@@ -39,6 +39,7 @@ where = ["."]
 include = [
     "gridworld*",
     "mazes*",
+    "multigrid*",
 ]
 
 [tool.setuptools.package-data]
