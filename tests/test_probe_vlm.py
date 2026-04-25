@@ -9,7 +9,7 @@ _v1_1_dir = str(Path(__file__).resolve().parent.parent)
 if _v1_1_dir not in sys.path:
     sys.path.insert(0, _v1_1_dir)
 
-from probe_vlm import collect_probe_context, parse_action_sequence, save_probe_images
+from scripts.probe_vlm import collect_probe_context, parse_action_sequence, save_probe_images
 
 
 def test_parse_action_sequence_accepts_empty():

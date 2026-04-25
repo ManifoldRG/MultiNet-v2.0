@@ -9,7 +9,7 @@ _v1_1_dir = str(Path(__file__).resolve().parent.parent)
 if _v1_1_dir not in sys.path:
     sys.path.insert(0, _v1_1_dir)
 
-from chat_smoke_test import LOOK_TOKEN, build_prompt, parse_model_reply
+from scripts.chat_smoke_test import LOOK_TOKEN, build_prompt, parse_model_reply
 
 
 def test_parse_model_reply_accepts_names_and_look():
