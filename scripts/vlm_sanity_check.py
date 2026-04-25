@@ -10,8 +10,8 @@ This is NOT an action prediction test. It validates that the VLM's visual
 encoder correctly perceives the gridworld before we ask it to act.
 
 Usage:
-    python vlm_sanity_check.py --model ollama --ollama-model qwen2.5vl:7b
-    python vlm_sanity_check.py --model lmstudio --lmstudio-model local-model
+    python -m scripts.vlm_sanity_check --model ollama --ollama-model qwen2.5vl:7b
+    python -m scripts.vlm_sanity_check --model lmstudio --lmstudio-model local-model
 """
 
 from __future__ import annotations

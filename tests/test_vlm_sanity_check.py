@@ -16,7 +16,7 @@ if _v1_1_dir not in sys.path:
 from gridworld.task_spec import TaskSpecification
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.backends.base import GridState
-from vlm_sanity_check import (
+from scripts.vlm_sanity_check import (
     generate_questions_for_task,
     check_answer,
     run_sanity_check,
