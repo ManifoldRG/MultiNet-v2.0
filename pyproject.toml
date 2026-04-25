@@ -28,18 +28,36 @@ hf = [
     "transformers",
 ]
 
+[project.scripts]
+multinet-run-eval = "run_eval:main"
+multinet-chat-smoke = "chat_smoke_test:main"
+multinet-probe-vlm = "probe_vlm:main"
+multinet-ollama-vision-check = "ollama_vision_check:main"
+multinet-ollama-maze-shape-check = "ollama_maze_shape_check:main"
+multinet-vlm-sanity = "vlm_sanity_check:main"
+
 [tool.setuptools]
 include-package-data = true
 py-modules = [
+    "chat_smoke_test",
+    "evaluation_harness",
     "model_interface",
+    "ollama_maze_shape_check",
+    "ollama_vision_check",
+    "probe_vlm",
+    "run_eval",
+    "vlm_sanity_check",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
+    "adapters*",
+    "cross_domain*",
     "gridworld*",
     "mazes*",
     "multigrid*",
+    "nl_domain*",
 ]
 
 [tool.setuptools.package-data]
