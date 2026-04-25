@@ -1,0 +1,15 @@
+Runner/Prompt/Observation/Querying smoke report
+
+prompting=minimal        success=True  steps=12  queries=12 
+prompting=standard       success=True  steps=12  queries=12 
+prompting=verbose        success=True  steps=12  queries=12 
+context=current          success=True  steps=12  queries=12 
+context=last3            success=True  steps=12  queries=12 
+obs=text_only            success=True  steps=12  queries=12 
+obs=image_text           success=True  steps=12  queries=12 
+obs=screenshot_only      success=True  steps=12  queries=12 
+query=step_by_step       success=True  steps=12  queries=12 
+query=subgoal            success=True  steps=12  queries=4  
+query=full_trajectory    success=True  steps=12  queries=1  
+
+All checks passed.

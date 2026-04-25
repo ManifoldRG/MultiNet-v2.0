@@ -1,0 +1,2889 @@
+{
+  "maze": "C:\\Users\\arush\\MIT Dropbox\\Arushi Jain\\MultiNet\\src\\v2\\nlu_pipeline\\nlu_benchmark\\sample mazes\\V01_empty_room.json",
+  "runs": [
+    {
+      "label": "prompting=minimal",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "prompting=standard",
+      "config": {
+        "prompting": "standard",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nThe environment may contain:\n- Keys: pick them up to open doors of the matching color\n- Doors: blocked passages that require a matching key\n- Switches: toggle these to open or close linked gates\n- Gates: blocked passages controlled by switches\n\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "prompting=verbose",
+      "config": {
+        "prompting": "verbose",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nThe environment may contain:\n- Keys: pick them up to open doors of the matching color\n- Doors: blocked passages that require a matching key\n- Switches: toggle these to open or close linked gates\n- Gates: blocked passages controlled by switches\n\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nRULES (domain logic):\n  - PICKUP: take a key on your current cell and store it in your inventory.\n  - Doors: keys and doors are color-matched. With the matching key in your inventory, move onto\n    the door to open it\n  - Switches: face a switch and TOGGLE to flip it on or off. Only switches are toggled. Linked\n    gates are open if at least one linked switch is on, and closed if all are off.\n  - Gates: you cannot TOGGLE a gate. CLOSED gates block movement; OPEN gates do not.\n  - Closed gates and doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Manhattan: 10  |  Step 1/100 (100 left)\nInventory: none\nFrom your perspective:\n  AHEAD: out of bounds\n  RIGHT: open (1,2)\n  BEHIND: open (2,1)\n  LEFT: out of bounds\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10  |  Step 2/100 (99 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (1,2)\n  RIGHT: open (2,1)\n  BEHIND: out of bounds\n  LEFT: out of bounds\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 9  |  Step 3/100 (98 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (1,3)\n  RIGHT: open (2,2)\n  BEHIND: open (1,1)\n  LEFT: out of bounds\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 8  |  Step 4/100 (97 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (1,4)\n  RIGHT: open (2,3)\n  BEHIND: open (1,2)\n  LEFT: out of bounds\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 7  |  Step 5/100 (96 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (1,5)\n  RIGHT: open (2,4)\n  BEHIND: open (1,3)\n  LEFT: out of bounds\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 6  |  Step 6/100 (95 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (1,6)\n  RIGHT: open (2,5)\n  BEHIND: open (1,4)\n  LEFT: out of bounds\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 5  |  Step 7/100 (94 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (1,7)\n  RIGHT: open (2,6)\n  BEHIND: open (1,5)\n  LEFT: out of bounds\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Manhattan: 5  |  Step 8/100 (93 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (2,6)\n  RIGHT: open (1,5)\n  BEHIND: out of bounds\n  LEFT: open (1,7)\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Manhattan: 4  |  Step 9/100 (92 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (3,6)\n  RIGHT: open (2,5)\n  BEHIND: open (1,6)\n  LEFT: open (2,7)\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Manhattan: 3  |  Step 10/100 (91 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (4,6)\n  RIGHT: open (3,5)\n  BEHIND: open (2,6)\n  LEFT: open (3,7)\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Manhattan: 2  |  Step 11/100 (90 left)\nInventory: none\nFrom your perspective:\n  AHEAD: open (5,6)\n  RIGHT: open (4,5)\n  BEHIND: open (3,6)\n  LEFT: open (4,7)\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Manhattan: 1  |  Step 12/100 (89 left)\nInventory: none\nFrom your perspective:\n  AHEAD: GOAL (6,6)\n  RIGHT: open (5,5)\n  BEHIND: open (4,6)\n  LEFT: open (5,7)\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "context=current",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "current",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "context=last3",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "obs=text_only",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "obs=image_text",
+      "config": {
+        "prompting": "minimal",
+        "observation": "image_text",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "obs=screenshot_only",
+      "config": {
+        "prompting": "minimal",
+        "observation": "screenshot_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Position: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  TURN_RIGHT\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  TURN_RIGHT\n  MOVE_FORWARD\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  TURN_RIGHT\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  MOVE_FORWARD\n  TURN_RIGHT\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  TURN_RIGHT\n  MOVE_FORWARD\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  TURN_RIGHT\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "list",
+          "has_image": true,
+          "user_text": "Recent steps (oldest first, action only):\n  MOVE_FORWARD\n  MOVE_FORWARD\n  MOVE_FORWARD\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: \nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "query=step_by_step",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "step_by_step"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 12
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing EAST.\nEnvironment steps used so far: 1 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 2/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing EAST.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 2) facing EAST.\nEnvironment steps used so far: 2 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 2)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 3/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 1) facing EAST -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing EAST.\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 3) facing EAST.\nEnvironment steps used so far: 3 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 3)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 4/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 5,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 6,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 5) facing EAST.\nEnvironment steps used so far: 5 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 5)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 6/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 7,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: TURN_RIGHT"
+        },
+        {
+          "call_idx": 8,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing SOUTH.\nEnvironment steps used so far: 7 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 8/100\nLast result: TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 9,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (2, 6) facing SOUTH.\nEnvironment steps used so far: 8 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (2, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 9/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 10,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 6) facing SOUTH -> TURN_RIGHT -> TURNED \u2014 TURN_RIGHT: Now facing SOUTH.\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (3, 6) facing SOUTH.\nEnvironment steps used so far: 9 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (3, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 10/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 11,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        },
+        {
+          "call_idx": 12,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n  (5, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (5, 6) facing SOUTH.\nEnvironment steps used so far: 11 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (5, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 12/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).\nWhat is your next action?",
+          "assistant_reply": "FINAL_OUTPUT: MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2)."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3)."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4)."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5)."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6)."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6)."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6)."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6)."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6)."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6)."
+        }
+      ]
+    },
+    {
+      "label": "query=subgoal",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "subgoal"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 4
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nFor each turn output:\n  SUB_GOAL: <short description of your next waypoint>\n  ACTIONS: <comma-separated action list to reach it>\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "SUB_GOAL: Advance toward goal.\nACTIONS: TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD"
+        },
+        {
+          "call_idx": 2,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).\n  (1, 3) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 4) facing EAST.\nEnvironment steps used so far: 4 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 4)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 5/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\nWhat is your next action?",
+          "assistant_reply": "SUB_GOAL: Advance toward goal.\nACTIONS: MOVE_FORWARD, MOVE_FORWARD"
+        },
+        {
+          "call_idx": 3,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (1, 4) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).\n  (1, 5) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).\n  (1, 6) facing EAST -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 6) facing EAST.\nEnvironment steps used so far: 6 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 6)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 7/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).\nWhat is your next action?",
+          "assistant_reply": "SUB_GOAL: Advance toward goal.\nACTIONS: TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD"
+        },
+        {
+          "call_idx": 4,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Recent history (last 3 steps, oldest first):\n  (2, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).\n  (3, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).\n  (4, 6) facing SOUTH -> MOVE_FORWARD -> MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\n\nObservation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (4, 6) facing SOUTH.\nEnvironment steps used so far: 10 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (4, 6)  |  Facing: SOUTH  |  Goal: (6, 6)  |  Step 11/100\nLast result: MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).\nWhat is your next action?",
+          "assistant_reply": "SUB_GOAL: Advance toward goal.\nACTIONS: MOVE_FORWARD, MOVE_FORWARD"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST.",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH.",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).",
+          "subgoal": "Advance toward goal."
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6).",
+          "subgoal": "Advance toward goal."
+        }
+      ]
+    },
+    {
+      "label": "query=full_trajectory",
+      "config": {
+        "prompting": "minimal",
+        "observation": "text_only",
+        "context_window": "last3",
+        "querying": "full_trajectory"
+      },
+      "summary": {
+        "success": true,
+        "steps_used": 12,
+        "query_count": 1
+      },
+      "system_prompt": "Task: move to the goal cell in the grid.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.\nOn the last line, output exactly:\nFINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)\n\nOutput your complete trajectory once as:\n  SUB_GOAL: <short description of the full plan>\n  ACTIONS: <comma-separated action list from start to finish>\nThe last action in ACTIONS should be DONE (when you expect to be at the goal).\nYou will not be queried again \u2014 this is your only planning turn.\n\nInitial maze (fixed for this episode):\nThe world is a 8 by 8 grid.\nCoordinates are given as (row, column).\nThe top-left corner is (1,1).\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: none.",
+      "queries": [
+        {
+          "call_idx": 1,
+          "user_content_type": "str",
+          "has_image": false,
+          "user_text": "Observation:\nCurrent situation (this step):\nThe goal is at (6, 6).\nYou are at (1, 1) facing NORTH.\nEnvironment steps used so far: 0 (max 100 before timeout).\nYour inventory: empty.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\n(No keys on the ground, doors, switches, or gates in the current state description.)\n\nPosition: (1, 1)  |  Facing: NORTH  |  Goal: (6, 6)  |  Step 1/100\nLast result: Episode start.\nWhat is your next action?",
+          "assistant_reply": "SUB_GOAL: Reach goal by open-room shortest path.\nACTIONS: TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, DONE"
+        }
+      ],
+      "transcript": [
+        {
+          "step": 1,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            1
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing EAST.",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 2,
+          "position_before": [
+            1,
+            1
+          ],
+          "position_after": [
+            1,
+            2
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 2).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 3,
+          "position_before": [
+            1,
+            2
+          ],
+          "position_after": [
+            1,
+            3
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 3).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 4,
+          "position_before": [
+            1,
+            3
+          ],
+          "position_after": [
+            1,
+            4
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 4).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 5,
+          "position_before": [
+            1,
+            4
+          ],
+          "position_after": [
+            1,
+            5
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 5).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 6,
+          "position_before": [
+            1,
+            5
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (1, 6).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 7,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            1,
+            6
+          ],
+          "action": "TURN_RIGHT",
+          "event_type": "TURNED",
+          "feedback": "TURNED \u2014 TURN_RIGHT: Now facing SOUTH.",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 8,
+          "position_before": [
+            1,
+            6
+          ],
+          "position_after": [
+            2,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (2, 6).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 9,
+          "position_before": [
+            2,
+            6
+          ],
+          "position_after": [
+            3,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (3, 6).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 10,
+          "position_before": [
+            3,
+            6
+          ],
+          "position_after": [
+            4,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (4, 6).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 11,
+          "position_before": [
+            4,
+            6
+          ],
+          "position_after": [
+            5,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "MOVED",
+          "feedback": "MOVED \u2014 MOVE_FORWARD: Moved to (5, 6).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        },
+        {
+          "step": 12,
+          "position_before": [
+            5,
+            6
+          ],
+          "position_after": [
+            6,
+            6
+          ],
+          "action": "MOVE_FORWARD",
+          "event_type": "DONE",
+          "feedback": "SUCCESS \u2014 MOVE_FORWARD: Reached goal at (6, 6).",
+          "subgoal": "Reach goal by open-room shortest path.",
+          "full_trajectory": true
+        }
+      ]
+    }
+  ]
+}
