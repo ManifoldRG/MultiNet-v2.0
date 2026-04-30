@@ -481,6 +481,11 @@ def render_multigrid(
     usable_height = height * (1 - 2 * margin)
     offset_x = width * margin
     offset_y = height * margin
+    wall_cells = {
+        obj.cell_id
+        for obj in state.objects.values()
+        if obj.obj_type == "wall" and obj.cell_id is not None
+    }
 
     # Draw all cells
     for cell_id, cell in tiling.cells.items():
@@ -535,7 +540,9 @@ def render_multigrid(
             vertices = get_square_vertices((px, py), cell_size)
 
         # Determine cell color
-        if goal_cell_id and cell_id == goal_cell_id:
+        if cell_id in wall_cells:
+            color = COLORS["wall"]
+        elif goal_cell_id and cell_id == goal_cell_id:
             color = COLORS["goal"]
         else:
             color = COLORS["background"]
@@ -568,6 +575,8 @@ def render_multigrid(
     # Draw objects (skip non-visible cells)
     for obj_id, obj in state.objects.items():
         if obj.cell_id is None:
+            continue
+        if obj.obj_type == "wall":
             continue
         if visible_cells is not None and obj.cell_id not in visible_cells:
             continue

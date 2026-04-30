@@ -87,7 +87,7 @@ class TaskParser:
             see_through_walls = True
             agent_view_size = 7
             agent_pov = False
-            highlight = True
+            highlight = False
         elif obs_mode == "view_cone":
             see_through_walls = False
             agent_view_size = spec.rules.view_size
@@ -104,7 +104,7 @@ class TaskParser:
             see_through_walls = True
             agent_view_size = 7
             agent_pov = False
-            highlight = True
+            highlight = False
 
         # Create the base environment with core parameters
         # The CustomMiniGridEnv is initialized but not yet populated with task objects
