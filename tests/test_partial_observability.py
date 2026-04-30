@@ -121,6 +121,7 @@ class TestFullObservability:
         parser = TaskParser(render_mode="rgb_array")
         env = parser.parse(full_obs_spec)
         assert env.see_through_walls is True
+        assert env.highlight is False
 
     def test_full_obs_backend_state(self, full_obs_spec):
         """Full obs mode should have observability_mode='full' in GridState."""

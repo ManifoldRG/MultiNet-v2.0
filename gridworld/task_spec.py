@@ -534,7 +534,7 @@ class TaskSpecification:
 
         for door in self.mechanisms.doors:
             register_id(door.id, f"Door {door.id}")
-            check_position(door.position, f"Door {door.id}")
+            check_position(door.position, f"Door {door.id}", allow_wall=True)
             register_position(door.position, f"Door {door.id}")
 
         for switch in self.mechanisms.switches:
@@ -544,7 +544,7 @@ class TaskSpecification:
 
         for gate in self.mechanisms.gates:
             register_id(gate.id, f"Gate {gate.id}")
-            check_position(gate.position, f"Gate {gate.id}")
+            check_position(gate.position, f"Gate {gate.id}", allow_wall=True)
             register_position(gate.position, f"Gate {gate.id}")
 
         for block in self.mechanisms.blocks:

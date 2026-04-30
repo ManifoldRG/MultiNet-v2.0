@@ -121,7 +121,23 @@ class MultiGridBackend(AbstractGridBackend):
         """
         width, height = spec.maze.dimensions
 
+        coordinate_tiling = None
+        cell_ids_by_grid_pos = {}
+        if self.tiling_type in {"square", "hex"}:
+            from multigrid.env import TilingRegistry
+
+            coordinate_tiling = TilingRegistry.get(self.tiling_type)
+            coordinate_tiling.generate_graph(width, height, spec.seed)
+            cell_ids_by_grid_pos = {
+                (cell.col, cell.row): cell_id
+                for cell_id, cell in coordinate_tiling.cells.items()
+            }
+
         def canonical_pos(x: int, y: int) -> dict:
+            if coordinate_tiling is not None and (x, y) in cell_ids_by_grid_pos:
+                cell_id = cell_ids_by_grid_pos[(x, y)]
+                cx, cy = coordinate_tiling.cell_to_canonical(cell_id)
+                return {"x": cx, "y": cy}
             return {
                 "x": (x + 0.5) / width,
                 "y": (y + 0.5) / height,
@@ -137,6 +153,15 @@ class MultiGridBackend(AbstractGridBackend):
         for y in range(height):
             wall_positions.add((0, y))
             wall_positions.add((width - 1, y))
+
+        barrier_positions = {
+            (door.position.x, door.position.y)
+            for door in spec.mechanisms.doors
+        } | {
+            (gate.position.x, gate.position.y)
+            for gate in spec.mechanisms.gates
+        }
+        wall_positions -= barrier_positions
 
         for x, y in sorted(wall_positions):
             objects.append({
@@ -228,10 +253,7 @@ class MultiGridBackend(AbstractGridBackend):
                 goal_target = spec.goal.target or spec.maze.goal
                 goal_spec = {
                     "type": "reach_position",
-                    "target": {
-                        "x": (goal_target.x + 0.5) / width,
-                        "y": (goal_target.y + 0.5) / height,
-                    }
+                    "target": canonical_pos(goal_target.x, goal_target.y),
                 }
             elif spec.goal.goal_type == "collect_all":
                 goal_spec = {
@@ -243,8 +265,7 @@ class MultiGridBackend(AbstractGridBackend):
                     "type": "push_block_to",
                     "target_ids": spec.goal.target_ids,
                     "target_positions": [
-                        {"x": p.x / spec.maze.dimensions[0],
-                         "y": p.y / spec.maze.dimensions[1]}
+                        canonical_pos(p.x, p.y)
                         for p in spec.goal.target_positions
                     ] if spec.goal.target_positions else []
                 }
@@ -262,10 +283,7 @@ class MultiGridBackend(AbstractGridBackend):
             },
             "scene": {
                 "agent": {
-                    "position": {
-                        "x": (spec.maze.start.x + 0.5) / width,
-                        "y": (spec.maze.start.y + 0.5) / height,
-                    },
+                    "position": canonical_pos(spec.maze.start.x, spec.maze.start.y),
                     "facing": 0  # Default direction (right)
                 },
                 "objects": objects,
@@ -450,12 +468,18 @@ class MultiGridBackend(AbstractGridBackend):
         state = self.env.state
         tiling = self.env.tiling
 
+        def cell_to_grid_pos(cell_id: str) -> tuple[int, int]:
+            cell = tiling.cells.get(cell_id)
+            if cell is not None:
+                return (cell.col, cell.row)
+            pos = tiling.cell_to_canonical(cell_id)
+            return (
+                int(pos[0] * self.task_spec.maze.dimensions[0]),
+                int(pos[1] * self.task_spec.maze.dimensions[1])
+            )
+
         # Get agent position in grid coordinates
-        agent_pos = tiling.cell_to_canonical(state.agent.cell_id)
-        grid_pos = (
-            int(agent_pos[0] * self.task_spec.maze.dimensions[0]),
-            int(agent_pos[1] * self.task_spec.maze.dimensions[1])
-        )
+        grid_pos = cell_to_grid_pos(state.agent.cell_id)
 
         # Get carrying object
         carrying = None
@@ -469,11 +493,7 @@ class MultiGridBackend(AbstractGridBackend):
         block_positions = {}
         for obj_id, obj in state.objects.items():
             if obj_id in block_ids and obj.obj_type == "movable" and obj.cell_id is not None:
-                pos = tiling.cell_to_canonical(obj.cell_id)
-                block_positions[obj_id] = (
-                    int(pos[0] * self.task_spec.maze.dimensions[0]),
-                    int(pos[1] * self.task_spec.maze.dimensions[1])
-                )
+                block_positions[obj_id] = cell_to_grid_pos(obj.cell_id)
 
         # Convert visibility sets from cell_id strings to (x,y) grid coords
         obs_mode = getattr(state, 'observability_mode', 'full')
@@ -481,13 +501,10 @@ class MultiGridBackend(AbstractGridBackend):
         explored_xy = set()
 
         if obs_mode != "full":
-            dims = self.task_spec.maze.dimensions
             for cell_id in state.visible_cells:
-                pos = tiling.cell_to_canonical(cell_id)
-                visible_xy.add((int(pos[0] * dims[0]), int(pos[1] * dims[1])))
+                visible_xy.add(cell_to_grid_pos(cell_id))
             for cell_id in state.explored_cells:
-                pos = tiling.cell_to_canonical(cell_id)
-                explored_xy.add((int(pos[0] * dims[0]), int(pos[1] * dims[1])))
+                explored_xy.add(cell_to_grid_pos(cell_id))
 
         open_doors = {
             obj.id for obj in state.objects.values()
