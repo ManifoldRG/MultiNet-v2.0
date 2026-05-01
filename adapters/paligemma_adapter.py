@@ -1,5 +1,5 @@
 """
-PaliGemma Adapter for MultiNet v1.1
+PaliGemma Adapter for MultiNet-v2.0
 
 Uses Google's PaliGemma VLM for MiniGrid evaluation.
 Lighter weight than the larger local adapter options, good for quick iteration.

@@ -9,9 +9,9 @@ import sys
 import os
 from pathlib import Path
 
-_v1_1_dir = str(Path(__file__).resolve().parent.parent)
-if _v1_1_dir not in sys.path:
-    sys.path.insert(0, _v1_1_dir)
+_repo_root = str(Path(__file__).resolve().parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from gridworld.task_spec import TaskSpecification
 from gridworld.backends.minigrid_backend import MiniGridBackend
@@ -172,7 +172,7 @@ class TestMockSanityCheck:
 
     def test_perfect_mock_vlm(self):
         """A mock VLM that always answers correctly should get 100%."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
 
@@ -191,7 +191,7 @@ class TestMockSanityCheck:
 
     def test_blind_mock_vlm(self):
         """A mock VLM that returns garbage should score poorly."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
 
@@ -204,7 +204,7 @@ class TestMockSanityCheck:
 
     def test_error_handling_mock(self):
         """VLM errors should be captured gracefully."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
 
@@ -219,7 +219,7 @@ class TestMockSanityCheck:
 
     def test_report_serialization(self):
         """Report should serialize to dict cleanly."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
 
@@ -235,7 +235,7 @@ class TestMockSanityCheck:
 
     def test_image_passed_to_vlm(self):
         """The ask function should receive a valid RGB image."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier2" / "single_key_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier2" / "single_key_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
 

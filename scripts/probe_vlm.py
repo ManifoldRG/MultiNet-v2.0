@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Small VLM probe CLI for MiniGrid v1.1.
+Small VLM probe CLI for MiniGrid-v2.0.
 
 Use this to smoke-test local vision models before running full evaluation.
 It supports:
@@ -318,7 +318,7 @@ def save_probe_images(context: ProbeContext, output_dir: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Probe local vision models on MiniGrid v1.1.")
+    parser = argparse.ArgumentParser(description="Probe local vision models on MiniGrid-v2.0.")
     parser.add_argument("--probe", choices=["orientation", "action"], required=True)
     parser.add_argument("--model", choices=["lmstudio", "ollama"], required=True)
     parser.add_argument("--task", default=None, help="Task JSON path. Defaults to validation_10/V01.")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Manual chat-interface smoke test runner for MiniGrid v1.1.
+Manual chat-interface smoke test runner for MiniGrid-v2.0.
 
 This runner is for frontier web-chat testing where the model is controlled
 through ChatGPT / Claude / Gemini manually rather than through an API.
