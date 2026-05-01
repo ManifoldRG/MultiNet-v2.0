@@ -5,9 +5,9 @@ import sys
 import os
 from pathlib import Path
 
-_v1_1_dir = str(Path(__file__).resolve().parent.parent)
-if _v1_1_dir not in sys.path:
-    sys.path.insert(0, _v1_1_dir)
+_repo_root = str(Path(__file__).resolve().parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from gridworld.task_spec import TaskSpecification, Rules
 from gridworld.task_parser import TaskParser
@@ -292,7 +292,7 @@ class TestPartialObsTaskFiles:
 
     def test_hidden_switch_has_view_cone(self):
         """tier5/hidden_switch_001.json should have view_cone observability."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier5" / "hidden_switch_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier5" / "hidden_switch_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
         spec = TaskSpecification.from_json(str(task_path))
@@ -301,7 +301,7 @@ class TestPartialObsTaskFiles:
 
     def test_memory_has_fog_of_war(self):
         """tier5/memory_003.json should have fog_of_war observability."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier5" / "memory_003.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier5" / "memory_003.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
         spec = TaskSpecification.from_json(str(task_path))
@@ -310,7 +310,7 @@ class TestPartialObsTaskFiles:
 
     def test_hidden_switch_playable_with_view_cone(self):
         """hidden_switch_001 should be playable with view cone."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier5" / "hidden_switch_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier5" / "hidden_switch_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
         backend = MiniGridBackend(render_mode="rgb_array")
@@ -327,7 +327,7 @@ class TestPartialObsTaskFiles:
 
     def test_memory_playable_with_fog_of_war(self):
         """memory_003 should be playable with fog of war."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier5" / "memory_003.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier5" / "memory_003.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
         backend = MiniGridBackend(render_mode="rgb_array")
@@ -340,7 +340,7 @@ class TestPartialObsTaskFiles:
 
     def test_existing_tasks_default_to_full(self):
         """Tasks without observability field should default to full."""
-        task_path = Path(_v1_1_dir) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
+        task_path = Path(_repo_root) / "gridworld" / "tasks" / "tier1" / "maze_simple_001.json"
         if not task_path.exists():
             pytest.skip("Task file not found")
         spec = TaskSpecification.from_json(str(task_path))
