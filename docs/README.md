@@ -455,7 +455,7 @@ When adding new features to the framework:
 
 ## Version History
 
-- **v1.1**: Current version
+- **v2.0**: Current version
   - MiniGrid Backend: Production-ready
   - MultiGrid Backend: Experimental
   - Full mechanism support in MiniGrid

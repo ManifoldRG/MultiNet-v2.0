@@ -1,6 +1,6 @@
 # Gridworld Domain: Backend Reference
 
-This document describes the two gridworld backends available in MultiNet v1.1 for VLM/VLA evaluation on navigation and puzzle-solving tasks.
+This document describes the two gridworld backends available in MultiNet-v2.0 for VLM/VLA evaluation on navigation and puzzle-solving tasks.
 
 ## Overview
 

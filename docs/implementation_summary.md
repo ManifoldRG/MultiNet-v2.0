@@ -1,4 +1,4 @@
-# MultiGrid v1.1 Implementation Summary
+# MultiGrid-v2.0 Implementation Summary
 
 ## Completion Status: ✅ COMPLETE
 

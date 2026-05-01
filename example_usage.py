@@ -221,7 +221,7 @@ def distance_calculation_example():
 def main():
     """Run all examples."""
     print("\n" + "#" * 60)
-    print("# MultiGrid v1.1 - Usage Examples")
+    print("# MultiGrid-v2.0 - Usage Examples")
     print("#" * 60)
 
     basic_example()
