@@ -5,9 +5,9 @@ import sys
 import os
 from pathlib import Path
 
-_v1_1_dir = str(Path(__file__).resolve().parent.parent)
-if _v1_1_dir not in sys.path:
-    sys.path.insert(0, _v1_1_dir)
+_repo_root = str(Path(__file__).resolve().parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from gridworld.task_spec import TaskSpecification
 from gridworld.task_parser import TaskParser
