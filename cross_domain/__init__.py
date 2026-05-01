@@ -1,5 +1,5 @@
 """
-Cross-Domain Interface for MultiNet v1.1
+Cross-Domain Interface for MultiNet-v2.0
 
 Provides canonical task specification and domain adapter abstractions
 for evaluating models across different action domains (GridWorld, Physics, NL, GUI).
