@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the comprehensive test suite implementation for the MultiGrid v1.1 framework, based on specifications in `specs/test_cases.md`.
+This document summarizes the comprehensive test suite implementation for the MultiGrid-v2.0 framework, based on specifications in `specs/test_cases.md`.
 
 ## Test Coverage
 

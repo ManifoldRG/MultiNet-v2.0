@@ -1,8 +1,8 @@
-# Technical Design Document: MultiNet v1.1 GridWorld Framework
+# Technical Design Document: MultiNet-v2.0 GridWorld Framework
 
 ## Document Overview
 
-This document provides the technical rationale and architectural decisions behind the MultiNet v1.1 GridWorld evaluation framework. It explains why certain technologies were chosen, how components interact, and the forward-looking vision for cross-domain evaluation.
+This document provides the technical rationale and architectural decisions behind the MultiNet-v2.0 GridWorld evaluation framework. It explains why certain technologies were chosen, how components interact, and the forward-looking vision for cross-domain evaluation.
 
 **Target Audience**: Researchers, contributors, and engineers extending the framework
 
@@ -1355,7 +1355,7 @@ for tier in range(1, 6):
 ### Version 1.0 (2026-02-06)
 - Initial technical design document
 - Covers technology stack, architecture, cross-domain vision, evaluation methodology
-- Written for MultiNet v1.1 release
+- Written for MultiNet-v2.0 release
 
 ---
 

@@ -1,4 +1,4 @@
-# MultiNet v1.1 - How to Run
+# MultiNet-v2.0 - How to Run
 
 ## Prerequisites
 
