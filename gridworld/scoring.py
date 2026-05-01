@@ -46,10 +46,14 @@ def _count_backtracking(solution: list[tuple[int, int]] | None) -> float:
         return 0.0
     seen = set()
     revisits = 0
+    previous_pos = None
     for pos in solution:
+        if pos == previous_pos:
+            continue
         if pos in seen:
             revisits += 1
         seen.add(pos)
+        previous_pos = pos
     return float(revisits)
 
 
@@ -102,7 +106,14 @@ def compute_12d_score(
     solver_output: DifficultyReport | None = None,
     weights: list[float] | None = None,
 ) -> ScoredDifficulty:
-    """Compute the 12-dimension score from a task spec and solver output."""
+    """
+    Compute the full 12-dimension benchmark score.
+
+    This wraps solver-derived metrics with rubric dimensions such as
+    fragility, dependency variety, distractor quality, partial observability,
+    wall density, and irreversibility. The compact solver report remains in
+    compute_difficulty for callers that only need path/search metrics.
+    """
     validator = TaskValidator(spec)
     is_beatable, solution, message = validator.validate()
     if solver_output is None:

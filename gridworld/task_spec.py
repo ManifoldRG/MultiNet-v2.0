@@ -459,56 +459,110 @@ class TaskSpecification:
         Returns:
             (is_valid, list of error messages)
         """
-        errors = []
+        errors: list[str] = []
         width, height = self.maze.dimensions
 
         # Check dimensions
         if width < 3 or height < 3:
             errors.append(f"Maze dimensions too small: {width}x{height}, minimum is 3x3")
 
-        # Check start position
-        if not (0 <= self.maze.start.x < width and 0 <= self.maze.start.y < height):
-            errors.append(f"Start position {self.maze.start.to_tuple()} out of bounds")
+        def in_bounds(pos: Position) -> bool:
+            return 0 <= pos.x < width and 0 <= pos.y < height
 
-        # Check goal position
-        if not (0 <= self.maze.goal.x < width and 0 <= self.maze.goal.y < height):
-            errors.append(f"Goal position {self.maze.goal.to_tuple()} out of bounds")
+        explicit_wall_positions = set()
+        for wall in self.maze.walls:
+            if not in_bounds(wall):
+                errors.append(f"Wall position {wall.to_tuple()} out of bounds")
+            explicit_wall_positions.add(wall.to_tuple())
 
-        # Check that start and goal are not walls
-        wall_positions = {w.to_tuple() for w in self.maze.walls}
-        if self.maze.start.to_tuple() in wall_positions:
-            errors.append("Start position is a wall")
-        if self.maze.goal.to_tuple() in wall_positions:
-            errors.append("Goal position is a wall")
+        border_positions = {
+            (x, 0) for x in range(width)
+        } | {
+            (x, height - 1) for x in range(width)
+        } | {
+            (0, y) for y in range(height)
+        } | {
+            (width - 1, y) for y in range(height)
+        }
+        wall_positions = explicit_wall_positions | border_positions
 
-        # Check all mechanism positions are in bounds and not walls
-        def check_position(pos: Position, name: str):
-            if not (0 <= pos.x < width and 0 <= pos.y < height):
+        def check_position(pos: Position, name: str, *, allow_wall: bool = False) -> None:
+            if not in_bounds(pos):
                 errors.append(f"{name} position {pos.to_tuple()} out of bounds")
-            elif pos.to_tuple() in wall_positions:
+            elif not allow_wall and pos.to_tuple() in wall_positions:
                 errors.append(f"{name} position {pos.to_tuple()} is a wall")
 
+        # Check start and canonical maze goal positions.
+        check_position(self.maze.start, "Start")
+        check_position(self.maze.goal, "Goal")
+
+        if self.rules.view_size < 3 or self.rules.view_size % 2 == 0:
+            errors.append(
+                f"Invalid view_size: {self.rules.view_size}, must be odd and >= 3"
+            )
+
+        mechanism_ids: dict[str, str] = {}
+        mechanism_positions: dict[tuple[int, int], str] = {}
+
+        def register_id(mechanism_id: str, name: str) -> None:
+            if not mechanism_id:
+                errors.append(f"{name} id must be non-empty")
+                return
+            if mechanism_id in mechanism_ids:
+                errors.append(
+                    f"Duplicate mechanism id '{mechanism_id}' used by "
+                    f"{mechanism_ids[mechanism_id]} and {name}"
+                )
+            else:
+                mechanism_ids[mechanism_id] = name
+
+        def register_position(pos: Position, name: str) -> None:
+            pos_tuple = pos.to_tuple()
+            if pos_tuple in mechanism_positions:
+                errors.append(
+                    f"{name} position {pos_tuple} overlaps "
+                    f"{mechanism_positions[pos_tuple]}"
+                )
+            else:
+                mechanism_positions[pos_tuple] = name
+
+        # Check all mechanism IDs and positions.
         for key in self.mechanisms.keys:
+            register_id(key.id, f"Key {key.id}")
             check_position(key.position, f"Key {key.id}")
+            register_position(key.position, f"Key {key.id}")
 
         for door in self.mechanisms.doors:
+            register_id(door.id, f"Door {door.id}")
             check_position(door.position, f"Door {door.id}")
+            register_position(door.position, f"Door {door.id}")
 
         for switch in self.mechanisms.switches:
+            register_id(switch.id, f"Switch {switch.id}")
             check_position(switch.position, f"Switch {switch.id}")
+            register_position(switch.position, f"Switch {switch.id}")
 
         for gate in self.mechanisms.gates:
+            register_id(gate.id, f"Gate {gate.id}")
             check_position(gate.position, f"Gate {gate.id}")
+            register_position(gate.position, f"Gate {gate.id}")
 
         for block in self.mechanisms.blocks:
+            register_id(block.id, f"Block {block.id}")
             check_position(block.position, f"Block {block.id}")
+            register_position(block.position, f"Block {block.id}")
 
         for hazard in self.mechanisms.hazards:
+            register_id(hazard.id, f"Hazard {hazard.id}")
             check_position(hazard.position, f"Hazard {hazard.id}")
+            register_position(hazard.position, f"Hazard {hazard.id}")
 
         for teleporter in self.mechanisms.teleporters:
+            register_id(teleporter.id, f"Teleporter {teleporter.id}")
             check_position(teleporter.position_a, f"Teleporter {teleporter.id} endpoint A")
             check_position(teleporter.position_b, f"Teleporter {teleporter.id} endpoint B")
+            register_position(teleporter.position_a, f"Teleporter {teleporter.id} endpoint A")
+            register_position(teleporter.position_b, f"Teleporter {teleporter.id} endpoint B")
 
         # Check door-key color consistency
         key_colors = {k.color for k in self.mechanisms.keys}
@@ -522,6 +576,12 @@ class TaskSpecification:
             for controlled_id in switch.controls:
                 if controlled_id not in gate_ids:
                     errors.append(f"Switch {switch.id} controls non-existent gate '{controlled_id}'")
+
+        # Check all metadata references point to known mechanism IDs.
+        all_mechanism_ids = set(mechanism_ids)
+        for hidden_id in self.rules.hidden_mechanisms:
+            if hidden_id not in all_mechanism_ids:
+                errors.append(f"rules.hidden_mechanisms references unknown id '{hidden_id}'")
 
         # Check difficulty tier
         if self.difficulty_tier < 1:
@@ -540,12 +600,62 @@ class TaskSpecification:
                 )
             expected_step = 1
             for step in self.dependency_chain.sequence:
+                if step.element not in all_mechanism_ids:
+                    errors.append(
+                        f"Dependency chain step {step.step} references unknown element '{step.element}'"
+                    )
+                if step.unlocks not in all_mechanism_ids:
+                    errors.append(
+                        f"Dependency chain step {step.step} references unknown unlock target '{step.unlocks}'"
+                    )
                 if step.step != expected_step:
                     errors.append(
                         f"Dependency chain step numbering is invalid at step {step.step}"
                     )
                     break
                 expected_step += 1
+
+        if self.distractors:
+            for distractor in self.distractors:
+                if (
+                    distractor.type != "distractor_chain"
+                    and distractor.element_id not in all_mechanism_ids
+                ):
+                    errors.append(
+                        f"Distractor {distractor.type} references unknown element_id "
+                        f"'{distractor.element_id}'"
+                    )
+
+        if self.goal.goal_type == "reach_position":
+            if self.goal.target is None:
+                errors.append("Goal type 'reach_position' requires target")
+            else:
+                check_position(self.goal.target, "Goal target")
+        elif self.goal.goal_type == "collect_all":
+            if not self.goal.target_ids:
+                errors.append("Goal type 'collect_all' requires target_ids")
+            for target_id in self.goal.target_ids:
+                if target_id not in all_mechanism_ids:
+                    errors.append(
+                        f"Goal type 'collect_all' references unknown target_id '{target_id}'"
+                    )
+        elif self.goal.goal_type == "push_block_to":
+            block_ids = {block.id for block in self.mechanisms.blocks}
+            if not self.goal.target_ids:
+                errors.append("Goal type 'push_block_to' requires target_ids")
+            if not self.goal.target_positions:
+                errors.append("Goal type 'push_block_to' requires target_positions")
+            if len(self.goal.target_ids) != len(self.goal.target_positions):
+                errors.append(
+                    "Goal type 'push_block_to' requires one target_position per target_id"
+                )
+            for target_id in self.goal.target_ids:
+                if target_id not in block_ids:
+                    errors.append(
+                        f"Goal type 'push_block_to' references unknown block id '{target_id}'"
+                    )
+            for pos in self.goal.target_positions:
+                check_position(pos, "Push-block goal target")
 
         return len(errors) == 0, errors
 

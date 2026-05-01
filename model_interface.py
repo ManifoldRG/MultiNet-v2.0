@@ -1,5 +1,5 @@
 """
-Standard Model Interface for MultiNet v1.1
+Standard Model Interface for MultiNet-v2.0
 
 Defines the abstract interface all model adapters must implement,
 plus built-in baselines (random, file-based).
