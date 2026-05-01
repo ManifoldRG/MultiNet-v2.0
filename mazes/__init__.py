@@ -1,1 +1,1 @@
-"""Packaged maze resources for MultiNet v1.1."""
+"""Packaged maze resources for MultiNet-v2.0."""

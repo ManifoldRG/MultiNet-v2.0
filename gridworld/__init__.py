@@ -1,12 +1,7 @@
-"""
-MiniGrid/GridWorld Domain for MultiNet v1.1
+"""Gridworld domain for MultiNet-v2.0.
 
-This module provides a complete gridworld evaluation domain with:
-- Task specification schema (JSON) for defining puzzles
-- Task parser that creates MiniGrid environments from specs
-- Backend abstraction for pluggable grid implementations
-- Episode runner for trajectory collection
-- Evaluation module following GenESIS patterns
+This module provides task schema, validation, and scoring utilities for
+gridworld puzzle specifications.
 """
 
 from .bootstrap import disable_gymnasium_env_plugins
@@ -31,8 +26,13 @@ from .task_spec import (
     GoalSpec,
     TaskSpecification,
 )
-from .task_parser import TaskParser
-from .actions import MiniGridActions, ACTION_NAMES, ACTION_DESCRIPTIONS
+from .task_validator import (
+    DifficultyReport,
+    FragilityReport,
+    TaskValidator,
+    compute_difficulty,
+)
+from .scoring import ScoredDifficulty, compute_12d_score
 
 
 __all__ = [
@@ -53,10 +53,11 @@ __all__ = [
     "Rules",
     "GoalSpec",
     "TaskSpecification",
-    # Parser
-    "TaskParser",
-    # Actions
-    "MiniGridActions",
-    "ACTION_NAMES",
-    "ACTION_DESCRIPTIONS",
+    # Validation and scoring
+    "TaskValidator",
+    "DifficultyReport",
+    "FragilityReport",
+    "compute_difficulty",
+    "ScoredDifficulty",
+    "compute_12d_score",
 ]

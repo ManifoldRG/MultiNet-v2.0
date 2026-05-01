@@ -18,10 +18,19 @@ from typing import Optional
 from .task_spec import TaskSpecification, Position
 
 
+DIRECTION_VECTORS: tuple[tuple[int, int], ...] = (
+    (1, 0),   # right
+    (0, 1),   # down
+    (-1, 0),  # left
+    (0, -1),  # up
+)
+
+
 @dataclass(frozen=True)
 class ValidatorState:
     """Immutable state for BFS search."""
     agent_pos: tuple[int, int]
+    agent_dir: int
     carrying_key: Optional[str]  # key id currently held
     collected_keys: frozenset  # key ids removed from the map
     active_switches: frozenset  # set of switch ids that are on
@@ -48,9 +57,8 @@ class TaskValidator:
     2. All mechanism dependencies are satisfiable
     3. Block push constraints don't create deadlocks on the solution path
 
-    Note: This explores state space ignoring agent direction since the agent
-    can always turn in place. We only need to check reachability in the
-    grid graph with mechanism state transitions.
+    The search includes agent direction and turn actions, so path length
+    reflects the same forward/turn distinction exposed by the action space.
     """
 
     def __init__(self, spec: TaskSpecification):
@@ -170,128 +178,144 @@ class TaskValidator:
         """Generate abstract successor transitions from a validator state."""
         successors: list[SuccessorTransition] = []
 
-        for dx, dy, move_label in [
-            (0, -1, "move_up"),
-            (0, 1, "move_down"),
-            (-1, 0, "move_left"),
-            (1, 0, "move_right"),
-        ]:
-            nx, ny = state.agent_pos[0] + dx, state.agent_pos[1] + dy
-
-            if not (0 <= nx < self.width and 0 <= ny < self.height):
-                continue
-
-            next_pos = (nx, ny)
-            if next_pos in self.walls or next_pos in self.hazards:
-                continue
-
-            block_dict = {(bx, by): bid for bid, bx, by in state.block_positions}
-
-            new_carrying_key = state.carrying_key
-            new_collected_keys = state.collected_keys
-            new_open_doors = state.open_doors
-            new_block_positions = state.block_positions
-            action_label = move_label
-
-            if next_pos in self.doors:
-                door_info = self.doors[next_pos]
-                if door_info["id"] not in state.open_doors:
-                    held_color = None
-                    if state.carrying_key is not None:
-                        held_color = self.keys_by_id[state.carrying_key]["color"]
-                    if held_color == door_info["color"]:
-                        new_open_doors = state.open_doors | {door_info["id"]}
-                        action_label = f"open_door:{door_info['id']}"
-                        if self.key_consumption:
-                            new_carrying_key = None
-                    else:
-                        continue
-
-            if next_pos in self.gates:
-                gate_id = self.gates[next_pos]
-                if gate_id not in state.open_gates:
-                    continue
-
-            if next_pos in block_dict:
-                push_x, push_y = nx + dx, ny + dy
-                push_pos = (push_x, push_y)
-                if (
-                    push_pos in self.walls
-                    or push_pos in block_dict
-                    or push_pos in self.doors
-                    or push_pos in self.gates
-                    or push_pos in self.hazards
-                    or not (0 <= push_x < self.width and 0 <= push_y < self.height)
-                ):
-                    continue
-                bid = block_dict[next_pos]
-                new_block_positions = (
-                    state.block_positions - {(bid, nx, ny)} | {(bid, push_x, push_y)}
-                )
-                action_label = f"push:{bid}:{push_x},{push_y}"
-
-            actual_pos = next_pos
-            if next_pos in self.teleporter_map:
-                actual_pos = self.teleporter_map[next_pos]
-                action_label = f"teleport:{next_pos}->{actual_pos}"
-
-            successor_variants = [
-                (new_carrying_key, new_collected_keys, action_label)
-            ]
-            if next_pos in self.keys:
-                key_info = self.keys[next_pos]
-                if key_info["id"] not in state.collected_keys and new_carrying_key is None:
-                    successor_variants.append(
-                        (
-                            key_info["id"],
-                            state.collected_keys | {key_info["id"]},
-                            f"pickup:{key_info['id']}",
-                        )
-                    )
-
-            for carrying_key, collected_keys, label in successor_variants:
-                successors.append(
-                    SuccessorTransition(
-                        next_state=ValidatorState(
-                            agent_pos=actual_pos,
-                            carrying_key=carrying_key,
-                            collected_keys=collected_keys,
-                            active_switches=state.active_switches,
-                            used_switches=state.used_switches,
-                            open_gates=state.open_gates,
-                            open_doors=new_open_doors,
-                            block_positions=new_block_positions,
-                        ),
-                        next_pos=actual_pos,
-                        action_label=label,
-                    )
-                )
-
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            target_pos = (state.agent_pos[0] + dx, state.agent_pos[1] + dy)
-            if target_pos not in self.switches:
-                continue
-            switch_info = self.switches[target_pos]
-            result = self._apply_switch_activation(state, switch_info)
-            if result is None:
-                continue
-            new_active, new_used_switches, new_open_gates = result
+        for delta, label in [(-1, "turn_left"), (1, "turn_right")]:
             successors.append(
                 SuccessorTransition(
                     next_state=ValidatorState(
                         agent_pos=state.agent_pos,
+                        agent_dir=(state.agent_dir + delta) % len(DIRECTION_VECTORS),
                         carrying_key=state.carrying_key,
                         collected_keys=state.collected_keys,
-                        active_switches=new_active,
-                        used_switches=new_used_switches,
-                        open_gates=new_open_gates,
+                        active_switches=state.active_switches,
+                        used_switches=state.used_switches,
+                        open_gates=state.open_gates,
                         open_doors=state.open_doors,
                         block_positions=state.block_positions,
                     ),
                     next_pos=state.agent_pos,
-                    action_label=f"toggle:{switch_info['id']}",
+                    action_label=label,
                 )
             )
+
+        if state.agent_pos in self.keys:
+            key_info = self.keys[state.agent_pos]
+            if key_info["id"] not in state.collected_keys and state.carrying_key is None:
+                successors.append(
+                    SuccessorTransition(
+                        next_state=ValidatorState(
+                            agent_pos=state.agent_pos,
+                            agent_dir=state.agent_dir,
+                            carrying_key=key_info["id"],
+                            collected_keys=state.collected_keys | {key_info["id"]},
+                            active_switches=state.active_switches,
+                            used_switches=state.used_switches,
+                            open_gates=state.open_gates,
+                            open_doors=state.open_doors,
+                            block_positions=state.block_positions,
+                        ),
+                        next_pos=state.agent_pos,
+                        action_label=f"pickup:{key_info['id']}",
+                    )
+                )
+
+        if state.agent_pos in self.switches:
+            switch_info = self.switches[state.agent_pos]
+            result = self._apply_switch_activation(state, switch_info)
+            if result is not None:
+                new_active, new_used_switches, new_open_gates = result
+                successors.append(
+                    SuccessorTransition(
+                        next_state=ValidatorState(
+                            agent_pos=state.agent_pos,
+                            agent_dir=state.agent_dir,
+                            carrying_key=state.carrying_key,
+                            collected_keys=state.collected_keys,
+                            active_switches=new_active,
+                            used_switches=new_used_switches,
+                            open_gates=new_open_gates,
+                            open_doors=state.open_doors,
+                            block_positions=state.block_positions,
+                        ),
+                        next_pos=state.agent_pos,
+                        action_label=f"toggle:{switch_info['id']}",
+                    )
+                )
+
+        dx, dy = DIRECTION_VECTORS[state.agent_dir]
+        nx, ny = state.agent_pos[0] + dx, state.agent_pos[1] + dy
+        if not (0 <= nx < self.width and 0 <= ny < self.height):
+            return successors
+
+        next_pos = (nx, ny)
+        if next_pos in self.walls or next_pos in self.hazards:
+            return successors
+
+        block_dict = {(bx, by): bid for bid, bx, by in state.block_positions}
+
+        new_carrying_key = state.carrying_key
+        new_open_doors = state.open_doors
+        new_block_positions = state.block_positions
+        action_label = "move_forward"
+
+        if next_pos in self.doors:
+            door_info = self.doors[next_pos]
+            if door_info["id"] not in state.open_doors:
+                held_color = None
+                if state.carrying_key is not None:
+                    held_color = self.keys_by_id[state.carrying_key]["color"]
+                if held_color == door_info["color"]:
+                    new_open_doors = state.open_doors | {door_info["id"]}
+                    action_label = f"open_door:{door_info['id']}"
+                    if self.key_consumption:
+                        new_carrying_key = None
+                else:
+                    return successors
+
+        if next_pos in self.gates:
+            gate_id = self.gates[next_pos]
+            if gate_id not in state.open_gates:
+                return successors
+
+        if next_pos in block_dict:
+            push_x, push_y = nx + dx, ny + dy
+            push_pos = (push_x, push_y)
+            if (
+                push_pos in self.walls
+                or push_pos in block_dict
+                or push_pos in self.doors
+                or push_pos in self.gates
+                or push_pos in self.hazards
+                or not (0 <= push_x < self.width and 0 <= push_y < self.height)
+            ):
+                return successors
+            bid = block_dict[next_pos]
+            new_block_positions = (
+                state.block_positions - {(bid, nx, ny)} | {(bid, push_x, push_y)}
+            )
+            action_label = f"push:{bid}:{push_x},{push_y}"
+
+        actual_pos = next_pos
+        if next_pos in self.teleporter_map:
+            actual_pos = self.teleporter_map[next_pos]
+            action_label = f"teleport:{next_pos}->{actual_pos}"
+
+        successors.append(
+            SuccessorTransition(
+                next_state=ValidatorState(
+                    agent_pos=actual_pos,
+                    agent_dir=state.agent_dir,
+                    carrying_key=new_carrying_key,
+                    collected_keys=state.collected_keys,
+                    active_switches=state.active_switches,
+                    used_switches=state.used_switches,
+                    open_gates=state.open_gates,
+                    open_doors=new_open_doors,
+                    block_positions=new_block_positions,
+                ),
+                next_pos=actual_pos,
+                action_label=action_label,
+            )
+        )
 
         return successors
 
@@ -349,6 +373,7 @@ class TaskValidator:
         )
         initial_state = ValidatorState(
             agent_pos=self.start,
+            agent_dir=0,
             carrying_key=None,
             collected_keys=frozenset(),
             active_switches=initial_active_switches,
@@ -360,7 +385,8 @@ class TaskValidator:
 
         beatable, path, states_explored = self._find_solution(initial_state, max_states=max_states)
         if beatable:
-            return True, path, f"Solution found in {len(path)} steps ({states_explored} states explored)"
+            step_count = len(path) - 1 if path else 0
+            return True, path, f"Solution found in {step_count} steps ({states_explored} states explored)"
         if states_explored >= max_states:
             return False, None, f"State space exceeded {max_states} states without finding solution"
         return False, None, f"No solution found ({states_explored} states explored, all reachable states checked)"
@@ -492,6 +518,7 @@ class TaskValidator:
         )
         initial_state = ValidatorState(
             agent_pos=self.start,
+            agent_dir=0,
             carrying_key=None,
             collected_keys=frozenset(),
             active_switches=initial_active_switches,
@@ -531,6 +558,7 @@ class TaskValidator:
                     ):
                         dropped_state = ValidatorState(
                             agent_pos=transition.next_state.agent_pos,
+                            agent_dir=transition.next_state.agent_dir,
                             carrying_key=None,
                             collected_keys=transition.next_state.collected_keys,
                             active_switches=transition.next_state.active_switches,
@@ -571,6 +599,7 @@ class TaskValidator:
         )
         initial_state = ValidatorState(
             agent_pos=self.start,
+            agent_dir=0,
             carrying_key=None,
             collected_keys=frozenset(),
             active_switches=initial_active_switches,
@@ -739,7 +768,14 @@ class DifficultyReport:
 
 
 def compute_difficulty(spec: TaskSpecification) -> DifficultyReport:
-    """Compute difficulty metrics for a task specification."""
+    """
+    Compute solver-derived difficulty metrics for a task.
+
+    This is a compact report centered on BFS output: beatability, shortest
+    action count, states explored, coarse mechanism complexity, and a legacy
+    composite score. Use compute_12d_score when the full rubric vector is
+    needed for benchmark comparison.
+    """
     validator = TaskValidator(spec)
     is_beatable, solution, message = validator.validate()
 
@@ -750,10 +786,14 @@ def compute_difficulty(spec: TaskSpecification) -> DifficultyReport:
     states_explored = int(match.group(1)) if match else 0
     seen = set()
     backtrack_count = 0
+    previous_pos = None
     for pos in solution or []:
+        if pos == previous_pos:
+            continue
         if pos in seen:
             backtrack_count += 1
         seen.add(pos)
+        previous_pos = pos
 
     # Count mechanisms
     m = spec.mechanisms
