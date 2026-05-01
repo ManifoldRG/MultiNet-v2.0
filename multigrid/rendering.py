@@ -228,12 +228,12 @@ class MinimalRenderer(Renderer):
             # Base
             self.draw.rectangle(
                 [x - switch_r, y - switch_r, x + switch_r, y + switch_r],
-                fill=COLORS["grey"],
+                fill=color,
                 outline=COLORS["black"]
             )
             # Indicator (lit if active)
             indicator_r = int(r * 0.25)
-            indicator_color = color if is_active else COLORS["black"]
+            indicator_color = COLORS["white"] if is_active else COLORS["black"]
             self.draw.ellipse(
                 [x - indicator_r, y - indicator_r, x + indicator_r, y + indicator_r],
                 fill=indicator_color

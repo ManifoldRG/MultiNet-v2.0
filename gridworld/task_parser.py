@@ -246,6 +246,7 @@ class TaskParser:
                 switch.controls,  # List of gate IDs this switch controls
                 switch.switch_type,
                 switch.initial_state,
+                switch.color,
             )
 
         # Place blocks
