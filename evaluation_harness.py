@@ -1,5 +1,5 @@
 """
-Evaluation Harness for MultiNet v1.1
+Evaluation Harness for MultiNet-v2.0
 
 Wraps GridRunner + ModelInterface to evaluate models on MiniGrid tasks.
 Handles conversion between GridRunner's callback interface and ModelInterface.

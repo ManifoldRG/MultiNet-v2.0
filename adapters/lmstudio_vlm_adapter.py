@@ -1,5 +1,5 @@
 """
-LMStudio VLM Adapter for MultiNet v1.1
+LMStudio VLM Adapter for MultiNet-v2.0
 
 Uses the OpenAI-compatible chat/completions endpoint provided by LMStudio.
 Also works with any OpenAI-compatible vision API.

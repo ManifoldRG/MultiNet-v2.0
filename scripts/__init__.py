@@ -1,1 +1,1 @@
-"""Helper CLI scripts for MultiNet v1.1."""
+"""Helper CLI scripts for MultiNet-v2.0."""

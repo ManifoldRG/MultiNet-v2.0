@@ -5,9 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_v1_1_dir = str(Path(__file__).resolve().parent.parent)
-if _v1_1_dir not in sys.path:
-    sys.path.insert(0, _v1_1_dir)
+_repo_root = str(Path(__file__).resolve().parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from scripts.chat_smoke_test import LOOK_TOKEN, build_prompt, parse_model_reply
 

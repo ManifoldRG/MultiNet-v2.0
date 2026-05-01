@@ -1,5 +1,5 @@
 """
-Ollama VLM Adapter for MultiNet v1.1
+Ollama VLM Adapter for MultiNet-v2.0
 
 Connects to a local Ollama server to use open-source VLMs for MiniGrid evaluation.
 Recommended model: qwen2.5vl:7b (best accuracy in the 7B VLM class).

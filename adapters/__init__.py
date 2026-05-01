@@ -1,1 +1,1 @@
-"""Model adapters for MultiNet v1.1 evaluation."""
+"""Model adapters for MultiNet-v2.0 evaluation."""
