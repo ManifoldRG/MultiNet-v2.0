@@ -18,6 +18,7 @@ disable_gymnasium_env_plugins()
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import WorldObj, Key, Door, Goal, Wall, Lava, Box, Ball
+from minigrid.utils.rendering import fill_coords, point_in_circle
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
@@ -32,6 +33,17 @@ MINIGRID_COLORS = {
     "purple": "purple",
     "grey": "grey",
     "gray": "grey",
+}
+
+SWITCH_RENDER_COLORS = {
+    "red": np.array([255, 0, 0]),
+    "green": np.array([0, 255, 0]),
+    "blue": np.array([0, 0, 255]),
+    "purple": np.array([112, 39, 195]),
+    "yellow": np.array([255, 255, 0]),
+    "grey": np.array([100, 100, 100]),
+    "gray": np.array([100, 100, 100]),
+    "white": np.array([255, 255, 255]),
 }
 
 
@@ -49,7 +61,8 @@ class Switch(Ball):
         switch_type: str = "toggle",
         initial_state: str = "off",
     ):
-        super().__init__(color)
+        self.visual_color = color
+        super().__init__(MINIGRID_COLORS.get(color, "grey"))
         self.switch_id = switch_id
         self.controls = controls or []
         self.switch_type = switch_type
@@ -84,6 +97,16 @@ class Switch(Ball):
             self.is_active = False
             return True
         return False
+
+    def render(self, img):
+        color = SWITCH_RENDER_COLORS.get(self.visual_color, SWITCH_RENDER_COLORS["grey"])
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), color)
+
+    def encode(self):
+        obj_type, color_idx, state = super().encode()
+        if self.visual_color not in MINIGRID_COLORS:
+            state = 1
+        return (obj_type, color_idx, state)
 
 
 class Gate(Door):

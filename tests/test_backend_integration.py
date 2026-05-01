@@ -45,6 +45,49 @@ def test_minigrid_respects_initial_switch_state():
     assert "g1" in state.open_gates
 
 
+def test_switch_colors_are_preserved_across_backends():
+    spec = TaskSpecification.from_dict({
+        "task_id": "colored_switch",
+        "seed": 11,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [8, 8],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [6, 6],
+        },
+        "mechanisms": {
+            "switches": [
+                {
+                    "id": "s1",
+                    "position": [2, 2],
+                    "controls": ["g1"],
+                    "color": "white",
+                    "switch_type": "toggle",
+                    "initial_state": "off",
+                }
+            ],
+            "gates": [{"id": "g1", "position": [4, 4], "initial_state": "closed"}],
+        },
+        "goal": {"type": "reach_position", "target": [6, 6]},
+        "max_steps": 40,
+    })
+
+    assert spec.mechanisms.switches[0].color == "white"
+    assert spec.to_dict()["mechanisms"]["switches"][0]["color"] == "white"
+
+    minigrid = MiniGridBackend(render_mode="rgb_array")
+    minigrid.configure(spec)
+    minigrid.reset(seed=11)
+    minigrid_switch = minigrid.env.grid.get(2, 2)
+    assert minigrid_switch.visual_color == "white"
+
+    multigrid = MultiGridBackend(tiling="square", render_mode="rgb_array")
+    multigrid.configure(spec)
+    multigrid.reset(seed=11)
+    assert multigrid.env.state.objects["s1"].color == "white"
+
+
 def test_doors_and_gates_may_replace_wall_cells():
     spec = TaskSpecification.from_dict({
         "task_id": "barriers_replace_walls",

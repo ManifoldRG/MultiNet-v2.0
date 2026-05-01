@@ -192,7 +192,7 @@ class MultiGridBackend(AbstractGridBackend):
             objects.append({
                 "id": switch.id,
                 "type": "switch",
-                "color": "yellow",
+                "color": switch.color,
                 "position": canonical_pos(switch.position.x, switch.position.y),
                 "controls": switch.controls,
                 "switch_type": switch.switch_type,
