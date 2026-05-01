@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multinet-v1-1"
+version = "0.1.0"
+description = "Gridworld and multigrid evaluation harness for multimodal model benchmarking."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "gymnasium",
+    "minigrid",
+    "numpy",
+    "pillow",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+visual = [
+    "matplotlib",
+    "pygame",
+]
+hf = [
+    "torch",
+    "transformers",
+]
+
+[project.scripts]
+multinet-run-eval = "run_eval:main"
+
+[tool.setuptools]
+include-package-data = true
+py-modules = [
+    "model_interface",
+    "run_eval",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "gridworld*",
+    "mazes*",
+]
+
+[tool.setuptools.package-data]
+gridworld = ["tasks/**/*.json", "tasks/*.json"]
+mazes = ["validation_10/**/*.json", "validation_10/*.json"]
