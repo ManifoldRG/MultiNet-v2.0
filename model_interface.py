@@ -13,7 +13,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -26,6 +26,8 @@ class ModelInput:
     max_steps: int
     additional_context: str | None = None
     prior_images: list[np.ndarray] | None = None
+    task_spec: Any | None = None   # Optional structured task for non-learned baselines
+    grid_state: Any | None = None  # Optional live state for non-learned baselines
 
 
 @dataclass

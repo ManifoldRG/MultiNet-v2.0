@@ -7,6 +7,8 @@ benchmark sets, starting with `validation_10`.
 
 Usage:
     python run_eval.py --model random --benchmark validation_10
+    python run_eval.py --model bfs --benchmark validation_10
+    python run_eval.py --model greedy --benchmark validation_10
     python run_eval.py --model random --benchmark validation_10 --backend multigrid --tiling square
     python run_eval.py --model random --benchmark tiers --tier 1
     python run_eval.py --model ollama --ollama-model qwen2.5vl:7b --benchmark validation_10
@@ -48,11 +50,18 @@ def parse_tiers(tier_str: str) -> list[int]:
 def load_model(args) -> "ModelInterface":
     """Load model based on CLI arguments."""
     from model_interface import ModelInterface, RandomModelInterface, FileBasedModelInterface
+    from gridworld.baselines import BFSModelInterface, GreedyModelInterface
 
     model_name = args.model.lower()
 
     if model_name == "random":
         return RandomModelInterface(seed=args.seed)
+
+    elif model_name == "bfs":
+        return BFSModelInterface()
+
+    elif model_name == "greedy":
+        return GreedyModelInterface()
 
     elif model_name == "file_based":
         if not args.work_dir:
@@ -90,14 +99,14 @@ def load_model(args) -> "ModelInterface":
 
     else:
         raise ValueError(
-            f"Unknown model: {model_name}. Options: random, file_based, ollama, lmstudio, paligemma"
+            f"Unknown model: {model_name}. Options: random, bfs, greedy, file_based, ollama, lmstudio, paligemma"
         )
 
 
 def main():
     parser = argparse.ArgumentParser(description="MultiNet-v2.0 Evaluation CLI")
     parser.add_argument("--model", required=True,
-                        help="Model to evaluate: random, file_based, ollama, lmstudio, paligemma")
+                        help="Model to evaluate: random, bfs, greedy, file_based, ollama, lmstudio, paligemma")
     parser.add_argument("--benchmark", default="validation_10",
                         choices=["validation_10", "tiers", "directory"],
                         help="Benchmark mode: validation_10, legacy tiers, or every JSON in --task-dir")
