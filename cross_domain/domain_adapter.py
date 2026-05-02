@@ -8,28 +8,11 @@ to domain-specific environments and back.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
 
 from .canonical_task_spec import CanonicalTaskSpec
-
-
-@dataclass
-class GUIAction:
-    """
-    Action type for Domain 4 (GUI manipulation) -- forward-looking.
-
-    Designed now to ensure the cross-domain interface supports
-    mouse/keyboard GUI interactions from the start.
-    """
-    action_type: str  # "mouse_click", "mouse_drag", "key_press"
-    x: float = 0.0
-    y: float = 0.0
-    drag_to_x: float = 0.0
-    drag_to_y: float = 0.0
-    key: str = ""     # For key_press actions
 
 
 class DomainAdapter(ABC):
@@ -43,7 +26,6 @@ class DomainAdapter(ABC):
     - GridWorldDomainAdapter: MiniGrid/MultiGrid gridworlds
     - PhysicsDomainAdapter (future): Pymunk 2D physics
     - NLDomainAdapter (future): Natural language commands
-    - GUIDomainAdapter (future): Pygame GUI manipulation
     """
 
     @property
@@ -55,7 +37,7 @@ class DomainAdapter(ABC):
     @property
     @abstractmethod
     def action_type(self) -> str:
-        """Action type: 'discrete', 'continuous', 'text', 'gui'."""
+        """Action type: 'discrete', 'continuous', or 'text'."""
         ...
 
     @abstractmethod

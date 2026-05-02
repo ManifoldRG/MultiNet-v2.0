@@ -12,7 +12,12 @@ from typing import Any, Optional
 
 import numpy as np
 
-from .canonical_task_spec import CanonicalTaskSpec, CanonicalGoal, CanonicalObject
+from .canonical_task_spec import (
+    CanonicalGoal,
+    CanonicalObject,
+    CanonicalRules,
+    CanonicalTaskSpec,
+)
 from .domain_adapter import DomainAdapter
 
 try:
@@ -21,6 +26,7 @@ try:
     from ..gridworld.task_spec import (
         TaskSpecification, MazeLayout, MechanismSet, Rules, GoalSpec, Position,
         KeySpec, DoorSpec, SwitchSpec, GateSpec, BlockSpec, TeleporterSpec, HazardSpec,
+        DependencyChain, Distractor,
     )
 except ImportError:
     from gridworld.backends.base import AbstractGridBackend, GridState
@@ -28,6 +34,7 @@ except ImportError:
     from gridworld.task_spec import (
         TaskSpecification, MazeLayout, MechanismSet, Rules, GoalSpec, Position,
         KeySpec, DoorSpec, SwitchSpec, GateSpec, BlockSpec, TeleporterSpec, HazardSpec,
+        DependencyChain, Distractor,
     )
 
 
@@ -77,8 +84,8 @@ class GridWorldDomainAdapter(DomainAdapter):
 
         def denorm(pos: tuple[float, ...]) -> Position:
             """Convert normalized [0,1] to grid coordinates."""
-            x = max(1, min(grid_w - 2, int(pos[0] * (grid_w - 1))))
-            y = max(1, min(grid_h - 2, int(pos[1] * (grid_h - 1))))
+            x = max(0, min(grid_w - 1, int(round(pos[0] * (grid_w - 1)))))
+            y = max(0, min(grid_h - 1, int(round(pos[1] * (grid_h - 1)))))
             return Position(x, y)
 
         # Build mechanisms from canonical objects
@@ -121,12 +128,15 @@ class GridWorldDomainAdapter(DomainAdapter):
                     id=obj.id,
                     position=pos,
                     controls=props.get("controls", []),
+                    color=props.get("color", "yellow"),
                     switch_type=props.get("switch_type", "toggle"),
+                    initial_state=props.get("initial_state", "off"),
                 ))
             elif obj.obj_type == "block":
                 blocks.append(BlockSpec(
                     id=obj.id,
                     position=pos,
+                    pushable=props.get("pushable", True),
                     color=props.get("color", "grey"),
                 ))
             elif obj.obj_type == "hazard":
@@ -157,10 +167,29 @@ class GridWorldDomainAdapter(DomainAdapter):
             }.get(spec.goal.goal_type, "reach_position"),
             target=goal_target,
             target_ids=spec.goal.target_ids,
+            target_positions=[denorm(pos) for pos in spec.goal.target_positions],
         )
 
         start = denorm(spec.agent_start)
-        goal_pos = goal_target or Position(grid_w - 2, grid_h - 2)
+        maze_goal = spec.domain_config.get("maze_goal")
+        goal_pos = goal_target or (
+            denorm(tuple(maze_goal)) if maze_goal else Position(grid_w - 2, grid_h - 2)
+        )
+        rules = Rules(
+            key_consumption=spec.rules.key_consumption,
+            switch_type=spec.rules.switch_type,
+            hidden_mechanisms=spec.rules.hidden_mechanisms,
+            observability=spec.rules.observability,
+            view_size=spec.rules.view_size,
+        )
+        dependency_chain = (
+            DependencyChain.from_dict(spec.dependency_chain)
+            if spec.dependency_chain
+            else None
+        )
+        distractors = [
+            Distractor.from_dict(item) for item in spec.distractors
+        ] if spec.distractors else None
 
         task_spec = TaskSpecification(
             task_id=spec.task_id,
@@ -181,9 +210,13 @@ class GridWorldDomainAdapter(DomainAdapter):
                 teleporters=teleporters,
                 hazards=hazards,
             ),
-            rules=Rules(),
+            rules=rules,
             goal=goal,
             max_steps=spec.max_steps,
+            dependency_chain=dependency_chain,
+            distractors=distractors,
+            metadata=spec.domain_config.get("metadata"),
+            version=spec.domain_config.get("version", "1.0"),
             description=spec.description,
         )
 
@@ -232,7 +265,12 @@ class GridWorldDomainAdapter(DomainAdapter):
                 id=switch.id,
                 obj_type="interactive",
                 position=norm(switch.position),
-                properties={"controls": switch.controls, "switch_type": switch.switch_type},
+                properties={
+                    "controls": switch.controls,
+                    "color": switch.color,
+                    "switch_type": switch.switch_type,
+                    "initial_state": switch.initial_state,
+                },
             ))
 
         # Convert gates
@@ -250,7 +288,7 @@ class GridWorldDomainAdapter(DomainAdapter):
                 id=block.id,
                 obj_type="block",
                 position=norm(block.position),
-                properties={"color": block.color},
+                properties={"pushable": block.pushable, "color": block.color},
             ))
 
         # Convert hazards
@@ -285,7 +323,26 @@ class GridWorldDomainAdapter(DomainAdapter):
             goal_type=goal_type_map.get(domain_spec.goal.goal_type, "reach"),
             target=norm(domain_spec.goal.target) if domain_spec.goal.target else None,
             target_ids=domain_spec.goal.target_ids,
+            target_positions=[
+                norm(pos) for pos in domain_spec.goal.target_positions
+            ],
         )
+        rules = CanonicalRules(
+            key_consumption=domain_spec.rules.key_consumption,
+            switch_type=domain_spec.rules.switch_type,
+            hidden_mechanisms=domain_spec.rules.hidden_mechanisms,
+            observability=domain_spec.rules.observability,
+            view_size=domain_spec.rules.view_size,
+        )
+        domain_config = {
+            "grid_width": grid_w,
+            "grid_height": grid_h,
+            "maze_goal": list(norm(domain_spec.maze.goal)),
+            "version": domain_spec.version,
+        }
+        if domain_spec.metadata is not None:
+            domain_config["metadata"] = domain_spec.metadata
+        serialized = domain_spec.to_dict()
 
         return CanonicalTaskSpec(
             task_id=domain_spec.task_id,
@@ -297,7 +354,10 @@ class GridWorldDomainAdapter(DomainAdapter):
             objects=objects,
             max_steps=domain_spec.max_steps,
             description=domain_spec.description,
-            domain_config={"grid_width": grid_w, "grid_height": grid_h},
+            rules=rules,
+            dependency_chain=serialized.get("dependency_chain"),
+            distractors=serialized.get("distractors", []),
+            domain_config=domain_config,
         )
 
     def reset(self, seed: Optional[int] = None) -> tuple[np.ndarray, dict]:

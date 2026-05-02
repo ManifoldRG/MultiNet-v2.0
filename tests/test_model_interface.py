@@ -237,6 +237,22 @@ class TestEvaluationHarness:
             "max_steps": 20,
         })
 
+    def write_task(self, path: Path, spec: TaskSpecification) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        spec.to_json(str(path))
+
+    @pytest.fixture
+    def tier_task_dir(self, tmp_path, simple_spec):
+        task_root = tmp_path / "tasks"
+        for idx in range(3):
+            data = simple_spec.to_dict()
+            data["task_id"] = f"tier1_task_{idx}"
+            self.write_task(
+                task_root / "tier1" / f"task_{idx}.json",
+                TaskSpecification.from_dict(data),
+            )
+        return task_root
+
     def test_evaluate_single_task(self, simple_spec):
         model = RandomModelInterface(seed=42)
         harness = EvaluationHarness(model)
@@ -296,32 +312,29 @@ class TestEvaluationHarness:
         assert all(not inp.prior_images for inp in model.inputs)
         assert all(inp.additional_context is None for inp in model.inputs)
 
-    def test_evaluate_tier(self):
+    def test_evaluate_tier(self, tier_task_dir):
         model = RandomModelInterface(seed=42)
         harness = EvaluationHarness(model)
-        task_dir = str(Path(__file__).resolve().parent.parent / "gridworld" / "tasks")
-        metrics = harness.evaluate_tier(tier=1, task_dir=task_dir)
+        metrics = harness.evaluate_tier(tier=1, task_dir=str(tier_task_dir))
         assert isinstance(metrics, TierMetrics)
         assert metrics.tier == 1
         assert metrics.num_tasks == 3  # 3 tier1 tasks
         assert 0.0 <= metrics.success_rate <= 1.0
         harness.close()
 
-    def test_evaluate_all(self):
+    def test_evaluate_all(self, tier_task_dir):
         model = RandomModelInterface(seed=42)
         harness = EvaluationHarness(model)
-        task_dir = str(Path(__file__).resolve().parent.parent / "gridworld" / "tasks")
-        result = harness.evaluate_all(task_dir=task_dir, tiers=[1])
+        result = harness.evaluate_all(task_dir=str(tier_task_dir), tiers=[1])
         assert isinstance(result, EvaluationResult)
         assert result.model_name == "random"
         assert 1 in result.tier_metrics
         harness.close()
 
-    def test_result_serialization(self):
+    def test_result_serialization(self, tier_task_dir):
         model = RandomModelInterface(seed=42)
         harness = EvaluationHarness(model)
-        task_dir = str(Path(__file__).resolve().parent.parent / "gridworld" / "tasks")
-        result = harness.evaluate_all(task_dir=task_dir, tiers=[1])
+        result = harness.evaluate_all(task_dir=str(tier_task_dir), tiers=[1])
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             result.save(f.name)
@@ -352,14 +365,21 @@ class TestEvaluationHarness:
             os.unlink(f.name)
         harness.close()
 
-    def test_evaluate_task_dir_loads_validation_set(self):
+    def test_evaluate_task_dir_loads_directory(self, tmp_path, simple_spec):
         model = RandomModelInterface(seed=42)
         harness = EvaluationHarness(model)
-        task_dir = str(Path(__file__).resolve().parent.parent / "mazes" / "validation_10")
-        result = harness.evaluate_task_dir(task_dir=task_dir, benchmark_name="validation_10")
-        assert result.benchmark_name == "validation_10"
-        assert result.num_tasks == 10
-        assert len(result.task_results) == 10
+        task_dir = tmp_path / "task_dir"
+        for idx in range(2):
+            data = simple_spec.to_dict()
+            data["task_id"] = f"directory_task_{idx}"
+            self.write_task(
+                task_dir / f"task_{idx}.json",
+                TaskSpecification.from_dict(data),
+            )
+        result = harness.evaluate_task_dir(task_dir=str(task_dir), benchmark_name="unit_dir")
+        assert result.benchmark_name == "unit_dir"
+        assert result.num_tasks == 2
+        assert len(result.task_results) == 2
         harness.close()
 
 
@@ -481,8 +501,83 @@ class TestCrossDomain:
         assert len(key_objs) == 1
         assert key_objs[0].id == "k1"
 
-    def test_gui_action_dataclass(self):
-        from cross_domain.domain_adapter import GUIAction
-        action = GUIAction(action_type="mouse_click", x=0.5, y=0.3)
-        assert action.action_type == "mouse_click"
-        assert action.x == 0.5
+    def test_gridworld_canonical_roundtrip_preserves_domain_features(self):
+        from cross_domain.gridworld_adapter import GridWorldDomainAdapter
+
+        spec = TaskSpecification.from_dict({
+            "task_id": "feature_roundtrip",
+            "seed": 7,
+            "difficulty_tier": 5,
+            "version": "2.0",
+            "description": "Preserve gridworld-specific features.",
+            "maze": {
+                "dimensions": [10, 10],
+                "walls": [[9, 9]],
+                "start": [1, 1],
+                "goal": [8, 8],
+            },
+            "mechanisms": {
+                "keys": [{"id": "k1", "position": [2, 2], "color": "red"}],
+                "doors": [{"id": "d1", "position": [3, 2], "requires_key": "red"}],
+                "switches": [
+                    {
+                        "id": "s1",
+                        "position": [8, 7],
+                        "controls": ["g1"],
+                        "color": "white",
+                        "switch_type": "one_shot",
+                        "initial_state": "off",
+                    }
+                ],
+                "gates": [{"id": "g1", "position": [8, 8], "initial_state": "closed"}],
+                "blocks": [{"id": "b1", "position": [4, 4], "pushable": False, "color": "grey"}],
+            },
+            "rules": {
+                "key_consumption": False,
+                "switch_type": "one_shot",
+                "hidden_mechanisms": ["s1"],
+                "observability": "view_cone",
+                "view_size": 5,
+            },
+            "goal": {
+                "type": "push_block_to",
+                "target_ids": ["b1"],
+                "target_positions": [[8, 8]],
+            },
+            "dependency_chain": {
+                "depth": 2,
+                "sequence": [
+                    {"step": 1, "type": "key-door", "element": "k1", "unlocks": "d1"},
+                    {"step": 2, "type": "switch-gate", "element": "s1", "unlocks": "g1"},
+                ],
+                "notation": "k1 -> d1 -> s1 -> g1",
+            },
+            "distractors": [
+                {"type": "inactive_switch", "element_id": "s1", "description": "hidden switch"}
+            ],
+            "metadata": {"chain_pattern": "mixed"},
+            "max_steps": 120,
+        })
+
+        adapter = GridWorldDomainAdapter()
+        canonical = adapter.to_canonical(spec)
+        restored = adapter.from_canonical(canonical)
+
+        assert restored.rules.observability == "view_cone"
+        assert restored.rules.view_size == 5
+        assert restored.rules.key_consumption is False
+        assert restored.rules.hidden_mechanisms == ["s1"]
+        assert restored.dependency_chain is not None
+        assert restored.dependency_chain.depth == 2
+        assert restored.distractors is not None
+        assert restored.distractors[0].element_id == "s1"
+        assert restored.metadata == {"chain_pattern": "mixed"}
+        assert restored.version == "2.0"
+        assert restored.maze.walls[0].to_tuple() == (9, 9)
+        assert restored.mechanisms.switches[0].position.to_tuple() == (8, 7)
+        assert restored.mechanisms.switches[0].color == "white"
+        assert restored.mechanisms.switches[0].switch_type == "one_shot"
+        assert restored.mechanisms.blocks[0].pushable is False
+        assert restored.goal.goal_type == "push_block_to"
+        assert restored.goal.target_ids == ["b1"]
+        assert restored.goal.target_positions[0].to_tuple() == (8, 8)
