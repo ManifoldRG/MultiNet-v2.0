@@ -8,10 +8,11 @@ if _HF_TOKEN_FOR_THIS_SCRIPT:
 from nlu_benchmark.runner import EpisodeRunner
 from nlu_benchmark.agents import HuggingFaceLLMAgent, HFLLMConfig
 
-runner = EpisodeRunner.from_json("nlu_benchmark/sample mazes/V02_winding_corridor.json")
+runner = EpisodeRunner.from_json("nlu_benchmark/sample mazes/V01_empty_room.json")
 
 # Uses HFLLMConfig defaults (small Qwen on HF Router). Override model=... if needed.
 agent = HuggingFaceLLMAgent(config=HFLLMConfig())
 
 result = runner.run(agent)
 print(result["success"])
+

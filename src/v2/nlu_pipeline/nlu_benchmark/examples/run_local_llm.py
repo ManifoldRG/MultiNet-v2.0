@@ -1,7 +1,7 @@
 from nlu_benchmark.runner import EpisodeRunner
 from nlu_benchmark.agents import LocalTransformersAgent, LocalLLMConfig
 
-runner = EpisodeRunner.from_json("nlu_benchmark/sample mazes/V02_winding_corridor.json")
+runner = EpisodeRunner.from_json("nlu_benchmark/sample mazes/V01_empty_room.json")
 
 # Small local model (no HF inference credits required).
 agent = LocalTransformersAgent(
@@ -13,3 +13,4 @@ agent = LocalTransformersAgent(
 
 result = runner.run(agent)
 print(result["success"])
+
