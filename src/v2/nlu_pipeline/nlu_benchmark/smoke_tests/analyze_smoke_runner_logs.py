@@ -13,7 +13,7 @@ def main() -> None:
 
     maze_stem = Path(args.maze).stem
     suffix = f"_{args.tag}" if args.tag else ""
-    p = Path(__file__).resolve().parent / "results" / f"smoke_runner_matrix_{maze_stem}{suffix}" / "detailed_logs.json"
+    p = Path(__file__).resolve().parent / "results" / f"smoke_all_{maze_stem}{suffix}" / "detailed_logs.json"
     d = json.loads(p.read_text(encoding="utf-8"))
     runs = d["runs"]
     print("runs", len(runs))
