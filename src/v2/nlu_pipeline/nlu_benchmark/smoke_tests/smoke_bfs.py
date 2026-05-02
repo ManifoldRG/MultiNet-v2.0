@@ -108,7 +108,7 @@ def _inject_pickups(actions: list[str], env, state) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run BFS-guided smoke test on an NLU sample maze.")
+    parser = argparse.ArgumentParser(description="Smoke test: mazegen solver plan replayed in NLU env (PNG trace under results/smoke_*_bfs/).")
     parser.add_argument("--maze", default="V04_single_key.json", help="Maze JSON filename under sample mazes/")
     parser.add_argument("--tag", default="", help="Optional output tag suffix.")
     args = parser.parse_args()
@@ -116,7 +116,7 @@ def main() -> None:
     maze_path = ROOT / "nlu_benchmark" / "sample mazes" / args.maze
     maze_stem = Path(args.maze).stem
     suffix = f"_{args.tag}" if args.tag else ""
-    out_dir = Path(__file__).resolve().parent / "results" / f"smoke_{maze_stem}_smart_manual{suffix}"
+    out_dir = Path(__file__).resolve().parent / "results" / f"smoke_{maze_stem}_bfs{suffix}"
     out_dir.mkdir(parents=True, exist_ok=True)
     for p in out_dir.glob("*.png"):
         p.unlink()
