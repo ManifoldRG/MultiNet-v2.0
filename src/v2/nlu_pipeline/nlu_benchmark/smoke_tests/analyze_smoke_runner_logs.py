@@ -41,10 +41,11 @@ def main() -> None:
                 issues.append((label, "image_mode_not_list"))
 
         has_initial = "Initial maze (fixed for this episode):" in system_prompt
-        if cfg["observation"] == "screenshot_only" and has_initial:
-            issues.append((label, "screenshot_has_initial_maze"))
-        if cfg["observation"] != "screenshot_only" and not has_initial:
-            issues.append((label, "non_screenshot_missing_initial_maze"))
+        obs = cfg["observation"]
+        if obs == "image_only" and has_initial:
+            issues.append((label, "image_only_has_initial_maze"))
+        if obs != "image_only" and not has_initial:
+            issues.append((label, "missing_initial_maze"))
 
         has_mechanism_list = "The environment may contain:" in system_prompt
         has_rules = "RULES (domain logic):" in system_prompt
@@ -72,9 +73,9 @@ def main() -> None:
             if cfg["context_window"] == "current" and (has_recent or has_action_only):
                 issues.append((label, "current_has_history"))
             if cfg["context_window"] == "last3":
-                if cfg["observation"] == "screenshot_only" and not has_action_only:
-                    issues.append((label, "last3_screenshot_missing_action_history"))
-                if cfg["observation"] != "screenshot_only" and not has_recent:
+                if obs == "image_only" and not has_action_only:
+                    issues.append((label, "last3_image_only_missing_action_history"))
+                if obs != "image_only" and not has_recent:
                     issues.append((label, "last3_missing_history"))
 
         steps = [t["step"] for t in transcript]

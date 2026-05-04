@@ -1,7 +1,11 @@
-from nlu_benchmark.runner import EpisodeRunner
+from nlu_benchmark.config import ExperimentConfig
+from nlu_benchmark.runner import ExperimentRunner
 from nlu_benchmark.agents import LocalTransformersAgent, LocalLLMConfig
 
-runner = EpisodeRunner.from_json("nlu_benchmark/sample mazes/V01_empty_room.json")
+runner = ExperimentRunner.from_json(
+    "nlu_benchmark/sample mazes/V01_empty_room.json",
+    config=ExperimentConfig(observation="text_only"),
+)
 
 # Small local model (no HF inference credits required).
 agent = LocalTransformersAgent(

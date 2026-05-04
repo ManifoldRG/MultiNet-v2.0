@@ -253,7 +253,7 @@ def _suite_cases(base: ExperimentConfig, suite: str):
         (replace(base, context_window="last3"), "context=last3"),
         (replace(base, observation="text_only", context_window="last3"), "obs=text_only"),
         (replace(base, observation="image_text", context_window="last3"), "obs=image_text"),
-        (replace(base, observation="screenshot_only", context_window="last3"), "obs=screenshot_only"),
+        (replace(base, observation="image_only", context_window="last3"), "obs=image_only"),
         (replace(base, querying="step_by_step"), "query=step_by_step"),
         (replace(base, querying="subgoal"), "query=subgoal"),
         (replace(base, querying="full_trajectory"), "query=full_trajectory"),
@@ -308,10 +308,10 @@ def run_smoke_suite(maze_name: str, tag: str, max_steps: int, suite: str = "all"
             _assert(first["user_content_type"] == "list", f"{label}: image mode should send list content", errors)
             _assert(first["has_image"], f"{label}: image mode should include image block", errors)
 
-        if cfg.observation == "screenshot_only":
-            _assert("Initial maze (fixed for this episode):" not in first["system"], f"{label}: screenshot_only should omit initial NL map", errors)
+        if cfg.observation == "image_only":
+            _assert("Initial maze (fixed for this episode):" not in first["system"], f"{label}: image_only should omit initial NL map", errors)
         else:
-            _assert("Initial maze (fixed for this episode):" in first["system"], f"{label}: non-screenshot should include initial NL map", errors)
+            _assert("Initial maze (fixed for this episode):" in first["system"], f"{label}: expected initial NL map in system prompt", errors)
 
         if cfg.context_window == "current" and len(agent.calls) > 1:
             second_text = agent.calls[1]["user_text"]
@@ -319,8 +319,8 @@ def run_smoke_suite(maze_name: str, tag: str, max_steps: int, suite: str = "all"
             _assert("Recent steps (oldest first, action only):" not in second_text, f"{label}: current unexpectedly includes action history", errors)
         if cfg.context_window == "last3" and len(agent.calls) > 1:
             second_text = agent.calls[1]["user_text"]
-            if cfg.observation == "screenshot_only":
-                _assert("Recent steps (oldest first, action only):" in second_text, f"{label}: last3 screenshot should include action-only history", errors)
+            if cfg.observation == "image_only":
+                _assert("Recent steps (oldest first, action only):" in second_text, f"{label}: last3 image_only should include action-only history", errors)
             else:
                 _assert("Recent history (last 3 steps, oldest first):" in second_text, f"{label}: last3 should include full history", errors)
 

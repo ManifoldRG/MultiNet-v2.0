@@ -15,9 +15,9 @@ class ExperimentConfig:
         Maze **layout** text is in the system / user split from ``observation``, not from prompting.
 
     observation
-        text_only       – initial NL maze in system; current situation text per user turn; last3 history
-        image_text      – same as text_only + live PNG each turn; last3 = full feedback
-        screenshot_only – live PNG only (no NL map); last3 = action-only lines
+        text_only        – initial NL maze in system; current situation text per user turn; last3 history
+        image_text       – same as text_only + live PNG each turn; last3 = full feedback
+        image_only       – live PNG only (no NL map); last3 = action-only lines (default)
 
     context_window
         current  – only the current observation (no prior steps in the prompt)
@@ -30,7 +30,7 @@ class ExperimentConfig:
     """
 
     prompting: Literal["minimal", "standard", "verbose"] = "minimal"
-    observation: Literal["text_only", "image_text", "screenshot_only"] = "text_only"
+    observation: Literal["text_only", "image_text", "image_only"] = "image_only"
     context_window: Literal["current", "last3"] = "current"
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
 

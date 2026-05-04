@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-ObservationKind = Literal["text_only", "image_text", "screenshot_only"]
+ObservationKind = Literal["text_only", "image_text", "image_only"]
 
 
 def action_feedback_for_prompt(observation: ObservationKind, text: str) -> str:
-    """Step outcomes for ``Last result:`` / history; cleared for screenshot-only. Parse failures are never masked (see runner)."""
-    if observation == "screenshot_only":
+    """Step outcomes for ``Last result:`` / history; cleared for ``image_only``. Parse failures stay visible in runner."""
+    if observation == "image_only":
         return ""
     return text
 

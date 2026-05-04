@@ -1,18 +1,21 @@
 import os
+from pathlib import Path
 
-# Optional: paste a token here for quick runs, or set HF_TOKEN in your shell / `huggingface-cli login`.
-_HF_TOKEN_FOR_THIS_SCRIPT = ""
-if _HF_TOKEN_FOR_THIS_SCRIPT:
-    os.environ["HF_TOKEN"] = _HF_TOKEN_FOR_THIS_SCRIPT
+# Load Anthropic API key from repo-root api_key.txt if ANTHROPIC_API_KEY is unset.
+if not os.environ.get("ANTHROPIC_API_KEY"):
+    for directory in Path(__file__).resolve().parents:
+        key_file = directory / "api_key.txt"
+        if key_file.is_file():
+            os.environ["ANTHROPIC_API_KEY"] = key_file.read_text().strip()
+            break
 
-from nlu_benchmark.runner import EpisodeRunner
-from nlu_benchmark.agents import HuggingFaceLLMAgent, HFLLMConfig
+from nlu_benchmark.runner import ExperimentRunner
+from nlu_benchmark.agents import ClaudeAnthropicAgent, ClaudeAnthropicConfig
 
-runner = EpisodeRunner.from_json("nlu_benchmark/sample mazes/V01_empty_room.json")
+runner = ExperimentRunner.from_json("nlu_benchmark/sample mazes/V01_empty_room.json")
 
-# Uses HFLLMConfig defaults (small Qwen on HF Router). Override model=... if needed.
-agent = HuggingFaceLLMAgent(config=HFLLMConfig())
+# Override model=... on ClaudeAnthropicConfig if needed (see Anthropic model IDs).
+agent = ClaudeAnthropicAgent(config=ClaudeAnthropicConfig())
 
 result = runner.run(agent)
 print(result["success"])
-

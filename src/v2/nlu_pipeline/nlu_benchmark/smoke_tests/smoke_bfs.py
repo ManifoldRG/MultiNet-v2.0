@@ -13,7 +13,7 @@ if str(V2_ROOT) not in sys.path:
 
 from nlu_benchmark.env import FACING_ORDER, FACING_TO_DELTA
 from nlu_benchmark.loader import load_maze
-from nlu_benchmark.renderer import render_maze_image_png_bytes
+from nlu_benchmark.smoke_trace import trace_prepare, trace_reset, trace_step, trace_write_text_artifacts
 from automatic_maze_generation.mazegen.models import Door, Gate, Key, MazeInstance, Switch
 from automatic_maze_generation.mazegen.solver import solve_maze
 
@@ -117,12 +117,7 @@ def main() -> None:
     maze_stem = Path(args.maze).stem
     suffix = f"_{args.tag}" if args.tag else ""
     out_dir = Path(__file__).resolve().parent / "results" / f"smoke_{maze_stem}_bfs{suffix}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for p in out_dir.glob("*.png"):
-        p.unlink()
-    for p in out_dir.glob("*.txt"):
-        p.unlink()
-
+    trace_prepare(out_dir)
     env_plan = load_maze(maze_path)
     plan_state = env_plan.reset()
     maze_inst = _state_to_maze_instance(plan_state)
@@ -137,24 +132,15 @@ def main() -> None:
     env = load_maze(maze_path)
     state = env.reset()
 
-    (out_dir / "step_000_reset.png").write_bytes(render_maze_image_png_bytes(state))
-    lines = [f"000 RESET pos={state.agent_pos} facing={state.facing} inv={state.inventory}"]
+    lines = trace_reset(out_dir, state)
 
     for step, action in enumerate(executable_actions, start=1):
         before = state.agent_pos
-        state, event = env.step(action)
-        (out_dir / f"step_{step:03d}_{action}.png").write_bytes(render_maze_image_png_bytes(state))
-        line = (
-            f"{step:03d} {action:<12} {event.type:<10} from={before} "
-            f"to={state.agent_pos} facing={state.facing} inv={state.inventory}"
-        )
-        print(line)
-        lines.append(line)
+        state, event = trace_step(out_dir, lines, step, action, env, position_before=before)
         if event.type == "DONE":
             break
 
-    (out_dir / "run_log.txt").write_text("\n".join(lines), encoding="utf-8")
-    (out_dir / "plan.txt").write_text("\n".join(executable_actions), encoding="utf-8")
+    trace_write_text_artifacts(out_dir, lines, executable_actions)
     print(f"\nsuccess={state.agent_pos == state.goal}")
     print(f"steps_used={state.step_count}")
     print(f"out={out_dir}")
