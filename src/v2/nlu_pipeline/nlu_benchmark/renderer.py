@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import Any
 
 from nlu_benchmark.env import GridState
 
@@ -128,3 +129,26 @@ def render_maze_image_png_bytes(state: GridState) -> bytes:
         agent_pos=(ar, ac),
         facing=state.facing,
     )
+
+
+def render_task_json_with_solver_path_png(
+    task_data: dict[str, Any],
+    solver_path_xy: list[tuple[int, int]],
+    output_path: Path,
+) -> None:
+    """
+    One static figure like ``automatic_maze_generation/render_dataset.py`` / ``main()``:
+    maze + mechanisms + semi-transparent optimal route.
+
+    ``solver_path_xy`` is ``solve_maze(...)["path"]`` (mazegen 0-based ``(x, y)``; ``x`` = column index, ``y`` = row index).
+    """
+    optimal_path_rc = [[y + 1, x + 1] for (x, y) in solver_path_xy]
+    payload = {
+        **task_data,
+        "validation": {
+            **task_data.get("validation", {}),
+            "optimal_path": optimal_path_rc,
+        },
+    }
+    mod = _render_dataset_module()
+    mod.render_maze_payload(payload, output_path)

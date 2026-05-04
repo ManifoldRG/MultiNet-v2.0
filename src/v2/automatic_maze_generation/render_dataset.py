@@ -42,7 +42,8 @@ def _row_col_payload_to_xy_payload(payload: dict) -> dict:
 
     def rc_to_xy(pos):
         r, c = pos
-        return [c, r]
+        # Payloads use 1-based (row, col); drawing uses 0-based (x=col, y=row).
+        return [c - 1, r - 1]
 
     dims = maze.get("dimensions")
     if dims and len(dims) == 2:
@@ -320,7 +321,7 @@ def _figure_from_maze_payload(payload: dict, title: str) -> Tuple[Any, Any, int]
     ax.set_title(title)
     ax.set_xlim(0, width)
     ax.set_ylim(0, height)
-    ax.set_aspect("equal")
+    ax.set_aspect("equal", adjustable="box")
     ax.axis("off")
 
     return fig, ax, height

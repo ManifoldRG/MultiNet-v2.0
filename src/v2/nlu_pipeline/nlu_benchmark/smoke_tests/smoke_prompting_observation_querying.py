@@ -18,10 +18,9 @@ if str(V2_ROOT) not in sys.path:
 
 from nlu_benchmark.config import ExperimentConfig
 from nlu_benchmark.env import FACING_ORDER, FACING_TO_DELTA
-from nlu_benchmark.loader import load_maze
+from nlu_benchmark.loader import load_maze, grid_state_to_maze_instance
 from nlu_benchmark.runner import ExperimentRunner
 import nlu_benchmark.observation as observation_module
-from automatic_maze_generation.mazegen.models import Door, Gate, Key, MazeInstance, Switch
 from automatic_maze_generation.mazegen.solver import solve_maze
 
 
@@ -88,51 +87,6 @@ def _plan_to_goal_from_prompt(user_text: str, budget: int = 6) -> list[str]:
     return actions[:budget] if actions else ["DONE"]
 
 
-def _state_to_maze_instance(st) -> MazeInstance:
-    def rc_to_xy(pos):
-        r, c = pos
-        return (c - 1, r - 1)
-
-    return MazeInstance(
-        width=st.cols,
-        height=st.rows,
-        walls={rc_to_xy(w) for w in st.walls},
-        start=rc_to_xy(st.start),
-        goal=rc_to_xy(st.goal),
-        keys=[
-            Key(id=k.get("id", f"key_{i}"), position=rc_to_xy(tuple(k["position"])), color=k["color"])
-            for i, k in enumerate(st.keys)
-        ],
-        doors=[
-            Door(
-                id=d.get("id", f"door_{i}"),
-                position=rc_to_xy(tuple(d["position"])),
-                requires_key=d["requires_key"],
-                initial_state=d.get("initial_state", "locked"),
-            )
-            for i, d in enumerate(st.doors)
-        ],
-        switches=[
-            Switch(
-                id=s.get("id", f"switch_{i}"),
-                position=rc_to_xy(tuple(s["position"])),
-                controls=list(s.get("controls", [])),
-                switch_type=s.get("switch_type", "toggle"),
-                initial_state=s.get("initial_state", "off"),
-            )
-            for i, s in enumerate(st.switches)
-        ],
-        gates=[
-            Gate(
-                id=g.get("id", f"gate_{i}"),
-                position=rc_to_xy(tuple(g["position"])),
-                initial_state=g.get("initial_state", "closed"),
-            )
-            for i, g in enumerate(st.gates)
-        ],
-    )
-
-
 def _xy_path_to_rc(path_xy) -> list[tuple[int, int]]:
     return [(y + 1, x + 1) for (x, y) in path_xy]
 
@@ -178,7 +132,7 @@ def _inject_pickups(actions: list[str], env, state) -> list[str]:
 def _full_trajectory_actions_for_maze(maze_path: Path) -> list[str]:
     env = load_maze(maze_path)
     state = env.reset()
-    maze_inst = _state_to_maze_instance(state)
+    maze_inst = grid_state_to_maze_instance(state)
     solver_result = solve_maze(maze_inst)
     if not solver_result.get("is_solvable"):
         return ["DONE"]
