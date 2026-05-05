@@ -3,9 +3,9 @@ For each ``nlu_benchmark/benchmark_mazes/**/*.json``:
 
 0. Apply :func:`~nlu_benchmark.loader.task_dict_shrink_dimensions_minus_two` (labeled 10×10 → 8×8 grid; coordinates unchanged).
 1. Run mazegen :func:`~automatic_maze_generation.mazegen.solver.solve_maze` (no ``validate_maze``).
-2. If solvable, write **one** PNG (same style as ``automatic_maze_generation/render_dataset.py``):
-   maze + mechanisms + overlaid optimal path, under
-   ``smoke_tests/results/benchmark_solver/<category>/<stem>.png``.
+2. Write **one** PNG (same style as ``automatic_maze_generation/render_dataset.py``) under
+   ``smoke_tests/results/benchmark_solver/<category>/<stem>.png``:
+   if solvable, maze + mechanisms + overlaid optimal path; if not solvable, maze + mechanisms only (no path).
 3. Write ``smoke_tests/results/benchmark_solver/benchmark_mazes_metadata.csv`` with columns:
    ``rel_path``, ``chain_pattern``, ``is_solvable``, ``optimal_cost``, ``optimal_path``, ``n_interactions``, ``error``.
    ``optimal_path`` is a JSON list of ``[x, y]`` cells in mazegen 0-based coordinates (column, row),
@@ -112,20 +112,14 @@ def main() -> None:
             result = solve_maze(maze_instance_from_task_dict(data))
             _fill_solver_columns(row, result)
             solvable = bool(result.get("is_solvable"))
-            if not solvable:
-                failed += 1
-                msg = "not solvable"
-                row["error"] = msg
-                failures.append((rel, msg))
-                print(f"FAIL {rel}: {msg}", flush=True)
-                csv_rows.append(row)
-                continue
-
-            path_pts = result.get("path") or []
+            path_pts = (result.get("path") or []) if solvable else []
             out_png = _BENCHMARK_SOLVER_DIR / rel.parent / f"{path.stem}.png"
             out_png.parent.mkdir(parents=True, exist_ok=True)
             render_task_json_with_solver_path_png(data, path_pts, out_png)
-            print(f"ok {rel} cost={result.get('optimal_cost')} png={out_png}")
+            if solvable:
+                print(f"ok {rel} cost={result.get('optimal_cost')} png={out_png}")
+            else:
+                print(f"ok {rel} not solvable png={out_png} (no path)")
         except Exception as e:
             failed += 1
             msg = str(e)
