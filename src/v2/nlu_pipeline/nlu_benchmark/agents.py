@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -13,11 +15,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
+logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
 
-
-DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 
 
 def _parse_data_image_url(url: str) -> tuple[str, str]:
@@ -100,9 +102,13 @@ def _anthropic_messages_http(
     if system:
         body["system"] = system
 
+    raw = json.dumps(body).encode("utf-8")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Anthropic request: model=%s json_bytes=%d", model, len(raw))
+
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
-        data=json.dumps(body).encode("utf-8"),
+        data=raw,
         headers={
             "Content-Type": "application/json",
             "x-api-key": api_key,
@@ -110,12 +116,16 @@ def _anthropic_messages_http(
         },
         method="POST",
     )
+    t0 = time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=timeout or 60.0) as resp:
             payload = json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")
         raise RuntimeError(f"Anthropic API HTTP {e.code}: {detail}") from e
+    elapsed = time.perf_counter() - t0
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Anthropic Messages API: model=%s elapsed=%.2fs", model, elapsed)
 
     parts: List[str] = []
     for block in payload.get("content", []) or []:
@@ -198,12 +208,21 @@ class LocalTransformersAgent:
         inputs = self.tokenizer(prompt, return_tensors="pt")
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 
+        t0 = time.perf_counter()
         generated = self.model.generate(
             **inputs,
             max_new_tokens=self.config.max_new_tokens,
             temperature=self.config.temperature,
             do_sample=self.config.temperature > 0,
         )
+        gen_s = time.perf_counter() - t0
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Local generate: model=%s elapsed=%.2fs prompt_tokens=%d",
+                self.config.model,
+                gen_s,
+                inputs["input_ids"].shape[1],
+            )
 
         prompt_len = inputs["input_ids"].shape[1]
         new_tokens = generated[0][prompt_len:]

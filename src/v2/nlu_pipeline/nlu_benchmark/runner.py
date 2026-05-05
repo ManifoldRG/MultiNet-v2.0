@@ -10,6 +10,12 @@ Usage
     result = runner.run(agent)                      # verbose=True: print progress
     result = runner.run(agent, verbose=False)     # quiet for batch runs
 
+Or enable library logging in your script::
+
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    result = runner.run(agent, verbose=False)
+
 Or from a JSON file directly:
 
     runner = ExperimentRunner.from_json("path/to/maze.json", config=cfg)
@@ -18,7 +24,18 @@ Or from a JSON file directly:
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Callable, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+def _user_message_has_image(message: dict) -> bool:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return False
+    return any(isinstance(b, dict) and b.get("type") == "image_url" for b in content)
 
 from nlu_benchmark.config import ExperimentConfig
 from nlu_benchmark.feedback import action_feedback_for_prompt, format_step_feedback
@@ -137,18 +154,54 @@ class ExperimentRunner:
         consecutive_failures    = 0
         transcript: List[dict]  = []
         max_steps               = self.env.initial.max_steps
+        query_count             = 0
+
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s",
+                max_steps,
+                self.config.querying,
+                self.config.observation,
+                self.config.context_window,
+            )
 
         while state.step_count < max_steps:
 
             # --- Query model if needed ---
             if self.querying.should_query(action_queue, consecutive_failures):
                 consecutive_failures = 0
-                messages.append(self._build_message(state, last_feedback))
+                query_count += 1
+                user_message = self._build_message(state, last_feedback)
+                has_image = _user_message_has_image(user_message)
+                messages.append(user_message)
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(
+                        "LLM query #%d: messages_in_context=%d current_turn_has_image=%s",
+                        query_count,
+                        len(messages),
+                        has_image,
+                    )
+                t_llm = time.perf_counter()
                 model_text = agent(messages)
+                llm_s = time.perf_counter() - t_llm
                 messages.append({"role": "assistant", "content": model_text})
                 action_queue = self.querying.parse_actions(model_text)
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(
+                        "LLM query #%d finished in %.2fs: reply_chars=%d actions_parsed=%d",
+                        query_count,
+                        llm_s,
+                        len(model_text),
+                        len(action_queue),
+                    )
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("LLM query #%d reply preview: %s", query_count, model_text[:4000])
 
                 if not action_queue:
+                    logger.warning(
+                        "LLM query #%d: no valid actions parsed; retrying with parser feedback",
+                        query_count,
+                    )
                     last_feedback = (
                         f"Could not parse FINAL_OUTPUT (one or more valid actions). "
                         f"Use only: {ACTIONS_HINT}."
@@ -187,6 +240,8 @@ class ExperimentRunner:
             self.obs.record(state.agent_pos, state.facing, action, last_feedback)
 
             if event_type == "DONE":
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info("Episode success at env step %s (LLM queries=%d)", state.step_count, query_count)
                 if verbose:
                     print(f"  Success at step {state.step_count}")
                 return self._result(True, state, transcript)
@@ -194,6 +249,12 @@ class ExperimentRunner:
             if verbose:
                 print(f"  Step {state.step_count}/{max_steps}: {action} -> {event_type}")
 
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                "Episode ended without DONE: env_steps=%s success=false LLM_queries=%d",
+                state.step_count,
+                query_count,
+            )
         return self._result(False, state, transcript)
 
     # ------------------------------------------------------------------

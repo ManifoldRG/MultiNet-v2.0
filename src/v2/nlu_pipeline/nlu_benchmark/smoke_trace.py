@@ -2,6 +2,7 @@
 
 Writes ``step_000_reset.png``, ``step_NNN_<ACTION>.png``, ``run_log.txt``, ``plan.txt``
 under a caller-chosen ``results/…`` directory.
+``trace_prepare`` also removes ``*.json`` and ``*.jsonl`` there (e.g. LLM smoke sidecars).
 """
 
 from __future__ import annotations
@@ -17,6 +18,10 @@ def trace_prepare(out_dir: Path) -> None:
     for p in out_dir.glob("*.png"):
         p.unlink()
     for p in out_dir.glob("*.txt"):
+        p.unlink()
+    for p in out_dir.glob("*.json"):
+        p.unlink()
+    for p in out_dir.glob("*.jsonl"):
         p.unlink()
 
 
