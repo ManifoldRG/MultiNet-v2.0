@@ -28,10 +28,9 @@ def _render_dataset_module():
     return _RENDER_DATASET_MOD
 
 
-def _grid_state_to_maze_payload(state: GridState) -> dict:
+def _grid_state_to_maze_payload(state: GridState, *, task_id: str = "") -> dict:
     """JSON-shaped maze dict for ``render_maze_payload`` / ``render_maze_payload_bytes``."""
-    return {
-        "task_id": "nlu_live",
+    out: dict[str, Any] = {
         "maze": {
             # Unified convention: payloads are always (row, col).
             "dimensions": [state.rows, state.cols],
@@ -46,6 +45,9 @@ def _grid_state_to_maze_payload(state: GridState) -> dict:
             "gates": [dict(g) for g in state.gates],
         },
     }
+    if task_id:
+        out["task_id"] = task_id
+    return out
 
 
 def _static_layout_lines(state: GridState) -> list[str]:
@@ -118,10 +120,14 @@ def render_user_observation_text(state: GridState) -> str:
     return "\n".join(head)
 
 
-def render_maze_image_png_bytes(state: GridState) -> bytes:
-    """Render the current ``GridState`` to a PNG (same style as ``render_dataset.render_maze_payload``)."""
+def render_maze_image_png_bytes(state: GridState, *, task_id: str = "") -> bytes:
+    """Render the current ``GridState`` to a PNG (same style as ``render_dataset.render_maze_payload``).
+
+    ``task_id`` is only for the optional figure title (smoke replay uses the JSON id; LLM observations
+    default to empty so the title does not change ``tight_layout`` / margins).
+    """
     mod = _render_dataset_module()
-    payload = _grid_state_to_maze_payload(state)
+    payload = _grid_state_to_maze_payload(state, task_id=task_id)
     ar, ac = state.agent_pos
     return mod.render_maze_payload_bytes(
         payload,

@@ -3,6 +3,10 @@
 Writes ``step_000_reset.png``, ``step_NNN_<ACTION>.png``, ``run_log.txt``, ``plan.txt``
 under a caller-chosen ``results/…`` directory.
 ``trace_prepare`` also removes ``*.json`` and ``*.jsonl`` there (e.g. LLM smoke sidecars).
+
+PNG frames omit a figure title by default (see ``task_id=""`` on ``trace_reset`` / ``trace_step``)
+so ``tight_layout`` + ``bbox_inches="tight"`` framing stays balanced; pass a non-empty
+``task_id`` only if you want a title.
 """
 
 from __future__ import annotations
@@ -25,8 +29,8 @@ def trace_prepare(out_dir: Path) -> None:
         p.unlink()
 
 
-def trace_reset(out_dir: Path, state: Any) -> list[str]:
-    (out_dir / "step_000_reset.png").write_bytes(render_maze_image_png_bytes(state))
+def trace_reset(out_dir: Path, state: Any, *, task_id: str = "") -> list[str]:
+    (out_dir / "step_000_reset.png").write_bytes(render_maze_image_png_bytes(state, task_id=task_id))
     return [f"000 RESET pos={state.agent_pos} facing={state.facing} inv={state.inventory}"]
 
 
@@ -38,9 +42,12 @@ def trace_step(
     env: Any,
     *,
     position_before: tuple[Any, ...],
+    task_id: str = "",
 ) -> Tuple[Any, Any]:
     state, event = env.step(action)
-    (out_dir / f"step_{step:03d}_{action}.png").write_bytes(render_maze_image_png_bytes(state))
+    (out_dir / f"step_{step:03d}_{action}.png").write_bytes(
+        render_maze_image_png_bytes(state, task_id=task_id)
+    )
     line = (
         f"{step:03d} {action:<12} {event.type:<10} from={position_before} "
         f"to={state.agent_pos} facing={state.facing} inv={state.inventory}"

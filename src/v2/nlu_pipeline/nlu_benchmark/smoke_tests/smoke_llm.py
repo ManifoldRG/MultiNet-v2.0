@@ -22,6 +22,7 @@ from nlu_benchmark.agents import (
     LocalLLMConfig,
     LocalTransformersAgent,
 )
+from nlu_benchmark.config import ExperimentConfig
 from nlu_benchmark.loader import load_maze
 from nlu_benchmark.runner import ExperimentRunner
 from nlu_benchmark.smoke_trace import trace_prepare, trace_reset, trace_step, trace_write_text_artifacts
@@ -139,6 +140,19 @@ def main() -> None:
         default="auto",
         help='With --backend local: passed to from_pretrained device_map (e.g. "auto", "cuda:0").',
     )
+    parser.add_argument(
+        "--chat-history",
+        choices=("stateless", "rolling", "full"),
+        default=None,
+        help="ExperimentConfig.chat_history (default: rolling = last N turns in API).",
+    )
+    parser.add_argument(
+        "--chat-turns-max",
+        type=int,
+        default=None,
+        metavar="N",
+        help="ExperimentConfig.chat_turns_max for rolling mode (default: 3).",
+    )
     args = parser.parse_args()
     _configure_benchmark_logging(args.log_level)
 
@@ -154,7 +168,15 @@ def main() -> None:
 
     trace_prepare(out_dir)
 
-    runner = ExperimentRunner.from_json(str(maze_path.resolve()))
+    exp_cfg: ExperimentConfig | None = None
+    if args.chat_history is not None or args.chat_turns_max is not None:
+        exp_cfg = ExperimentConfig()
+        if args.chat_history is not None:
+            exp_cfg.chat_history = args.chat_history
+        if args.chat_turns_max is not None:
+            exp_cfg.chat_turns_max = args.chat_turns_max
+
+    runner = ExperimentRunner.from_json(str(maze_path.resolve()), config=exp_cfg)
 
     query_log: List[dict] = []
     if args.backend == "anthropic":

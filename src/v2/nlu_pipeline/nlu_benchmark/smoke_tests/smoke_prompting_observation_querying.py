@@ -270,11 +270,11 @@ def run_smoke_suite(maze_name: str, tag: str, max_steps: int, suite: str = "all"
         if cfg.context_window == "current" and len(agent.calls) > 1:
             second_text = agent.calls[1]["user_text"]
             _assert("Recent history (last 3 steps" not in second_text, f"{label}: current unexpectedly includes history", errors)
-            _assert("Recent steps (oldest first, action only):" not in second_text, f"{label}: current unexpectedly includes action history", errors)
+            _assert("Recent steps (oldest first, action -> outcome):" not in second_text, f"{label}: current unexpectedly includes action history", errors)
         if cfg.context_window == "last3" and len(agent.calls) > 1:
             second_text = agent.calls[1]["user_text"]
             if cfg.observation == "image_only":
-                _assert("Recent steps (oldest first, action only):" in second_text, f"{label}: last3 image_only should include action-only history", errors)
+                _assert("Recent steps (oldest first, action -> outcome):" in second_text, f"{label}: last3 image_only should include action+outcome history", errors)
             else:
                 _assert("Recent history (last 3 steps, oldest first):" in second_text, f"{label}: last3 should include full history", errors)
 

@@ -4,7 +4,8 @@
   system message once per episode. Each user turn: ``render_user_observation_text``,
   last3 history, and live PNG when image is enabled.
 
-* **image_only** – No initial NL map in system; live PNG each query; last3 history is action-only lines.
+* **image_only** – No initial NL map in system; live PNG each query; last3 history lists
+  recent ``action → feedback`` lines (same feedback strings as ``Last result:``).
 
 ``build_image_blocks`` adds PNGs whenever observation is not ``text_only`` (see ``runner._build_message``).
 """
@@ -51,9 +52,9 @@ class ObservationBuilder:
             return ""
         recs = self._history[-3:]
         if self._observation == "image_only":
-            lines = ["Recent steps (oldest first, action only):"]
+            lines = ["Recent steps (oldest first, action -> outcome):"]
             for rec in recs:
-                lines.append(f"  {rec.action}")
+                lines.append(f"  {rec.action} -> {rec.feedback}")
             return "\n".join(lines)
         lines = ["Recent history (last 3 steps, oldest first):"]
         for rec in recs:

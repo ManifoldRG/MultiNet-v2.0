@@ -37,6 +37,17 @@ def _user_message_has_image(message: dict) -> bool:
         return False
     return any(isinstance(b, dict) and b.get("type") == "image_url" for b in content)
 
+
+def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
+    """Keep ``messages[0]`` (system) and at most ``max_pairs`` following (user, assistant) pairs."""
+    if max_pairs < 1 or len(messages) <= 1:
+        return
+    tail_len = len(messages) - 1
+    cap = 2 * max_pairs
+    if tail_len > cap:
+        del messages[1 : 1 + (tail_len - cap)]
+
+
 from nlu_benchmark.config import ExperimentConfig
 from nlu_benchmark.feedback import action_feedback_for_prompt, format_step_feedback
 from nlu_benchmark.observation import ObservationBuilder
@@ -89,7 +100,7 @@ def build_runner(
 # ---------------------------------------------------------------------------
 
 class ExperimentRunner:
-    """Runs a maze episode.  Owns the full episode loop."""
+    """Runs a maze episode. API chat style is set by ``ExperimentConfig.chat_history``."""
 
     def __init__(
         self,
@@ -131,11 +142,11 @@ class ExperimentRunner:
         Returns
         -------
         dict:
-            success       – bool
-            steps_used    – int
-            final_state   – GridState
-            transcript    – list[dict] with one record per executed action
-            config        – dict, serialised ExperimentConfig for this run
+            success        bool
+            steps_used     int
+            final_state    GridState
+            transcript     list[dict] with one record per executed action
+            config         dict, serialised ExperimentConfig for this run
         """
         state = self.env.reset()
         self.obs.reset()
@@ -147,7 +158,9 @@ class ExperimentRunner:
                 f"{system_prompt}\n\nInitial maze (fixed for this episode):\n"
                 f"{render_initial_maze_text(state)}"
             )
-        messages: List[dict] = [{"role": "system", "content": system_prompt}]
+        system_message = {"role": "system", "content": system_prompt}
+        chat_history = self.config.chat_history
+        messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
 
         action_queue: List[str] = []
         last_feedback           = "Episode start."
@@ -158,11 +171,14 @@ class ExperimentRunner:
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(
-                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s",
+                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s "
+                "chat_history=%s chat_turns_max=%s",
                 max_steps,
                 self.config.querying,
                 self.config.observation,
                 self.config.context_window,
+                chat_history,
+                self.config.chat_turns_max if chat_history == "rolling" else "-",
             )
 
         while state.step_count < max_steps:
@@ -173,18 +189,26 @@ class ExperimentRunner:
                 query_count += 1
                 user_message = self._build_message(state, last_feedback)
                 has_image = _user_message_has_image(user_message)
-                messages.append(user_message)
+                if chat_history == "stateless":
+                    agent_messages: List[dict] = [system_message, user_message]
+                else:
+                    messages.append(user_message)
+                    agent_messages = messages
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
-                        "LLM query #%d: messages_in_context=%d current_turn_has_image=%s",
+                        "LLM query #%d: chat_history=%s messages_in_context=%d current_turn_has_image=%s",
                         query_count,
-                        len(messages),
+                        chat_history,
+                        len(agent_messages),
                         has_image,
                     )
                 t_llm = time.perf_counter()
-                model_text = agent(messages)
+                model_text = agent(agent_messages)
                 llm_s = time.perf_counter() - t_llm
-                messages.append({"role": "assistant", "content": model_text})
+                if chat_history != "stateless":
+                    messages.append({"role": "assistant", "content": model_text})
+                    if chat_history == "rolling":
+                        _trim_rolling_chat(messages, max(1, self.config.chat_turns_max))
                 action_queue = self.querying.parse_actions(model_text)
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(

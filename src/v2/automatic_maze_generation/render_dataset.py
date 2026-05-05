@@ -42,8 +42,8 @@ def _row_col_payload_to_xy_payload(payload: dict) -> dict:
 
     def rc_to_xy(pos):
         r, c = pos
-        # Payloads use 1-based (row, col); drawing uses 0-based (x=col, y=row).
-        return [c - 1, r - 1]
+        # NLU JSON: 1-based (row, col). Legacy draw indices ``(x, y) = (c, r)`` (no ``-1``); matches historical traces.
+        return [c, r]
 
     dims = maze.get("dimensions")
     if dims and len(dims) == 2:
@@ -195,8 +195,7 @@ _AGENT_FACING_DELTA = {
 
 
 def _draw_agent(ax, ar: int, ac: int, height: int, facing: str) -> None:
-    """Overlay current agent (row, col) and facing; same cell coords as ``_draw_centered_text``."""
-    # GridState uses (row, col). Rendering uses x=col, y=row (inverted vertical axis).
+    """Agent overlay; ``ar, ac`` are NLU **1-based** ``(row, col)`` (same as ``GridState``), matching ``rc_to_xy`` → ``[c, r]``."""
     cx = ac + 0.5
     cy = height - 1 - ar + 0.5
     ax.plot(
@@ -318,10 +317,14 @@ def _figure_from_maze_payload(payload: dict, title: str) -> Tuple[Any, Any, int]
         x, y = gate["position"]
         _draw_gate(ax, x, y, height, "G")
 
-    ax.set_title(title)
+    if title:
+        ax.set_title(title)
     ax.set_xlim(0, width)
     ax.set_ylim(0, height)
-    ax.set_aspect("equal", adjustable="box")
+    # Use default adjustable ("datalim"): ``adjustable="box"`` rescales the axes
+    # rectangle inside the subplot; with ``tight_layout`` + ``bbox_inches="tight"``
+    # that often yields asymmetric white bands (e.g. extra empty rows/cols on one side).
+    ax.set_aspect("equal")
     ax.axis("off")
 
     return fig, ax, height
@@ -342,11 +345,15 @@ def render_maze_payload_bytes(
     agent_pos: Optional[Tuple[int, int]] = None,
     facing: str = "NORTH",
 ) -> bytes:
-    """Same layout as ``render_maze_payload``, PNG bytes (e.g. NLU live observations)."""
-    title = str(payload.get("task_id", "maze"))
+    """Same layout as ``render_maze_payload``, PNG bytes (e.g. NLU live observations).
+
+    ``agent_pos`` is NLU 1-based ``(row, col)``; passed through to ``_draw_agent`` unchanged (legacy pairing with ``rc_to_xy`` → ``[c, r]``).
+    """
+    title = str(payload.get("task_id", "") or "")
     fig, ax, height = _figure_from_maze_payload(payload, title)
     if agent_pos is not None:
-        _draw_agent(ax, agent_pos[0], agent_pos[1], height, facing)
+        r1, c1 = int(agent_pos[0]), int(agent_pos[1])
+        _draw_agent(ax, r1, c1, height, facing)
     plt.tight_layout()
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")

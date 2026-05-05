@@ -69,11 +69,11 @@ def main() -> None:
         if len(queries) >= 2:
             second_text = queries[1]["user_text"]
             has_recent = "Recent history (last 3 steps, oldest first):" in second_text
-            has_action_only = "Recent steps (oldest first, action only):" in second_text
-            if cfg["context_window"] == "current" and (has_recent or has_action_only):
+            has_action_outcome = "Recent steps (oldest first, action -> outcome):" in second_text
+            if cfg["context_window"] == "current" and (has_recent or has_action_outcome):
                 issues.append((label, "current_has_history"))
             if cfg["context_window"] == "last3":
-                if obs == "image_only" and not has_action_only:
+                if obs == "image_only" and not has_action_outcome:
                     issues.append((label, "last3_image_only_missing_action_history"))
                 if obs != "image_only" and not has_recent:
                     issues.append((label, "last3_missing_history"))

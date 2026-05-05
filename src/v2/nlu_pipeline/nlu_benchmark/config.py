@@ -17,22 +17,34 @@ class ExperimentConfig:
     observation
         text_only        – initial NL maze in system; current situation text per user turn; last3 history
         image_text       – same as text_only + live PNG each turn; last3 = full feedback
-        image_only       – live PNG only (no NL map); last3 = action-only lines (default)
+        image_only       – live PNG only (no NL map); last3 = action -> outcome lines (same strings as ``Last result:``)
 
     context_window
         current  – only the current observation (no prior steps in the prompt)
-        last3    – last 3 steps as structured lines prepended to the prompt
+        last3    – last 3 steps as structured lines prepended to the prompt (default)
 
     querying
         step_by_step    – one LLM call per env step (only the first action in FINAL_OUTPUT is used)
         subgoal         – SUB_GOAL + ACTIONS list; re-queries when queue empty, stuck, or mid-budget
         full_trajectory – same format as subgoal, but exactly one LLM call per episode (no re-query)
+
+    chat_history
+        stateless – each API call is only ``[system, current_user]`` (cheapest; no prior assistant text).
+        rolling   – append user/assistant each query, but keep at most ``chat_turns_max`` prior
+                    user+assistant **pairs** after ``system`` (default: good balance for vision + reasoning).
+        full      – append without trimming (original behavior; high token use with images).
+
+    chat_turns_max
+        For ``chat_history=\"rolling\"``: max number of full ``(user, assistant)`` rounds kept in the API
+        payload after ``system``. Ignored for ``stateless`` / ``full``.
     """
 
     prompting: Literal["minimal", "standard", "verbose"] = "minimal"
     observation: Literal["text_only", "image_text", "image_only"] = "image_only"
-    context_window: Literal["current", "last3"] = "current"
+    context_window: Literal["current", "last3"] = "last3"
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
+    chat_history: Literal["stateless", "rolling", "full"] = "rolling"
+    chat_turns_max: int = 3
 
     def to_dict(self) -> dict:
         return asdict(self)

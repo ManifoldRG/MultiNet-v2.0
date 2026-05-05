@@ -7,10 +7,13 @@ from typing import Any, Literal
 ObservationKind = Literal["text_only", "image_text", "image_only"]
 
 
-def action_feedback_for_prompt(observation: ObservationKind, text: str) -> str:
-    """Step outcomes for ``Last result:`` / history; cleared for ``image_only``. Parse failures stay visible in runner."""
-    if observation == "image_only":
-        return ""
+def action_feedback_for_prompt(_observation: ObservationKind, text: str) -> str:
+    """Step outcomes for ``Last result:`` and for observation history.
+
+    All observation modes receive the same ``text`` (from :func:`format_step_feedback`).
+    ``image_only`` includes this so stateless API turns still see BLOCKED/MOVED/etc. without
+    relying on prior assistant messages. ``_observation`` is kept for call-site compatibility.
+    """
     return text
 
 
