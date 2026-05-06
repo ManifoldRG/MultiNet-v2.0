@@ -17,7 +17,7 @@ class ExperimentConfig:
     observation
         text_only        – initial NL maze in system; current situation text per user turn; last3 history
         image_text       – same as text_only + live PNG each turn; last3 = full feedback
-        image_only       – live PNG only (no NL map); last3 = action -> outcome lines (same strings as ``Last result:``)
+        image_only       – live PNG only (no NL map); last3 = prior decision-frame PNGs + ``Action: …`` only (multimodal)
 
     context_window
         current  – only the current observation (no prior steps in the prompt)
@@ -39,9 +39,9 @@ class ExperimentConfig:
         payload after ``system``. Ignored for ``stateless`` / ``full``.
     """
 
-    prompting: Literal["minimal", "standard", "verbose"] = "minimal"
+    prompting: Literal["minimal", "standard", "verbose"] = "standard"
     observation: Literal["text_only", "image_text", "image_only"] = "image_only"
-    context_window: Literal["current", "last3"] = "last3"
+    context_window: Literal["current", "last3"] = "current"
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
     chat_history: Literal["stateless", "rolling", "full"] = "rolling"
     chat_turns_max: int = 3

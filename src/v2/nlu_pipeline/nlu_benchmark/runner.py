@@ -7,14 +7,6 @@ Usage
 
     cfg    = ExperimentConfig(prompting="verbose", querying="full_trajectory")
     runner = build_runner(cfg, env, maze_json_path="path/to/maze.json")
-    result = runner.run(agent)                      # verbose=True: print progress
-    result = runner.run(agent, verbose=False)     # quiet for batch runs
-
-Or enable library logging in your script::
-
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    result = runner.run(agent, verbose=False)
 
 Or from a JSON file directly:
 
@@ -171,9 +163,10 @@ class ExperimentRunner:
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(
-                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s "
+                "Episode start: max_steps=%s prompting=%s querying=%s observation=%s context_window=%s "
                 "chat_history=%s chat_turns_max=%s",
                 max_steps,
+                self.config.prompting,
                 self.config.querying,
                 self.config.observation,
                 self.config.context_window,
@@ -223,7 +216,8 @@ class ExperimentRunner:
 
                 if not action_queue:
                     logger.warning(
-                        "LLM query #%d: no valid actions parsed; retrying with parser feedback",
+                        "LLM query #%d: no valid actions parsed; empty queue so another query follows, "
+                        "user turn will include parse-hint feedback",
                         query_count,
                     )
                     last_feedback = (
@@ -240,6 +234,7 @@ class ExperimentRunner:
             action = action_queue.pop(0)
             position_before = state.agent_pos
 
+            decision_png = self.obs.render_decision_frame_png(state)
             state, event = self.env.step(action)
             step_detail = format_step_feedback(action, event.type, event.message, position_before)
             last_feedback = action_feedback_for_prompt(self.config.observation, step_detail)
@@ -261,7 +256,13 @@ class ExperimentRunner:
                 **self.querying.step_metadata(),
             })
 
-            self.obs.record(state.agent_pos, state.facing, action, last_feedback)
+            self.obs.record(
+                state.agent_pos,
+                state.facing,
+                action,
+                last_feedback,
+                decision_frame_png=decision_png,
+            )
 
             if event_type == "DONE":
                 if logger.isEnabledFor(logging.INFO):
@@ -288,10 +289,12 @@ class ExperimentRunner:
     def _build_message(self, state, last_feedback: str) -> dict:
         obs_text     = self.obs.build_text(state)
         history_text = self.obs.history_text()
-        prompt_text  = self.prompt.build_user_prompt(obs_text, history_text, state, last_feedback)
-        images = self.obs.build_image_blocks(state, self.maze_json_path)
-        if images:
-            return {"role": "user", "content": images + [{"type": "text", "text": prompt_text}]}
+        prompt_text = self.prompt.build_user_prompt(obs_text, history_text, state, last_feedback)
+        hist_blocks = self.obs.history_content_blocks()
+        images      = self.obs.build_image_blocks(state, self.maze_json_path)
+        text_block  = {"type": "text", "text": prompt_text}
+        if hist_blocks or images:
+            return {"role": "user", "content": hist_blocks + images + [text_block]}
         return {"role": "user", "content": prompt_text}
 
     def _result(self, success: bool, state, transcript: List[dict]) -> dict:

@@ -4,8 +4,9 @@
   system message once per episode. Each user turn: ``render_user_observation_text``,
   last3 history, and live PNG when image is enabled.
 
-* **image_only** – No initial NL map in system; live PNG each query; last3 history lists
-  recent ``action → feedback`` lines (same feedback strings as ``Last result:``).
+* **image_only** – No initial NL map in system; live PNG each query; ``last3``
+  history is multimodal: up to three prior **decision-frame** PNGs (view before each
+  executed action) plus ``Action: …`` lines only — pose/outcome are left to the image.
 
 ``build_image_blocks`` adds PNGs whenever observation is not ``text_only`` (see ``runner._build_message``).
 """
@@ -20,13 +21,14 @@ from nlu_benchmark.renderer import render_maze_image_png_bytes, render_user_obse
 
 
 class _StepRecord:
-    __slots__ = ("position", "facing", "action", "feedback")
+    __slots__ = ("position", "facing", "action", "feedback", "png_raw")
 
-    def __init__(self, position, facing, action, feedback):
+    def __init__(self, position, facing, action, feedback, png_raw: Optional[bytes] = None):
         self.position = position
         self.facing   = facing
         self.action   = action
         self.feedback = feedback
+        self.png_raw  = png_raw
 
 
 class ObservationBuilder:
@@ -44,18 +46,55 @@ class ObservationBuilder:
     def reset(self) -> None:
         self._history.clear()
 
-    def record(self, position, facing: str, action: str, feedback: str) -> None:
-        self._history.append(_StepRecord(position, facing, action, feedback))
+    def render_decision_frame_png(self, state) -> Optional[bytes]:
+        """PNG of the maze **before** ``env.step`` mutates ``state`` (``image_only`` only)."""
+        if self._observation != "image_only":
+            return None
+        try:
+            return render_maze_image_png_bytes(state)
+        except Exception:
+            return None
+
+    def record(
+        self,
+        position,
+        facing: str,
+        action: str,
+        feedback: str,
+        *,
+        decision_frame_png: Optional[bytes] = None,
+    ) -> None:
+        png_raw = decision_frame_png if self._observation == "image_only" else None
+        self._history.append(_StepRecord(position, facing, action, feedback, png_raw))
+
+    def history_content_blocks(self) -> List[dict]:
+        """Multimedia tail for ``image_only`` + ``last3``: prior frames + action labels only."""
+        if self._observation != "image_only" or self._context_window == "current" or not self._history:
+            return []
+        recs = self._history[-3:]
+        blocks: List[dict] = []
+        for rec in recs:
+            if not rec.png_raw:
+                continue
+            b64 = base64.b64encode(rec.png_raw).decode("utf-8")
+            blocks.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}})
+            blocks.append({"type": "text", "text": f"Action: {rec.action}\n\n"})
+        if not blocks:
+            return []
+        intro = (
+            "Recent steps (oldest first). Each image is the maze view from which the "
+            "following action was chosen; infer pose and environment state from the image.\n\n"
+        )
+        return [{"type": "text", "text": intro}] + blocks
 
     def history_text(self) -> str:
-        if self._context_window == "current" or not self._history:
+        if (
+            self._context_window == "current"
+            or not self._history
+            or self._observation == "image_only"
+        ):
             return ""
         recs = self._history[-3:]
-        if self._observation == "image_only":
-            lines = ["Recent steps (oldest first, action -> outcome):"]
-            for rec in recs:
-                lines.append(f"  {rec.action} -> {rec.feedback}")
-            return "\n".join(lines)
         lines = ["Recent history (last 3 steps, oldest first):"]
         for rec in recs:
             lines.append(

@@ -230,7 +230,7 @@ def run_smoke_suite(maze_name: str, tag: str, max_steps: int, suite: str = "all"
     full_trajectory_actions = _full_trajectory_actions_for_maze(maze_path)
     # Smoke test already validated rendering elsewhere; use tiny static bytes for speed.
     observation_module.render_maze_image_png_bytes = lambda _state: _ONE_BY_ONE_PNG
-    base = ExperimentConfig(prompting="minimal", observation="text_only", context_window="last3", querying="step_by_step")
+    base = ExperimentConfig(prompting="standard", observation="image_only", context_window="last3", querying="step_by_step")
     selected = _suite_cases(base, suite)
     outputs = [
         _run_case(cfg, maze_path, label, full_trajectory_actions, max_steps)
@@ -270,11 +270,19 @@ def run_smoke_suite(maze_name: str, tag: str, max_steps: int, suite: str = "all"
         if cfg.context_window == "current" and len(agent.calls) > 1:
             second_text = agent.calls[1]["user_text"]
             _assert("Recent history (last 3 steps" not in second_text, f"{label}: current unexpectedly includes history", errors)
-            _assert("Recent steps (oldest first, action -> outcome):" not in second_text, f"{label}: current unexpectedly includes action history", errors)
+            _assert(
+                "infer pose and environment state from the image" not in second_text,
+                f"{label}: current unexpectedly includes visual step history",
+                errors,
+            )
         if cfg.context_window == "last3" and len(agent.calls) > 1:
             second_text = agent.calls[1]["user_text"]
             if cfg.observation == "image_only":
-                _assert("Recent steps (oldest first, action -> outcome):" in second_text, f"{label}: last3 image_only should include action+outcome history", errors)
+                _assert(
+                    "infer pose and environment state from the image" in second_text,
+                    f"{label}: last3 image_only should include PNG+action history intro",
+                    errors,
+                )
             else:
                 _assert("Recent history (last 3 steps, oldest first):" in second_text, f"{label}: last3 should include full history", errors)
 
