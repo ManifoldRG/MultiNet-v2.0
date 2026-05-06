@@ -6,7 +6,8 @@ For each ``nlu_benchmark/benchmark_mazes/**/*.json``:
 2. Write **one** PNG (same style as ``automatic_maze_generation/render_dataset.py``) under
    ``smoke_tests/results/benchmark_solver/<category>/<stem>.png``:
    if solvable, maze + mechanisms + overlaid optimal path; if not solvable, maze + mechanisms only (no path).
-3. Write ``smoke_tests/results/benchmark_solver/benchmark_mazes_metadata.csv`` with columns:
+3. Write ``smoke_tests/results/benchmark_solver/benchmark_mazes_metadata.csv`` (local smoke output; not
+   tracked in git) with columns:
    ``rel_path``, ``chain_pattern``, ``is_solvable``, ``optimal_cost``, ``optimal_path``, ``n_interactions``, ``error``.
    ``optimal_path`` is a JSON list of ``[x, y]`` cells in mazegen 0-based coordinates (column, row),
    only filled when ``is_solvable``; otherwise empty.
