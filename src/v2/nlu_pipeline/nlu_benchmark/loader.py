@@ -35,6 +35,11 @@ def load_maze(path) -> GridWorldEnv:
     return _task_dict_to_env(data)
 
 
+def load_maze_from_dict(data: dict[str, Any]) -> GridWorldEnv:
+    """Build env from a parsed task dict (same schema as ``load_maze`` JSON files)."""
+    return _task_dict_to_env(data)
+
+
 def grid_state_to_maze_instance(st: GridState) -> MazeInstance:
     def rc_to_xy(pos):
         r, c = pos

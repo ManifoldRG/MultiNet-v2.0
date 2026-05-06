@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 from automatic_maze_generation.mazegen.solver import solve_maze
 from nlu_benchmark.env import FACING_ORDER, FACING_TO_DELTA
-from nlu_benchmark.loader import grid_state_to_maze_instance, load_maze
+from nlu_benchmark.loader import (
+    grid_state_to_maze_instance,
+    load_maze_from_dict,
+    task_dict_shrink_dimensions_minus_two,
+)
 from nlu_benchmark.smoke_trace import trace_prepare, trace_reset, trace_step, trace_write_text_artifacts
 
 
@@ -58,11 +63,17 @@ def write_png_trace_for_maze_json(maze_path: Path, out_dir: Path) -> dict[str, A
     """
     Solve ``maze_path``, replay the plan in the NLU env, write ``step_*.png``, ``run_log.txt``, ``plan.txt`` under ``out_dir``.
 
+    Applies :func:`~nlu_benchmark.loader.task_dict_shrink_dimensions_minus_two` to the task JSON first
+    (same convention as benchmark maze smoke).
+
     Returns a dict with keys ``ok`` (bool), ``optimal_cost``, ``success``, ``steps_used``, ``out_dir``,
     and on failure ``reason`` (str) or ``solver_result``.
     """
     trace_prepare(out_dir)
-    env_plan = load_maze(maze_path)
+    raw: dict[str, Any] = task_dict_shrink_dimensions_minus_two(
+        json.loads(maze_path.read_text(encoding="utf-8"))
+    )
+    env_plan = load_maze_from_dict(raw)
     plan_state = env_plan.reset()
     maze_inst = grid_state_to_maze_instance(plan_state)
     solver_result = solve_maze(maze_inst)
@@ -78,7 +89,7 @@ def write_png_trace_for_maze_json(maze_path: Path, out_dir: Path) -> dict[str, A
     planned_actions = path_to_actions(path_rc, start_facing="NORTH")
     executable_actions = inject_pickups(planned_actions, env_plan, plan_state)
 
-    env = load_maze(maze_path)
+    env = load_maze_from_dict(raw)
     state = env.reset()
     lines = trace_reset(out_dir, state)
 

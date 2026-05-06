@@ -23,8 +23,8 @@ from nlu_benchmark.agents import (
     LocalTransformersAgent,
 )
 from nlu_benchmark.config import ExperimentConfig
-from nlu_benchmark.loader import load_maze
-from nlu_benchmark.runner import ExperimentRunner
+from nlu_benchmark.loader import load_maze_from_dict, task_dict_shrink_dimensions_minus_two
+from nlu_benchmark.runner import ExperimentRunner, build_runner
 from nlu_benchmark.smoke_trace import trace_prepare, trace_reset, trace_step, trace_write_text_artifacts
 
 
@@ -168,15 +168,18 @@ def main() -> None:
 
     trace_prepare(out_dir)
 
-    exp_cfg: ExperimentConfig | None = None
-    if args.chat_history is not None or args.chat_turns_max is not None:
-        exp_cfg = ExperimentConfig()
-        if args.chat_history is not None:
-            exp_cfg.chat_history = args.chat_history
-        if args.chat_turns_max is not None:
-            exp_cfg.chat_turns_max = args.chat_turns_max
+    task_data = task_dict_shrink_dimensions_minus_two(
+        json.loads(maze_path.read_text(encoding="utf-8"))
+    )
+    maze_env = load_maze_from_dict(task_data)
 
-    runner = ExperimentRunner.from_json(str(maze_path.resolve()), config=exp_cfg)
+    exp_cfg = ExperimentConfig()
+    if args.chat_history is not None:
+        exp_cfg.chat_history = args.chat_history
+    if args.chat_turns_max is not None:
+        exp_cfg.chat_turns_max = args.chat_turns_max
+
+    runner = build_runner(exp_cfg, maze_env, maze_json_path=str(maze_path.resolve()))
 
     query_log: List[dict] = []
     if args.backend == "anthropic":
@@ -204,7 +207,7 @@ def main() -> None:
     transcript = result["transcript"]
     planned_actions = [rec["action"] for rec in transcript]
 
-    env = load_maze(maze_path)
+    env = load_maze_from_dict(task_data)
     state = env.reset()
 
     lines = trace_reset(out_dir, state)

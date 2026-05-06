@@ -42,8 +42,8 @@ def _row_col_payload_to_xy_payload(payload: dict) -> dict:
 
     def rc_to_xy(pos):
         r, c = pos
-        # NLU JSON: 1-based (row, col). Legacy draw indices ``(x, y) = (c, r)`` (no ``-1``); matches historical traces.
-        return [c, r]
+        # NLU JSON: 1-based (row, col). Matplotlib cells are 0..cols-1 / 0..rows-1 after the dimension swap below.
+        return [c - 1, r - 1]
 
     dims = maze.get("dimensions")
     if dims and len(dims) == 2:
@@ -193,29 +193,35 @@ _AGENT_FACING_DELTA = {
     "WEST": (0, -1),
 }
 
+_AGENT_ARROW_CELL_FRAC = 0.5
+
 
 def _draw_agent(ax, ar: int, ac: int, height: int, facing: str) -> None:
-    """Agent overlay; ``ar, ac`` are NLU **1-based** ``(row, col)`` (same as ``GridState``), matching ``rc_to_xy`` → ``[c, r]``."""
-    cx = ac + 0.5
-    cy = height - 1 - ar + 0.5
+    """Agent overlay; ``ar, ac`` are NLU 1-based ``(row, col)``. Draw space matches ``rc_to_xy`` (0-based column, row)."""
+    sx, sy = ac - 1, ar - 1
+    cx = sx + 0.5
+    cy = height - 1 - sy + 0.5
     ax.plot(
         cx,
         cy,
         "o",
         color="black",
-        markersize=10,
+        markersize=6,
         zorder=6,
         markeredgecolor="black",
     )
     dr, dc = _AGENT_FACING_DELTA.get(facing, (0, 0))
     if dr == 0 and dc == 0:
         return
-    nr, nc = ar + dr, ac + dc
-    tip_x = nc + 0.5
-    tip_y = height - 1 - nr + 0.5
+    tip_sx = sx + dc
+    tip_sy = sy + dr
+    tip_x = tip_sx + 0.5
+    tip_y = height - 1 - tip_sy + 0.5
+    end_x = cx + _AGENT_ARROW_CELL_FRAC * (tip_x - cx)
+    end_y = cy + _AGENT_ARROW_CELL_FRAC * (tip_y - cy)
     ax.annotate(
         "",
-        xy=(tip_x, tip_y),
+        xy=(end_x, end_y),
         xytext=(cx, cy),
         arrowprops=dict(arrowstyle="->", color="black", lw=1.5),
         zorder=7,
@@ -334,7 +340,7 @@ def render_maze_payload(payload: dict, output_path: Path) -> None:
     title = payload.get("task_id", output_path.stem)
     fig, _ax, _height = _figure_from_maze_payload(payload, title)
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
 
 
@@ -347,7 +353,7 @@ def render_maze_payload_bytes(
 ) -> bytes:
     """Same layout as ``render_maze_payload``, PNG bytes (e.g. NLU live observations).
 
-    ``agent_pos`` is NLU 1-based ``(row, col)``; passed through to ``_draw_agent`` unchanged (legacy pairing with ``rc_to_xy`` → ``[c, r]``).
+    ``agent_pos`` is NLU 1-based ``(row, col)``; aligned with ``rc_to_xy`` (0-based draw indices).
     """
     title = str(payload.get("task_id", "") or "")
     fig, ax, height = _figure_from_maze_payload(payload, title)
@@ -356,7 +362,7 @@ def render_maze_payload_bytes(
         _draw_agent(ax, r1, c1, height, facing)
     plt.tight_layout()
     buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     return buf.getvalue()
 
