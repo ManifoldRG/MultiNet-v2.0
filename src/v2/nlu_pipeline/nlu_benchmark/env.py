@@ -1,14 +1,16 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple, Optional
 
+# Grid positions are 1-based ``(row, column)``: origin **top-left** ``(1, 1)``; row increases **southward**,
+# column increases eastward. Movement deltas are ``(Δrow, Δcolumn)``.
 Pos = Tuple[int, int]
 
 FACING_ORDER = ["NORTH", "EAST", "SOUTH", "WEST"]
 
 FACING_TO_DELTA: Dict[str, Tuple[int, int]] = {
     "NORTH": (-1,  0),
-    "EAST":  ( 0,  1),
-    "SOUTH": ( 1,  0),
+    "EAST":  ( 0, +1),
+    "SOUTH": (+1,  0),
     "WEST":  ( 0, -1),
 }
 
@@ -18,7 +20,7 @@ class GridState:
     rows: int
     cols: int
     walls: Set[Pos]
-    start: Pos
+    start: Pos    # (row, column) 1-based
     goal: Pos
     agent_pos: Pos
     facing: str = "NORTH"
@@ -115,7 +117,7 @@ class GridWorldEnv:
         # --- Move one step forward ---
         if verb == "MOVE_FORWARD":
             dr, dc = FACING_TO_DELTA[self.state.facing]
-            r, c   = self.state.agent_pos
+            r, c = self.state.agent_pos
             nr, nc = r + dr, c + dc
             reason = self._blocked(nr, nc)
             if reason:
@@ -147,7 +149,7 @@ class GridWorldEnv:
         # --- Toggle facing switch only (opens/closes linked gates; doors and gates are not toggled directly) ---
         if verb == "TOGGLE":
             dr, dc = FACING_TO_DELTA[self.state.facing]
-            r, c   = self.state.agent_pos
+            r, c = self.state.agent_pos
             target = (r + dr, c + dc)
             sw = self._switch_at(target)
             if sw:
@@ -173,16 +175,16 @@ class GridWorldEnv:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _blocked(self, nr: int, nc: int) -> Optional[str]:
-        """Return a reason string if (nr, nc) is impassable, else None."""
-        if nr < 1 or nr > self.state.rows or nc < 1 or nc > self.state.cols:
+    def _blocked(self, nrow: int, ncol: int) -> Optional[str]:
+        """Return a reason string if ``(nrow, ncol)`` is impassable, else ``None``. Indices are ``(row, column)``."""
+        if nrow < 1 or nrow > self.state.rows or ncol < 1 or ncol > self.state.cols:
             return "out of bounds"
-        if (nr, nc) in self.state.walls:
+        if (nrow, ncol) in self.state.walls:
             return "wall"
-        door = self._door_at((nr, nc))
+        door = self._door_at((nrow, ncol))
         if door and door["requires_key"] not in self.state.inventory:
             return f"locked {door['requires_key']} door"
-        gate = self._gate_at((nr, nc))
+        gate = self._gate_at((nrow, ncol))
         if gate and gate.get("state", gate.get("initial_state", "closed")) == "closed":
             return "closed gate"
         return None

@@ -42,6 +42,7 @@ def path_to_actions(path: list[tuple[int, int]], start_facing: str = "NORTH") ->
 
 
 def xy_path_to_rc(path_xy: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """mazegen 0-based ``(x, y)`` (y south from north edge) → NLU ``(row, column)`` with row southward."""
     return [(y + 1, x + 1) for (x, y) in path_xy]
 
 

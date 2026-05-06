@@ -49,10 +49,12 @@ def _parse_prompt_state(user_text: str):
     gm = _GOAL_RE.search(user_text)
     if not (pm and fm and gm):
         return None
-    pos = (int(pm.group(1)), int(pm.group(2)))
+    row = int(pm.group(1))
+    col = int(pm.group(2))
     facing = fm.group(1)
-    goal = (int(gm.group(1)), int(gm.group(2)))
-    return pos, facing, goal
+    grow = int(gm.group(1))
+    gcol = int(gm.group(2))
+    return (row, col), facing, (grow, gcol)
 
 
 def _turn_to_face(cur: str, target: str) -> list[str]:
@@ -72,22 +74,23 @@ def _plan_to_goal_from_prompt(user_text: str, budget: int = 6) -> list[str]:
     parsed = _parse_prompt_state(user_text)
     if parsed is None:
         return ["TURN_RIGHT"]
-    (r, c), facing, (gr, gc) = parsed
+    (row, col), facing, (grow, gcol) = parsed
     actions: list[str] = []
-    if c != gc:
-        target = "EAST" if gc > c else "WEST"
+    if col != gcol:
+        target = "EAST" if gcol > col else "WEST"
         actions.extend(_turn_to_face(facing, target))
-        actions.extend(["MOVE_FORWARD"] * min(abs(gc - c), max(1, budget - len(actions))))
-    elif r != gr:
-        target = "SOUTH" if gr > r else "NORTH"
+        actions.extend(["MOVE_FORWARD"] * min(abs(gcol - col), max(1, budget - len(actions))))
+    elif row != grow:
+        target = "SOUTH" if grow > row else "NORTH"
         actions.extend(_turn_to_face(facing, target))
-        actions.extend(["MOVE_FORWARD"] * min(abs(gr - r), max(1, budget - len(actions))))
+        actions.extend(["MOVE_FORWARD"] * min(abs(grow - row), max(1, budget - len(actions))))
     else:
         actions.append("DONE")
     return actions[:budget] if actions else ["DONE"]
 
 
 def _xy_path_to_rc(path_xy) -> list[tuple[int, int]]:
+    """mazegen 0-based ``(x, y)`` (y south) → NLU 1-based ``(row, column)`` (row southward)."""
     return [(y + 1, x + 1) for (x, y) in path_xy]
 
 

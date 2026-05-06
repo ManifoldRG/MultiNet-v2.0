@@ -28,21 +28,34 @@ def _render_dataset_module():
     return _RENDER_DATASET_MOD
 
 
+def _internal_pos_to_json_list(pos: tuple[int, int]) -> list[int]:
+    """Env ``(row, column)`` → JSON ``[x, y]`` = ``[column, row]`` (standard Cartesian order)."""
+    row, col = pos
+    return [col, row]
+
+
+def _mechanism_dict_for_payload(item: dict[str, Any]) -> dict[str, Any]:
+    out = dict(item)
+    if "position" in out:
+        out["position"] = _internal_pos_to_json_list(tuple(out["position"]))
+    return out
+
+
 def _grid_state_to_maze_payload(state: GridState, *, task_id: str = "") -> dict:
     """JSON-shaped maze dict for ``render_maze_payload`` / ``render_maze_payload_bytes``."""
     out: dict[str, Any] = {
         "maze": {
-            # Unified convention: payloads are always (row, col).
+            # Task JSON ``[x, y]`` = ``[column, row]`` (``dimensions`` are ``[rows, cols]``).
             "dimensions": [state.rows, state.cols],
-            "walls": [list(w) for w in sorted(state.walls)],
-            "start": list(state.start),
-            "goal": list(state.goal),
+            "walls": [_internal_pos_to_json_list(w) for w in sorted(state.walls)],
+            "start": _internal_pos_to_json_list(state.start),
+            "goal": _internal_pos_to_json_list(state.goal),
         },
         "mechanisms": {
-            "keys": [dict(k) for k in state.keys],
-            "doors": [dict(d) for d in state.doors],
-            "switches": [dict(s) for s in state.switches],
-            "gates": [dict(g) for g in state.gates],
+            "keys": [_mechanism_dict_for_payload(k) for k in state.keys],
+            "doors": [_mechanism_dict_for_payload(d) for d in state.doors],
+            "switches": [_mechanism_dict_for_payload(s) for s in state.switches],
+            "gates": [_mechanism_dict_for_payload(g) for g in state.gates],
         },
     }
     if task_id:
@@ -51,11 +64,12 @@ def _grid_state_to_maze_payload(state: GridState, *, task_id: str = "") -> dict:
 
 
 def _static_layout_lines(state: GridState) -> list[str]:
-    wall_str = ", ".join(f"({r},{c})" for r, c in sorted(state.walls)) or "none"
+    wall_str = ", ".join(f"({row},{col})" for row, col in sorted(state.walls)) or "none"
     return [
         f"The world is a {state.rows} by {state.cols} grid.",
-        "Coordinates are given as (row, column).",
-        "The top-left corner is (1,1).",
+        "Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``;"
+        " tuples in this text use ``(row, column)`` matching env state (row southward, column east)."
+        " So ``x`` = column index, ``y`` = row index (e.g. goal ``[2, 12]`` is the cell ``(12, 2)``).",
         f"The start is at {state.start}.",
         f"The goal is at {state.goal}.",
         f"The following cells are walls: {wall_str}.",
@@ -65,30 +79,30 @@ def _static_layout_lines(state: GridState) -> list[str]:
 def _mechanism_lines(state: GridState) -> list[str]:
     parts: list[str] = []
     for key in state.keys:
-        r, c = key["position"]
-        parts.append(f"There is a {key['color']} key at ({r},{c}).")
+        row, col = key["position"]
+        parts.append(f"There is a {key['color']} key at ({row},{col}).")
 
     for door in state.doors:
-        r, c = door["position"]
+        row, col = door["position"]
         parts.append(
-            f"There is a locked {door['requires_key']} door at ({r},{c})."
+            f"There is a locked {door['requires_key']} door at ({row},{col})."
             f" It requires the {door['requires_key']} key to open."
         )
 
     for switch in state.switches:
-        r, c = switch["position"]
+        row, col = switch["position"]
         controls = ", ".join(switch.get("controls", []))
         on_off = "on" if switch.get("on") else "off"
         parts.append(
-            f"There is a {switch.get('switch_type', 'toggle')} switch at ({r},{c}) (currently {on_off})."
+            f"There is a {switch.get('switch_type', 'toggle')} switch at ({row},{col}) (currently {on_off})."
             f" It controls: {controls}."
         )
 
     for gate in state.gates:
-        r, c = gate["position"]
+        row, col = gate["position"]
         cur = gate.get("state", gate.get("initial_state", "closed"))
         parts.append(
-            f"There is a gate ({gate['id']}) at ({r},{c})."
+            f"There is a gate ({gate['id']}) at ({row},{col})."
             f" It is currently {cur} (initially {gate.get('initial_state', 'closed')})."
         )
     return parts
@@ -128,11 +142,11 @@ def render_maze_image_png_bytes(state: GridState, *, task_id: str = "") -> bytes
     """
     mod = _render_dataset_module()
     payload = _grid_state_to_maze_payload(state, task_id=task_id)
-    ar, ac = state.agent_pos
+    row, col = state.agent_pos
     return mod.render_maze_payload_bytes(
         payload,
         dpi=150,
-        agent_pos=(ar, ac),
+        agent_pos=(col, row),
         facing=state.facing,
     )
 
@@ -148,12 +162,12 @@ def render_task_json_with_solver_path_png(
 
     ``solver_path_xy`` is ``solve_maze(...)["path"]`` (mazegen 0-based ``(x, y)``; ``x`` = column index, ``y`` = row index).
     """
-    optimal_path_rc = [[y + 1, x + 1] for (x, y) in solver_path_xy]
+    optimal_path_cells = [[x + 1, y + 1] for (x, y) in solver_path_xy]
     payload = {
         **task_data,
         "validation": {
             **task_data.get("validation", {}),
-            "optimal_path": optimal_path_rc,
+            "optimal_path": optimal_path_cells,
         },
     }
     mod = _render_dataset_module()

@@ -138,9 +138,9 @@ class VerbosePromptStrategy(StandardPromptStrategy):
             if steps_left <= max(5, state.max_steps // 5)
             else ""
         )
-        r, c   = state.agent_pos
-        gr, gc = state.goal
-        manhattan = abs(r - gr) + abs(c - gc)
+        row, col = state.agent_pos
+        grow, gcol = state.goal
+        manhattan = abs(row - grow) + abs(col - gcol)
 
         facing_idx = FACING_ORDER.index(state.facing)
         rel_dirs = [
@@ -152,7 +152,7 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         neighbour_lines = []
         for rel, cardinal in rel_dirs:
             dr, dc = FACING_TO_DELTA[cardinal]
-            nr, nc = r + dr, c + dc
+            nr, nc = row + dr, col + dc
             if nr < 1 or nr > state.rows or nc < 1 or nc > state.cols:
                 desc = "out of bounds"
             elif (nr, nc) in state.walls:

@@ -11,14 +11,45 @@ from automatic_maze_generation.mazegen.models import Door, Gate, Key, MazeInstan
 from nlu_benchmark.env import GridState, GridWorldEnv
 
 
+def _swap_validation_v04_dimensions_if_raw(maze: dict[str, Any], task_id: str) -> None:
+    """``validation_10_v04_single_key.json`` lists ``dimensions`` as ``[cols, rows]`` = ``[14, 12]``; normalize once."""
+    if str(task_id) != "validation_10_v04_single_key":
+        return
+    dims = maze.get("dimensions")
+    if isinstance(dims, list) and len(dims) == 2 and dims[0] == 14 and dims[1] == 12:
+        maze["dimensions"] = [12, 14]
+
+
+def _json_cell_to_pos(pair: list | tuple) -> tuple[int, int]:
+    """JSON cell ``[x, y]`` with origin at **top-left** ``(1, 1)``: ``x`` east (column), ``y`` south (row).
+
+    Same as ``[column, row]``. Internal env tuple is ``(row, column)``.
+    """
+    col, row = int(pair[0]), int(pair[1])
+    return (row, col)
+
+
+def _normalize_mechanisms_from_json(mechs: dict[str, Any] | None) -> dict[str, Any]:
+    """Deep-copy mechanisms; JSON ``position`` is ``[x, y]`` / ``[column, row]``, stored as ``[row, column]`` internally."""
+    m = copy.deepcopy(mechs or {})
+    for name in ("keys", "doors", "switches", "gates"):
+        for item in m.get(name, []):
+            pos = item.get("position")
+            if isinstance(pos, (list, tuple)) and len(pos) == 2:
+                r, c = _json_cell_to_pos(pos)
+                item["position"] = [r, c]
+    return m
+
+
 def _task_dict_to_env(data: dict[str, Any]) -> GridWorldEnv:
     maze = data["maze"]
+    _swap_validation_v04_dimensions_if_raw(maze, str(data.get("task_id", "")))
     rows, cols = maze["dimensions"]
-    walls = {tuple(w) for w in maze["walls"]}
-    start = tuple(maze["start"])
-    goal = tuple(maze["goal"])
+    walls = {_json_cell_to_pos(w) for w in maze["walls"]}
+    start = _json_cell_to_pos(maze["start"])
+    goal = _json_cell_to_pos(maze["goal"])
     max_steps = data.get("max_steps", 100)
-    mechanisms = data.get("mechanisms", {})
+    mechanisms = _normalize_mechanisms_from_json(data.get("mechanisms", {}))
     return GridWorldEnv(
         rows=rows,
         cols=cols,
@@ -42,9 +73,9 @@ def load_maze_from_dict(data: dict[str, Any]) -> GridWorldEnv:
 
 def grid_state_to_maze_instance(st: GridState) -> MazeInstance:
     def rc_to_xy(pos):
-        r, c = pos
-        # NLU grids are 1-based (row, col); mazegen solver uses 0-based (x, y).
-        return (c - 1, r - 1)
+        row, col = pos
+        # Mazegen ``y`` increases south from the north edge; NLU row 1 is north (top) → ``y = row - 1``.
+        return (col - 1, row - 1)
 
     return MazeInstance(
         width=st.cols,
@@ -103,29 +134,30 @@ def task_dict_shrink_dimensions_minus_two(data: dict[str, Any]) -> dict[str, Any
     """
     Return a deep copy whose ``maze.dimensions`` are each reduced by 2 (e.g. ``[10, 10] -> [8, 8]``).
 
-    Row/column coordinates are **unchanged**. Use when the JSON names a larger grid than the
-    coordinates actually use (common in the ogbench-style exports this repo ingests).
+    JSON coordinates are 1-based ``[x, y]`` with origin at the **top-left** cell ``(1, 1)``: ``x`` east (column),
+    ``y`` south (row). Same as ``[column, row]``. They are not rewritten—only ``dimensions`` shrink.
 
     Raises ``ValueError`` if the new size would be <2 or any coordinate lies outside the shrunk grid.
     """
     out = copy.deepcopy(data)
     maze = out["maze"]
+    _swap_validation_v04_dimensions_if_raw(maze, str(out.get("task_id", "")))
     rows, cols = maze["dimensions"]
     if rows < 2 or cols < 2:
         raise ValueError("maze dimensions must be at least 2 to shrink by 2")
     nr, nc = rows - 2, cols - 2
 
-    def bad_rc(r: int, c: int) -> bool:
-        return not (1 <= r <= nr and 1 <= c <= nc)
+    def bad_cell(col: int, row: int) -> bool:
+        return not (1 <= row <= nr and 1 <= col <= nc)
 
-    sr, sc = int(maze["start"][0]), int(maze["start"][1])
-    gr, gc = int(maze["goal"][0]), int(maze["goal"][1])
-    if bad_rc(sr, sc) or bad_rc(gr, gc):
-        raise ValueError(f"start/goal outside shrunk grid 1..{nr} x 1..{nc}: start={maze['start']} goal={maze['goal']}")
+    scol, srow = int(maze["start"][0]), int(maze["start"][1])
+    gcol, grow = int(maze["goal"][0]), int(maze["goal"][1])
+    if bad_cell(scol, srow) or bad_cell(gcol, grow):
+        raise ValueError(f"start/goal outside shrunk grid x 1..{nc}, y 1..{nr}: start={maze['start']} goal={maze['goal']}")
 
     for w in maze["walls"]:
-        r, c = int(w[0]), int(w[1])
-        if bad_rc(r, c):
+        wc, wr = int(w[0]), int(w[1])
+        if bad_cell(wc, wr):
             raise ValueError(f"wall {w} outside shrunk grid ({nr}x{nc})")
 
     mech = out.get("mechanisms", {})
@@ -134,16 +166,16 @@ def task_dict_shrink_dimensions_minus_two(data: dict[str, Any]) -> dict[str, Any
             pos = item.get("position")
             if pos is None:
                 continue
-            r, c = int(pos[0]), int(pos[1])
-            if bad_rc(r, c):
+            wc, wr = int(pos[0]), int(pos[1])
+            if bad_cell(wc, wr):
                 raise ValueError(f"{name} position {pos} outside shrunk grid ({nr}x{nc})")
 
     g = out.get("goal")
     if isinstance(g, dict) and g.get("type") == "reach_position":
         t = g.get("target")
         if isinstance(t, (list, tuple)) and len(t) == 2:
-            r, c = int(t[0]), int(t[1])
-            if bad_rc(r, c):
+            tc, tr = int(t[0]), int(t[1])
+            if bad_cell(tc, tr):
                 raise ValueError(f"goal.target {t} outside shrunk grid ({nr}x{nc})")
 
     maze["dimensions"] = [nr, nc]
