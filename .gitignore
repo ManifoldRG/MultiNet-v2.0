@@ -7,10 +7,9 @@ api_key.txt
 .pytest_cache/
 .env
 
-# Smoke-test outputs (local logs, traces) — except checked-in benchmark_solver PNGs for review.
+# Smoke-test outputs (local logs, traces) — except checked-in benchmark_solver/ (PNGs + CSV) for review.
 src/v2/nlu_pipeline/nlu_benchmark/smoke_tests/results/*
 !src/v2/nlu_pipeline/nlu_benchmark/smoke_tests/results/benchmark_solver/
 !src/v2/nlu_pipeline/nlu_benchmark/smoke_tests/results/benchmark_solver/**
-src/v2/nlu_pipeline/nlu_benchmark/smoke_tests/results/benchmark_solver/*.csv
 src/v2/nlu_pipeline/nlu_benchmark/benchmark_mazes/
 src/v2/nlu_pipeline/nlu_benchmark/terminal_output.txt
