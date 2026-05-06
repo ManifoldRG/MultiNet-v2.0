@@ -35,43 +35,46 @@ def _extract_payload_fields(payload: dict):
 
 
 def _row_col_payload_to_xy_payload(payload: dict) -> dict:
-    """Convert a row/col payload to renderer-space (x/y) without mutating input."""
+    """Convert NLU maze JSON (1-based ``[x, y]`` = ``[column, row]``, top-left origin) to renderer indices."""
     out = deepcopy(payload)
     maze = out.get("maze", {})
     mechs = out.get("mechanisms", {})
 
-    def rc_to_xy(pos):
-        r, c = pos
-        # NLU JSON: 1-based (row, col). Matplotlib cells are 0..cols-1 / 0..rows-1 after the dimension swap below.
-        return [c - 1, r - 1]
-
     dims = maze.get("dimensions")
     if dims and len(dims) == 2:
-        rows, cols = dims
+        rows, cols = dims[0], dims[1]
+    else:
+        rows, cols = 0, 0
+
+    def cr_to_xy(pos):
+        col, row = pos[0], pos[1]
+        return [col - 1, row - 1]
+
+    if dims and len(dims) == 2:
         maze["dimensions"] = [cols, rows]
 
-    maze["walls"] = [rc_to_xy(w) for w in maze.get("walls", [])]
+    maze["walls"] = [cr_to_xy(w) for w in maze.get("walls", [])]
     if "start" in maze:
-        maze["start"] = rc_to_xy(maze["start"])
+        maze["start"] = cr_to_xy(maze["start"])
     if "goal" in maze:
-        maze["goal"] = rc_to_xy(maze["goal"])
+        maze["goal"] = cr_to_xy(maze["goal"])
 
     for k in mechs.get("keys", []):
         if "position" in k:
-            k["position"] = rc_to_xy(k["position"])
+            k["position"] = cr_to_xy(k["position"])
     for d in mechs.get("doors", []):
         if "position" in d:
-            d["position"] = rc_to_xy(d["position"])
+            d["position"] = cr_to_xy(d["position"])
     for s in mechs.get("switches", []):
         if "position" in s:
-            s["position"] = rc_to_xy(s["position"])
+            s["position"] = cr_to_xy(s["position"])
     for g in mechs.get("gates", []):
         if "position" in g:
-            g["position"] = rc_to_xy(g["position"])
+            g["position"] = cr_to_xy(g["position"])
 
     validation = out.get("validation", {})
     if "optimal_path" in validation:
-        validation["optimal_path"] = [rc_to_xy(p) for p in validation.get("optimal_path", [])]
+        validation["optimal_path"] = [cr_to_xy(p) for p in validation.get("optimal_path", [])]
     return out
 
 
@@ -196,9 +199,9 @@ _AGENT_FACING_DELTA = {
 _AGENT_ARROW_CELL_FRAC = 0.5
 
 
-def _draw_agent(ax, ar: int, ac: int, height: int, facing: str) -> None:
-    """Agent overlay; ``ar, ac`` are NLU 1-based ``(row, col)``. Draw space matches ``rc_to_xy`` (0-based column, row)."""
-    sx, sy = ac - 1, ar - 1
+def _draw_agent(ax, col: int, row: int, height: int, facing: str) -> None:
+    """Agent overlay; NLU 1-based ``column``, ``row`` (origin top-left, row increases downward)."""
+    sx, sy = col - 1, row - 1
     cx = sx + 0.5
     cy = height - 1 - sy + 0.5
     ax.plot(
@@ -353,13 +356,13 @@ def render_maze_payload_bytes(
 ) -> bytes:
     """Same layout as ``render_maze_payload``, PNG bytes (e.g. NLU live observations).
 
-    ``agent_pos`` is NLU 1-based ``(row, col)``; aligned with ``rc_to_xy`` (0-based draw indices).
+    ``agent_pos`` is NLU 1-based ``(column_index, row_index)`` for matplotlib overlay (same as JSON ``x``, ``y``).
     """
     title = str(payload.get("task_id", "") or "")
     fig, ax, height = _figure_from_maze_payload(payload, title)
     if agent_pos is not None:
-        r1, c1 = int(agent_pos[0]), int(agent_pos[1])
-        _draw_agent(ax, r1, c1, height, facing)
+        col1, row1 = int(agent_pos[0]), int(agent_pos[1])
+        _draw_agent(ax, col1, row1, height, facing)
     plt.tight_layout()
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.08)
