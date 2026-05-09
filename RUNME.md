@@ -1,4 +1,4 @@
-# MultiNet-v2.0 - How to Run
+# Multinet-v2.0 - How to Run
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ pip install -e ".[hf]"
 ## 1. Run the Test Suite
 
 ```bash
-# All tests (133 tests, excludes flaky perf tests)
+# All tests collected on this branch: 270. This command excludes perf tests.
 python -m pytest tests/ -v --ignore=tests/test_performance.py
 
 # Specific test files
@@ -104,29 +104,29 @@ python visualize_grids_proper.py
 
 ```bash
 # Default: MiniGrid backend + discrete actions
-python run_eval.py --model random --tier all
+python run_eval.py --model random --benchmark validation_10
 
 # MultiGrid backend with hexagonal tiling
-python run_eval.py --model random --tier 1 --backend multigrid --tiling hex
+python run_eval.py --model random --benchmark tiers --tier 1 --backend multigrid --tiling hex
 
 # Natural language action mode (model outputs text commands)
-python run_eval.py --model ollama --ollama-model qwen2.5vl:7b --tier 1 --action-mode nl
+python run_eval.py --model ollama --ollama-model qwen2.5vl:7b --benchmark tiers --tier 1 --action-mode nl
 ```
 
 ### Random Baseline
 
 ```bash
 # Evaluate random agent on all tiers
-python run_eval.py --model random --tier all
+python run_eval.py --model random --benchmark tiers --tier all
 
 # Single tier
-python run_eval.py --model random --tier 1
+python run_eval.py --model random --benchmark tiers --tier 1
 
 # Range of tiers
-python run_eval.py --model random --tier 1-3
+python run_eval.py --model random --benchmark tiers --tier 1-3
 
 # Save results to file
-python run_eval.py --model random --tier all --output results/random_baseline.json
+python run_eval.py --model random --benchmark tiers --tier all --output results/random_baseline.json
 ```
 
 ### Ollama VLM (e.g., Qwen2.5-VL-7B)
@@ -136,10 +136,10 @@ python run_eval.py --model random --tier all --output results/random_baseline.js
 ollama pull qwen2.5vl:7b
 
 # Run evaluation
-python run_eval.py --model ollama --ollama-model qwen2.5vl:7b --tier 1
+python run_eval.py --model ollama --ollama-model qwen2.5vl:7b --benchmark tiers --tier 1
 
 # Or use a different model
-python run_eval.py --model ollama --ollama-model llava:7b --tier 1-3
+python run_eval.py --model ollama --ollama-model llava:7b --benchmark tiers --tier 1-3
 ```
 
 ### LM Studio VLM
@@ -147,7 +147,7 @@ python run_eval.py --model ollama --ollama-model llava:7b --tier 1-3
 ```bash
 # Start LM Studio with a vision model loaded
 
-python run_eval.py --model lmstudio --lmstudio-model local-model --tier 1
+python run_eval.py --model lmstudio --lmstudio-model local-model --benchmark tiers --tier 1
 ```
 
 ### File-Based Protocol (Any External Model)
@@ -156,7 +156,7 @@ python run_eval.py --model lmstudio --lmstudio-model local-model --tier 1
 # The file-based protocol writes observations to a directory
 # and waits for action responses. See model_interface.py FileBasedModelInterface.
 
-python run_eval.py --model file_based --tier 1
+python run_eval.py --model file_based --benchmark tiers --tier 1
 ```
 
 ---
@@ -280,7 +280,7 @@ Supported tiling types for the MultiGrid backend:
 
 ---
 
-## 10. Architecture Summary
+## 11. Architecture Summary
 
 ```
 Task JSON  -->  TaskParser  -->  CustomMiniGridEnv
@@ -294,4 +294,3 @@ Task JSON  -->  TaskParser  -->  CustomMiniGridEnv
                                       |
                  Adapters: File-Based | PaliGemma | Ollama | LMStudio
 ```
-

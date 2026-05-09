@@ -35,7 +35,7 @@ from typing import Optional
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Ensure our v1_1 directory is on sys.path for gridworld imports
+# Ensure the repository root is on sys.path for gridworld imports
 _script_dir_str = str(_SCRIPT_DIR)
 if _script_dir_str not in sys.path:
     sys.path.insert(0, _script_dir_str)

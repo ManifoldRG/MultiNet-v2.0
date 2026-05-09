@@ -1,73 +1,82 @@
-# MultiGrid-v2.0 Implementation Summary
+# Multinet-v2.0 Implementation Summary
 
-## Completion Status: ✅ COMPLETE
+## Completion Status: Current
 
-All tests from `specs/test_cases.md` are passing. User can render and view grids to confirm.
+The current branch contains the gridworld backend stack, the custom multigrid
+backend, model adapters, evaluation harnesses, validation task specs, and
+documentation. Test collection currently finds 270 tests.
 
 ## What Was Implemented
 
-### 1. Core Architecture (100% Complete)
+### 1. Core Architecture
 - ✅ `Cell` dataclass with adjacency information
 - ✅ `Tiling` abstract base class
 - ✅ `TilingGraph` for representing world topology
 - ✅ Canonical coordinate system ([0,1] normalization)
 
-### 2. Tiling Implementations (100% Complete)
+### 2. Tiling Implementations
 
 #### Square Tiling (`multigrid/tilings/square.py`)
 - 4 directions: north, east, south, west
 - Manhattan distance metric
 - Row/column coordinate system
-- All tests passing ✓
+- Covered by tiling tests
 
 #### Hexagonal Tiling (`multigrid/tilings/hex.py`)
 - 6 directions: N, NE, SE, S, SW, NW
 - Axial coordinate system (Red Blob Games implementation)
 - Hex distance metric
 - Pointy-top orientation
-- All tests passing ✓
+- Covered by tiling tests
 
 #### Triangular Tiling (`multigrid/tilings/triangle.py`)
 - 3 edges per triangle
 - Alternating up/down triangle orientation
 - BFS-based distance computation
-- All tests passing ✓
+- Covered by tiling tests
 
-### 3. Object System (100% Complete)
+#### Archimedean Tilings
+- `multigrid/tilings/archimedean_3464.py`
+- `multigrid/tilings/archimedean_488.py`
+- Registered as `3464` and `488` in `multigrid.env.TilingRegistry`
+
+### 3. Object System
 - ✅ `WorldObj` abstract base class
 - ✅ `ObjectRegistry` for extensible types
 - ✅ Built-in objects:
   - `MovableObj` - can be picked up and pushed
   - `Wall` - blocks movement
   - `Zone` - overlappable goal regions
+  - `Key`, `Door`, `Switch`, `Gate`, `Hazard`, `Teleporter`
 - ✅ Physics properties stub for future expansion
 
-### 4. Agent & Actions (100% Complete)
+### 4. Agent & Actions
 - ✅ `AgentState` dataclass (position, facing, holding)
-- ✅ 8 discrete actions:
+- ✅ 9 discrete actions:
   - FORWARD - move in facing direction
   - BACKWARD - move opposite to facing
   - TURN_LEFT - rotate counter-clockwise
   - TURN_RIGHT - rotate clockwise
   - PICKUP - pick up object (from current or adjacent cell)
   - DROP - drop held object
+  - TOGGLE - interact with doors and switches
   - PUSH - push object in facing direction
   - WAIT - no-op
 - ✅ Invalid action detection and handling
 
-### 5. Environment (100% Complete)
+### 5. Environment
 - ✅ `MultiGridEnv` class (Gymnasium-compatible)
 - ✅ Task specification from JSON
 - ✅ `reset()` and `step()` methods
 - ✅ State export via `get_state_dict()`
 - ✅ Multiple tiling support via `TilingRegistry`
 
-### 6. World State (100% Complete)
+### 6. World State
 - ✅ `WorldState` class managing agents and objects
 - ✅ `from_task_spec()` constructor
 - ✅ Collision detection (`can_move_to()`)
 - ✅ Object queries (`get_object_at()`)
-- ✅ Goal checking stub
+- ✅ Goal predicates in `multigrid/goals.py`
 
 ### 7. Rendering (Basic Implementation)
 - ✅ `Renderer` abstract interface
@@ -75,47 +84,28 @@ All tests from `specs/test_cases.md` are passing. User can render and view grids
 - ✅ Visualization script with matplotlib
 - ⚠️ Note: Rendering is simplified (sufficient for testing)
 
-### 8. Test Suite (100% Complete)
+### 8. Test Suite
 
-All 36 tests passing:
+`python -m pytest --collect-only -q` collects 270 tests. Coverage includes:
 
-#### test_tiling_generation.py (18 tests)
-- ✅ Direction count (3 tilings)
-- ✅ Cell count (3 tilings)
-- ✅ Boundary cells have fewer neighbors (3 tilings)
-- ✅ Adjacency symmetry (3 tilings)
-- ✅ Seed determinism (3 tilings)
-
-#### test_coordinates.py (9 tests)
-- ✅ Canonical roundtrip center (3 tilings)
-- ✅ Canonical corners (3 tilings)
-- ✅ Cell positions unique (3 tilings)
-
-#### test_distance.py (9 tests)
-- ✅ Square Manhattan distance
-- ✅ Hex distance
-- ✅ Distance zero to self (3 tilings)
-- ✅ Distance symmetry (3 tilings)
-
-#### test_actions.py (4 tests)
-- ✅ Forward movement
-- ✅ Turn changes facing
-- ✅ Invalid move into wall
-- ✅ Pickup object
+- core tiling generation, coordinates, distance, and action execution
+- exotic tilings (`3464`, `488`)
+- MiniGrid and MultiGrid backend integration
+- partial observability in both backend families
+- teleporter mechanics
+- task-spec validation and beatability scoring
+- model interface and evaluation harness behavior
+- NL action parsing and cross-domain canonical round trips
+- VLM sanity-check helpers and chat smoke-test parsing
 
 ## Test Results
 
 ```
 ============================= test session starts ==============================
 platform linux -- Python 3.10.14, pytest-8.2.2, pluggy-1.5.0
-collected 36 items
+collected 270 items
 
-tests/test_actions.py ....                                               [ 11%]
-tests/test_coordinates.py .........                                      [ 36%]
-tests/test_distance.py .........                                         [ 58%]
-tests/test_tiling_generation.py ..................                       [100%]
-
-============================== 36 passed in 0.08s ===============================
+270 tests collected
 ```
 
 ## Visualizations Generated
@@ -130,77 +120,73 @@ Generated files:
 - ✅ `grid_visualization_square.png` - Shows 10×10 square grid structure
 - ✅ `grid_visualization_hex.png` - Shows 10×10 hexagonal grid structure
 - ✅ `grid_visualization_triangle.png` - Shows 10×10 triangular grid structure
-- ✅ `environment_comparison.png` - Side-by-side comparison of all three tilings with agent and objects
+- ✅ `environment_comparison.png` - Side-by-side comparison of the original three tilings with agent and objects
+- `visualize_all_tilings.py` renders square, hex, triangle, 3-4-6-4, and 4-8-8 tilings
 
 ## File Structure
 
 ```
-src/v1_1/
+.
 ├── multigrid/
 │   ├── __init__.py
-│   ├── base.py              # Tiling abstract base (79 lines)
-│   ├── core.py              # Cell and TilingGraph (25 lines)
-│   ├── agent.py             # AgentState and Action enum (32 lines)
-│   ├── world.py             # WorldState and action execution (165 lines)
-│   ├── env.py               # MultiGridEnv environment (154 lines)
-│   ├── rendering.py         # Renderer interface and MinimalRenderer (120 lines)
+│   ├── base.py              # Tiling abstract base
+│   ├── core.py              # Cell and TilingGraph
+│   ├── agent.py             # AgentState and Action enum
+│   ├── world.py             # WorldState and action execution
+│   ├── env.py               # MultiGridEnv environment
+│   ├── rendering.py         # Renderer interface and MinimalRenderer
 │   ├── tilings/
 │   │   ├── __init__.py
-│   │   ├── square.py        # Square tiling implementation (183 lines)
-│   │   ├── hex.py           # Hexagonal tiling implementation (271 lines)
-│   │   └── triangle.py      # Triangular tiling implementation (149 lines)
+│   │   ├── square.py
+│   │   ├── hex.py
+│   │   ├── triangle.py
+│   │   ├── archimedean_3464.py
+│   │   └── archimedean_488.py
 │   └── objects/
 │       ├── __init__.py
-│       ├── base.py          # WorldObj and ObjectRegistry (65 lines)
-│       └── builtin.py       # MovableObj, Wall, Zone (60 lines)
-├── tests/
-│   ├── test_tiling_generation.py   # 96 lines, 18 tests
-│   ├── test_coordinates.py         # 59 lines, 9 tests
-│   ├── test_distance.py            # 62 lines, 9 tests
-│   └── test_actions.py             # 103 lines, 4 tests
-├── specs/                   # Design specifications (provided)
-├── visualize_grid.py        # Visualization script (216 lines)
+│       ├── base.py          # WorldObj and ObjectRegistry
+│       └── builtin.py       # Built-in object types
+├── tests/                   # Pytest suite for backends, interfaces, tasks, VLM helpers
+├── gridworld/tasks/          # Tiered task specs
+├── mazes/validation_10/      # Default validation benchmark specs
+├── visualize_grid.py        # Visualization script
 ├── README.md                # Usage documentation
-└── IMPLEMENTATION_SUMMARY.md # This file
+└── docs/implementation_summary.md
 
-Total: ~1,800 lines of implementation + test code
+See `docs/README.md` for the current full file map.
 ```
 
 ## Code Quality
 
 - **Style**: Follows repository conventions (type hints, docstrings)
-- **Testing**: 100% of specified tests passing
+- **Testing**: Current suite is discovered with `python -m pytest --collect-only -q`
 - **Documentation**: Comprehensive docstrings and README
 - **Architecture**: Clean separation of concerns
 - **Extensibility**: Easy to add new tilings and objects
 
 ## Known Limitations
 
-1. **Rendering**: Basic implementation sufficient for testing but not production-ready
-2. **Goal System**: Stub implementation (goal checking returns False)
-3. **Exotic Tilings**: Not yet implemented (Archimedean, Penrose)
-4. **Partial Observability**: Not implemented
-5. **Episode Logging**: Not implemented
+1. **MultiGrid maturity**: newer than the MiniGrid backend; add focused regressions for new benchmark mechanics.
+2. **Rendering**: custom renderer is functional but still experimental for publication visuals.
+3. **Backend parity**: the same high-level spec can differ subtly across MiniGrid and MultiGrid because the engines are different.
 
 These limitations are documented and don't affect the core functionality tested in the test suite.
 
 ## Next Iteration Priorities
 
 If continuing implementation:
-1. Implement goal predicate system (ObjectInZone, etc.)
-2. Add proper rendering with PIL/cv2
-3. Add partial observability (field of view)
-4. Implement exotic tilings
-5. Add episode logging to JSON
-6. Natural language wrapper
-7. Optimal pathfinding for efficiency metrics
+1. Keep documentation and examples aligned with `gridworld/tasks` and `mazes/validation_10`.
+2. Add focused backend parity tests for any new mechanism or tiling.
+3. Improve publication-quality rendering for exotic tilings.
+4. Extend benchmark reporting around optimality and point scoring.
 
 ## Conclusion
 
-**Status**: ✅ All tests in @src/v1_1/specs/test_cases.md are passing.
+**Status**: current tests are collected from `tests/` and `multigrid/test_multigrid.py`; tests are the source of truth for this branch.
 
 **Verification**: User can run:
-- `pytest tests/ -v` - See all 36 tests pass
+- `python -m pytest --collect-only -q` - Confirm test discovery
+- `python -m pytest tests/ -v --ignore=tests/test_performance.py` - Run the main suite without performance tests
 - `python visualize_grid.py` - Generate and view grid visualizations
 
 The implementation successfully provides a tiling-agnostic grid environment framework with square, hexagonal, and triangular tilings, following the design specifications exactly.

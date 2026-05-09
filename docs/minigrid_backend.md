@@ -6,9 +6,9 @@ The MiniGrid Backend is a production-ready implementation of the `AbstractGridBa
 
 **Purpose**: Enable evaluation of vision-language-action models on standard square-grid environments with comprehensive mechanism support (keys, doors, switches, gates, blocks, hazards).
 
-**Location**: `/src/v1_1/gridworld/backends/minigrid_backend.py`
+**Location**: `gridworld/backends/minigrid_backend.py`
 
-**Status**: MVP (Minimum Viable Product) - Production ready
+**Status**: Default square-grid backend
 
 ---
 
@@ -158,7 +158,7 @@ from gridworld.task_spec import TaskSpecification
 from gridworld.backends import MiniGridBackend
 
 # Load task specification
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 
 # Configure backend
 backend = MiniGridBackend()
@@ -412,7 +412,7 @@ from gridworld.backends import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Load task
-spec = TaskSpecification.from_json("tasks/navigation_8x8.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier1/maze_simple_001.json")
 
 # Create and configure backend
 backend = MiniGridBackend(render_mode="rgb_array")
@@ -497,7 +497,11 @@ def evaluate_policy(policy_fn, task_path, num_seeds=10):
 def random_policy(obs, state):
     return np.random.randint(0, 7)
 
-results = evaluate_policy(random_policy, "task.json", num_seeds=10)
+results = evaluate_policy(
+    random_policy,
+    "mazes/validation_10/V01_empty_room.json",
+    num_seeds=10,
+)
 print(f"Success rate: {results['success_rate']:.1%}")
 ```
 
@@ -508,7 +512,7 @@ from gridworld.backends import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Setup
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 backend = MiniGridBackend(render_mode="rgb_array")
 backend.configure(spec)
 
@@ -540,7 +544,7 @@ from gridworld.backends import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Task with switches and gates
-spec = TaskSpecification.from_json("tasks/switch_gate_puzzle.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier3/gates_switches_002.json")
 backend = MiniGridBackend()
 backend.configure(spec)
 
@@ -572,7 +576,7 @@ from gridworld.task_spec import TaskSpecification
 import imageio
 
 # Setup
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 backend = MiniGridBackend(render_mode="rgb_array")
 backend.configure(spec)
 
@@ -610,7 +614,7 @@ print(f"Saved {len(frames)} frames to episode.mp4")
 | Gates | ✓ | Controlled by switches |
 | Blocks | ✓ | Pushable Sokoban-style |
 | Hazards | ✓ | Lava (episode-ending) |
-| Teleporters | ✗ | Not implemented in MiniGrid |
+| Teleporters | ✓ | Linked endpoint pairs with cooldown state |
 | Partial Observability | ✓ | Agent has limited field of view |
 
 ### Supported Goal Types
@@ -772,22 +776,23 @@ backend.reset()  # Works
 
 | Feature | MiniGridBackend | MultiGridBackend |
 |---------|-----------------|------------------|
-| **Tilings** | Square only | Square, hex, triangle |
-| **Maturity** | Production-ready | Experimental |
-| **Performance** | Fast (~400ms/episode) | Slower (~600ms/episode) |
-| **Switches/Gates** | Fully supported | Not yet implemented |
-| **Partial Observability** | Supported | Not yet implemented |
+| **Tilings** | Square only | Square, hex, triangle, 3464, 488 |
+| **Maturity** | Default backend | Experimental but integrated |
+| **Performance** | MiniGrid native | Custom renderer and graph runtime |
+| **Switches/Gates** | Supported | Supported |
+| **Partial Observability** | Supported | Supported |
 | **Render Quality** | High (MiniGrid native) | Variable |
 | **Use Case** | Standard evaluation | Research on exotic tilings |
 
-**Recommendation**: Use MiniGridBackend for production evaluation. Use MultiGridBackend only for research requiring non-square tilings.
+**Recommendation**: Use MiniGridBackend for default square-grid evaluation. Use MultiGridBackend for experiments that require non-square tilings.
 
 ---
 
 ## See Also
 
-- [AbstractGridBackend Interface](../gridworld/backends/base.py): Base interface documentation
+- [Interface Reference](./interfaces.md): Public interface documentation
+- `gridworld/backends/base.py`: Base backend interface
 - [Task Parser Documentation](./task_parser.md): How tasks are parsed into environments
 - [MultiGrid Backend Documentation](./multigrid_backend.md): Alternative backend for exotic tilings
-- [TaskSpecification Schema](../gridworld/task_spec.py): JSON format for tasks
-- [Evaluation Pipeline Guide](../../docs/evaluation.md): End-to-end evaluation setup
+- `gridworld/task_spec.py`: JSON format for tasks
+- [Run Guide](../RUNME.md): End-to-end evaluation commands

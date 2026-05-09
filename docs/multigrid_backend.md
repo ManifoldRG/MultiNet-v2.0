@@ -2,13 +2,13 @@
 
 ## Overview
 
-The MultiGrid Backend is an experimental implementation of the `AbstractGridBackend` interface that supports exotic grid tilings (hexagonal and triangular) in addition to standard square grids. It bridges the standard MiniGrid task specification format with a custom MultiGrid environment system designed for research on non-traditional spatial representations.
+The MultiGrid Backend is an experimental implementation of the `AbstractGridBackend` interface that supports exotic grid tilings (`hex`, `triangle`, `3464`, and `488`) in addition to standard square grids. It bridges the standard MiniGrid task specification format with a custom MultiGrid environment system designed for research on non-traditional spatial representations.
 
 **Purpose**: Enable research and evaluation on exotic grid tilings while maintaining compatibility with the standard backend interface and task specification format.
 
-**Location**: `/src/v1_1/gridworld/backends/multigrid_backend.py`
+**Location**: `gridworld/backends/multigrid_backend.py`
 
-**Status**: Experimental - Research use only
+**Status**: Experimental but integrated
 
 **Target Audience**: Researchers investigating how agents generalize across different spatial topologies.
 
@@ -18,11 +18,13 @@ The MultiGrid Backend is an experimental implementation of the `AbstractGridBack
 
 ### Exotic Tiling Support
 
-The key differentiator of MultiGrid Backend is its support for three tiling types:
+The key differentiator of MultiGrid Backend is its support for five tiling types:
 
 1. **Square Tiling** (Standard): 4-connected grid with 90° rotations
 2. **Hexagonal Tiling**: 6-connected grid with 60° rotations
 3. **Triangular Tiling**: Variable connectivity with complex navigation
+4. **3-4-6-4 Tiling**: Archimedean mixed triangle/square/hex cells
+5. **4-8-8 Tiling**: Archimedean mixed square/octagon cells
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -111,7 +113,7 @@ A major architectural challenge is coordinate system conversion:
 class MultiGridBackend(AbstractGridBackend):
     """
     Backend adapter for the custom MultiGrid system.
-    Supports exotic tilings: square, hex, triangle.
+    Supports tilings: square, hex, triangle, 3464, 488.
     """
 
     def __init__(self, tiling="square", render_mode="rgb_array",
@@ -183,7 +185,7 @@ from gridworld.task_spec import TaskSpecification
 from gridworld.backends import MultiGridBackend
 
 # Load standard MiniGrid task
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 
 # Configure with hexagonal tiling
 backend = MultiGridBackend(tiling="hex")
@@ -248,8 +250,8 @@ MultiGrid uses a different action enumeration than MiniGrid. The backend automat
 | 2: forward | 0: FORWARD | Move in facing direction |
 | 3: pickup | 4: PICKUP | Pick up object in front |
 | 4: drop | 5: DROP | Drop held object |
-| 5: toggle | 6: PUSH | Interact with object |
-| 6: done | 7: WAIT | No-op action |
+| 5: toggle | 6: TOGGLE | Interact with object |
+| 6: done | 8: WAIT | No-op action |
 
 **Example**:
 ```python
@@ -305,18 +307,8 @@ Internal method that converts MiniGrid TaskSpecification to MultiGrid format.
             "facing": 0
         },
         "objects": [
-            {
-                "id": "key1",
-                "type": "movable",
-                "color": "red",
-                "position": {"x": 0.25, "y": 0.25}  # 2/8, 2/8
-            },
-            {
-                "id": "door1",
-                "type": "wall",
-                "color": "red",
-                "position": {"x": 0.5, "y": 0.5}  # 4/8, 4/8
-            },
+            {"id": "key1", "type": "key", "color": "red", "position": {"x": 0.25, "y": 0.25}},
+            {"id": "door1", "type": "door", "color": "red", "position": {"x": 0.5, "y": 0.5}},
             {
                 "id": "block1",
                 "type": "movable",
@@ -337,17 +329,16 @@ Internal method that converts MiniGrid TaskSpecification to MultiGrid format.
 ```
 
 **Object Type Mapping**:
-- Keys → `"movable"` (can be picked up)
-- Doors → `"wall"` (blocking barrier with color)
-- Blocks → `"movable"` (pushable)
-- Switches → Not yet supported
-- Gates → Not yet supported
+- Keys -> `"key"`
+- Doors -> `"door"`
+- Blocks -> `"movable"`
+- Switches -> `"switch"`
+- Gates -> `"gate"`
+- Hazards -> `"hazard"`
+- Teleporters -> `"teleporter"` endpoint objects
 
-**Limitations**:
-- Switches and gates not implemented in MultiGrid
-- Teleporters not supported
-- Hazards not supported
-- All mechanisms except reach_position goals are limited
+**Conversion note**: border cells are emitted as explicit wall objects so square
+MultiGrid tasks match MiniGrid border-wall semantics.
 
 ### Method: `_build_grid_state()`
 
@@ -419,7 +410,7 @@ Normalized coordinates abstract over these differences, allowing the "same" task
 # Hex tiling: Can move diagonally, ~6 steps minimum
 # Triangle tiling: Complex, depends on orientation
 
-# Normalized positions allow all three to work:
+# Normalized positions allow all supported tilings to work:
 # Agent: (0.25, 0.375)
 # Goal: (0.75, 0.875)
 ```
@@ -454,13 +445,13 @@ MiniGrid has separate lists for different mechanism types. MultiGrid uses a unif
 
 | MiniGrid Mechanism | MultiGrid Type | Notes |
 |--------------------|----------------|-------|
-| `keys` | `"movable"` | Can be picked up and carried |
-| `doors` | `"wall"` | Blocking barrier (unlock not implemented) |
+| `keys` | `"key"` | Can be picked up and carried |
+| `doors` | `"door"` | Colored lockable door |
 | `blocks` | `"movable"` | Pushable objects |
-| `switches` | N/A | Not yet supported |
-| `gates` | N/A | Not yet supported |
-| `teleporters` | N/A | Not yet supported |
-| `hazards` | N/A | Not yet supported |
+| `switches` | `"switch"` | Toggle, hold, or one-shot switch |
+| `gates` | `"gate"` | Controlled barrier |
+| `teleporters` | `"teleporter"` | Linked endpoint objects |
+| `hazards` | `"hazard"` | Hazard object |
 
 **Example Conversion**:
 
@@ -558,7 +549,7 @@ from gridworld.backends import MultiGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Load a navigation task
-spec = TaskSpecification.from_json("tasks/navigation_8x8.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier1/maze_simple_001.json")
 
 # Evaluate on square grid
 square_backend = MultiGridBackend(tiling="square")
@@ -634,7 +625,10 @@ def evaluate_across_tilings(policy_fn, task_path, tilings=["square", "hex", "tri
     return results
 
 # Example usage
-results = evaluate_across_tilings(my_policy, "task.json")
+results = evaluate_across_tilings(
+    my_policy,
+    "mazes/validation_10/V01_empty_room.json",
+)
 for tiling, metrics in results.items():
     print(f"{tiling:10s}: success={metrics['success']}, "
           f"steps={metrics['steps']}, reward={metrics['reward']:.3f}")
@@ -648,7 +642,7 @@ from gridworld.task_spec import TaskSpecification
 import matplotlib.pyplot as plt
 
 # Load task
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 
 # Create backends for each tiling
 tilings = ["square", "hex", "triangle"]
@@ -735,7 +729,7 @@ from gridworld.backends import MiniGridBackend, MultiGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Load task
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 
 # Create both backends
 minigrid = MiniGridBackend()
@@ -782,34 +776,37 @@ multigrid.close()
 | Square | ✓ Full | Same as MiniGrid |
 | Hexagonal | ✓ Experimental | 6-connected, 60° angles |
 | Triangular | ✓ Experimental | Complex topology, variable connectivity |
+| 3-4-6-4 | ✓ Experimental | Mixed triangle, square, and hex cells |
+| 4-8-8 | ✓ Experimental | Mixed square and octagon cells |
 
 ### Mechanism Support
 
 | Mechanism | Status | Notes |
 |-----------|--------|-------|
 | Walls | ✓ Supported | Static barriers |
-| Keys | Partial | Can be placed, but pickup may not work correctly |
-| Doors | ✗ Limited | Rendered as colored walls, no unlock mechanic |
-| Switches | ✗ Not implemented | MultiGrid enhancement needed |
-| Gates | ✗ Not implemented | MultiGrid enhancement needed |
-| Blocks | Partial | Rendered, but push mechanic unverified |
-| Hazards | ✗ Not implemented | No hazard support in MultiGrid |
-| Teleporters | ✗ Not implemented | Planned feature |
+| Keys | ✓ Supported | Native `key` objects |
+| Doors | ✓ Supported | Native `door` objects |
+| Switches | ✓ Supported | Toggle, hold, and one-shot modes |
+| Gates | ✓ Supported | Controlled by switches |
+| Blocks | ✓ Supported | Native `movable` objects |
+| Hazards | ✓ Supported | Native `hazard` objects |
+| Teleporters | ✓ Supported | Linked endpoint objects |
 
 ### Goal Support
 
 | Goal Type | Status | Implementation |
 |-----------|--------|----------------|
 | Reach Position | ✓ Supported | Fully functional |
-| Collect All | ⚠️ Partial | Goal spec converted, checking may not work |
-| Push Block To | ⚠️ Partial | Goal spec converted, checking may not work |
-| Survive Steps | ⚠️ Partial | Can be specified, but no special handling |
+| Collect All | ✓ Supported | `CollectAllGoal` |
+| Push Block To | ✓ Supported | `PushBlockToGoal` |
+| Survive Steps | Partial | `SurviveStepsGoal`; truncation semantics should be checked per experiment |
 
-**Legend**: ✓ Full support | ⚠️ Partial support | ✗ Not supported
+**Legend**: ✓ Supported | Partial = supported with experiment-specific caveats
 
 ### Known Limitations
 
-1. **Mechanism Interactivity**: Many mechanisms (doors, switches, gates) are not yet implemented in the underlying MultiGrid environment. They may be converted and placed but won't function.
+1. **Experimental backend**: MultiGrid is newer than the MiniGrid path and should
+   be verified for each benchmark before publishing results.
 
 2. **Coordinate Precision**: Integer-to-normalized conversion can lose precision:
    ```python
@@ -832,7 +829,8 @@ multigrid.close()
 
 4. **Performance**: MultiGrid is ~1.5× slower than MiniGrid due to coordinate conversions and less optimized implementation.
 
-5. **Partial Observability**: Not yet implemented. All observations are full-grid.
+5. **Partial Observability**: `view_cone` and `fog_of_war` are implemented, but
+   the visibility model differs from MiniGrid because it is graph-based.
 
 ---
 
@@ -871,11 +869,11 @@ Exotic tilings add additional overhead:
 | Aspect | MiniGridBackend | MultiGridBackend |
 |--------|-----------------|------------------|
 | **Maturity** | Production-ready | Experimental |
-| **Tilings** | Square only | Square, hex, triangle |
-| **Mechanisms** | Full support | Limited (keys/walls only) |
-| **Performance** | Fast (~400ms/episode) | Slower (~600-900ms/episode) |
+| **Tilings** | Square only | Square, hex, triangle, 3464, 488 |
+| **Mechanisms** | Supported | Supported |
+| **Performance** | MiniGrid native | Custom graph/runtime |
 | **Rendering** | High quality | Experimental quality |
-| **Partial Obs** | Supported | Not yet |
+| **Partial Obs** | Supported | Supported |
 | **Backend Source** | Gymnasium MiniGrid | Custom MultiGrid |
 | **Use Case** | Standard evaluation | Research on exotic tilings |
 | **Stability** | Stable | May have bugs |
@@ -1023,11 +1021,13 @@ if str(multigrid_path.parent) not in sys.path:
 
 ### Issue 3: Mechanisms Not Working
 
-**Symptom**: Keys can't be picked up, doors don't open
+**Symptom**: A mechanism behaves differently across MiniGrid and MultiGrid.
 
-**Cause**: Mechanism interaction not yet implemented in MultiGrid
+**Cause**: The two backends implement the same high-level spec over different
+environment engines and action semantics.
 
-**Solution**: Currently, MultiGrid backend is best for navigation-only tasks. For tasks requiring mechanisms, use MiniGridBackend.
+**Solution**: Add a focused regression test for the mechanism and tiling being
+used. Use `MiniGridBackend` as the reference for square-grid behavior.
 
 ### Issue 4: Rendering Artifacts on Hex/Triangle
 
@@ -1043,17 +1043,7 @@ if str(multigrid_path.parent) not in sys.path:
 
 ### Planned Features
 
-1. **Full Mechanism Support**:
-   - Implement switches and gates in MultiGrid
-   - Add door unlock mechanic
-   - Add hazard tiles
-
-2. **Partial Observability**:
-   - Limited agent field of view
-   - Fog of war
-   - Memory-dependent tasks
-
-3. **Improved Rendering**:
+1. **Improved Rendering**:
    - High-quality hex/triangle tile graphics
    - Customizable visual themes
    - Animation support
@@ -1082,4 +1072,4 @@ if str(multigrid_path.parent) not in sys.path:
 - [Task Parser Documentation](./task_parser.md): How tasks are parsed
 - [AbstractGridBackend Interface](../gridworld/backends/base.py): Backend interface specification
 - [MultiGrid Environment](../multigrid/env.py): Underlying custom environment
-- [Tiling Theory](../../docs/tiling_theory.md): Mathematical background on grid tilings
+- [Technical Design](./technical_design.md): Architectural rationale for non-square tilings

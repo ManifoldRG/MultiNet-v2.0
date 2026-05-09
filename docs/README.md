@@ -1,51 +1,35 @@
-# MiniGrid Task Framework Documentation
+# Multinet-v2.0 Documentation
 
-This directory contains comprehensive documentation for the MiniGrid task specification and evaluation framework used in MultiNet.
+This directory contains the current documentation for the Multinet-v2.0 gridworld,
+multigrid, model-adapter, and evaluation interfaces.
 
 ## Quick Navigation
 
 ### Core Components
 
-1. **[Task Parser](./task_parser.md)** - Transforms JSON task specifications into executable environments
-2. **[MiniGrid Backend](./minigrid_backend.md)** - Production-ready square grid backend (recommended)
-3. **[MultiGrid Backend](./multigrid_backend.md)** - Experimental backend supporting exotic tilings (hex, triangle)
+1. **[Interfaces](./interfaces.md)** - Public task, backend, runner, model, and evaluation contracts
+2. **[Task Parser](./task_parser.md)** - Transforms JSON task specifications into executable MiniGrid environments
+3. **[MiniGrid Backend](./minigrid_backend.md)** - Default square-grid backend
+4. **[MultiGrid Backend](./multigrid_backend.md)** - Custom backend for square, hex, triangle, 3-4-6-4, and 4-8-8 tilings
+5. **[Backend Reference](./gridworld_backends.md)** - Cross-backend behavior and feature matrix
 
 ## Overview
 
-The MiniGrid framework provides a complete pipeline for defining, parsing, and evaluating agents on gridworld navigation and puzzle-solving tasks.
+The framework provides a complete pipeline for defining task specs, rendering
+grid observations, running policies, and scoring multimodal model behavior.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │              Complete Framework Architecture             │
 └─────────────────────────────────────────────────────────┘
 
-JSON Task Specification
-    │
-    ├─ maze: dimensions, walls, start, goal
-    ├─ mechanisms: keys, doors, switches, gates, blocks, hazards
-    ├─ rules: key consumption, switch types
-    └─ goal: reach_position, collect_all, push_block_to
-    │
-    ▼
-TaskSpecification (Python object)
-    │
-    ▼
-TaskParser
-    │
-    ├─ Validate specification
-    ├─ Create CustomMiniGridEnv
-    └─ Populate grid with objects
-    │
-    ▼
-Backend (MiniGrid or MultiGrid)
-    │
-    ├─ configure(task_spec)
-    ├─ reset(seed) → observation, state
-    ├─ step(action) → observation, reward, terminated, truncated, state
-    └─ render() → RGB image
-    │
-    ▼
-Evaluation / Agent Training
+Task JSON
+  -> TaskSpecification
+  -> Backend.configure(task_spec)
+  -> Backend.reset(seed)
+  -> GridRunner / EvaluationHarness
+  -> ModelInterface adapters
+  -> EpisodeResult / benchmark metrics
 ```
 
 ## Getting Started
@@ -57,7 +41,7 @@ from gridworld.backends import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # 1. Load task specification
-spec = TaskSpecification.from_json("path/to/task.json")
+spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 
 # 2. Create and configure backend
 backend = MiniGridBackend(render_mode="rgb_array")
@@ -84,7 +68,7 @@ print(f"Steps: {state.step_count}")
 # Simple navigation from start to goal
 from gridworld.task_parser import load_task_from_file
 
-env = load_task_from_file("tasks/tier1/navigation_8x8.json")
+env = load_task_from_file("gridworld/tasks/tier1/maze_simple_001.json")
 obs, info = env.reset()
 # ... run episode
 ```
@@ -92,7 +76,7 @@ obs, info = env.reset()
 #### Key-Door Puzzle
 ```python
 # Task requiring key collection and door unlocking
-spec = TaskSpecification.from_json("tasks/tier2/key_door_puzzle.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier2/single_key_001.json")
 backend = MiniGridBackend()
 backend.configure(spec)
 
@@ -103,7 +87,7 @@ obs, state, info = backend.reset()
 #### Switch-Gate Mechanism
 ```python
 # Task with remote-controlled barriers
-spec = TaskSpecification.from_json("tasks/tier3/switch_gate.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier3/gates_switches_002.json")
 backend = MiniGridBackend()
 backend.configure(spec)
 
@@ -243,15 +227,15 @@ Tasks are organized into 5 difficulty tiers based on complexity:
 
 | Feature | MiniGrid Backend | MultiGrid Backend |
 |---------|------------------|-------------------|
-| **Status** | Production-ready | Experimental |
-| **Tilings** | Square only | Square, hex, triangle |
-| **Performance** | Fast (~400ms/episode) | Slower (~600-900ms/episode) |
-| **Mechanisms** | Full support | Limited (keys/walls only) |
-| **Rendering** | High quality | Experimental |
-| **Partial Obs** | Supported | Not yet |
-| **Use Case** | Standard evaluation | Research on exotic tilings |
+| **Status** | Default backend | Experimental but integrated |
+| **Tilings** | Square only | `square`, `hex`, `triangle`, `3464`, `488` |
+| **Mechanisms** | Keys, doors, switches, gates, blocks, hazards, teleporters | Keys, doors, switches, gates, blocks, hazards, teleporters |
+| **Partial Obs** | `full`, `view_cone`, `fog_of_war` | `full`, `view_cone`, `fog_of_war` |
+| **Rendering** | MiniGrid RGB rendering | Custom polygon renderer |
+| **Use Case** | Standard square-grid evaluation | Tiling and topology generalization |
 
-**Recommendation**: Use **MiniGrid Backend** for production evaluation. Use **MultiGrid Backend** only for research requiring non-square tilings.
+**Recommendation**: use **MiniGridBackend** for default square-grid evaluation.
+Use **MultiGridBackend** when the experiment depends on non-square tilings.
 
 ## Common Patterns
 
@@ -405,24 +389,34 @@ See individual documentation files for detailed troubleshooting guides.
 ## File Locations
 
 ```
-src/v1_1/
+.
 ├── gridworld/
-│   ├── task_spec.py              # TaskSpecification schema
-│   ├── task_parser.py            # Parser implementation
-│   ├── custom_env.py             # CustomMiniGridEnv
-│   └── backends/
-│       ├── base.py               # AbstractGridBackend interface
-│       ├── minigrid_backend.py   # MiniGrid implementation
-│       └── multigrid_backend.py  # MultiGrid implementation
-│
-├── multigrid/                    # Custom MultiGrid environment
-│   └── env.py
-│
-└── docs/                         # This directory
-    ├── README.md                 # This file
-    ├── task_parser.md            # Task Parser docs
-    ├── minigrid_backend.md       # MiniGrid Backend docs
-    └── multigrid_backend.md      # MultiGrid Backend docs
+│   ├── task_spec.py
+│   ├── task_parser.py
+│   ├── custom_env.py
+│   ├── task_validator.py
+│   ├── actions.py
+│   ├── tasks/
+│   │   ├── tier1/
+│   │   ├── tier2/
+│   │   ├── tier3/
+│   │   ├── tier4/
+│   │   └── tier5/
+│   ├── backends/
+│   │   ├── base.py
+│   │   ├── minigrid_backend.py
+│   │   └── multigrid_backend.py
+│   └── runner/grid_runner.py
+├── mazes/validation_10/
+├── multigrid/
+├── cross_domain/
+├── nl_domain/
+├── adapters/
+├── scripts/
+├── model_interface.py
+├── evaluation_harness.py
+├── run_eval.py
+└── play_task.py
 ```
 
 ## Related Resources
@@ -430,18 +424,25 @@ src/v1_1/
 ### Code Files
 - `gridworld/task_spec.py`: Complete TaskSpecification schema with validation
 - `gridworld/custom_env.py`: Custom MiniGrid environment with all mechanisms
-- `gridworld/backends/base.py`: Backend interface and GridState definition
+- `gridworld/backends/base.py`: Backend interface and `GridState` definition
+- `model_interface.py`: model adapter interface
+- `evaluation_harness.py`: model evaluation bridge and metrics
+- `gridworld/runner/grid_runner.py`: episode execution and trajectory data
 
 ### Example Tasks
-- `tasks/tier1/`: Navigation tasks
-- `tasks/tier2/`: Key-door puzzles
-- `tasks/tier3/`: Switch-gate mechanisms
-- `tasks/tier4/`: Irreversible actions
-- `tasks/tier5/`: Hidden information
+- `gridworld/tasks/tier1/`: Navigation tasks
+- `gridworld/tasks/tier2/`: Key-door puzzles
+- `gridworld/tasks/tier3/`: Switch-gate mechanisms
+- `gridworld/tasks/tier4/`: Irreversible actions and push blocks
+- `gridworld/tasks/tier5/`: Partial observability, inference, and teleporters
+- `mazes/validation_10/`: Default validation benchmark for `run_eval.py`
 
 ### Evaluation Scripts
-- `scripts/eval_minigrid.py`: Evaluation runner
-- `scripts/generate_tasks.py`: Task generation utilities
+- `run_eval.py`: benchmark runner
+- `play_task.py`: interactive Pygame player
+- `scripts/vlm_sanity_check.py`: visual sanity checks
+- `scripts/chat_smoke_test.py`: manual web-chat action loop
+- `scripts/probe_vlm.py`: VLM orientation and action probes
 
 ## Contributing
 
@@ -456,10 +457,10 @@ When adding new features to the framework:
 ## Version History
 
 - **v2.0**: Current version
-  - MiniGrid Backend: Production-ready
-  - MultiGrid Backend: Experimental
-  - Full mechanism support in MiniGrid
-  - Comprehensive documentation
+  - MiniGrid Backend: default square-grid backend
+  - MultiGrid Backend: experimental backend for square, hex, triangle, 3-4-6-4, and 4-8-8 tilings
+  - Shared task schema for keys, doors, switches, gates, blocks, hazards, teleporters, and partial observability
+  - Public interfaces documented in `docs/interfaces.md`
 
 - **v1.0**: Initial release
   - Basic task specification
@@ -469,12 +470,12 @@ When adding new features to the framework:
 ## Contact and Support
 
 For issues, questions, or contributions:
-- See main MultiNet repository README
+- See the repository [README.md](../README.md)
 - Check individual documentation files for detailed troubleshooting
 - Review inline code comments for implementation details
 
 ---
 
-**Last Updated**: 2026-01-30
+**Last Updated**: 2026-05-09
 
 **Documentation Status**: Complete and ready for production use

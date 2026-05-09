@@ -2,13 +2,14 @@
 
 ## Overview
 
-This document summarizes the comprehensive test suite implementation for the MultiGrid-v2.0 framework, based on specifications in `specs/test_cases.md`.
+This document summarizes the current test suite for the Multinet-v2.0 gridworld
+and multigrid framework. Tests are the source of truth for this branch.
 
 ## Test Coverage
 
-### ✅ Implemented and Passing (70 tests total)
+### Collected Test Suite (270 tests)
 
-#### 1. Core Tiling Tests (test_tiling_generation.py) - 15 tests
+#### 1. Core Tiling Tests (`tests/test_tiling_generation.py`)
 - **Direction count tests**: Validates correct number of directions for each tiling type
   - Square: 4 directions (N, E, S, W)
   - Hexagonal: 6 directions (N, NE, SE, S, SW, NW)
@@ -21,26 +22,26 @@ This document summarizes the comprehensive test suite implementation for the Mul
 - **Adjacency symmetry**: If A neighbors B, then B neighbors A (bidirectional)
 - **Determinism**: Same seed produces identical graphs
 
-#### 2. Coordinate Conversion Tests (test_coordinates.py) - 9 tests
+#### 2. Coordinate Conversion Tests (`tests/test_coordinates.py`)
 - **Roundtrip conversion**: Canonical [0,1] → cell ID → canonical preserves position
 - **Corner mapping**: Corner positions map to boundary cells correctly
 - **Position uniqueness**: Each cell has a unique canonical position
 - Validates across all three tiling types (square, hex, triangle)
 
-#### 3. Distance Computation Tests (test_distance.py) - 7 tests
+#### 3. Distance Computation Tests (`tests/test_distance.py`)
 - **Manhattan distance**: Square grid uses Manhattan metric
 - **Hex metric**: Hexagonal grid uses appropriate hex distance
 - **Zero distance**: Distance from cell to itself is 0
 - **Symmetry**: Distance(A, B) = Distance(B, A)
 - Validates across all three tiling types
 
-#### 4. Action Execution Tests (test_actions.py) - 4 tests
+#### 4. Action Execution Tests (`tests/test_actions.py`)
 - **Forward movement**: Agent moves in facing direction
 - **Turn actions**: Facing changes without position change
 - **Boundary collision**: Invalid move into wall/boundary returns error
 - **Object pickup**: Agent can pick up adjacent objects
 
-#### 5. Edge Case Tests (test_edge_cases.py) - 13 tests
+#### 5. Edge Case Tests (`tests/test_edge_cases.py`)
 - **Corner behavior**: Agents at corners have exactly 2 movement options
 - **Edge behavior**: Agents at edges have 3 movement options
 - **Deterministic reset**: Seed 0 produces identical observations
@@ -51,7 +52,7 @@ This document summarizes the comprehensive test suite implementation for the Mul
   - East edge test
   - All boundary directions for all tilings
 
-#### 6. Performance Tests (test_performance.py) - 22 tests
+#### 6. Performance Tests (`tests/test_performance.py`)
 - **Reset time benchmarks**:
   - Small grids (10×10): < 200ms average
   - Medium grids (25×25): < 200ms average
@@ -85,24 +86,15 @@ This document summarizes the comprehensive test suite implementation for the Mul
 
 **Note**: Triangle tiling has 6× more cells than square/hex for same grid dimensions, explaining slower performance.
 
-## Code Review Fixes Applied
+## Regression Coverage
 
-Three issues from the code review were addressed:
+Current regression tests cover:
 
-1. **Random policy seeding** (grid_runner.py):
-   - Fixed unseeded `np.random.randint()` call
-   - Now uses seeded `np.random.RandomState` for deterministic random policy
-   - Ensures CLAUDE.md requirement: "All stochastic operations must use explicit seed values"
-
-2. **Nested loop break** (minigrid_backend.py):
-   - Fixed break statement that only exited inner loop
-   - Added `found` flag to properly exit both x and y loops
-   - Prevents unnecessary grid scanning after block is located
-
-3. **Gymnasium compatibility** (minigrid/__init__.py):
-   - Added `register_minigrid_envs()` stub function
-   - Fixes AttributeError when gymnasium tries to load minigrid plugin
-   - Local minigrid module now compatible with gymnasium's plugin system
+1. **Random policy seeding** in `gridworld/runner/grid_runner.py`.
+2. **Block position extraction** in `gridworld/backends/minigrid_backend.py`.
+3. **Gymnasium plugin isolation** in `gridworld/bootstrap.py`.
+4. **Canonical gridworld round trips** in `cross_domain/`.
+5. **Backend conversion fidelity** for doors, gates, switches, hazards, and teleporters.
 
 ## Visualization
 
@@ -113,7 +105,8 @@ Grid visualization scripts confirmed working:
   - `grid_visualization_triangle.png` (640 KB)
   - `environment_comparison.png` (284 KB)
 
-All visualizations render correctly and demonstrate the three tiling types.
+Visualization checks cover square, hex, triangle, and the newer Archimedean
+tilings through targeted rendering tests.
 
 ## Test Execution
 
@@ -129,49 +122,50 @@ python -m pytest tests/test_performance.py -v
 python -m pytest tests/test_performance.py -v -s
 ```
 
-## Files Added/Modified
+## Files Covered
 
-**New Test Files**:
-- `tests/test_edge_cases.py` (13 tests)
-- `tests/test_performance.py` (22 tests)
+**Runtime and interface test files include**:
+- `tests/test_backend_integration.py`
+- `tests/test_model_interface.py`
+- `tests/test_partial_observability.py`
+- `tests/test_multigrid_partial_obs.py`
+- `tests/test_teleporters.py`
+- `tests/test_task_spec_validation.py`
+- `tests/test_vlm_sanity_check.py`
+- `tests/test_chat_smoke_test.py`
+- `tests/test_probe_vlm.py`
+- `tests/test_standalone_surface.py`
 
-**Modified Files**:
-- `minigrid/__init__.py` - Added gymnasium compatibility stub
-- `minigrid/runner/grid_runner.py` - Fixed random policy seeding
-- `minigrid/backends/minigrid_backend.py` - Fixed nested loop break
+**Core multigrid test files include**:
+- `multigrid/test_multigrid.py`
+- `tests/test_tiling_generation.py`
+- `tests/test_coordinates.py`
+- `tests/test_distance.py`
+- `tests/test_actions.py`
+- `tests/test_exotic_tilings.py`
+- `tests/test_edge_cases.py`
+- `tests/test_performance.py`
 
-**Existing Test Files** (already passing):
-- `tests/test_tiling_generation.py` (15 tests)
-- `tests/test_coordinates.py` (9 tests)
-- `tests/test_distance.py` (7 tests)
-- `tests/test_actions.py` (4 tests)
+## Coverage Areas
 
-## Compliance with Specifications
-
-### From test_cases.md (Appendix E):
-
-✅ **E.2.1 Tiling Generation Tests** - Fully implemented
-✅ **E.2.2 Coordinate Conversion Tests** - Fully implemented
-✅ **E.2.3 Distance Computation Tests** - Fully implemented
-✅ **E.2.4 Action Execution Tests** - Fully implemented
-✅ **E.4.1 Boundary Conditions** - Fully implemented
-✅ **E.6 Performance Benchmarks** - Fully implemented with realistic thresholds
-
-⚠️ **E.3 Episode Walkthroughs** - Not implemented (integration tests)
-⚠️ **E.4.2 Object Interaction Edge Cases** - Partially covered by test_actions.py
-⚠️ **E.4.3 Zone Computation Edge Cases** - Not yet implemented
-⚠️ **E.7 Regression Test Suite** - Framework ready, no specific regressions documented yet
+- Tiling generation, coordinate conversion, and distance metrics
+- Action execution and boundary behavior
+- Object interactions, zones, hazards, switches, gates, and teleporters
+- MiniGrid/MultiGrid backend conversion fidelity
+- Partial observability and fog-of-war rendering
+- Task-spec validation and beatability scoring
+- Evaluation harness metrics and serialization
+- Model adapters for random, file-based, Ollama, LM Studio, and NL modes
 
 ## Next Steps (Future Work)
 
-1. **Episode walkthroughs** (E.3): Integration tests with complete task sequences
-2. **Object interaction edge cases** (E.4.2): Pickup while holding, push chains, etc.
-3. **Zone computation tests** (E.4.3): Zone boundary, radius 0, consecutive steps
-4. **Regression tests** (E.7): Document and test specific bug fixes as they occur
+1. Keep task-file tests synchronized with `gridworld/tasks` and `mazes/validation_10`.
+2. Add backend-parity tests whenever a mechanism is extended.
+3. Add full-run benchmark smoke tests for any new CLI mode.
 
 ## Conclusion
 
-The test suite provides comprehensive coverage of core MultiGrid functionality with 70 passing tests across:
+The test suite provides coverage of core Multinet-v2.0 functionality across:
 - Graph generation and topology
 - Coordinate systems and conversions
 - Distance metrics
@@ -179,4 +173,6 @@ The test suite provides comprehensive coverage of core MultiGrid functionality w
 - Edge cases and boundary conditions
 - Performance benchmarks
 
-All tests pass successfully and the grid visualization system is confirmed working. The implementation adheres to the specifications in `specs/test_cases.md` and fixes all issues identified in the code review.
+Use `python -m pytest --collect-only -q` to verify discovery and
+`python -m pytest tests/ -v --ignore=tests/test_performance.py` for the main
+non-performance suite.

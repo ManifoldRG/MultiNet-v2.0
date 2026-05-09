@@ -7,7 +7,7 @@
 | Branch | `reporting-and-examples` |
 | Scope | Target architecture + as-is delta for the MultiNet v2.0 benchmark pipeline |
 | Supersedes | Pipeline summary in `RUNME.md` §10; informal owner allocation in standup notes |
-| Companion docs | `docs/README.md`, `docs/technical_design.md`, `docs/gridworld_backends.md`, `docs/task_parser.md`, `docs/minigrid_backend.md`, `docs/multigrid_backend.md` (all describe the system as it is today and remain authoritative for component internals) |
+| Companion docs | `docs/README.md`, `docs/interfaces.md`, `docs/technical_design.md`, `docs/gridworld_backends.md`, `docs/task_parser.md`, `docs/minigrid_backend.md`, `docs/multigrid_backend.md` (all describe the system as it is today and remain authoritative for component internals) |
 
 This document is the single canonical source of truth for how the MultiNet v2.0 evaluation pipeline is structured. It describes the target architecture; per-component implementation details continue to live in the companion docs above.
 
@@ -41,6 +41,8 @@ This document is the single canonical source of truth for how the MultiNet v2.0 
 
 ### 1.2 Two-axis backend / inference decomposition
 
+![Backend × Adapter axes](diagrams/02_backend_adapter_axes.svg)
+
 ```
 Spatial+Modality Backend             Inference Adapter
 (implements AbstractGridBackend)     (talks to a model)
@@ -58,6 +60,8 @@ Each evaluation run is a 2-tuple `(backend, adapter)` plus a task. Same task acr
 ---
 
 ## 2. Pipeline DAG: stages, artifacts, invalidation
+
+![Pipeline stage flow](diagrams/01_pipeline_stage_flow.svg)
 
 The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and is keyed by a content hash so re-runs only touch stages whose inputs actually changed.
 
@@ -94,6 +98,9 @@ The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and
 Stages 1–2 are per-task and produce the **task artifact bundle**. Stage 3 is per `(task × backend × adapter × seed)`. Stage 4 is 1:1 with stage 3. Stage 5 fans in.
 
 ### 2.2 Artifact layout
+
+![DAG artifacts and invalidation](diagrams/03_dag_artifacts_and_invalidation.svg)
+
 
 ```
 artifacts/
@@ -354,18 +361,12 @@ class AbstractGridBackend(ABC):
     def get_mission_text() -> str
     def get_state() -> GridState
     def close() -> None
-
-    @property
-    def action_space() -> ActionSpace
-    @property
-    def observation_modality() -> Literal["rgb", "text", "rgb+text"]
-    @property
-    def supported_tilings() -> set[str]
 ```
 
 ### 6.2 Schema generalizations from current code
 
-Three changes from the current `AbstractGridBackend`:
+The target pipeline adds three pieces that are not yet part of the current
+`AbstractGridBackend` signature:
 
 1. `Observation` is now `Union[np.ndarray, str, dict]` (was `np.ndarray` only). RGB backends return arrays; text backend returns strings; future hybrid backends can return `{"rgb": ..., "text": ...}`. Adapters introspect via `observation_modality`.
 2. `Action` is now `Union[int, str]` (was `int`). Discrete backends accept integer action IDs; the text backend accepts NL command strings. The backend's `action_space` describes which.
@@ -373,8 +374,8 @@ Three changes from the current `AbstractGridBackend`:
 
 ### 6.3 Concrete backends
 
-- **`MiniGridBackend`** — square grid only; `observation_modality = "rgb"`; `action_space.kind = "discrete"`, size 7, names per MiniGrid (turn_left / turn_right / forward / pickup / drop / toggle / done). Wraps the gymnasium `minigrid` package.
-- **`MultiGridBackend`** — `supported_tilings = {square, hex, triangle, 3-4-6-4, 4-8-8}`; `observation_modality = "rgb"`; `action_space.kind = "discrete"`, size 9, names per MultiGrid (forward / backward / turn_left / turn_right / pickup / drop / toggle / push / wait). Translates from 7-action MiniGrid for compatibility.
+- **`MiniGridBackend`** — square grid only; current public action interface is the 7-action MiniGrid-compatible set (`turn_left`, `turn_right`, `move_forward`, `pickup`, `drop`, `toggle`, `done`). Wraps the gymnasium `minigrid` package.
+- **`MultiGridBackend`** — supports `square`, `hex`, `triangle`, `3464`, and `488` tilings. Current public action interface is the same 7-action MiniGrid-compatible set; internally it maps to the 9-action native MultiGrid enum (`forward`, `backward`, `turn_left`, `turn_right`, `pickup`, `drop`, `toggle`, `push`, `wait`).
 - **`TextBackend`** *(pending merge)* — any tiling; `observation_modality = "text"`; `action_space.kind = "text"`, with `grammar_hint` describing accepted commands ("go forward", "turn left", "pickup", …). Renders the maze as text.
 
 ### 6.4 Inference adapter contract: `ModelInterface`

@@ -1,12 +1,12 @@
-# Technical Design Document: MultiNet-v2.0 GridWorld Framework
+# Technical Design Document: Multinet-v2.0 GridWorld Framework
 
 ## Document Overview
 
-This document provides the technical rationale and architectural decisions behind the MultiNet-v2.0 GridWorld evaluation framework. It explains why certain technologies were chosen, how components interact, and the forward-looking vision for cross-domain evaluation.
+This document provides the technical rationale and architectural decisions behind the Multinet-v2.0 GridWorld evaluation framework. It explains why certain technologies were chosen, how components interact, and the forward-looking vision for cross-domain evaluation.
 
 **Target Audience**: Researchers, contributors, and engineers extending the framework
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-05-09
 
 ---
 
@@ -68,7 +68,7 @@ MiniGrid natively supports:
 We extended MiniGrid with:
 - **Switches and Gates**: Remote-controlled barriers
 - **Goal Markers**: Explicit visual goal positions
-- **Teleporters**: Instant transport between positions (v1.2 planned)
+- **Teleporters**: Instant transport between linked endpoint pairs
 
 #### Limitations
 
@@ -194,10 +194,10 @@ goals = {
 - Research-friendly architecture
 
 **Disadvantages:**
-- Immature: Fewer users, less tested
-- Slower: ~600-900ms per episode (vs 400ms for MiniGrid)
-- Incomplete: Switches/gates not yet implemented
-- No partial observability yet
+- Immature: Fewer users and newer code than the MiniGrid path
+- Slower: custom graph and rendering code is less optimized than MiniGrid
+- Backend divergence: mechanisms should be regression-tested per tiling
+- Different visibility model: partial observability is graph-based instead of MiniGrid-native
 - Rendering quality variable for exotic tilings
 
 #### Performance Overhead
@@ -233,8 +233,8 @@ Render                  ~4 ms       ~8 ms       2x
 
 **Not suitable for:**
 - Production evaluation (use MiniGrid)
-- Large-scale benchmarking (too slow)
-- Tasks requiring all mechanisms (switches/gates incomplete)
+- Large-scale benchmarking without targeted performance checks
+- Publishing mechanism-heavy benchmarks without backend-parity tests
 - Time-critical applications
 
 ---
@@ -245,16 +245,16 @@ Render                  ~4 ms       ~8 ms       2x
 |---------|----------|-----------|-------|
 | **Status** | Production | Experimental | MiniGrid is battle-tested |
 | **Maturity** | High | Low | MultiGrid needs more testing |
-| **Tilings** | Square only | Square/Hex/Triangle | MultiGrid's key innovation |
-| **Performance** | ~400ms/episode | ~600-900ms/episode | MiniGrid 1.5-2x faster |
+| **Tilings** | Square only | Square/Hex/Triangle/3-4-6-4/4-8-8 | MultiGrid's key innovation |
+| **Performance** | MiniGrid native | Custom graph/runtime | Measure per benchmark |
 | **Mechanisms** | | | |
-| - Keys/Doors | ✓ | Partial | Door unlocking incomplete in MultiGrid |
-| - Switches/Gates | ✓ | ✗ | Not yet in MultiGrid |
+| - Keys/Doors | ✓ | ✓ | Native objects in both backends |
+| - Switches/Gates | ✓ | ✓ | Regression-test parity per tiling |
 | - Pushable Blocks | ✓ | ✓ | Both support |
-| - Hazards (Lava) | ✓ | ✗ | Not yet in MultiGrid |
-| - Teleporters | ✗ | ✓ | MultiGrid native support |
+| - Hazards (Lava) | ✓ | ✓ | Episode-ending hazards |
+| - Teleporters | ✓ | ✓ | Linked endpoint pairs |
 | - Zones | ✗ | ✓ | MultiGrid native support |
-| **Partial Obs** | ✓ | ✗ | MultiGrid planned v1.2 |
+| **Partial Obs** | ✓ | ✓ | MiniGrid-native vs graph-based visibility |
 | **Rendering Quality** | High | Variable | Hex/triangle rendering experimental |
 | **Community** | Large | Small | MiniGrid has 8+ years community |
 | **Documentation** | Extensive | Limited | MiniGrid has official docs |
@@ -387,9 +387,10 @@ task = {
 # Model must commit to longer plans without greedy shortcuts
 ```
 
-### 2.4 Archimedean Tilings (Future Work)
+### 2.4 Archimedean Tilings
 
-**Archimedean tilings** use multiple regular polygons. Example: **3-4-6-4 tiling** (triangle-square-hexagon-square pattern).
+**Archimedean tilings** use multiple regular polygons. The current `multigrid`
+registry includes `3464` and `488` tilings.
 
 **Why This Is The Ultimate Test:**
 
@@ -637,9 +638,9 @@ actions = {
     3: "TURN_RIGHT",   # Rotate CW
     4: "PICKUP",       # Pick up object
     5: "DROP",         # Drop object
-    6: "PUSH",         # Push object forward
-    7: "WAIT",         # No-op
-    8: "TELEPORT"      # Use teleporter (if on one)
+    6: "TOGGLE",       # Unlock door or activate switch
+    7: "PUSH",         # Push object forward
+    8: "WAIT"          # No-op
 }
 ```
 
@@ -653,8 +654,8 @@ minigrid_to_multigrid = {
     2: 0,  # forward → FORWARD
     3: 4,  # pickup → PICKUP
     4: 5,  # drop → DROP
-    5: 6,  # toggle → PUSH
-    6: 7   # done → WAIT
+    5: 6,  # toggle -> TOGGLE
+    6: 8   # done -> WAIT
 }
 ```
 
@@ -833,7 +834,7 @@ door_sprite = Sprite(position=(400, 400), texture="door_red_locked.png")
 
 ```python
 # Core task specification (domain-agnostic)
-task_spec = TaskSpecification.from_json("task.json")
+task_spec = TaskSpecification.from_json("mazes/validation_10/V01_empty_room.json")
 
 # Domain adapters
 gridworld_env = GridWorldAdapter(task_spec, tiling="square")
@@ -1186,7 +1187,8 @@ Tasks are organized into 5 tiers based on complexity.
         ]
     },
     "rules": {
-        "partial_observability": true
+        "observability": "view_cone",
+        "view_size": 5
     }
 }
 ```
@@ -1355,7 +1357,7 @@ for tier in range(1, 6):
 ### Version 1.0 (2026-02-06)
 - Initial technical design document
 - Covers technology stack, architecture, cross-domain vision, evaluation methodology
-- Written for MultiNet-v2.0 release
+- Updated for Multinet-v2.0 repository-root package layout and current backend support
 
 ---
 

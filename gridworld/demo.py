@@ -17,7 +17,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 
-# Ensure imports work from the v1_1 directory
+# Ensure imports work from the repository root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gridworld.task_spec import TaskSpecification

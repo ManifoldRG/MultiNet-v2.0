@@ -1,6 +1,7 @@
 # Gridworld Domain: Backend Reference
 
-This document describes the two gridworld backends available in MultiNet-v2.0 for VLM/VLA evaluation on navigation and puzzle-solving tasks.
+This document describes the two gridworld backends available in Multinet-v2.0
+for VLM/VLA evaluation on navigation and puzzle-solving tasks.
 
 ## Overview
 
@@ -8,8 +9,8 @@ The gridworld domain provides configurable puzzle environments where an agent mu
 
 | Backend | Based On | Best For |
 |---------|----------|----------|
-| **MiniGridBackend** | gymnasium `minigrid` package | Standard square grid tasks, mature/tested |
-| **MultiGridBackend** | Custom implementation | Exotic tilings (hex, triangle), zones, teleporters |
+| **MiniGridBackend** | gymnasium `minigrid` package plus `CustomMiniGridEnv` | Standard square-grid tasks |
+| **MultiGridBackend** | Custom `multigrid` implementation | Non-square tilings and topology experiments |
 
 Both backends implement the same `AbstractGridBackend` interface, allowing seamless swapping for evaluation.
 
@@ -34,7 +35,7 @@ from gridworld.backends import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Load task specification
-spec = TaskSpecification.from_json("tasks/tier2/single_key_001.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier2/single_key_001.json")
 
 # Create and configure backend
 backend = MiniGridBackend(render_mode="rgb_array")
@@ -69,7 +70,7 @@ backend.close()
 | Gates | ✓ | Via custom implementation |
 | Blocks (pushable) | ✓ | Can be pushed by agent |
 | Hazards (lava) | ✓ | Terminates episode |
-| Teleporters | ✗ | Not supported |
+| Teleporters | ✓ | Linked endpoint pairs with cooldown state |
 | Zones | ✗ | Not supported |
 | **Features** | | |
 | Partial observability | ✓ | Agent sees limited view |
@@ -101,7 +102,7 @@ backend.close()
 
 - Square grids only
 - No zone/target area objects
-- No teleporter mechanics
+- No zone/target area objects in `TaskSpecification`
 - Tied to MiniGrid's object set
 
 ---
@@ -110,7 +111,9 @@ backend.close()
 
 ### Description
 
-Custom implementation supporting arbitrary grid topologies (square, hexagonal, triangle) with an extended object set. Built on a topology-agnostic adjacency graph that generalizes to any tiling pattern.
+Custom implementation supporting multiple grid topologies with an extended
+object system. It is built on a topology-agnostic adjacency graph and is exposed
+through the same `AbstractGridBackend` contract as `MiniGridBackend`.
 
 ### Usage
 
@@ -119,11 +122,11 @@ from gridworld.backends import MultiGridBackend
 from gridworld.task_spec import TaskSpecification
 
 # Load task specification
-spec = TaskSpecification.from_json("tasks/tier2/single_key_001.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier2/single_key_001.json")
 
 # Create with exotic tiling
 backend = MultiGridBackend(
-    tiling="triangle",  # or "square", "hex"
+    tiling="triangle",  # or "square", "hex", "3464", "488"
     render_mode="rgb_array"
 )
 backend.configure(spec)
@@ -149,6 +152,8 @@ backend.close()
 | Square grid | ✓ | 4-connected (N/E/S/W) |
 | Hexagonal grid | ✓ | 6-connected (pointy-top) |
 | Triangle grid | ✓ | 3-connected (within hex subdivision) |
+| 3-4-6-4 tiling | ✓ | Archimedean mixed triangle/square/hex cells |
+| 4-8-8 tiling | ✓ | Archimedean mixed square/octagon cells |
 | **Objects** | | |
 | Walls | ✓ | Impassable barriers |
 | Keys | ✓ | Colored, unlock matching doors |
@@ -160,13 +165,13 @@ backend.close()
 | Teleporters | ✓ | Linked pairs, cooldown support |
 | Zones | ✓ | Target areas (overlappable) |
 | **Features** | | |
-| Partial observability | ✗ | Planned for future |
-| Full observability | ✓ | Agent sees entire grid |
+| Partial observability | ✓ | `view_cone` and `fog_of_war` |
+| Full observability | ✓ | `full` mode |
 | RGB rendering | ✓ | Vector-based (PIL) |
 
 ### Action Space
 
-9 discrete actions (extended from MiniGrid):
+The native `multigrid.agent.Action` enum has 9 actions:
 
 | ID | Action | Description |
 |----|--------|-------------|
@@ -180,9 +185,18 @@ backend.close()
 | 7 | `push` | Push object in facing direction |
 | 8 | `wait` | No-op |
 
-**Note:** When using MultiGridBackend through the standard 7-action interface, actions are mapped:
-- MiniGrid action 5 (toggle) → MultiGrid TOGGLE
-- MiniGrid action 6 (done) → MultiGrid WAIT
+`MultiGridBackend.step()` accepts the standard 7-action MiniGrid-compatible
+external interface and maps it internally:
+
+| External action | Native MultiGrid action |
+| --- | --- |
+| 0 `turn_left` | 2 `TURN_LEFT` |
+| 1 `turn_right` | 3 `TURN_RIGHT` |
+| 2 `move_forward` | 0 `FORWARD` |
+| 3 `pickup` | 4 `PICKUP` |
+| 4 `drop` | 5 `DROP` |
+| 5 `toggle` | 6 `TOGGLE` |
+| 6 `done` | 8 `WAIT` |
 
 ### Tiling Types
 
@@ -431,17 +445,15 @@ Both backends use the same JSON task specification format:
 
 ### Use MiniGridBackend when:
 - Working with standard square grids
-- Need partial observability
-- Want mature, well-tested implementation
-- Using existing MiniGrid environments
-- Don't need zones or teleporters
+- Need MiniGrid-compatible rendering and mechanics
+- Evaluating the default `gridworld/tasks` or `mazes/validation_10` specs
+- Need `full`, `view_cone`, or `fog_of_war` observability on square grids
 
 ### Use MultiGridBackend when:
-- Need hexagonal or triangle grids
-- Need zone/target area objects
-- Need teleporter mechanics
-- Want extended action space (backward, push)
-- Building custom puzzle types
+- Need `hex`, `triangle`, `3464`, or `488` tilings
+- Comparing the same task across different adjacency graphs
+- Need the custom MultiGrid renderer or native object system
+- Need topology-aware partial observability
 
 ### Factory Function
 
@@ -505,16 +517,17 @@ Tasks are organized into difficulty tiers:
 from gridworld.backends import get_backend
 from gridworld.task_spec import TaskSpecification
 from gridworld.runner import GridRunner
+from pathlib import Path
 
 # Load tasks
 tasks = [
-    TaskSpecification.from_json(f"tasks/tier{i}/puzzle_{j:03d}.json")
+    TaskSpecification.from_json(path)
     for i in range(1, 6)
-    for j in range(1, 4)
+    for path in sorted(Path(f"gridworld/tasks/tier{i}").glob("*.json"))
 ]
 
 # Create runner
-runner = GridRunner(backend="minigrid", render_mode="rgb_array")
+runner = GridRunner(backend=get_backend("minigrid", render_mode="rgb_array"))
 
 # Evaluate
 results = []
@@ -536,11 +549,11 @@ print(f"Success rate: {success_rate:.2%}")
 
 ## Files Reference
 
-```
-src/v1_1/gridworld/
+```text
+gridworld/
 ├── __init__.py
 ├── task_spec.py              # TaskSpecification dataclass
-├── task_parser.py            # JSON → environment parser
+├── task_parser.py            # JSON to environment parser
 ├── actions.py                # Action space definitions
 ├── custom_env.py             # CustomMiniGridEnv class
 ├── backends/
@@ -559,11 +572,11 @@ src/v1_1/gridworld/
     ├── tier4/
     └── tier5/
 
-src/v1_1/multigrid/
+multigrid/
 ├── __init__.py
 ├── core.py                   # Cell, TilingGraph
 ├── base.py                   # Tiling base class
-├── tilings.py                # Square, Hex, Triangle tilings
+├── tilings/                  # Square, Hex, Triangle, 3464, 488 tilings
 ├── agent.py                  # AgentState, Action enum
 ├── world.py                  # WorldState, execute_action()
 ├── goals.py                  # Goal predicates

@@ -6,7 +6,7 @@ The Task Parser is a critical component of the MiniGrid evaluation framework tha
 
 **Purpose**: Enable researchers and evaluators to define gridworld puzzles in a human-readable JSON format without needing to write Python code or understand MiniGrid internals.
 
-**Location**: `/src/v1_1/gridworld/task_parser.py`
+**Location**: `gridworld/task_parser.py`
 
 **Key Classes**:
 - `TaskParser`: Main parser class that orchestrates environment creation
@@ -63,7 +63,7 @@ Dictionary                          │
                        - Add gates (must come before switches!)
                        - Add switches (control gates)
                        - Add blocks (pushable)
-                       - Add hazards (lava, pits)
+                       - Add hazards and teleporters
                        - Set agent position (last!)
                        │
                        ▼
@@ -166,7 +166,7 @@ from gridworld.task_spec import TaskSpecification
 from gridworld.task_parser import TaskParser
 
 # Load specification
-spec = TaskSpecification.from_json("task_001.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier1/maze_simple_001.json")
 
 # Create parser and parse
 parser = TaskParser(render_mode="rgb_array")
@@ -189,7 +189,7 @@ Convenience method that loads a JSON file and parses it.
 **Example**:
 ```python
 parser = TaskParser()
-env = parser.parse_file("tasks/navigation/task_001.json")
+env = parser.parse_file("gridworld/tasks/tier1/maze_simple_001.json")
 ```
 
 #### Method: `parse_dict(data)`
@@ -206,7 +206,7 @@ Convenience method that parses a dictionary (e.g., loaded from JSON or construct
 ```python
 import json
 
-with open("task.json") as f:
+with open("gridworld/tasks/tier1/maze_simple_001.json") as f:
     data = json.load(f)
 
 parser = TaskParser()
@@ -231,7 +231,10 @@ Top-level convenience function for the most common use case: loading a task from
 from gridworld.task_parser import load_task_from_file
 
 # One-liner to load and parse
-env = load_task_from_file("task.json", render_mode="rgb_array")
+env = load_task_from_file(
+    "mazes/validation_10/V01_empty_room.json",
+    render_mode="rgb_array",
+)
 ```
 
 #### `load_task_from_dict(data, render_mode=None)`
@@ -255,7 +258,7 @@ Top-level convenience function for loading from a dictionary.
 from gridworld.task_parser import load_task_from_file
 
 # Load a simple navigation task
-env = load_task_from_file("tasks/tier1/navigate_8x8.json")
+env = load_task_from_file("gridworld/tasks/tier1/maze_simple_001.json")
 
 # Run episode
 obs, info = env.reset()
@@ -279,7 +282,7 @@ from gridworld.task_parser import TaskParser
 from gridworld.task_spec import TaskSpecification
 
 # Load task specification
-spec = TaskSpecification.from_json("tasks/tier2/key_door_puzzle.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier2/single_key_001.json")
 
 # Create parser with rendering for debugging
 parser = TaskParser(render_mode="human")
@@ -342,7 +345,7 @@ from gridworld.task_parser import TaskParser
 from gridworld.task_spec import TaskSpecification
 
 # Load task once
-spec = TaskSpecification.from_json("task.json")
+spec = TaskSpecification.from_json("gridworld/tasks/tier1/maze_simple_001.json")
 parser = TaskParser(render_mode="rgb_array")
 
 # Evaluate with multiple seeds
@@ -461,6 +464,25 @@ for block in spec.mechanisms.blocks:
 for hazard in spec.mechanisms.hazards:
     env.place_hazard(hazard.position.x, hazard.position.y,
                      hazard.hazard_type)
+```
+
+### Teleporters
+
+- **Type**: Linked endpoint pairs
+- **Placement**: Added after hazards
+- **Mechanics**: Stepping onto endpoint A moves the agent to endpoint B. If
+  `bidirectional` is true, endpoint B links back to endpoint A.
+
+```python
+for teleporter in spec.mechanisms.teleporters:
+    env.place_teleporter(
+        teleporter.id,
+        teleporter.position_a.x,
+        teleporter.position_a.y,
+        teleporter.position_b.x,
+        teleporter.position_b.y,
+        teleporter.bidirectional,
+    )
 ```
 
 ---
@@ -627,4 +649,5 @@ env.place_key(3, 3, "red")  # Now the key stays
 - [TaskSpecification Schema](../gridworld/task_spec.py): JSON format for tasks
 - [CustomMiniGridEnv](../gridworld/custom_env.py): The environment class created by parser
 - [MiniGridBackend Documentation](./minigrid_backend.md): Integration with backend system
-- [MultiNet Task Generation Guide](../../docs/task_generation.md): Creating evaluation tasks
+- [Interface Reference](./interfaces.md): Current public API contracts
+- [Backend Reference](./gridworld_backends.md): MiniGrid and MultiGrid behavior

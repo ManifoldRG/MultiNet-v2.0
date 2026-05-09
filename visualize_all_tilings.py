@@ -28,10 +28,10 @@ import math
 import sys
 import os
 
-# Add the v1_1 directory to sys.path so multigrid imports resolve
-_V1_1_DIR = os.path.dirname(os.path.abspath(__file__))
-if _V1_1_DIR not in sys.path:
-    sys.path.insert(0, _V1_1_DIR)
+# Add the repository root to sys.path so multigrid imports resolve
+_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import matplotlib
 matplotlib.use("Agg")
@@ -486,7 +486,7 @@ def generate_individual_images():
         render_fn(ax)
         _add_legend(fig)
         fig.tight_layout(rect=[0, 0.08, 1, 1])
-        filepath = os.path.join(_V1_1_DIR, filename)
+        filepath = os.path.join(_REPO_ROOT, filename)
         fig.savefig(filepath, dpi=150, bbox_inches="tight",
                     facecolor="white", edgecolor="none")
         plt.close(fig)
@@ -517,7 +517,7 @@ def generate_comparison_image():
     _add_legend(fig)
     fig.tight_layout(rect=[0, 0.06, 1, 0.94])
 
-    filepath = os.path.join(_V1_1_DIR, "tiling_comparison.png")
+    filepath = os.path.join(_REPO_ROOT, "tiling_comparison.png")
     fig.savefig(filepath, dpi=150, bbox_inches="tight",
                 facecolor="white", edgecolor="none")
     plt.close(fig)
@@ -536,7 +536,7 @@ def main():
     print("Generating comparison image...")
     generate_comparison_image()
     print()
-    print("Done. All images saved to:", _V1_1_DIR)
+    print("Done. All images saved to:", _REPO_ROOT)
 
 
 if __name__ == "__main__":
