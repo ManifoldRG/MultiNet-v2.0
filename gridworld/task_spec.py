@@ -69,6 +69,7 @@ class SwitchSpec:
     id: str
     position: Position
     controls: list[str]  # list of gate IDs this switch controls
+    color: str = "yellow"
     switch_type: Literal["toggle", "hold", "one_shot"] = "toggle"
     initial_state: Literal["on", "off"] = "off"
 
@@ -78,6 +79,7 @@ class SwitchSpec:
             id=d["id"],
             position=Position.from_list(d["position"]) if isinstance(d["position"], list) else Position.from_dict(d["position"]),
             controls=d["controls"],
+            color=d.get("color", "yellow"),
             switch_type=d.get("switch_type", "toggle"),
             initial_state=d.get("initial_state", "off")
         )
@@ -398,7 +400,7 @@ class TaskSpecification:
             "mechanisms": {
                 "keys": [{"id": k.id, "position": pos_to_list(k.position), "color": k.color} for k in self.mechanisms.keys],
                 "doors": [{"id": d.id, "position": pos_to_list(d.position), "requires_key": d.requires_key, "initial_state": d.initial_state} for d in self.mechanisms.doors],
-                "switches": [{"id": s.id, "position": pos_to_list(s.position), "controls": s.controls, "switch_type": s.switch_type, "initial_state": s.initial_state} for s in self.mechanisms.switches],
+                "switches": [{"id": s.id, "position": pos_to_list(s.position), "controls": s.controls, "color": s.color, "switch_type": s.switch_type, "initial_state": s.initial_state} for s in self.mechanisms.switches],
                 "gates": [{"id": g.id, "position": pos_to_list(g.position), "initial_state": g.initial_state} for g in self.mechanisms.gates],
                 "blocks": [{"id": b.id, "position": pos_to_list(b.position), "pushable": b.pushable, "color": b.color} for b in self.mechanisms.blocks],
                 "teleporters": [{"id": t.id, "position_a": pos_to_list(t.position_a), "position_b": pos_to_list(t.position_b), "bidirectional": t.bidirectional} for t in self.mechanisms.teleporters],
@@ -534,7 +536,7 @@ class TaskSpecification:
 
         for door in self.mechanisms.doors:
             register_id(door.id, f"Door {door.id}")
-            check_position(door.position, f"Door {door.id}")
+            check_position(door.position, f"Door {door.id}", allow_wall=True)
             register_position(door.position, f"Door {door.id}")
 
         for switch in self.mechanisms.switches:
@@ -544,7 +546,7 @@ class TaskSpecification:
 
         for gate in self.mechanisms.gates:
             register_id(gate.id, f"Gate {gate.id}")
-            check_position(gate.position, f"Gate {gate.id}")
+            check_position(gate.position, f"Gate {gate.id}", allow_wall=True)
             register_position(gate.position, f"Gate {gate.id}")
 
         for block in self.mechanisms.blocks:
