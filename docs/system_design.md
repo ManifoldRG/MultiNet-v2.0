@@ -555,9 +555,8 @@ Status legend:
 - Delta: same `ActionSpace` / `observation_modality` adoption as `MiniGridBackend`.
 
 **7. `TextBackend`** — backend axis
-- ⚠️ `nl_domain/nl_env.py` is a wrapper around `MiniGridBackend`, not a peer backend. Placeholder only.
 - 🚧 Full `AbstractGridBackend` implementation pending.
-- Delta on merge: deprecate the wrapper; the new `TextBackend` takes its place. NL-as-action-mode collapses into the backend's text `ActionSpace`.
+- Delta on merge: add the text backend as a peer to `MiniGridBackend` and `MultiGridBackend`; text commands should be represented by the backend's text `ActionSpace`.
 
 **8. Inference adapters** — adapter axis
 - ✅ `OllamaAdapter`, `LMStudioAdapter`, `PaliGemmaAdapter`, `FileBasedModelInterface`, `RandomModelInterface` exist in `model_interface.py` + `adapters/`.

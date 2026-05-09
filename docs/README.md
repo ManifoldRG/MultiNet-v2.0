@@ -410,7 +410,6 @@ See individual documentation files for detailed troubleshooting guides.
 ├── mazes/validation_10/
 ├── multigrid/
 ├── cross_domain/
-├── nl_domain/
 ├── adapters/
 ├── scripts/
 ├── model_interface.py

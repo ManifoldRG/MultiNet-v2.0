@@ -108,9 +108,6 @@ python run_eval.py --model random --benchmark validation_10
 
 # MultiGrid backend with hexagonal tiling
 python run_eval.py --model random --benchmark tiers --tier 1 --backend multigrid --tiling hex
-
-# Natural language action mode (model outputs text commands)
-python run_eval.py --model ollama --ollama-model qwen2.5vl:7b --benchmark tiers --tier 1 --action-mode nl
 ```
 
 ### Random Baseline

@@ -213,7 +213,6 @@ Built-in adapters:
 - `adapters.ollama_vlm_adapter.OllamaVLMAdapter`
 - `adapters.lmstudio_vlm_adapter.LMStudioVLMAdapter`
 - `adapters.paligemma_adapter.PaliGemmaMiniGridAdapter`
-- `nl_domain.nl_model_interface.NLModelInterface`
 
 ## EvaluationHarness
 
