@@ -3,7 +3,7 @@
 """
 MultiGrid Backend Implementation
 
-Adapter for the custom MultiGrid system (src/v1_1/multigrid/) that implements
+Adapter for the custom MultiGrid system (`multigrid/`) that implements
 the AbstractGridBackend interface. This allows evaluation of custom tilings
 (square, hex, triangle) using the same pipeline as MiniGrid.
 
@@ -340,14 +340,8 @@ class MultiGridBackend(AbstractGridBackend):
         2: forward       → 0: FORWARD
         3: pickup        → 4: PICKUP
         4: drop          → 5: DROP
-        5: toggle        → 6: PUSH (closest equivalent for switch/door interaction)
-        6: done/wait     → 7: WAIT
-
-        Note on "toggle" vs "PUSH":
-        MiniGrid's "toggle" action is used for switches, doors, and other interactive
-        objects. MultiGrid's closest equivalent is "PUSH", which can interact with
-        objects in front of the agent. This mapping may need refinement as MultiGrid
-        adds more interaction mechanics.
+        5: toggle        → 6: TOGGLE
+        6: done/wait     → 8: WAIT
 
         Design Rationale:
         The action mapping allows evaluation code to use standard MiniGrid action

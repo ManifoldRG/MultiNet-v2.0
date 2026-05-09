@@ -18,8 +18,8 @@ class MiniGridBackend(AbstractGridBackend):
     """
     Backend implementation using gymnasium's MiniGrid package.
 
-    This is the MVP backend that wraps MiniGrid environments and
-    provides the standard AbstractGridBackend interface.
+    This is the default backend for square-grid evaluation and provides the
+    standard AbstractGridBackend interface.
     """
 
     def __init__(self, render_mode: Optional[str] = "rgb_array"):

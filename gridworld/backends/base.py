@@ -8,8 +8,9 @@ BACKEND ABSTRACTION LAYER
 =========================
 
 This module provides a pluggable backend system for gridworld environments.
-Any grid implementation (MiniGrid, custom MultiGrid with square/hex/triangle tilings,
-or future backends) can be used with the same runner and evaluation pipeline.
+Any grid implementation (MiniGrid, custom MultiGrid with square/hex/triangle/
+3464/488 tilings, or future backends) can be used with the same runner and
+evaluation pipeline.
 
 Architecture:
     TaskSpecification (JSON)
@@ -23,18 +24,18 @@ Architecture:
     ┌─────────┐ ┌─────────────┐
     │MiniGrid │ │ MultiGrid   │
     │Backend  │ │ Backend     │
-    │(MVP)    │ │(Custom)     │
+    │(Default)│ │(Custom)     │
     └─────────┘ └─────────────┘
 
 Usage:
-    # Option 1: Use MiniGridBackend (gymnasium-based, recommended for MVP)
+    # Option 1: Use MiniGridBackend (gymnasium-based default backend)
     from gridworld.backends import MiniGridBackend
     backend = MiniGridBackend(render_mode="rgb_array")
     backend.configure(task_spec)
     obs, state, info = backend.reset(seed=42)
     obs, reward, terminated, truncated, state, info = backend.step(action)
 
-    # Option 2: Use MultiGridBackend (custom tilings: square, hex, triangle)
+    # Option 2: Use MultiGridBackend (custom tilings: square, hex, triangle, 3464, 488)
     from gridworld.backends import MultiGridBackend
     backend = MultiGridBackend(tiling="triangle", render_mode="rgb_array")
     backend.configure(task_spec)
@@ -87,7 +88,7 @@ The two backends have different feature support. Choose based on your needs:
 
     Recommendation:
     - Use MiniGridBackend for standard square grid tasks (more mature)
-    - Use MultiGridBackend for exotic tilings (hex/triangle) or zones
+    - Use MultiGridBackend for exotic tilings (hex/triangle/3464/488) or zones
 
 See Also:
     - minigrid_backend.py: MiniGrid (gymnasium) implementation

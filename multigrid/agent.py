@@ -11,8 +11,8 @@ class Action(IntEnum):
     """
     Discrete action space for MultiGrid.
 
-    Actions 0-6 map to MiniGrid's standard 7-action space for compatibility.
-    Action 7 (PUSH) and 8 (TOGGLE) extend beyond MiniGrid's standard set.
+    MultiGridBackend exposes MiniGrid's 7-action external interface and maps it
+    onto this native enum internally.
     """
     # Movement
     FORWARD = 0       # Move in facing direction
