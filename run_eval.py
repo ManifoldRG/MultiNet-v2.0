@@ -2,8 +2,8 @@
 """
 MultiNet-v2.0 Evaluation CLI
 
-Evaluate models on either the legacy tier directories or the authored
-benchmark sets, starting with `validation_10`.
+Evaluate models on either the tier task directories or the authored benchmark
+sets, starting with `validation_10`.
 
 Usage:
     python run_eval.py --model random --benchmark validation_10
@@ -100,7 +100,7 @@ def main():
                         help="Model to evaluate: random, file_based, ollama, lmstudio, paligemma")
     parser.add_argument("--benchmark", default="validation_10",
                         choices=["validation_10", "tiers", "directory"],
-                        help="Benchmark mode: validation_10, legacy tiers, or every JSON in --task-dir")
+                        help="Benchmark mode: validation_10, tier tasks, or every JSON in --task-dir")
     parser.add_argument("--tier", default="all",
                         help="Tier(s) to evaluate: 'all', '1', '1-3', '2,4,5'")
     parser.add_argument("--backend", default="minigrid",
@@ -109,8 +109,8 @@ def main():
     parser.add_argument("--tiling", default="square",
                         help="Tiling type for multigrid backend (default: square)")
     parser.add_argument("--action-mode", default="discrete",
-                        choices=["discrete", "nl"],
-                        help="Action mode: discrete (int actions) or nl (natural language)")
+                        choices=["discrete"],
+                        help="Action mode: discrete integer actions")
     parser.add_argument("--device", default="cpu",
                         help="Device for model inference (default: cpu)")
     parser.add_argument("--seed", type=int, default=42,
