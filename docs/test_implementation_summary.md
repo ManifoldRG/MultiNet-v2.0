@@ -7,7 +7,7 @@ and multigrid framework. Tests are the source of truth for this branch.
 
 ## Test Coverage
 
-### Collected Test Suite (270 tests)
+### Collected Test Suite (261 tests)
 
 #### 1. Core Tiling Tests (`tests/test_tiling_generation.py`)
 - **Direction count tests**: Validates correct number of directions for each tiling type

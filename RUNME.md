@@ -18,13 +18,13 @@ pip install -e ".[hf]"
 ## 1. Run the Test Suite
 
 ```bash
-# All tests collected on this branch: 270. This command excludes perf tests.
+# All tests collected on this branch: 261. This command excludes perf tests.
 python -m pytest tests/ -v --ignore=tests/test_performance.py
 
 # Specific test files
 python -m pytest tests/test_teleporters.py -v          # Teleporter mechanics
 python -m pytest tests/test_exotic_tilings.py -v       # Archimedean tilings
-python -m pytest tests/test_model_interface.py -v       # Model interface + NL + cross-domain
+python -m pytest tests/test_model_interface.py -v       # Model interface + cross-domain
 python -m pytest tests/test_tiling_generation.py -v     # Core tiling tests
 ```
 

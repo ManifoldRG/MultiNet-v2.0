@@ -4,7 +4,7 @@
 
 The current branch contains the gridworld backend stack, the custom multigrid
 backend, model adapters, evaluation harnesses, validation task specs, and
-documentation. Test collection currently finds 270 tests.
+documentation. Test collection currently finds 261 tests.
 
 ## What Was Implemented
 
@@ -86,7 +86,7 @@ documentation. Test collection currently finds 270 tests.
 
 ### 8. Test Suite
 
-`python -m pytest --collect-only -q` collects 270 tests. Coverage includes:
+`python -m pytest --collect-only -q` collects 261 tests. Coverage includes:
 
 - core tiling generation, coordinates, distance, and action execution
 - exotic tilings (`3464`, `488`)
@@ -103,9 +103,9 @@ documentation. Test collection currently finds 270 tests.
 ```
 ============================= test session starts ==============================
 platform linux -- Python 3.10.14, pytest-8.2.2, pluggy-1.5.0
-collected 270 items
+collected 261 items
 
-270 tests collected
+261 tests collected
 ```
 
 ## Visualizations Generated
