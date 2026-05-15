@@ -53,7 +53,6 @@ Output only the action name.
 """
 
 CONDITION_SET = {
-	"id": "condition_set_3",
 	"name": "Context window",
 	"comparisons": [
 		"0 history (current frame only)",
@@ -66,3 +65,5 @@ CONDITION_SET = {
 		"text_summary": TEXT_SUMMARY_PROMPT,
 	},
 }
+
+PROMPTS = CONDITION_SET["prompts"]

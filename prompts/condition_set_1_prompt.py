@@ -48,7 +48,6 @@ Output only the action name.
 """
 
 CONDITION_SET = {
-	"id": "condition_set_1",
 	"name": "Prompt",
 	"comparisons": [
 		"Standard: goal + mechanism descriptions + action list",
@@ -60,3 +59,5 @@ CONDITION_SET = {
 		"explicit": EXPLICIT_PROMPT,
 	},
 }
+
+PROMPTS = CONDITION_SET["prompts"]

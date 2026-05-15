@@ -45,7 +45,6 @@ Output only the action name.
 """
 
 CONDITION_SET = {
-	"id": "condition_set_5",
 	"name": "Querying strategy",
 	"comparisons": [
 		"Step-by-step: one action per query",
@@ -57,3 +56,5 @@ CONDITION_SET = {
 		"subgoal_execution": SUBGOAL_EXECUTION_PROMPT,
 	},
 }
+
+PROMPTS = CONDITION_SET["prompts"]

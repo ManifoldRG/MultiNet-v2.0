@@ -1,5 +1,7 @@
 """Condition set 6: in-context learning."""
 
+from .condition_set_1_prompt import STANDARD_PROMPT
+
 ONE_SHOT_PROMPT = """Example maze interaction:
 
 mechanisms present:
@@ -59,7 +61,6 @@ Output only the action name.
 """
 
 CONDITION_SET = {
-	"id": "condition_set_6",
 	"name": "In-context learning",
 	"comparisons": [
 		"Zero-shot: no examples",
@@ -71,6 +72,9 @@ CONDITION_SET = {
 	),
 	"constraint": "ICL examples must not use evaluation mazes.",
 	"prompts": {
+		"zero_shot": STANDARD_PROMPT,
 		"one_shot": ONE_SHOT_PROMPT,
 	},
 }
+
+PROMPTS = CONDITION_SET["prompts"]

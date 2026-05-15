@@ -47,7 +47,6 @@ Output only the action name.
 """
 
 CONDITION_SET = {
-	"id": "condition_set_4",
 	"name": "Action space",
 	"comparisons": [
 		"Egocentric: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, INTERACT",
@@ -59,3 +58,5 @@ CONDITION_SET = {
 		"cardinal": CARDINAL_PROMPT,
 	},
 }
+
+PROMPTS = CONDITION_SET["prompts"]
