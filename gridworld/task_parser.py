@@ -220,7 +220,7 @@ class TaskParser:
         # Place keys
         # Keys are collectible items that can unlock doors of matching color
         for key in spec.mechanisms.keys:
-            env.place_key(key.position.x, key.position.y, key.color)
+            env.place_key(key.position.x, key.position.y, key.color, key.id)
 
         # Place doors
         # Doors can be locked (requiring a matching key) or initially open

@@ -73,7 +73,7 @@ class Switch(Ball):
         return False
 
     def can_overlap(self):
-        return self.switch_type == "hold"
+        return True
 
     def activate(self):
         """Apply switch-type-specific activation semantics."""
@@ -207,6 +207,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.task_spec = task_spec
 
         # Mechanism tracking
+        self.key_objects: dict[str, Key] = {}
+        self.collected_keys: set[str] = set()
         self.switches: dict[str, Switch] = {}
         self.gates: dict[str, Gate] = {}
         self.blocks: dict[str, PushableBlock] = {}
@@ -247,6 +249,8 @@ class CustomMiniGridEnv(MiniGridEnv):
 
         # Reset fog-of-war tracking
         self.explored_cells = set()
+        self.key_objects.clear()
+        self.collected_keys.clear()
 
         # If we have a task spec, it will be populated after _gen_grid by the parser
         # For now, set basic start/goal if provided
@@ -266,10 +270,14 @@ class CustomMiniGridEnv(MiniGridEnv):
         """Place a wall at the given position."""
         self.grid.set(x, y, Wall())
 
-    def place_key(self, x: int, y: int, color: str):
+    def place_key(self, x: int, y: int, color: str, key_id: str | None = None):
         """Place a key at the given position."""
         color = MINIGRID_COLORS.get(color, color)
-        self.put_obj(Key(color), x, y)
+        key = Key(color)
+        if key_id is not None:
+            key.key_id = key_id
+            self.key_objects[key_id] = key
+        self.put_obj(key, x, y)
 
     def place_door(self, x: int, y: int, color: str, is_locked: bool = True):
         """Place a door at the given position."""
@@ -371,11 +379,128 @@ class CustomMiniGridEnv(MiniGridEnv):
         if changed:
             self._refresh_gates()
 
+    def _key_is_collected(self, key_id: str) -> bool:
+        """Return whether a tracked key is no longer on the grid."""
+        if key_id in self.collected_keys:
+            return True
+        key = self.key_objects.get(key_id)
+        if key is None:
+            return False
+        for x in range(self.width):
+            for y in range(self.height):
+                if self.grid.get(x, y) is key:
+                    return False
+        return True
+
+    def _block_position(self, block_id: str) -> tuple[int, int] | None:
+        """Find the current grid position for a tracked pushable block."""
+        block = self.blocks.get(block_id)
+        if block is None:
+            return None
+        for x in range(self.width):
+            for y in range(self.height):
+                if self.grid.get(x, y) is block:
+                    return (x, y)
+        return None
+
+    def _target_id_completed(self, target_id: str) -> bool:
+        if target_id in self.key_objects:
+            return self._key_is_collected(target_id)
+        if target_id in self.switches:
+            return self.switches[target_id].is_active
+        if target_id in self.gates:
+            return self.gates[target_id].is_open
+        if target_id in self.blocks:
+            return self._block_position(target_id) is None
+        return False
+
+    def _check_goal_completion(self) -> bool:
+        """Check all supported task goal types against the current runtime state."""
+        if self.task_spec is None or self.task_spec.goal is None:
+            if self.goal_pos is not None and self.agent_pos == self.goal_pos:
+                return True
+            return isinstance(self.grid.get(*self.agent_pos), Goal)
+
+        goal = self.task_spec.goal
+        goal_type = goal.goal_type
+
+        if goal_type == "reach_position":
+            target = goal.target.to_tuple() if goal.target is not None else self.goal_pos
+            return target is not None and self.agent_pos == target
+
+        if goal_type in {"pickup_key", "collect_key"}:
+            return bool(goal.target_ids) and all(
+                self._key_is_collected(key_id) for key_id in goal.target_ids
+            )
+
+        if goal_type == "activate_switch":
+            return bool(goal.target_ids) and all(
+                switch_id in self.switches and self.switches[switch_id].is_active
+                for switch_id in goal.target_ids
+            )
+
+        if goal_type == "collect_all":
+            return bool(goal.target_ids) and all(
+                self._target_id_completed(target_id) for target_id in goal.target_ids
+            )
+
+        if goal_type == "push_block_to":
+            if len(goal.target_ids) != len(goal.target_positions):
+                return False
+            return all(
+                self._block_position(block_id) == target_pos.to_tuple()
+                for block_id, target_pos in zip(goal.target_ids, goal.target_positions)
+            )
+
+        if goal_type == "survive_steps":
+            return self.step_count >= self.max_steps
+
+        return False
+
+    def _uses_minigrid_goal_tile(self) -> bool:
+        return (
+            self.task_spec is None
+            or self.task_spec.goal is None
+            or self.task_spec.goal.goal_type == "reach_position"
+        )
+
+    def _finalize_step_result(
+        self,
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+        info: dict,
+    ):
+        if self._check_goal_completion():
+            return max(float(reward), float(self._reward())), True, truncated, info
+        if terminated and reward > 0 and not self._uses_minigrid_goal_tile():
+            return 0, False, truncated, info
+        return reward, terminated, truncated, info
+
     def step(self, action: int):
         """Execute one step in the environment with custom mechanics."""
+        action = int(action)
         # Get the position in front of the agent
         fwd_pos = self.front_pos
         fwd_cell = self.grid.get(*fwd_pos)
+        current_cell = self.grid.get(*self.agent_pos)
+
+        # Switches are activated from the agent's current cell, matching the validator.
+        if action == self.actions.toggle and isinstance(current_cell, Switch):
+            if not current_cell.activate():
+                self.step_count += 1
+                truncated = self.step_count >= self.max_steps
+                obs = self.gen_obs()
+                reward, terminated, truncated, info = self._finalize_step_result(
+                    0, False, truncated, {"invalid_action": True}
+                )
+                return obs, reward, terminated, truncated, info
+            self._refresh_gates()
+            self.step_count += 1
+            truncated = self.step_count >= self.max_steps
+            obs = self.gen_obs()
+            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+            return obs, reward, terminated, truncated, info
 
         # Handle key consumption when unlocking doors
         if action == self.actions.toggle and isinstance(fwd_cell, Door) and not isinstance(fwd_cell, Gate):
@@ -393,7 +518,8 @@ class CustomMiniGridEnv(MiniGridEnv):
                     self.step_count += 1
                     truncated = self.step_count >= self.max_steps
                     obs = self.gen_obs()
-                    return obs, 0, False, truncated, {}
+                    reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+                    return obs, reward, terminated, truncated, info
 
         # Handle gate toggle attempt (gates can only be opened by switches, not directly)
         if action == self.actions.toggle and isinstance(fwd_cell, Gate):
@@ -401,21 +527,8 @@ class CustomMiniGridEnv(MiniGridEnv):
             self.step_count += 1
             truncated = self.step_count >= self.max_steps
             obs = self.gen_obs()
-            return obs, 0, False, truncated, {}
-
-        # Handle switch interaction
-        if action == self.actions.toggle and isinstance(fwd_cell, Switch):
-            if not fwd_cell.activate():
-                self.step_count += 1
-                truncated = self.step_count >= self.max_steps
-                obs = self.gen_obs()
-                return obs, 0, False, truncated, {"invalid_action": True}
-            self._refresh_gates()
-            # Return after handling (don't fall through to super which would re-toggle)
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            return obs, 0, False, truncated, {}
+            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+            return obs, reward, terminated, truncated, info
 
         # Handle block pushing
         if action == self.actions.forward and isinstance(fwd_cell, PushableBlock):
@@ -440,18 +553,9 @@ class CustomMiniGridEnv(MiniGridEnv):
                 else:
                     truncated = False
 
-                # Check if goal reached
-                terminated = False
-                reward = 0
-                if self.goal_pos and self.agent_pos == self.goal_pos:
-                    terminated = True
-                    reward = 1 - 0.9 * (self.step_count / self.max_steps)
-                elif isinstance(self.grid.get(*self.agent_pos), Goal):
-                    terminated = True
-                    reward = 1 - 0.9 * (self.step_count / self.max_steps)
-
                 obs = self.gen_obs()
-                return obs, reward, terminated, truncated, {}
+                reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+                return obs, reward, terminated, truncated, info
 
         # Handle gate blocking
         if action == self.actions.forward and isinstance(fwd_cell, Gate) and not fwd_cell.is_open:
@@ -462,10 +566,15 @@ class CustomMiniGridEnv(MiniGridEnv):
             else:
                 truncated = False
             obs = self.gen_obs()
-            return obs, 0, False, truncated, {}
+            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+            return obs, reward, terminated, truncated, info
 
         # Default behavior
         obs, reward, terminated, truncated, info = super().step(action)
+        if action == self.actions.pickup and isinstance(fwd_cell, Key) and self.carrying is fwd_cell:
+            key_id = getattr(fwd_cell, "key_id", None)
+            if key_id is not None:
+                self.collected_keys.add(key_id)
         if action == self.actions.forward:
             self._update_hold_switches()
 
@@ -492,6 +601,7 @@ class CustomMiniGridEnv(MiniGridEnv):
                         continue
                     break
 
+        reward, terminated, truncated, info = self._finalize_step_result(reward, terminated, truncated, info)
         return obs, reward, terminated, truncated, info
 
     def get_mission_text(self) -> str:

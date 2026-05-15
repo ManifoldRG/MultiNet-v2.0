@@ -234,7 +234,7 @@ class MiniGridBackend(AbstractGridBackend):
 
         # Initialize mechanism state tracking containers
         open_doors = set()  # Currently unused but reserved for future door state tracking
-        collected_keys = set()  # Currently unused but reserved for key collection tracking
+        collected_keys = set(getattr(self.env, "collected_keys", set()))
         active_switches = set()  # IDs of switches that are currently activated
         open_gates = set()  # IDs of gates that are currently open (passable)
         block_positions = {}  # Maps block_id -> (x, y) position
@@ -273,12 +273,7 @@ class MiniGridBackend(AbstractGridBackend):
         for tp_id, tp in self.env.teleporters.items():
             teleporter_cooldowns[tp_id] = tp.cooldown
 
-        # Check if goal has been reached
-        # Goal is reached when agent position matches goal position from task spec
-        goal_reached = False
-        if self.task_spec is not None:
-            goal_pos = self.task_spec.maze.goal.to_tuple()
-            goal_reached = self.env.agent_pos == goal_pos
+        goal_reached = self.env._check_goal_completion()
 
         # Get observability info
         obs_mode = self.task_spec.rules.observability if self.task_spec else "full"
