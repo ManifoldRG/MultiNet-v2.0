@@ -82,22 +82,16 @@ def load_model(args) -> "ModelInterface":
         model.setup()
         return model
 
-    elif model_name == "paligemma":
-        from adapters.paligemma_adapter import PaliGemmaMiniGridAdapter
-        model = PaliGemmaMiniGridAdapter()
-        model.setup(device=args.device)
-        return model
-
     else:
         raise ValueError(
-            f"Unknown model: {model_name}. Options: random, file_based, ollama, lmstudio, paligemma"
+            f"Unknown model: {model_name}. Options: random, file_based, ollama, lmstudio"
         )
 
 
 def main():
     parser = argparse.ArgumentParser(description="MultiNet-v2.0 Evaluation CLI")
     parser.add_argument("--model", required=True,
-                        help="Model to evaluate: random, file_based, ollama, lmstudio, paligemma")
+                        help="Model to evaluate: random, file_based, ollama, lmstudio")
     parser.add_argument("--benchmark", default="validation_10",
                         choices=["validation_10", "tiers", "directory"],
                         help="Benchmark mode: validation_10, tier tasks, or every JSON in --task-dir")
@@ -111,8 +105,6 @@ def main():
     parser.add_argument("--action-mode", default="discrete",
                         choices=["discrete"],
                         help="Action mode: discrete integer actions")
-    parser.add_argument("--device", default="cpu",
-                        help="Device for model inference (default: cpu)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed (default: 42)")
     parser.add_argument("--task-dir", default=None,
@@ -177,7 +169,6 @@ def main():
     print(f"Backend: {args.backend}" + (f" ({args.tiling})" if args.backend == "multigrid" else ""))
     print(f"Action mode: {args.action_mode}")
     print(f"Task dir: {task_dir}")
-    print(f"Device: {args.device}")
     print(f"History images: {args.history_images}")
     print(f"History text: {args.history_text}")
     if args.history_text:
