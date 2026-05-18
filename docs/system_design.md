@@ -49,8 +49,7 @@ Spatial+Modality Backend             Inference Adapter
 ─────────────────────────────        ────────────────────────
 MiniGridBackend  (square+RGB)        OllamaAdapter
 MultiGridBackend (5 tilings+RGB)     LMStudioAdapter
-TextBackend      (any+text) Pending  PaliGemmaAdapter
-                                     FileBasedAdapter
+TextBackend      (any+text) Pending  FileBasedAdapter
                                      ClaudeAdapter   Pending
                                      RandomBaseline (built-in)
 ```
@@ -405,7 +404,6 @@ class ModelInterface(ABC):
 - **`RandomBaseline`** — built-in; uniform sample from `action_space`. Sanity check.
 - **`OllamaAdapter`** — local Ollama HTTP server; supports RGB+text via vision models.
 - **`LMStudioAdapter`** — local LM Studio HTTP server.
-- **`PaliGemmaAdapter`** — direct HuggingFace transformers; RGB-only.
 - **`FileBasedAdapter`** (`FileBasedModelInterface`) — writes observation to a work-dir, polls for response file. Supports any model integrated via external process.
 - **`ClaudeAdapter`** *(pending)* — Anthropic API; supports RGB+text.
 
@@ -559,7 +557,7 @@ Status legend:
 - Delta on merge: add the text backend as a peer to `MiniGridBackend` and `MultiGridBackend`; text commands should be represented by the backend's text `ActionSpace`.
 
 **8. Inference adapters** — adapter axis
-- ✅ `OllamaAdapter`, `LMStudioAdapter`, `PaliGemmaAdapter`, `FileBasedModelInterface`, `RandomModelInterface` exist in `model_interface.py` + `adapters/`.
+- ✅ `OllamaAdapter`, `LMStudioAdapter`, `FileBasedModelInterface`, `RandomModelInterface` exist in `model_interface.py` + `adapters/`.
 - 🚧 `ClaudeAdapter` pending.
 - Delta: extend `predict()` signature to accept the new `ActionSpace` and to return a `ModelMetadata` object (tokens, latency, raw_response).
 

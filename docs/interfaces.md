@@ -212,7 +212,6 @@ Built-in adapters:
 - `FileBasedModelInterface`
 - `adapters.ollama_vlm_adapter.OllamaVLMAdapter`
 - `adapters.lmstudio_vlm_adapter.LMStudioVLMAdapter`
-- `adapters.paligemma_adapter.PaliGemmaMiniGridAdapter`
 
 ## EvaluationHarness
 

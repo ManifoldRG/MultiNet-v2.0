@@ -289,5 +289,5 @@ Task JSON  -->  TaskParser  -->  CustomMiniGridEnv
                                       |
                                EvaluationHarness + ModelInterface
                                       |
-                 Adapters: File-Based | PaliGemma | Ollama | LMStudio
+                 Adapters: File-Based | Ollama | LMStudio
 ```
