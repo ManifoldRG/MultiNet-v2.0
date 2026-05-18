@@ -7,11 +7,13 @@ multigrid, model-adapter, and evaluation interfaces.
 
 ### Core Components
 
-1. **[Interfaces](./interfaces.md)** - Public task, backend, runner, model, and evaluation contracts
-2. **[Task Parser](./task_parser.md)** - Transforms JSON task specifications into executable MiniGrid environments
-3. **[MiniGrid Backend](./minigrid_backend.md)** - Default square-grid backend
-4. **[MultiGrid Backend](./multigrid_backend.md)** - Custom backend for square, hex, triangle, 3-4-6-4, and 4-8-8 tilings
-5. **[Backend Reference](./gridworld_backends.md)** - Cross-backend behavior and feature matrix
+1. **[Canonical System Design](./system_design.md)** - Target architecture for the full MultiNet v2.0 benchmark pipeline
+2. **[Immediate System Design for Tests 1-3](./immediate_system_design_tests_1_3.md)** - Reduced merge-scope design for the first scoring experiments
+3. **[Interfaces](./interfaces.md)** - Public task, backend, runner, model, and evaluation contracts
+4. **[Task Parser](./task_parser.md)** - Transforms JSON task specifications into executable MiniGrid environments
+5. **[MiniGrid Backend](./minigrid_backend.md)** - Default square-grid backend
+6. **[MultiGrid Backend](./multigrid_backend.md)** - Custom backend for square, hex, triangle, 3-4-6-4, and 4-8-8 tilings
+7. **[Backend Reference](./gridworld_backends.md)** - Cross-backend behavior and feature matrix
 
 ## Overview
 
