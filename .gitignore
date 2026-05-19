@@ -1,0 +1,7 @@
+build/
+__pycache__
+*.Zone.Identifier
+.venv/
+token.txt
+.pytest_cache/
+.env
