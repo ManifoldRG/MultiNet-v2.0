@@ -29,8 +29,8 @@ MECHANISM_RULES = (
     "RULES (domain logic):\n"
     "  - PICKUP: pick up a key from the adjacent cell you are facing. Keys block movement — you\n"
     "    cannot MOVE_FORWARD onto a key; stand beside it, face it, and PICKUP.\n"
-    "  - Doors: keys and doors are color-matched. With the matching key in your inventory, move onto\n"
-    "    the door to open it\n"
+    "  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n"
+    "    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n"
     "  - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE (toggle/one-shot types). Hold-type\n"
     "    switches activate automatically while you stand on them. Only switches are toggled. Linked\n"
     "    gates are open if at least one linked switch is on, and closed if all are off.\n"
@@ -169,7 +169,7 @@ def _mechanism_hints_text(task_spec: TaskSpecification) -> str:
     if task_spec.mechanisms.keys or task_spec.mechanisms.doors:
         lines.append(
             "  - Face an adjacent key and PICKUP (do not walk onto the key). "
-            "With the right key, MOVE_FORWARD into a door to open it."
+            "Face a locked door with the matching key and TOGGLE to open it, then MOVE_FORWARD through."
         )
     if task_spec.mechanisms.switches or task_spec.mechanisms.gates:
         lines.append(

@@ -28,6 +28,15 @@ def infer_step_outcome(
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
     curr_pos = agent_row_col(curr)
+    newly_open = curr.open_doors - prev.open_doors
+
+    if newly_open:
+        door_id = sorted(newly_open)[0]
+        door = next((d for d in task_spec.mechanisms.doors if d.id == door_id), None)
+        color = door.requires_key if door else "matching"
+        if action == "MOVE_FORWARD" and prev_pos != curr_pos:
+            return "OPENED", f"Opened {color} door {door_id} and moved to {curr_pos}."
+        return "OPENED", f"Opened {color} door {door_id}."
 
     if action in ("TURN_LEFT", "TURN_RIGHT"):
         if prev.agent_direction != curr.agent_direction:
@@ -141,6 +150,8 @@ def format_step_feedback(
         return f"PICKUP — {action}: {event_message}", event_type
     if event_type == "NOTHING":
         return f"NOTHING — {action}: {event_message} You remain at {prev_pos}.", event_type
+    if event_type == "OPENED":
+        return f"OPENED — {action}: {event_message}", event_type
     if event_type == "TOGGLED":
         return f"TOGGLED — {action}: {event_message}", event_type
     if event_type == "WRONG_DONE":

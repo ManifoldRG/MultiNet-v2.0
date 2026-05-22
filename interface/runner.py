@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import time
 from pathlib import Path
 from typing import Callable, List
@@ -32,6 +33,8 @@ from interface.prompt_strategies import (
 )
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
+
+logger = logging.getLogger(__name__)
 
 _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
@@ -116,6 +119,16 @@ class ExperimentRunner:
         end_reason = "max_steps"
         initial_state = state_snapshot(state)
 
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s chat_history=%s",
+                max_steps,
+                self.config.querying,
+                self.config.observation,
+                self.config.context_window,
+                chat_history,
+            )
+
         transcript.append(
             {
                 "kind": "reset",
@@ -138,6 +151,13 @@ class ExperimentRunner:
                 else:
                     messages.append(user_message)
                     agent_messages = messages
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(
+                        "LLM query #%d: messages_in_context=%d current_turn_has_image=%s",
+                        query_count,
+                        len(agent_messages),
+                        has_image,
+                    )
                 t_llm = time.perf_counter()
                 model_text = agent(agent_messages)
                 llm_s = time.perf_counter() - t_llm
@@ -146,6 +166,16 @@ class ExperimentRunner:
                     if chat_history == "rolling":
                         _trim_rolling_chat(messages, max(1, self.config.chat_turns_max))
                 action_queue = self.querying.parse_actions(model_text)
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(
+                        "LLM query #%d finished in %.2fs: reply_chars=%d actions_parsed=%d",
+                        query_count,
+                        llm_s,
+                        len(model_text),
+                        len(action_queue),
+                    )
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("LLM query #%d reply:\n%s", query_count, model_text)
                 transcript.append(
                     {
                         "kind": "query",
@@ -163,6 +193,10 @@ class ExperimentRunner:
                     }
                 )
                 if not action_queue:
+                    logger.warning(
+                        "LLM query #%d: no valid actions parsed; retrying with parser feedback",
+                        query_count,
+                    )
                     last_feedback = (
                         f"Could not parse FINAL_OUTPUT (one or more valid actions). "
                         f"Use only: {ACTIONS_HINT}."

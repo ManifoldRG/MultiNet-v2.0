@@ -63,12 +63,19 @@ def _persist_llm_queries_jsonl(out_dir: Path, records: list[dict[str, Any]]) -> 
 class _AgentRecorder:
     """Delegates to a real agent and records each assistant reply for ``llm_queries.jsonl``."""
 
-    __slots__ = ("_inner", "_records", "_query_seq")
+    __slots__ = ("_inner", "_records", "_query_seq", "_log_replies")
 
-    def __init__(self, inner: Callable[[list[dict]], str], records: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        inner: Callable[[list[dict]], str],
+        records: list[dict[str, Any]],
+        *,
+        log_replies: bool = False,
+    ) -> None:
         self._inner = inner
         self._records = records
         self._query_seq = 0
+        self._log_replies = log_replies
 
     def __call__(self, messages: list[dict]) -> str:
         self._query_seq += 1
@@ -80,6 +87,10 @@ class _AgentRecorder:
                 "reply": text,
             }
         )
+        if self._log_replies:
+            print(f"\n{'=' * 72}\nLLM query {self._query_seq} (messages={len(messages)})\n{'=' * 72}")
+            print(text)
+            print(f"{'=' * 72}\n")
         return text
 
 
@@ -88,7 +99,8 @@ def main() -> None:
         description=(
             "End-to-end LLM maze episode. Writes llm_queries.jsonl plus exhaustive "
             "episode log (episode.json, frames/, queries/). "
-            "Anthropic runs in the cloud; --backend local uses Hugging Face."
+            "Anthropic runs in the cloud; --backend local uses Hugging Face. "
+            "-v prints full model replies; --log-level INFO adds query timing logs."
         ),
     )
     parser.add_argument("--maze", default="V10_distractor_chain.json")
@@ -97,13 +109,13 @@ def main() -> None:
         "-v",
         "--verbose",
         action="store_true",
-        help="Print per-step progress from ExperimentRunner.",
+        help="Print per-step progress and full LLM replies to stdout.",
     )
     parser.add_argument(
         "--log-level",
         default="WARNING",
         choices=["DEBUG", "INFO", "WARNING"],
-        help="Structured logs from interface agents (default: WARNING).",
+        help="Structured logs from interface runner/agents (default: WARNING). INFO: query timing; DEBUG: same as -v via logging.",
     )
     parser.add_argument(
         "--backend",
@@ -183,7 +195,11 @@ def main() -> None:
         agent_inner = LocalTransformersAgent(config=llm_cfg)
         model_id = llm_cfg.model
 
-    agent = _AgentRecorder(agent_inner, query_log)
+    agent = _AgentRecorder(
+        agent_inner,
+        query_log,
+        log_replies=args.verbose or args.log_level in ("INFO", "DEBUG"),
+    )
 
     try:
         result = runner.run(agent, verbose=args.verbose, maze_path=maze_path)
