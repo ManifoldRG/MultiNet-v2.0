@@ -8,9 +8,11 @@ from typing import Optional
 
 import numpy as np
 
+from minigrid.core.world_object import Door as MiniGridDoor
+
 from ..task_spec import TaskSpecification
 from ..task_parser import TaskParser
-from ..custom_env import CustomMiniGridEnv
+from ..custom_env import CustomMiniGridEnv, Gate
 from .base import AbstractGridBackend, GridState
 
 
@@ -232,8 +234,15 @@ class MiniGridBackend(AbstractGridBackend):
             # Try to get color attribute (for keys), fall back to string representation
             carrying = getattr(self.env.carrying, "color", str(self.env.carrying))
 
-        # Initialize mechanism state tracking containers
-        open_doors = set()  # Currently unused but reserved for future door state tracking
+        # Track door states from the live grid (doors are not kept in a side dict).
+        open_doors: set[str] = set()
+        if self.task_spec:
+            for door_spec in self.task_spec.mechanisms.doors:
+                x, y = door_spec.position.x, door_spec.position.y
+                cell = self.env.grid.get(x, y)
+                if isinstance(cell, MiniGridDoor) and not isinstance(cell, Gate):
+                    if cell.is_open or not cell.is_locked:
+                        open_doors.add(door_spec.id)
         collected_keys = set(getattr(self.env, "collected_keys", set()))
         active_switches = set()  # IDs of switches that are currently activated
         open_gates = set()  # IDs of gates that are currently open (passable)
