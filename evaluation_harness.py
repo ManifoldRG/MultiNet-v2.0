@@ -283,6 +283,8 @@ class EvaluationHarness:
                 max_steps=state.max_steps,
                 additional_context=additional_context,
                 prior_images=prior_images,
+                task_spec=self.runner.backend.task_spec,
+                grid_state=state,
             )
             model_start = time.perf_counter()
             output = self.model.predict(model_input)

@@ -21,10 +21,47 @@ from evaluation_harness import (
     EvaluationResult,
     TierMetrics,
 )
+from gridworld.baselines import BFSModelInterface, GreedyModelInterface
 from gridworld.task_spec import TaskSpecification
 from gridworld.actions import ACTION_NAMES
 from adapters.lmstudio_vlm_adapter import LMStudioVLMAdapter
 from adapters.ollama_vlm_adapter import OllamaVLMAdapter
+
+
+def make_dependency_spec():
+    """Small key-door-switch-gate task for deterministic baseline tests."""
+    return TaskSpecification.from_dict({
+        "task_id": "test_key_door_switch_gate",
+        "seed": 7,
+        "difficulty_tier": 3,
+        "maze": {
+            "dimensions": [8, 5],
+            "walls": [[1, 2], [2, 2], [3, 2], [5, 2], [6, 2]],
+            "start": [1, 1],
+            "goal": [6, 1],
+        },
+        "mechanisms": {
+            "keys": [{"id": "red_key", "position": [2, 1], "color": "red"}],
+            "doors": [{"id": "red_door", "position": [3, 1], "requires_key": "red"}],
+            "switches": [
+                {
+                    "id": "gate_switch",
+                    "position": [4, 2],
+                    "controls": ["exit_gate"],
+                    "switch_type": "toggle",
+                    "initial_state": "off",
+                }
+            ],
+            "gates": [{"id": "exit_gate", "position": [5, 1], "initial_state": "closed"}],
+        },
+        "rules": {
+            "key_consumption": True,
+            "observability": "full",
+            "view_size": 7,
+        },
+        "goal": {"type": "reach_position", "target": [6, 1]},
+        "max_steps": 30,
+    })
 
 
 class TestModelInput:
@@ -96,6 +133,66 @@ class TestRandomModel:
         outputs = model.predict_batch([inp, inp, inp])
         assert len(outputs) == 3
         assert all(isinstance(o, ModelOutput) for o in outputs)
+
+
+class TestBaselineModels:
+    def test_bfs_baseline_solves_dependency_task(self):
+        spec = make_dependency_spec()
+        harness = EvaluationHarness(BFSModelInterface(), history_images=0, history_text=False)
+        try:
+            result = harness.evaluate_task(spec, seed=spec.seed)
+        finally:
+            harness.close()
+
+        assert result.success is True
+        action_names = [step.action_name for step in result.trajectory]
+        assert "pickup" in action_names
+        assert "toggle" in action_names
+
+    def test_greedy_baseline_solves_simple_task(self):
+        spec = TaskSpecification.from_dict({
+            "task_id": "test_greedy_simple",
+            "seed": 3,
+            "difficulty_tier": 1,
+            "maze": {
+                "dimensions": [6, 5],
+                "walls": [],
+                "start": [1, 1],
+                "goal": [4, 1],
+            },
+            "goal": {"type": "reach_position", "target": [4, 1]},
+            "max_steps": 10,
+        })
+        harness = EvaluationHarness(GreedyModelInterface(), history_images=0, history_text=False)
+        try:
+            result = harness.evaluate_task(spec, seed=spec.seed)
+        finally:
+            harness.close()
+
+        assert result.success is True
+        assert result.steps_taken <= 3
+
+    def test_baseline_loader_accepts_bfs_and_greedy(self):
+        from argparse import Namespace
+        from run_eval import load_model
+
+        args = Namespace(model="bfs", seed=42)
+        assert load_model(args).model_name == "bfs"
+        args.model = "greedy"
+        assert load_model(args).model_name == "greedy"
+
+    def test_bfs_baseline_requires_task_spec(self):
+        model = BFSModelInterface()
+        with pytest.raises(ValueError, match="task_spec"):
+            model.predict(
+                ModelInput(
+                    image=np.zeros((64, 64, 3), dtype=np.uint8),
+                    text_prompt="test",
+                    action_space=ACTION_NAMES,
+                    step_number=1,
+                    max_steps=10,
+                )
+            )
 
 
 class TestLMStudioAdapter:
