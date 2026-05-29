@@ -41,6 +41,8 @@ def test_canonical_paths_include_bfs_actions_and_positions():
     assert report.positions == [(1, 1), (2, 1), (3, 1)]
     assert report.optimal_steps == 2
     assert report.states_explored > 0
+    assert report.greedy is not None
+    assert report.greedy["success"] is True
 
 
 def test_static_score_uses_configurable_weights():
@@ -80,6 +82,7 @@ def test_score_task_file_writes_stage_two_artifacts(tmp_path):
     assert payload["task_id"] == spec.task_id
     assert "dimensions_12" in payload
     assert payload["validation"]["schema_valid"] is True
+    assert payload["canonical_agent_features"]["greedy_solvability"] == 1.0
 
 
 def test_runtime_score_from_episode_json_payload():

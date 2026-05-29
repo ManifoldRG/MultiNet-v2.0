@@ -1,0 +1,56 @@
+"""Canonical solver integration for scorer artifacts."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from gridworld.baselines import plan_bfs_path, plan_greedy_path
+from gridworld.task_spec import TaskSpecification
+from gridworld.task_validator import compute_difficulty
+
+from .artifacts import CanonicalPathReport
+
+
+def _path_payload(path) -> dict[str, Any]:
+    return {
+        "success": path.success,
+        "actions": list(path.action_labels),
+        "positions": [list(pos) for pos in path.positions],
+        "steps": len(path.action_labels),
+    }
+
+
+def compute_canonical_paths(spec: TaskSpecification) -> CanonicalPathReport:
+    """Emit canonical BFS and greedy traces using the merged baseline solvers."""
+    difficulty = compute_difficulty(spec)
+    bfs_path = plan_bfs_path(spec)
+    greedy_path = plan_greedy_path(spec)
+
+    if bfs_path.success:
+        message = (
+            f"Solution found in {len(bfs_path.action_labels)} steps "
+            f"({difficulty.states_explored} states explored)"
+        )
+    elif difficulty.states_explored:
+        message = (
+            "No solution found "
+            f"({difficulty.states_explored} states explored, all reachable states checked)"
+        )
+    else:
+        message = "No solution found"
+
+    return CanonicalPathReport(
+        task_id=spec.task_id,
+        success=bfs_path.success,
+        actions=list(bfs_path.action_labels),
+        positions=list(bfs_path.positions),
+        optimal_steps=len(bfs_path.action_labels) if bfs_path.success else 0,
+        states_explored=difficulty.states_explored,
+        message=message,
+        greedy=_path_payload(greedy_path),
+    )
+
+
+def compute_greedy_solvability(spec: TaskSpecification) -> float:
+    """Return 1 when the merged greedy planner solves the task, else 0."""
+    return 1.0 if plan_greedy_path(spec).success else 0.0

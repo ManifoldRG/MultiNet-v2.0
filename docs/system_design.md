@@ -541,7 +541,7 @@ Status legend:
 - Delta: extract BFS path emission as one canonical agent, add Greedy as a peer, write combined output to `canonical_paths.json`.
 
 **4. Static scorer** — Stage 2
-- ⚠️ `gridworld/scoring.py::compute_12d_score` exists with 12 dimensions matching dimensions 1–12 of §4 (modulo formula calibration).
+- ⚠️ `scorer/scoring.py::compute_12d_score` exists with 12 dimensions matching dimensions 1–12 of §4 (modulo formula calibration).
 - Delta: add dimension 13 (`greedy_solvability`), restructure output to `scored.json` sidecar, move composite weights to `calibration.yaml`, include validation reports.
 
 **5. `MiniGridBackend`** — backend axis
