@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from gridworld.scoring import (
+from scorer.scoring import (
     ScorerConfig,
     compute_runtime_score,
     load_scorer_config,
@@ -119,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         default=None,
-        help="Optional scorer config JSON/YAML path. Defaults to gridworld/scorer_config.json.",
+        help="Optional scorer config JSON/YAML path. Defaults to scorer/scorer_config.json.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)

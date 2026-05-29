@@ -773,7 +773,7 @@ def compute_difficulty(spec: TaskSpecification) -> DifficultyReport:
 
     This is a compact report centered on BFS output: beatability, shortest
     action count, states explored, coarse mechanism complexity, and a legacy
-    composite score. Use compute_12d_score when the full rubric vector is
+    composite score. Use scorer.scoring.compute_12d_score when the full rubric vector is
     needed for benchmark comparison.
     """
     validator = TaskValidator(spec)

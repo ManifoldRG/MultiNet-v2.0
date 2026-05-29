@@ -32,22 +32,6 @@ from .task_validator import (
     TaskValidator,
     compute_difficulty,
 )
-from .scoring import (
-    CanonicalPathReport,
-    RuntimeScoreArtifact,
-    ScoredDifficulty,
-    ScorerConfig,
-    StaticScoreArtifact,
-    compute_12d_score,
-    compute_canonical_paths,
-    compute_runtime_score,
-    compute_static_score_artifact,
-    load_scorer_config,
-    score_runtime_file,
-    score_task_file,
-)
-
-
 __all__ = [
     # Task specification
     "Position",
@@ -71,16 +55,4 @@ __all__ = [
     "DifficultyReport",
     "FragilityReport",
     "compute_difficulty",
-    "ScoredDifficulty",
-    "ScorerConfig",
-    "CanonicalPathReport",
-    "StaticScoreArtifact",
-    "RuntimeScoreArtifact",
-    "compute_12d_score",
-    "compute_canonical_paths",
-    "compute_static_score_artifact",
-    "compute_runtime_score",
-    "load_scorer_config",
-    "score_task_file",
-    "score_runtime_file",
 ]

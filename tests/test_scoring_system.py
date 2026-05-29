@@ -1,6 +1,6 @@
 import json
 
-from gridworld.scoring import (
+from scorer.scoring import (
     ScorerConfig,
     compute_12d_score,
     compute_canonical_paths,
