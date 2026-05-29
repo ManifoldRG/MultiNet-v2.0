@@ -24,3 +24,6 @@ api_key.txt
 
 # Interface smoke test outputs (regenerated locally)
 interface/smoke_tests/results/
+# Generated evaluation outputs
+mazes/results/*_results.json
+mazes/results/*.progress.json
