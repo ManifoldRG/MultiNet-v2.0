@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .task_spec import TaskSpecification
-from .task_validator import (
+from gridworld.task_spec import TaskSpecification
+from gridworld.task_validator import (
     DifficultyReport,
     TaskValidator,
     ValidatorState,
@@ -401,9 +401,9 @@ def _compute_greedy_solvability(spec: TaskSpecification) -> float | None:
 
         from model_interface import ModelInput
 
-        from .actions import ACTION_NAMES
-        from .backends.minigrid_backend import MiniGridBackend
-        from .baselines import GreedyModelInterface
+        from gridworld.actions import ACTION_NAMES
+        from gridworld.backends.minigrid_backend import MiniGridBackend
+        from gridworld.baselines import GreedyModelInterface
     except ImportError:
         return None
 
