@@ -57,6 +57,7 @@ include = [
     "adapters*",
     "cross_domain*",
     "gridworld*",
+    "interface*",
     "mazes*",
     "multigrid*",
     "scripts*",

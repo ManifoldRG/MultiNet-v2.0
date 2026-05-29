@@ -274,6 +274,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         """Place a key at the given position."""
         color = MINIGRID_COLORS.get(color, color)
         key = Key(color)
+        key.can_overlap = True
         if key_id is not None:
             key.key_id = key_id
             self.key_objects[key_id] = key
@@ -464,6 +465,14 @@ class CustomMiniGridEnv(MiniGridEnv):
             or self.task_spec.goal.goal_type == "reach_position"
         )
 
+    def _cell_can_overlap(self, cell: WorldObj | None) -> bool:
+        if cell is None:
+            return False
+        can_overlap = getattr(cell, "can_overlap", False)
+        if isinstance(can_overlap, bool):
+            return can_overlap
+        return bool(can_overlap())
+
     def _finalize_step_result(
         self,
         reward: float,
@@ -498,6 +507,37 @@ class CustomMiniGridEnv(MiniGridEnv):
             self._refresh_gates()
             self.step_count += 1
             truncated = self.step_count >= self.max_steps
+            obs = self.gen_obs()
+            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+            return obs, reward, terminated, truncated, info
+
+        # Keys can be picked up from the agent's current cell, matching the validator.
+        if action == self.actions.pickup and isinstance(current_cell, Key):
+            if self.carrying is not None:
+                self.step_count += 1
+                truncated = self.step_count >= self.max_steps
+                obs = self.gen_obs()
+                reward, terminated, truncated, info = self._finalize_step_result(
+                    0, False, truncated, {"invalid_action": True}
+                )
+                return obs, reward, terminated, truncated, info
+
+            self.carrying = current_cell
+            self.grid.set(*self.agent_pos, None)
+            key_id = getattr(current_cell, "key_id", None)
+            if key_id is not None:
+                self.collected_keys.add(key_id)
+            self.step_count += 1
+            truncated = self.step_count >= self.max_steps
+            obs = self.gen_obs()
+            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
+            return obs, reward, terminated, truncated, info
+
+        if action == self.actions.forward and isinstance(fwd_cell, Key) and self._cell_can_overlap(fwd_cell):
+            self.agent_pos = (int(fwd_pos[0]), int(fwd_pos[1]))
+            self.step_count += 1
+            truncated = self.step_count >= self.max_steps
+            self._update_hold_switches()
             obs = self.gen_obs()
             reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
             return obs, reward, terminated, truncated, info
@@ -538,7 +578,7 @@ class CustomMiniGridEnv(MiniGridEnv):
 
             # Check if we can push the block
             behind_cell = self.grid.get(*behind_block_pos)
-            if behind_cell is None or behind_cell.can_overlap():
+            if behind_cell is None or self._cell_can_overlap(behind_cell):
                 # Push the block
                 self.grid.set(*fwd_pos, None)
                 self.grid.set(*behind_block_pos, fwd_cell)

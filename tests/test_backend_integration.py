@@ -234,6 +234,41 @@ def test_minigrid_pickup_key_goal_terminates_after_pickup():
     assert "k1" in state.collected_keys
 
 
+def test_minigrid_replays_validator_same_cell_key_pickup_plan():
+    spec = TaskSpecification.from_dict({
+        "task_id": "same_cell_key_pickup_runtime",
+        "seed": 15,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [5, 5],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [3, 3],
+        },
+        "mechanisms": {
+            "keys": [{"id": "k1", "position": [2, 1], "color": "red"}],
+        },
+        "goal": {"type": "pickup_key", "target_ids": ["k1"]},
+        "max_steps": 20,
+    })
+
+    backend = MiniGridBackend(render_mode="rgb_array")
+    backend.configure(spec)
+    backend.reset(seed=15)
+
+    _, _, terminated, _, state, _ = backend.step(MiniGridActions.MOVE_FORWARD)
+    assert terminated is False
+    assert state.agent_position == (2, 1)
+    assert "k1" not in state.collected_keys
+
+    _, reward, terminated, _, state, _ = backend.step(MiniGridActions.PICKUP)
+
+    assert terminated is True
+    assert reward > 0
+    assert state.goal_reached is True
+    assert "k1" in state.collected_keys
+
+
 def test_multigrid_backend_preserves_mechanism_types():
     spec = TaskSpecification.from_dict({
         "task_id": "multigrid_fidelity",
