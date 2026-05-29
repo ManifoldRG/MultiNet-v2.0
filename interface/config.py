@@ -14,6 +14,7 @@ class ExperimentConfig:
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
     chat_history: Literal["stateless", "rolling", "full"] = "stateless"
     chat_turns_max: int = 3
+    max_parse_retries: int = 3
 
     def to_dict(self) -> dict:
         return asdict(self)

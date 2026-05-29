@@ -113,6 +113,7 @@ class ExperimentRunner:
         transcript: List[dict] = []
         max_steps = self.task_spec.max_steps
         query_count = 0
+        parse_failures = 0
         step_index = 0
         current_query_index = 0
         action_queue_index = 0
@@ -193,15 +194,22 @@ class ExperimentRunner:
                     }
                 )
                 if not action_queue:
+                    parse_failures += 1
                     logger.warning(
-                        "LLM query #%d: no valid actions parsed; retrying with parser feedback",
+                        "LLM query #%d: no valid actions parsed; parse failure %d/%d",
                         query_count,
+                        parse_failures,
+                        self.config.max_parse_retries,
                     )
                     last_feedback = (
                         f"Could not parse FINAL_OUTPUT (one or more valid actions). "
                         f"Use only: {ACTIONS_HINT}."
                     )
+                    if parse_failures >= self.config.max_parse_retries:
+                        end_reason = "parse_failed"
+                        break
                     continue
+                parse_failures = 0
 
             if not action_queue:
                 end_reason = "exhausted"
