@@ -1,0 +1,8 @@
+# Python-generated cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated evaluation outputs
+mazes/results/*_results.json
+mazes/results/*.progress.json
