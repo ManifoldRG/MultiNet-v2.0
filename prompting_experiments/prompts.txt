@@ -1,0 +1,536 @@
+Prompt Experiment Preview
+Maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/validation_10/V01_empty_room.json
+Max steps: 5
+
+========================================================================================
+condition set 1: Prompt
+========================================================================================
+variant name: minimal
+description: Goal, action list, and final-output instruction only.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: standard
+description: Standard task prompt with mechanism descriptions.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: verbose
+description: Standard prompt plus explicit domain rules and local hints.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+RULES (domain logic):
+  - PICKUP: pick up a key from the adjacent cell you are facing. Keys block movement — you
+    cannot MOVE_FORWARD onto a key; stand beside it, face it, and PICKUP.
+  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then
+    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.
+  - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE (toggle/one-shot types). Hold-type
+    switches activate automatically while you stand on them. Only switches are toggled. Linked
+    gates are open if at least one linked switch is on, and closed if all are off.
+  - Gates: you cannot TOGGLE a gate. CLOSED gates block movement; OPEN gates do not.
+  - Closed gates and doors you lack a key for block movement like walls until resolved.
+  - Use DONE only when you are standing on the goal cell.
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10  |  Step 1/5 (5 left)
+Inventory: none
+  WARNING: Only 5 steps remaining!
+From your perspective:
+  AHEAD: open (1,2)
+  RIGHT: open (2,1)
+  BEHIND: out of bounds
+  LEFT: out of bounds
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 2: Observation format
+========================================================================================
+variant name: text_only
+description: Natural-language current observation, no image blocks.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: image_text
+description: Image block plus natural-language observation.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: image_only
+description: Image block with no initial natural-language maze map.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+[user prompt]
+[image block 1]
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 3: Context window
+========================================================================================
+variant name: current
+description: Prompt only with the current observation.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: last3
+description: Include up to the last three executed steps.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: text_summary
+description: PR #12 design axis; no ExperimentConfig summary mode exists yet.
+prompts:
+Status: not implemented in ExperimentConfig
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 4: Action space
+========================================================================================
+variant name: egocentric
+description: Current interface action space.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: cardinal
+description: PR #12 design axis; no cardinal action map exists in the interface yet.
+prompts:
+Status: not implemented in ExperimentConfig
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 5: Querying strategy
+========================================================================================
+variant name: step_by_step
+description: Ask for one action each query.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: subgoal
+description: Ask for a short subgoal and action chunk.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+For each turn output:
+  SUB_GOAL: <short description of your next waypoint>
+  ACTIONS: <comma-separated action list to reach it>
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: full_trajectory
+description: Ask once for a complete action trajectory.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Output your complete trajectory once as:
+  SUB_GOAL: <short description of the full plan>
+  ACTIONS: <comma-separated action list from start to finish>
+The last action in ACTIONS should be DONE (when you expect to be at the goal).
+You will not be queried again — this is your only planning turn.
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 6: In-context learning
+========================================================================================
+variant name: zero_shot
+description: Current interface behavior.
+prompts:
+[system prompt]
+Task: move to the goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+On the last line, output exactly:
+FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+[image block 1]
+Observation:
+Current situation (this step):
+The goal is at (6, 6).
+You are at (1, 1) facing EAST.
+Environment steps used so far: 0 (max 5 before timeout).
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Last result: Episode start.
+What is your next action?
+----------------------------------------------------------------------------------------
+variant name: one_shot
+description: PR #12 design axis; example selection/injection is not implemented yet.
+prompts:
+Status: not implemented in ExperimentConfig
+----------------------------------------------------------------------------------------
