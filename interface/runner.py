@@ -193,6 +193,9 @@ class ExperimentRunner:
                         "actions_remaining_before_step": len(action_queue),
                     }
                 )
+                # check if we got any valid actions; 
+                # if not, we'll count it as a parse failure and give feedback, 
+                # but still allow retries until max_parse_retries is reached
                 if not action_queue:
                     parse_failures += 1
                     logger.warning(
@@ -211,6 +214,7 @@ class ExperimentRunner:
                     continue
                 parse_failures = 0
 
+            # if action_queue is empty due to all actions having been executed, end the episode
             if not action_queue:
                 end_reason = "exhausted"
                 break
