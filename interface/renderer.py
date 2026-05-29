@@ -18,10 +18,12 @@ from interface.coords import (
     to_row_col,
     wall_cells,
 )
+from prompting_experiments.prompt_templates import observation as observation_templates
 
 if TYPE_CHECKING:
     from gridworld.backends.base import GridState
     from gridworld.task_spec import TaskSpecification
+
 
 #TODO: Move to utils.py
 def rgb_to_png_bytes(rgb: np.ndarray) -> bytes:
@@ -43,13 +45,11 @@ def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
     start = to_row_col(task_spec.maze.start)
     goal = goal_row_col(task_spec)
     return [
-        f"The world is a {rows} by {cols} grid.",
-        "Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``;"
-        " tuples in this text use ``(row, column)`` matching env state (row southward, column east)."
-        " So ``x`` = column index, ``y`` = row index.",
-        f"The start is at {start}.",
-        f"The goal is at {goal}.",
-        f"The following cells are walls: {wall_str}.",
+        observation_templates.WORLD_SIZE_LINE.format(rows=rows, cols=cols),
+        observation_templates.COORDINATE_EXPLANATION,
+        observation_templates.START_LINE.format(start=start),
+        observation_templates.GOAL_LINE.format(goal=goal),
+        observation_templates.WALLS_LINE.format(walls=wall_str),
     ]
 
 
@@ -64,14 +64,20 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
         if key.id in collected:
             continue
         row, col = to_row_col(key.position)
-        parts.append(f"There is a {key.color} key at ({row},{col}).")
+        parts.append(
+            observation_templates.KEY_LINE.format(color=key.color, row=row, col=col)
+        )
 
     for door in task_spec.mechanisms.doors:
         row, col = to_row_col(door.position)
         status = "open" if door.id in open_doors else door.initial_state
         parts.append(
-            f"There is a {status} {door.requires_key} door at ({row},{col})."
-            f" It requires the {door.requires_key} key to open."
+            observation_templates.DOOR_LINE.format(
+                status=status,
+                requires_key=door.requires_key,
+                row=row,
+                col=col,
+            )
         )
 
     for switch in task_spec.mechanisms.switches:
@@ -79,16 +85,26 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
         on_off = "on" if switch.id in active else switch.initial_state
         controls = ", ".join(switch.controls)
         parts.append(
-            f"There is a {switch.switch_type} switch at ({row},{col}) (currently {on_off})."
-            f" It controls: {controls}."
+            observation_templates.SWITCH_LINE.format(
+                switch_type=switch.switch_type,
+                row=row,
+                col=col,
+                state=on_off,
+                controls=controls,
+            )
         )
 
     for gate in task_spec.mechanisms.gates:
         row, col = to_row_col(gate.position)
         cur = "open" if gate.id in open_gates else gate.initial_state
         parts.append(
-            f"There is a gate ({gate.id}) at ({row},{col})."
-            f" It is currently {cur} (initially {gate.initial_state})."
+            observation_templates.GATE_LINE.format(
+                gate_id=gate.id,
+                row=row,
+                col=col,
+                state=cur,
+                initial_state=gate.initial_state,
+            )
         )
     return parts
 
@@ -102,18 +118,23 @@ def render_user_observation_text(task_spec: TaskSpecification, state: GridState)
     pos = agent_row_col(state)
     inv = ", ".join(inventory_list(state)) or "empty"
     head = [
-        "Current situation (this step):",
-        f"The goal is at {goal}.",
-        f"You are at {pos} facing {agent_facing(state)}.",
-        f"Environment steps used so far: {state.step_count} (max {state.max_steps} before timeout).",
-        f"Your inventory: {inv}.",
+        observation_templates.CURRENT_SITUATION_HEADER,
+        observation_templates.CURRENT_GOAL_LINE.format(goal=goal),
+        observation_templates.CURRENT_AGENT_LINE.format(
+            position=pos,
+            facing=agent_facing(state),
+        ),
+        observation_templates.CURRENT_STEPS_LINE.format(
+            step_count=state.step_count,
+            max_steps=state.max_steps,
+        ),
+        observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv),
         "",
-        "Map contents as of this step (keys on the ground, doors, switches, gates):",
+        observation_templates.CURRENT_MAP_CONTENTS_HEADER,
     ]
     mech = _mechanism_lines(task_spec, state)
     if mech:
         head.extend(mech)
     else:
-        head.append("(No keys on the ground, doors, switches, or gates in the current state description.)")
+        head.append(observation_templates.NO_MECHANISMS_LINE)
     return "\n".join(head)
-

@@ -19,6 +19,7 @@ from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
 from interface.renderer import render_user_observation_text, rgb_to_image_block
+from prompting_experiments.prompt_templates import observation as observation_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
 ContextWindow = Literal["current", "last3"]
@@ -51,11 +52,17 @@ def history_text(
     if not recs:
         return ""
 
-    lines = ["Recent history (last 3 steps, oldest first):"]
+    lines = [observation_templates.RECENT_HISTORY_HEADER]
     for rec in recs:
         row, col = rec["position_after"]
         lines.append(
-            f"  ({int(row)}, {int(col)}) facing {rec['facing_after']} -> {rec['action']} -> {rec['prompt_feedback']}"
+            observation_templates.RECENT_HISTORY_STEP.format(
+                row=int(row),
+                col=int(col),
+                facing=rec["facing_after"],
+                action=rec["action"],
+                feedback=rec["prompt_feedback"],
+            )
         )
     return "\n".join(lines)
 
@@ -78,16 +85,22 @@ def history_content_blocks(
             continue
         blocks.append(rgb_to_image_block(rgb))
         if observation == "image_only":
-            blocks.append({"type": "text", "text": f"Action: {rec['action']}\n\n"})
+            blocks.append(
+                {
+                    "type": "text",
+                    "text": observation_templates.IMAGE_HISTORY_ACTION.format(
+                        action=rec["action"]
+                    ),
+                }
+            )
 
     if not blocks:
         return []
 
     intro = (
-        "Recent steps (oldest first). Each image is the maze view from which the "
-        "following action was chosen; infer pose and environment state from the image.\n\n"
+        observation_templates.IMAGE_ONLY_HISTORY_INTRO
         if observation == "image_only"
-        else "Recent step views (oldest first):\n\n"
+        else observation_templates.IMAGE_TEXT_HISTORY_INTRO
     )
     return [{"type": "text", "text": intro}] + blocks
 
