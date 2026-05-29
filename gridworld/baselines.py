@@ -49,6 +49,16 @@ class Transition:
     next_state: PlannerState
 
 
+@dataclass(frozen=True)
+class PlannedPath:
+    """Planner output with replayed positions for scorer/reporting artifacts."""
+
+    success: bool
+    actions: list[int]
+    action_labels: list[str]
+    positions: list[tuple[int, int]]
+
+
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
@@ -459,6 +469,61 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
         state = next_state
 
     return actions or [int(MiniGridActions.DONE)]
+
+
+def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> PlannedPath:
+    """Replay planner actions through the planner graph without running a backend."""
+    ctx = TaskPlanningContext(spec)
+    state = ctx.initial_state()
+    positions = [state.agent_pos]
+    labels: list[str] = []
+
+    for action in actions:
+        if action == int(MiniGridActions.DONE):
+            labels.append("done")
+            break
+        transition = next(
+            (candidate for candidate in _successors(ctx, state) if candidate.action == action),
+            None,
+        )
+        if transition is None:
+            labels.append(f"invalid:{action}")
+            return PlannedPath(
+                success=False,
+                actions=list(actions),
+                action_labels=labels,
+                positions=positions,
+            )
+        labels.append(transition.label)
+        state = transition.next_state
+        positions.append(state.agent_pos)
+
+    return PlannedPath(
+        success=state.agent_pos == ctx.goal,
+        actions=list(actions),
+        action_labels=labels,
+        positions=positions,
+    )
+
+
+def plan_bfs_actions(spec: TaskSpecification) -> list[int]:
+    """Return the deterministic BFS baseline action plan."""
+    return _bfs_actions(spec)
+
+
+def plan_greedy_actions(spec: TaskSpecification) -> list[int]:
+    """Return the deterministic greedy baseline action plan."""
+    return _greedy_actions(spec)
+
+
+def plan_bfs_path(spec: TaskSpecification) -> PlannedPath:
+    """Return the BFS baseline plan plus replayed positions."""
+    return trace_planned_actions(spec, plan_bfs_actions(spec))
+
+
+def plan_greedy_path(spec: TaskSpecification) -> PlannedPath:
+    """Return the greedy baseline plan plus replayed positions."""
+    return trace_planned_actions(spec, plan_greedy_actions(spec))
 
 
 class PlannedBaselineModel(ModelInterface):
