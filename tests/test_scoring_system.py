@@ -1,12 +1,15 @@
 import argparse
 import json
+import pathlib
 
 import pytest
 
 from gridworld.actions import MiniGridActions
 from gridworld.baselines import plan_bfs_path, trace_planned_actions
+from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.runner.grid_runner import GridRunner
 from gridworld.task_spec import TaskSpecification
-from gridworld.task_validator import TaskValidator
+from gridworld.task_validator import TaskValidator, compute_difficulty
 from scorer.artifacts import CanonicalPathReport, ScoredDifficulty
 from scorer.config import (
     DEFAULT_CONFIG_PATH,
@@ -17,6 +20,7 @@ from scorer.config import (
 )
 from scorer.scoring import (
     ScorerConfig,
+    build_experiment_reports,
     compute_12d_score,
     compute_canonical_paths,
     compute_runtime_score,
@@ -162,13 +166,50 @@ def test_score_task_file_rejects_invalid_schema_before_planning(tmp_path, monkey
         score_task_file(task_path)
 
 
-def test_static_score_uses_canonical_bfs_metrics():
+def test_static_score_uses_validator_metrics():
     spec = make_spec()
-    bfs_path = plan_bfs_path(spec)
-    score = compute_12d_score(spec, bfs_path=bfs_path)
+    difficulty = compute_difficulty(spec)
+    score = compute_12d_score(spec)
 
-    assert score.dimensions[0] == len(bfs_path.action_labels)
-    assert score.dimensions[1] == bfs_path.states_explored
+    # Path/search dimensions are sourced from the validator, which is the
+    # authoritative static complexity solver.
+    assert score.dimensions[0] == float(difficulty.optimal_steps)
+    assert score.dimensions[1] == float(difficulty.states_explored)
+    assert score.dimensions[2] == float(difficulty.backtrack_count)
+
+
+PUSH_TASK_PATH = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "gridworld"
+    / "tasks"
+    / "tier4"
+    / "blocked_path_002.json"
+)
+
+
+@pytest.mark.skipif(
+    not PUSH_TASK_PATH.exists(), reason="push-block corpus task not available"
+)
+def test_push_required_task_scores_with_replayable_canonical_path(tmp_path):
+    """Regression: runtime canonical paths must include required block pushes."""
+    from scorer.io import load_json, task_spec_from_payload
+
+    spec = task_spec_from_payload(load_json(PUSH_TASK_PATH))
+    difficulty = compute_difficulty(spec)
+    assert difficulty.is_beatable is True
+    bfs_path = plan_bfs_path(spec)
+    assert bfs_path.success is True
+    assert any(label.startswith("push:") for label in bfs_path.action_labels)
+
+    canonical, static = score_task_file(PUSH_TASK_PATH, output_dir=tmp_path / "art")
+
+    assert canonical.success is True
+    assert canonical.optimal_steps == len(bfs_path.action_labels)
+    assert canonical.optimal_steps > 0
+    assert static.is_beatable is True
+    assert static.dimensions["optimal_path_length"] == float(difficulty.optimal_steps)
+    assert static.dimensions["search_space_size"] == float(difficulty.states_explored)
+    assert static.dimensions["optimal_path_length"] > 0
 
 
 def test_runtime_score_from_episode_json_payload():
@@ -186,6 +227,7 @@ def test_runtime_score_from_episode_json_payload():
         "terminated": True,
         "truncated": False,
         "total_tokens": 500,
+        "task_spec": spec.to_dict(),
         "trajectory": [
             {"state": {"agent_position": [1, 1]}},
             {"state": {"agent_position": [2, 1]}},
@@ -205,11 +247,46 @@ def test_runtime_score_from_episode_json_payload():
     assert score.task_id == spec.task_id
     assert score.composite == 1.0
     assert score.signals["step_ratio"] == 1.0
+    assert score.signals["optimality_ratio"] == 1.0
     assert score.signals["cell_overlap_bfs"] == 1.0
     assert score.signals["cell_overlap_greedy"] == 1.0
     assert score.signals["token_efficiency"] == 1.0
-    assert "path_choice" not in score.signals
-    assert "distractor_interactions" not in score.signals
+    assert score.signals["terminated_reason"] == "goal_reached"
+    assert score.signals["distractor_interactions"] == 0
+    assert score.signals["irreversible_failures"] == 0
+
+
+@pytest.mark.skipif(
+    not PUSH_TASK_PATH.exists(), reason="push-block corpus task not available"
+)
+def test_push_required_canonical_path_replays_and_scores_as_optimal():
+    from scorer.io import load_json, task_spec_from_payload
+
+    spec = task_spec_from_payload(load_json(PUSH_TASK_PATH))
+    canonical, static = score_task_file(PUSH_TASK_PATH)
+    actions = iter(plan_bfs_path(spec).actions)
+    result = GridRunner(MiniGridBackend()).run_episode(
+        spec,
+        policy_fn=lambda *_: next(actions),
+    )
+    run = result.to_dict()
+    run["task_spec"] = spec.to_dict()
+    run["total_tokens"] = 100
+
+    score = compute_runtime_score(
+        run,
+        static_score=static,
+        canonical_paths=canonical,
+        difficulty_max_static_score=static.static_score,
+    )
+
+    assert result.success is True
+    assert score.signals["step_ratio"] == 1.0
+    assert score.signals["cell_overlap_bfs"] == 1.0
+    assert score.signals["mechanism_interaction_order"] == [
+        "push:block_a:4,5",
+        "push:block_a:4,6",
+    ]
 
 
 def test_runtime_score_prefers_interface_state_after_over_row_col_position_after():
@@ -311,6 +388,21 @@ def test_runtime_score_rejects_schema_invalid_static_artifact_clearly():
         )
 
 
+def test_runtime_score_rejects_unbeatable_static_artifact_clearly():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec).to_dict()
+    static_score["is_beatable"] = False
+
+    with pytest.raises(ValueError, match="beatable"):
+        compute_runtime_score(
+            {"success": True, "steps": 2, "total_tokens": 100},
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score["static_score"],
+        )
+
+
 def test_runtime_token_count_does_not_double_count_nested_step_tokens():
     spec = make_spec()
     canonical = compute_canonical_paths(spec)
@@ -319,6 +411,7 @@ def test_runtime_token_count_does_not_double_count_nested_step_tokens():
         {
             "success": True,
             "steps": 2,
+            "task_spec": spec.to_dict(),
             "trajectory": [{"tokens": 100, "info": {"tokens": 100}}],
         },
         static_score=static_score,
@@ -337,6 +430,7 @@ def test_runtime_token_count_reads_query_transcript_usage():
         {
             "success": True,
             "steps": 2,
+            "task_spec": spec.to_dict(),
             "transcript": [
                 {
                     "kind": "query",
@@ -360,6 +454,7 @@ def test_runtime_hash_ignores_non_scoring_transcript_context():
         "success": True,
         "steps": 2,
         "total_tokens": 100,
+        "task_spec": spec.to_dict(),
         "transcript": [
             {
                 "kind": "query",
@@ -425,6 +520,150 @@ def test_runtime_score_rejects_missing_step_telemetry():
         )
 
 
+def test_runtime_score_rejects_missing_runtime_diagnostics():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="task_spec or precomputed"):
+        compute_runtime_score(
+            {"success": True, "steps": 2, "total_tokens": 100},
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score,
+        )
+
+
+def test_runtime_score_rejects_off_contract_terminated_reason():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="Unsupported terminated_reason"):
+        compute_runtime_score(
+            {
+                "success": False,
+                "terminated_reason": "unknown",
+                "steps": 2,
+                "total_tokens": 100,
+            },
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score,
+        )
+
+
+def test_runtime_score_requires_path_choice_for_test_two():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="path_choice"):
+        compute_runtime_score(
+            {
+                "experiment": "complexity_distance",
+                "success": True,
+                "steps": 2,
+                "total_tokens": 100,
+                "task_spec": spec.to_dict(),
+            },
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score,
+        )
+
+
+def test_runtime_score_reconstructs_distractor_and_irreversible_push_signals():
+    spec = make_spec(
+        maze={
+            "dimensions": [6, 6],
+            "walls": [],
+            "start": [2, 3],
+            "goal": [4, 4],
+        },
+        mechanisms={
+            "blocks": [
+                {"id": "block", "position": [2, 2], "pushable": True},
+            ],
+        },
+        goal={
+            "type": "push_block_to",
+            "target_ids": ["block"],
+            "target_positions": [[3, 2]],
+        },
+        distractors=[
+            {
+                "type": "decoy_block",
+                "element_id": "block",
+                "description": "Pushing upward traps the target block.",
+            },
+        ],
+    )
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+    before = {
+        "agent_position": [2, 3],
+        "agent_direction": 3,
+        "block_positions": {"block": [2, 2]},
+    }
+    after = {
+        "agent_position": [2, 2],
+        "agent_direction": 3,
+        "block_positions": {"block": [2, 1]},
+    }
+    score = compute_runtime_score(
+        {
+            "experiment": "mechanism_ordering",
+            "success": False,
+            "terminated_reason": "deadlock",
+            "steps": 1,
+            "total_tokens": 100,
+            "task_spec": spec.to_dict(),
+            "distractor_interactions": 0,
+            "irreversible_failures": 0,
+            "mechanism_interaction_order": [],
+            "failure_point": None,
+            "transcript": [
+                {
+                    "kind": "step",
+                    "step_index": 1,
+                    "action": "MOVE_FORWARD",
+                    "state_before": before,
+                    "state_after": after,
+                },
+            ],
+        },
+        static_score=static_score,
+        canonical_paths=canonical,
+        difficulty_max_static_score=static_score.static_score,
+    )
+
+    assert score.signals["distractor_interactions"] == 1
+    assert score.signals["irreversible_failures"] == 1
+    assert score.signals["mechanism_interaction_order"] == ["push:block:2,1"]
+    assert score.signals["failure_point"]["step"] == 1
+
+
+def test_runtime_score_requires_transition_snapshots_for_test_three():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="transition telemetry"):
+        compute_runtime_score(
+            {
+                "experiment": "mechanism_ordering",
+                "success": True,
+                "steps": 2,
+                "total_tokens": 100,
+                "task_spec": spec.to_dict(),
+            },
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score,
+        )
+
+
 def test_zero_step_plans_do_not_inflate_optimal_steps_with_done():
     spec = make_spec(
         maze={
@@ -462,6 +701,7 @@ def test_runtime_zero_step_success_gets_full_step_credit():
             "success": True,
             "steps": 0,
             "total_tokens": 100,
+            "task_spec": spec.to_dict(),
             "initial_state": {"agent_position": [1, 1]},
             "final_state": {"agent_position": [1, 1], "step_count": 0},
         },
@@ -566,3 +806,87 @@ def test_artifact_serialization_returns_detached_data():
     assert scored.weights == [2.0]
     assert canonical.actions == ["move_forward"]
     assert canonical.greedy == {"actions": ["move_forward"]}
+
+
+def test_stage_five_reports_cover_calibration_and_experiment_outputs():
+    first = compute_static_score_artifact(make_spec()).to_dict()
+    second = compute_static_score_artifact(
+        make_spec(task_id="scorer_case_two", difficulty_tier=2)
+    ).to_dict()
+    reports = build_experiment_reports(
+        [first, second],
+        [
+            {
+                "task_id": "scorer_case",
+                "experiment": "complexity_distance",
+                "condition": "short",
+                "model_id": "unit",
+                "seed": 1,
+                "signals": {
+                    "success": True,
+                    "optimality_ratio": 1.0,
+                    "path_choice": "short",
+                },
+                "composite": 1.0,
+            },
+            {
+                "task_id": "scorer_case",
+                "experiment": "mechanism_ordering",
+                "condition": "ordered",
+                "pair_id": "pair-a",
+                "model_id": "unit",
+                "seed": 1,
+                "signals": {
+                    "success": True,
+                    "optimality_ratio": 1.0,
+                    "mechanism_interaction_order": ["toggle:switch"],
+                    "failure_point": None,
+                },
+                "composite": 1.0,
+            },
+            {
+                "task_id": "scorer_case_two",
+                "experiment": "mechanism_ordering",
+                "condition": "reversed",
+                "pair_id": "pair-a",
+                "model_id": "unit",
+                "seed": 1,
+                "signals": {
+                    "success": False,
+                    "optimality_ratio": 0.0,
+                    "mechanism_interaction_order": [],
+                    "failure_point": {"step": 1},
+                },
+                "composite": 0.0,
+            },
+        ],
+    )
+
+    calibration = reports["scoring_calibration_summary.json"]
+    complexity = reports["complexity_distance_summary.json"]
+    ordering = reports["mechanism_ordering_pairs.json"]
+    assert "grid_size" in calibration["dimension_correlation_matrix"]
+    assert calibration["tier_boundary_candidates"]
+    assert complexity["path_choice_counts"][0]["path_choice"] == "short"
+    assert ordering["paired_deltas"][0]["paired_success_deltas"] == {
+        "reversed_minus_ordered": -1.0,
+    }
+
+
+def test_stage_five_rejects_test_two_rows_without_path_choice():
+    static_score = compute_static_score_artifact(make_spec()).to_dict()
+
+    with pytest.raises(ValueError, match="path_choice"):
+        build_experiment_reports(
+            [static_score],
+            [
+                {
+                    "task_id": "scorer_case",
+                    "experiment": "complexity_distance",
+                    "condition": "short",
+                    "model_id": "unit",
+                    "signals": {"success": True, "optimality_ratio": 1.0},
+                    "composite": 1.0,
+                },
+            ],
+        )

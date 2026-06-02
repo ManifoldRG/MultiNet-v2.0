@@ -77,7 +77,7 @@ The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and
      - `canonical_paths.json` `{ bfs: { actions, positions, optimal_steps, states_explored }, greedy: { success, actions, positions, steps }, … }`
      - `scored_static.json` `{ is_beatable, dimensions_12, canonical_agent_features, validation, message }`
    - Hash key: `hash(solver_v, scorer_v, task.json, agent_set_v)`.
-   - If `scored_static.json.is_beatable == false`, downstream stages skip the task; it is logged as ineligible and surfaced in reports.
+   - If `scored_static.json.is_beatable == false`, downstream stages raise an artifact error. The static artifact remains available as the diagnostic record; tasks are never silently skipped.
 
 3. **Render-and-Run**
    - Inputs: `task.json`, `scored_static.json` (gate on `is_beatable`), backend choice, adapter choice, `model_id`, `seed`.
@@ -91,7 +91,7 @@ The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and
 
 5. **Aggregate**
    - Inputs: many `run_score.json` files.
-   - Outputs: `leaderboard.json`, `tier_breakdown.json`, `per_model/<id>.json`, optional `comparisons.json`.
+   - Outputs: `leaderboard.json`, `tier_breakdown.json`, plus experiment summaries such as `scoring_calibration_summary.json`, `complexity_distance_summary.json`, and `mechanism_ordering_pairs.json`.
    - Hash key: `hash(aggregator_v, sorted_input_hashes)`.
 
 Stages 1–2 are per-task and produce the **task artifact bundle**. Stage 3 is per `(task × backend × adapter × seed)`. Stage 4 is 1:1 with stage 3. Stage 5 fans in.
@@ -460,6 +460,15 @@ write run.json
 ## 7. Reporting & aggregate
 
 Stage 5 fans many `run_score.json` files into headline reports. Aggregation is purely math over the run-score vectors; no model calls, no backend interaction.
+
+The standalone implementation is available as:
+
+```
+multinet-aggregate-scores \
+  --static artifacts/tasks \
+  --runtime artifacts/runs \
+  --output-dir artifacts/reports/<run_set_id>
+```
 
 ### 7.1 Run-set concept
 

@@ -6,6 +6,7 @@ from .scoring import (
     ScoredDifficulty,
     ScorerConfig,
     StaticScoreArtifact,
+    build_experiment_reports,
     compute_12d_score,
     compute_canonical_paths,
     compute_greedy_solvability,
@@ -14,6 +15,7 @@ from .scoring import (
     load_scorer_config,
     score_runtime_file,
     score_task_file,
+    write_experiment_reports,
 )
 
 __all__ = [
@@ -22,6 +24,7 @@ __all__ = [
     "ScoredDifficulty",
     "ScorerConfig",
     "StaticScoreArtifact",
+    "build_experiment_reports",
     "compute_12d_score",
     "compute_canonical_paths",
     "compute_greedy_solvability",
@@ -30,4 +33,5 @@ __all__ = [
     "load_scorer_config",
     "score_runtime_file",
     "score_task_file",
+    "write_experiment_reports",
 ]
