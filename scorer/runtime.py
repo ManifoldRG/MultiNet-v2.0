@@ -8,6 +8,7 @@ from typing import Any
 from .artifacts import CanonicalPathReport, RuntimeScoreArtifact, StaticScoreArtifact
 from .config import SCORER_VERSION, ScorerConfig
 from .io import dump_json, load_json, stable_hash
+from .telemetry import token_count_from_record
 
 
 def _artifact_dict(value: dict[str, Any] | StaticScoreArtifact | CanonicalPathReport) -> dict[str, Any]:
@@ -42,7 +43,7 @@ def _extract_bool(run: dict[str, Any], *keys: str, default: bool = False) -> boo
     return default
 
 
-def _extract_steps(run: dict[str, Any]) -> int:
+def _extract_steps(run: dict[str, Any]) -> int | None:
     for key in ("steps", "steps_taken", "steps_used"):
         if run.get(key) is not None:
             return int(run[key])
@@ -52,7 +53,7 @@ def _extract_steps(run: dict[str, Any]) -> int:
     final_step = _lookup_path(run, "final_state", "step_count")
     if final_step is not None:
         return int(final_step)
-    return 0
+    return None
 
 
 def _extract_token_count(run: dict[str, Any]) -> int | None:
@@ -79,29 +80,11 @@ def _sum_record_tokens(records: Any, kind: str | None = None) -> int | None:
             continue
         if kind is not None and item.get("kind") != kind:
             continue
-        item_tokens = _token_count_from_record(item)
+        item_tokens = token_count_from_record(item)
         if item_tokens is not None:
             total += item_tokens
             found = True
     return total if found else None
-
-
-def _token_count_from_record(record: dict[str, Any]) -> int | None:
-    for container in (record, record.get("info"), record.get("metadata")):
-        if not isinstance(container, dict):
-            continue
-        for key in ("total_tokens", "token_count", "tokens", "model_tokens"):
-            if container.get(key) is not None:
-                return int(container[key])
-        usage = container.get("usage")
-        if isinstance(usage, dict):
-            if usage.get("total_tokens") is not None:
-                return int(usage["total_tokens"])
-            prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
-            completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
-            if prompt_tokens is not None or completion_tokens is not None:
-                return int(prompt_tokens or 0) + int(completion_tokens or 0)
-    return None
 
 
 def _state_position(state: Any) -> tuple[int, int] | None:
@@ -196,6 +179,13 @@ def _runtime_weighted_average(signals: dict[str, float], weights: dict[str, floa
     return numerator / denominator if denominator else 0.0
 
 
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def compute_runtime_score(
     run: dict[str, Any],
     static_score: dict[str, Any] | StaticScoreArtifact,
@@ -207,6 +197,8 @@ def compute_runtime_score(
     scorer_config = config or ScorerConfig.default()
     static_data = _artifact_dict(static_score)
     canonical_data = _artifact_dict(canonical_paths)
+    if _lookup_path(static_data, "validation", "schema_valid") is False:
+        raise ValueError("Runtime scoring requires a schema-valid scored_static.json artifact")
 
     task_id = _extract_task_id(run, fallback=str(static_data.get("task_id", "")))
     success = _extract_bool(run, "success", default=bool(_lookup_path(run, "signals", "success") or False))
@@ -216,13 +208,22 @@ def compute_runtime_score(
     greedy_positions = _extract_canonical_positions(canonical_data, agent="greedy")
     run_positions = _extract_run_positions(run)
 
-    optimal_steps = int(
-        _lookup_path(canonical_data, "bfs", "optimal_steps")
-        or canonical_data.get("optimal_steps")
-        or static_data.get("optimal_steps", 0)
+    optimal_steps_value = _first_present(
+        _lookup_path(canonical_data, "bfs", "optimal_steps"),
+        canonical_data.get("optimal_steps"),
+        static_data.get("optimal_steps"),
     )
+    if optimal_steps_value is None:
+        raise ValueError("Runtime scoring requires bfs.optimal_steps in canonical_paths.json")
+    optimal_steps = int(optimal_steps_value)
+    if steps is None:
+        raise ValueError("Runtime scoring requires step telemetry")
+    if steps < 0:
+        raise ValueError("steps must not be negative")
     step_ratio = 0.0
-    if success and optimal_steps > 0:
+    if success and optimal_steps == 0:
+        step_ratio = 1.0 if steps == 0 else 0.0
+    elif success:
         step_ratio = optimal_steps / max(float(steps), float(optimal_steps), 1.0)
 
     cell_overlap_bfs = _cell_overlap(run_positions, canonical_positions)
@@ -231,9 +232,11 @@ def compute_runtime_score(
         if isinstance(canonical_data.get("greedy"), dict)
         else None
     )
-    token_efficiency = 1.0
-    if token_count is not None:
-        token_efficiency = min(1.0, scorer_config.baseline_tokens / max(float(token_count), 1.0))
+    if token_count is None:
+        raise ValueError("Runtime scoring requires positive token telemetry")
+    if token_count <= 0:
+        raise ValueError("token_count must be greater than zero")
+    token_efficiency = min(1.0, scorer_config.baseline_tokens / float(token_count))
 
     static_composite = _extract_static_score(static_data)
     normalizer = (
@@ -298,9 +301,25 @@ def compute_runtime_score(
 
     inputs_hash = stable_hash(
         {
-            "run": run,
-            "static_score": static_data,
-            "canonical_paths": canonical_data,
+            "run": {
+                "task_id": task_id,
+                "backend": run.get("backend"),
+                "adapter": run.get("adapter", run.get("agent_or_model")),
+                "model_id": run.get("model_id", run.get("model_name", run.get("agent_or_model"))),
+                "seed": run.get("seed"),
+                "positions": run_positions,
+                "signals": signals,
+            },
+            "static_score": {
+                "task_id": static_data.get("task_id"),
+                "static_score": static_composite,
+                "greedy_solvability": greedy_solvability,
+            },
+            "canonical_paths": {
+                "bfs_positions": canonical_positions,
+                "greedy_positions": greedy_positions,
+                "optimal_steps": optimal_steps,
+            },
             "config": scorer_config.to_dict(),
             "scorer_version": SCORER_VERSION,
         }

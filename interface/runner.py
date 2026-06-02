@@ -57,6 +57,18 @@ def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
         del messages[1 : 1 + (tail_len - cap)]
 
 
+def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
+    """Clear per-call telemetry so stale usage cannot leak into a later query."""
+    reset_usage = getattr(agent, "reset_usage", None)
+    if callable(reset_usage):
+        reset_usage()
+        return
+    try:
+        setattr(agent, "last_usage", None)
+    except (AttributeError, TypeError):
+        pass
+
+
 def build_runner(
     config: ExperimentConfig,
     backend: MiniGridBackend,
@@ -159,6 +171,7 @@ class ExperimentRunner:
                         len(agent_messages),
                         has_image,
                     )
+                _reset_agent_usage(agent)
                 t_llm = time.perf_counter()
                 model_text = agent(agent_messages)
                 llm_s = time.perf_counter() - t_llm

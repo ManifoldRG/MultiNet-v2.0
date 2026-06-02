@@ -260,6 +260,7 @@ Beyond the dimension vector, `scored_static.json` carries the validator's struct
 - `chain_ordering_valid` (bool) — each dependency step actually gates the next.
 
 These do not enter the composite but are surfaced in reports for task-quality auditing.
+Schema-invalid tasks are rejected before canonical planners execute and do not emit score artifacts.
 
 ### 4.4 Calibration notes
 
@@ -279,9 +280,9 @@ Runtime scoring runs at pipeline stage 4 (Score-runtime), once per `run.json`. I
 Recorded for every `(task, backend, adapter, model_id, seed)`:
 
 - `success` (bool) — goal reached within `max_steps`, no terminal hazard.
-- `steps` (int) — agent's actual step count.
+- `steps` (int) — agent's actual step count. Required; runtime scoring rejects missing telemetry.
 - `terminated_reason` (str) — one of `{goal_reached, hazard, max_steps, deadlock, invalid_action_excess}`.
-- `token_count` (int) — total prompt + response tokens summed over all model turns.
+- `token_count` (positive int) — total prompt + response tokens summed over all model turns. Required; runtime scoring rejects missing or non-positive telemetry.
 - `distractor_interactions` (int) — count of distractor-element interactions (any `pickup` / `toggle` / `push` on an element registered as a distractor).
 - `irreversible_failures` (int) — count of irreversible actions that broke solvability, detected by re-running the validator from the post-action state.
 
@@ -298,7 +299,7 @@ composite = success_factor × efficiency_factor × difficulty_weight − greedy_
 ```
 
 - `success_factor = 1.0 if success else 0.0` — hard gate; failed runs score 0 regardless of efficiency.
-- `efficiency_factor = α × step_ratio + β × cell_overlap_bfs + γ × token_efficiency` — weighted blend; default `α = β = γ = 1/3`. `token_efficiency = min(1, baseline_tokens / max(model_tokens, 1))` where `baseline_tokens` lives in scorer config.
+- `efficiency_factor = α × step_ratio + β × cell_overlap_bfs + γ × token_efficiency` — weighted blend; default `α = β = γ = 1/3`. `token_efficiency = min(1, baseline_tokens / model_tokens)` where `baseline_tokens` lives in scorer config. Missing or non-positive token telemetry is an artifact error, not a neutral score.
 - `difficulty_weight = normalize(static_composite)` — harder tasks contribute more. Default normalization: `f(x) = x / max_observed_static_composite_in_suite`. Runtime scoring requires that suite maximum either in scorer config or as an explicit runtime argument.
 - `greedy_penalty = δ × greedy_solvability × success_factor` — applied only to successful runs; `δ` is a calibration coefficient with default 0.5.
 
@@ -341,6 +342,7 @@ Defaults to a uniform mean. Calibration may switch to a tier-weighted or difficu
 
 - All composite coefficients ship as `1.0` or sensible defaults; the design does not claim correctness.
 - `scorer/scorer_config.json` is versioned in git; changes bump `calibration_version` and trigger stage-4 / stage-5 invalidation.
+- The shipped config intentionally leaves `difficulty_max_static_score` unset. Runtime scoring requires a calibrated suite maximum through config or `--difficulty-max-static-score`.
 - After a calibration update, the pipeline regenerates `run_score.json` and `reports/` from cached `run.json`. Run records do **not** re-execute model calls. This is a deliberate consequence of the DAG split.
 
 ---

@@ -99,6 +99,16 @@ class _AgentRecorder:
         usage = getattr(self._inner, "last_usage", None)
         return usage if isinstance(usage, dict) else None
 
+    def reset_usage(self) -> None:
+        reset_usage = getattr(self._inner, "reset_usage", None)
+        if callable(reset_usage):
+            reset_usage()
+            return
+        try:
+            setattr(self._inner, "last_usage", None)
+        except (AttributeError, TypeError):
+            pass
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(

@@ -20,6 +20,33 @@ def _load_config(args: argparse.Namespace) -> ScorerConfig:
     return load_scorer_config(args.config)
 
 
+def _static_target_dirs(files: list[Path], output_root: Path | None) -> list[Path]:
+    if output_root is None:
+        return [path.with_suffix("").with_name(f"{path.stem}_score") for path in files]
+    if len(files) == 1:
+        return [output_root]
+
+    target_dirs = [output_root / path.stem for path in files]
+    duplicates = sorted(
+        {
+            str(target)
+            for target in target_dirs
+            if target_dirs.count(target) > 1
+        }
+    )
+    if duplicates:
+        raise ValueError(
+            "Static output directories collide for same-stem inputs: "
+            f"{', '.join(duplicates)}. Score those inputs separately or use distinct filenames."
+        )
+    return target_dirs
+
+
+def _default_runtime_output(run_path: str | Path) -> Path:
+    path = Path(run_path)
+    return path.with_name(f"{path.stem}_score.json")
+
+
 def _static(args: argparse.Namespace) -> int:
     config = _load_config(args)
     files = json_files(args.inputs)
@@ -27,15 +54,7 @@ def _static(args: argparse.Namespace) -> int:
         raise FileNotFoundError("No JSON files matched the static scoring inputs")
 
     output_root = Path(args.output_dir) if args.output_dir else None
-    multiple = len(files) > 1
-    for task_path in files:
-        if output_root is None:
-            target_dir = task_path.with_suffix("").with_name(f"{task_path.stem}_score")
-        elif multiple:
-            target_dir = output_root / task_path.stem
-        else:
-            target_dir = output_root
-
+    for task_path, target_dir in zip(files, _static_target_dirs(files, output_root)):
         canonical, static_score = score_task_file(
             task_path,
             output_dir=target_dir,
@@ -50,7 +69,17 @@ def _static(args: argparse.Namespace) -> int:
 
 def _runtime(args: argparse.Namespace) -> int:
     config = _load_config(args)
-    output_path = Path(args.output) if args.output else Path(args.run).with_name("run_score.json")
+    output_path = Path(args.output) if args.output else _default_runtime_output(args.run)
+    if (args.static_score is None) != (args.canonical_paths is None):
+        raise ValueError("--static-score and --canonical-paths must be provided together")
+    if (
+        args.difficulty_max_static_score is None
+        and config.difficulty_max_static_score is None
+    ):
+        raise ValueError(
+            "Runtime scoring needs a suite maximum. Pass --difficulty-max-static-score "
+            "or set difficulty_max_static_score in scorer config."
+        )
 
     if args.static_score and args.canonical_paths:
         score = score_runtime_file(

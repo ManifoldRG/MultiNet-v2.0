@@ -1,5 +1,5 @@
 {
-  "version": "default-v1",
+  "version": "default-v2",
   "static_dimension_weights": {
     "optimal_path_length": 1.0,
     "search_space_size": 1.0,

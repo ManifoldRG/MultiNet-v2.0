@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import pytest
@@ -6,6 +7,14 @@ from gridworld.actions import MiniGridActions
 from gridworld.baselines import plan_bfs_path, trace_planned_actions
 from gridworld.task_spec import TaskSpecification
 from gridworld.task_validator import TaskValidator
+from scorer.artifacts import CanonicalPathReport, ScoredDifficulty
+from scorer.config import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_DISTRACTOR_TYPE_WEIGHTS,
+    DEFAULT_RUNTIME_WEIGHTS,
+    DIMENSION_NAMES,
+    load_scorer_config,
+)
 from scorer.scoring import (
     ScorerConfig,
     compute_12d_score,
@@ -14,6 +23,8 @@ from scorer.scoring import (
     compute_static_score_artifact,
     score_task_file,
 )
+from scripts.score_json import _default_runtime_output, _runtime, _static_target_dirs
+from scripts.visualize_scores import main as visualize_scores_main
 
 
 def make_spec(**overrides):
@@ -79,6 +90,14 @@ def test_static_score_rejects_partial_explicit_weight_vectors():
         compute_12d_score(spec, weights=[])
 
 
+def test_shipped_config_matches_code_defaults():
+    config = load_scorer_config(DEFAULT_CONFIG_PATH)
+
+    assert list(config.static_dimension_weights) == DIMENSION_NAMES
+    assert config.distractor_type_weights == DEFAULT_DISTRACTOR_TYPE_WEIGHTS
+    assert config.runtime_weights == DEFAULT_RUNTIME_WEIGHTS
+
+
 def test_score_task_file_writes_stage_two_artifacts(tmp_path):
     spec = make_spec()
     task_path = tmp_path / "task.json"
@@ -118,6 +137,38 @@ def test_score_task_file_reuses_primary_validator_result(tmp_path, monkeypatch):
     score_task_file(task_path)
 
     assert calls == 1
+
+
+def test_score_task_file_rejects_invalid_schema_before_planning(tmp_path, monkeypatch):
+    spec = make_spec(
+        maze={
+            "dimensions": [5, 5],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [9, 9],
+        },
+        goal={"type": "reach_position", "target": [9, 9]},
+    )
+    task_path = tmp_path / "task.json"
+    spec.to_json(str(task_path))
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("planner must not execute for schema-invalid tasks")
+
+    monkeypatch.setattr("scorer.static.plan_bfs_path", fail_if_called)
+    monkeypatch.setattr("scorer.static.plan_greedy_path", fail_if_called)
+
+    with pytest.raises(ValueError, match="failed schema validation"):
+        score_task_file(task_path)
+
+
+def test_static_score_uses_canonical_bfs_metrics():
+    spec = make_spec()
+    bfs_path = plan_bfs_path(spec)
+    score = compute_12d_score(spec, bfs_path=bfs_path)
+
+    assert score.dimensions[0] == len(bfs_path.action_labels)
+    assert score.dimensions[1] == bfs_path.states_explored
 
 
 def test_runtime_score_from_episode_json_payload():
@@ -168,6 +219,7 @@ def test_runtime_score_prefers_interface_state_after_over_row_col_position_after
     run = {
         "success": True,
         "steps_used": 2,
+        "total_tokens": 100,
         "end_reason": "success",
         "task_spec": spec.to_dict(),
         "initial_state": {"agent_position": [1, 1]},
@@ -209,7 +261,7 @@ def test_runtime_score_requires_suite_difficulty_normalizer():
 
     with pytest.raises(ValueError, match="difficulty_max_static_score"):
         compute_runtime_score(
-            {"success": True, "steps": 2},
+            {"success": True, "steps": 2, "total_tokens": 100},
             static_score=static_score,
             canonical_paths=canonical,
         )
@@ -222,7 +274,7 @@ def test_runtime_score_rejects_suite_max_smaller_than_task_score():
 
     with pytest.raises(ValueError, match="at least the task static score"):
         compute_runtime_score(
-            {"success": True, "steps": 2},
+            {"success": True, "steps": 2, "total_tokens": 100},
             static_score=static_score,
             canonical_paths=canonical,
             difficulty_max_static_score=static_score.static_score - 1,
@@ -237,7 +289,22 @@ def test_runtime_score_rejects_unevaluated_greedy_solvability():
 
     with pytest.raises(ValueError, match="greedy_solvability"):
         compute_runtime_score(
-            {"success": True, "steps": 2},
+            {"success": True, "steps": 2, "total_tokens": 100},
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score["static_score"],
+        )
+
+
+def test_runtime_score_rejects_schema_invalid_static_artifact_clearly():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec).to_dict()
+    static_score["validation"]["schema_valid"] = False
+
+    with pytest.raises(ValueError, match="schema-valid"):
+        compute_runtime_score(
+            {"success": True, "steps": 2, "total_tokens": 100},
             static_score=static_score,
             canonical_paths=canonical,
             difficulty_max_static_score=static_score["static_score"],
@@ -285,6 +352,79 @@ def test_runtime_token_count_reads_query_transcript_usage():
     assert score.signals["token_count"] == 100
 
 
+def test_runtime_hash_ignores_non_scoring_transcript_context():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+    base_run = {
+        "success": True,
+        "steps": 2,
+        "total_tokens": 100,
+        "transcript": [
+            {
+                "kind": "query",
+                "agent_messages": [{"role": "user", "content": "first"}],
+            }
+        ],
+    }
+    changed_context = {
+        **base_run,
+        "transcript": [
+            {
+                "kind": "query",
+                "agent_messages": [{"role": "user", "content": "second"}],
+            }
+        ],
+    }
+
+    first = compute_runtime_score(
+        base_run,
+        static_score=static_score,
+        canonical_paths=canonical,
+        difficulty_max_static_score=static_score.static_score,
+    )
+    second = compute_runtime_score(
+        changed_context,
+        static_score=static_score,
+        canonical_paths=canonical,
+        difficulty_max_static_score=static_score.static_score,
+    )
+
+    assert first.inputs_hash == second.inputs_hash
+
+
+@pytest.mark.parametrize("token_count", [None, 0])
+def test_runtime_score_rejects_missing_or_zero_token_telemetry(token_count):
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+    run = {"success": True, "steps": 2}
+    if token_count is not None:
+        run["total_tokens"] = token_count
+
+    with pytest.raises(ValueError, match="token"):
+        compute_runtime_score(
+            run,
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score,
+        )
+
+
+def test_runtime_score_rejects_missing_step_telemetry():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="step telemetry"):
+        compute_runtime_score(
+            {"success": True, "total_tokens": 100},
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score,
+        )
+
+
 def test_zero_step_plans_do_not_inflate_optimal_steps_with_done():
     spec = make_spec(
         maze={
@@ -303,3 +443,126 @@ def test_zero_step_plans_do_not_inflate_optimal_steps_with_done():
     assert path.action_labels == []
     assert traced_done.success is True
     assert traced_done.action_labels == []
+
+
+def test_runtime_zero_step_success_gets_full_step_credit():
+    spec = make_spec(
+        maze={
+            "dimensions": [5, 5],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [1, 1],
+        },
+        goal={"type": "reach_position", "target": [1, 1]},
+    )
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+    score = compute_runtime_score(
+        {
+            "success": True,
+            "steps": 0,
+            "total_tokens": 100,
+            "initial_state": {"agent_position": [1, 1]},
+            "final_state": {"agent_position": [1, 1], "step_count": 0},
+        },
+        static_score=static_score,
+        canonical_paths=canonical,
+        config=ScorerConfig.from_dict({"runtime_weights": {"greedy_penalty": 0.0}}),
+        difficulty_max_static_score=static_score.static_score,
+    )
+
+    assert score.signals["step_ratio"] == 1.0
+    assert score.composite == 1.0
+
+
+def test_static_cli_target_dirs_reject_same_stem_collisions(tmp_path):
+    files = [tmp_path / "a" / "task.json", tmp_path / "b" / "task.json"]
+
+    with pytest.raises(ValueError, match="collide"):
+        _static_target_dirs(files, tmp_path / "scores")
+
+
+def test_runtime_cli_default_output_uses_source_stem(tmp_path):
+    assert _default_runtime_output(tmp_path / "run.json") == tmp_path / "run_score.json"
+    assert _default_runtime_output(tmp_path / "episode.json") == tmp_path / "episode_score.json"
+
+
+def test_runtime_cli_rejects_half_specified_artifacts(tmp_path):
+    args = argparse.Namespace(
+        config=None,
+        run=str(tmp_path / "episode.json"),
+        output=None,
+        static_score=str(tmp_path / "scored_static.json"),
+        canonical_paths=None,
+        task=str(tmp_path / "task.json"),
+        artifact_dir=None,
+        difficulty_max_static_score=100.0,
+    )
+
+    with pytest.raises(ValueError, match="provided together"):
+        _runtime(args)
+
+
+def test_runtime_cli_explains_missing_suite_maximum(tmp_path):
+    args = argparse.Namespace(
+        config=None,
+        run=str(tmp_path / "episode.json"),
+        output=None,
+        static_score=str(tmp_path / "scored_static.json"),
+        canonical_paths=str(tmp_path / "canonical_paths.json"),
+        task=None,
+        artifact_dir=None,
+        difficulty_max_static_score=None,
+    )
+
+    with pytest.raises(ValueError, match="--difficulty-max-static-score"):
+        _runtime(args)
+
+
+def test_visualize_dimensions_validates_before_writing_csv(tmp_path):
+    payload = compute_static_score_artifact(make_spec()).to_dict()
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    first.write_text(json.dumps(payload))
+    second.write_text(json.dumps(payload))
+    csv_path = tmp_path / "scores.csv"
+
+    with pytest.raises(ValueError, match="exactly one"):
+        visualize_scores_main(
+            [
+                str(first),
+                str(second),
+                "--kind",
+                "dimensions",
+                "--csv",
+                str(csv_path),
+            ]
+        )
+
+    assert not csv_path.exists()
+
+
+def test_artifact_serialization_returns_detached_data():
+    scored = ScoredDifficulty(dimensions=[1.0], dimension_names=["only"], weights=[2.0])
+    scored_payload = scored.to_dict()
+    scored_payload["dimensions"][0] = 9.0
+    scored_payload["weights"][0] = 9.0
+
+    canonical = CanonicalPathReport(
+        task_id="task",
+        success=True,
+        actions=["move_forward"],
+        positions=[(1, 1), (2, 1)],
+        optimal_steps=1,
+        states_explored=2,
+        message="ok",
+        greedy={"actions": ["move_forward"]},
+    )
+    canonical_payload = canonical.to_dict()
+    canonical_payload["bfs"]["actions"][0] = "mutated"
+    canonical_payload["greedy"]["actions"][0] = "mutated"
+
+    assert scored.dimensions == [1.0]
+    assert scored.weights == [2.0]
+    assert canonical.actions == ["move_forward"]
+    assert canonical.greedy == {"actions": ["move_forward"]}

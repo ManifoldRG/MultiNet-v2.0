@@ -11,6 +11,19 @@ from typing import Any
 from scorer.io import json_files, load_json
 
 
+def _plotting_module():
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise ImportError(
+            "Score visualization requires matplotlib. Install the visual extra."
+        ) from exc
+    return plt
+
+
 def _artifact_kind(data: dict[str, Any]) -> str | None:
     if "signals" in data and "composite" in data:
         return "runtime"
@@ -84,15 +97,7 @@ def _write_csv(path: str | Path, rows: list[dict[str, Any]]) -> None:
 
 
 def _plot_rows(path: str | Path, rows: list[dict[str, Any]], title: str) -> None:
-    try:
-        import matplotlib
-
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError as exc:
-        raise ImportError(
-            "Score visualization requires matplotlib. Install the visual extra or use --csv only."
-        ) from exc
+    plt = _plotting_module()
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -125,15 +130,7 @@ def _plot_dimensions(path: str | Path, row: dict[str, Any]) -> None:
     if not dimensions:
         raise ValueError("Dimension plots require a scored_static.json artifact")
 
-    try:
-        import matplotlib
-
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError as exc:
-        raise ImportError(
-            "Score visualization requires matplotlib. Install the visual extra."
-        ) from exc
+    plt = _plotting_module()
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,14 +172,14 @@ def main(argv: list[str] | None = None) -> int:
     rows = _collect_rows(args.inputs, row_kind)
     if not rows:
         raise FileNotFoundError("No matching scorer artifacts found")
+    if args.kind == "dimensions" and len(rows) != 1:
+        raise ValueError("--kind dimensions expects exactly one static score artifact")
 
     if args.csv:
         _write_csv(args.csv, rows)
         print(f"Wrote CSV: {args.csv}")
 
     if args.kind == "dimensions":
-        if len(rows) != 1:
-            raise ValueError("--kind dimensions expects exactly one static score artifact")
         _plot_dimensions(args.output, rows[0])
     else:
         _plot_rows(args.output, rows, args.title)
