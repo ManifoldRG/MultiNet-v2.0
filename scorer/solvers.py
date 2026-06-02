@@ -19,12 +19,21 @@ def _path_payload(path) -> dict[str, Any]:
     }
 
 
+def require_scorable_spec(spec: TaskSpecification) -> None:
+    """Reject malformed tasks before canonical planners inspect their coordinates."""
+    schema_valid, schema_errors = spec.validate()
+    if not schema_valid:
+        detail = "; ".join(schema_errors)
+        raise ValueError(f"Task {spec.task_id!r} failed schema validation: {detail}")
+
+
 def compute_canonical_paths(
     spec: TaskSpecification,
     bfs_path: PlannedPath | None = None,
     greedy_path: PlannedPath | None = None,
 ) -> CanonicalPathReport:
     """Emit canonical BFS and greedy traces using the merged baseline solvers."""
+    require_scorable_spec(spec)
     if bfs_path is None:
         bfs_path = plan_bfs_path(spec)
     if greedy_path is None:

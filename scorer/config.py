@@ -9,7 +9,7 @@ from typing import Any
 from .io import load_json
 
 
-SCORER_VERSION = "0.2.0"
+SCORER_VERSION = "0.3.0"
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("scorer_config.json")
 
 DIMENSION_NAMES = [

@@ -10,6 +10,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from scorer.telemetry import normalize_token_usage
+
 # Stable defaults for HF Hub downloads on Windows (local Transformers path).
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
@@ -138,27 +140,7 @@ def _anthropic_messages_http(
     for block in payload.get("content", []) or []:
         if isinstance(block, dict) and block.get("type") == "text":
             parts.append(str(block.get("text", "")))
-    return "".join(parts).strip(), _normalized_usage(payload.get("usage"))
-
-
-def _normalized_usage(usage: Any) -> dict[str, int] | None:
-    """Normalize provider token usage for transcript persistence."""
-    if not isinstance(usage, dict):
-        return None
-    input_tokens = usage.get("input_tokens", usage.get("prompt_tokens"))
-    output_tokens = usage.get("output_tokens", usage.get("completion_tokens"))
-    total_tokens = usage.get("total_tokens")
-    if total_tokens is None and (input_tokens is not None or output_tokens is not None):
-        total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
-
-    normalized = {}
-    if input_tokens is not None:
-        normalized["input_tokens"] = int(input_tokens)
-    if output_tokens is not None:
-        normalized["output_tokens"] = int(output_tokens)
-    if total_tokens is not None:
-        normalized["total_tokens"] = int(total_tokens)
-    return normalized or None
+    return "".join(parts).strip(), normalize_token_usage(payload.get("usage"))
 
 
 @dataclass
