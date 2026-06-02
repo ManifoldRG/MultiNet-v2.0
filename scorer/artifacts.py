@@ -101,11 +101,13 @@ class StaticScoreArtifact:
     canonical_agent_features: dict[str, float | None]
     calibration_version: str
     inputs_hash: str
+    difficulty_tier: int | None = None
     producer_version: str = SCORER_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
+            "difficulty_tier": self.difficulty_tier,
             "is_beatable": self.is_beatable,
             "message": self.message,
             "dimensions_12": dict(self.dimensions),
@@ -136,6 +138,11 @@ class StaticScoreArtifact:
             canonical_agent_features=dict(data.get("canonical_agent_features", {})),
             calibration_version=str(data.get("calibration_version", "unknown")),
             inputs_hash=str(data.get("inputs_hash", "")),
+            difficulty_tier=(
+                int(data["difficulty_tier"])
+                if data.get("difficulty_tier") is not None
+                else None
+            ),
             producer_version=str(data.get("producer_version", SCORER_VERSION)),
         )
 
@@ -153,10 +160,14 @@ class RuntimeScoreArtifact:
     composite: float
     calibration_version: str
     inputs_hash: str
+    experiment: str = ""
+    condition: str = ""
+    variant: str = ""
+    pair_id: str = ""
     producer_version: str = SCORER_VERSION
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "task_id": self.task_id,
             "backend": self.backend,
             "adapter": self.adapter,
@@ -168,3 +179,8 @@ class RuntimeScoreArtifact:
             "inputs_hash": self.inputs_hash,
             "producer_version": self.producer_version,
         }
+        for key in ("experiment", "condition", "variant", "pair_id"):
+            value = getattr(self, key)
+            if value:
+                payload[key] = value
+        return payload

@@ -221,7 +221,8 @@ those merge, the remaining work is integration shape rather than new research.
 - Clean and rebase #8 so text/NLP uses the same task/backend/adapter contracts.
 - Clean and rebase #10 so BFS/greedy/random baselines are code, not generated
   result dumps.
-- Add thin aggregation reports for the three experiment deliverables.
+- Generate the three experiment summaries with `multinet-aggregate-scores`
+  after fixture runs are available.
 
 **Scope assumption:** the immediate scope stays MiniGrid-first and does not
 require full MultiGrid parity, public dashboards, final runtime composite
@@ -367,22 +368,22 @@ planning execution:
 - Closest to ready. The task set exists; no new fixture generation required.
 - Blocked on: #3 (runtime), #4 (adapters), #5 (reporting), #10 (greedy/random
   baselines for calibration runs).
-- Remaining engineering after merges: thin calibration summary report and
-  correlation-matrix output.
+- Remaining engineering after merges: run the calibration suite and inspect
+  the generated correlation matrix and weight candidates.
 
 **Test 2 — Complexity-vs-distance validation**
 
 - Requires curated shortcut-maze variants where both routes are open and path
   choice is measurable.
 - Blocked on: basis merges plus a small fixture generator (split out of #1/#8).
-- Remaining engineering: fixture authoring/generation, `path_choice` recording
-  in runs, complexity/distance summary report.
+- Remaining engineering: fixture authoring/generation and `path_choice`
+  recording in runs.
 
 **Test 3 — Mechanism-ordering consistency**
 
 - Requires curated mechanism-ordering pairs with path length and topology held
   constant within each pair.
 - Blocked on: basis merges plus the same fixture generator work as test 2.
-- Remaining engineering: paired-pair fixture authoring,
-  `mechanism_interaction_order` and `failure_point` recording, paired-delta
-  report.
+- Remaining engineering: paired-pair fixture authoring. Runtime scoring
+  reconstructs `mechanism_interaction_order` and `failure_point`, and Stage 5
+  emits paired deltas.

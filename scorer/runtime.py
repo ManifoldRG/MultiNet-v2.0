@@ -7,7 +7,8 @@ from typing import Any
 
 from .artifacts import CanonicalPathReport, RuntimeScoreArtifact, StaticScoreArtifact
 from .config import SCORER_VERSION, ScorerConfig
-from .io import dump_json, load_json, stable_hash
+from .io import dump_json, load_json, stable_hash, task_spec_from_payload
+from .runtime_signals import collect_runtime_diagnostics, normalize_terminated_reason
 from .telemetry import token_count_from_record
 
 
@@ -199,9 +200,14 @@ def compute_runtime_score(
     canonical_data = _artifact_dict(canonical_paths)
     if _lookup_path(static_data, "validation", "schema_valid") is False:
         raise ValueError("Runtime scoring requires a schema-valid scored_static.json artifact")
+    if static_data.get("is_beatable") is False:
+        raise ValueError("Runtime scoring requires a beatable scored_static.json artifact")
+    if _lookup_path(canonical_data, "bfs", "success") is False:
+        raise ValueError("Runtime scoring requires a successful canonical BFS path")
 
     task_id = _extract_task_id(run, fallback=str(static_data.get("task_id", "")))
     success = _extract_bool(run, "success", default=bool(_lookup_path(run, "signals", "success") or False))
+    terminated_reason = normalize_terminated_reason(run, success)
     steps = _extract_steps(run)
     token_count = _extract_token_count(run)
     canonical_positions = _extract_canonical_positions(canonical_data)
@@ -271,17 +277,19 @@ def compute_runtime_score(
         * success_factor
     )
     composite = max(0.0, success_factor * efficiency_factor * difficulty_weight - greedy_penalty)
+    runtime_diagnostics = collect_runtime_diagnostics(run)
 
     signals: dict[str, Any] = {
         "success": success,
         "steps": steps,
         "terminated": _extract_bool(run, "terminated", default=False),
         "truncated": _extract_bool(run, "truncated", default=False),
-        "terminated_reason": run.get("terminated_reason") or run.get("end_reason") or ("success" if success else "unknown"),
+        "terminated_reason": terminated_reason,
         "reward": run.get("reward", run.get("total_reward")),
         "token_count": token_count,
         "optimal_steps": optimal_steps,
         "step_ratio": step_ratio,
+        "optimality_ratio": step_ratio,
         "cell_overlap_bfs": cell_overlap_bfs,
         "cell_overlap_greedy": cell_overlap_greedy,
         "token_efficiency": token_efficiency,
@@ -289,15 +297,7 @@ def compute_runtime_score(
         "efficiency_factor": efficiency_factor,
         "greedy_penalty": greedy_penalty,
     }
-    for key in (
-        "distractor_interactions",
-        "irreversible_failures",
-        "path_choice",
-        "mechanism_interaction_order",
-        "failure_point",
-    ):
-        if run.get(key) is not None:
-            signals[key] = run[key]
+    signals.update(runtime_diagnostics)
 
     inputs_hash = stable_hash(
         {
@@ -307,6 +307,10 @@ def compute_runtime_score(
                 "adapter": run.get("adapter", run.get("agent_or_model")),
                 "model_id": run.get("model_id", run.get("model_name", run.get("agent_or_model"))),
                 "seed": run.get("seed"),
+                "experiment": run.get("experiment"),
+                "condition": run.get("condition"),
+                "variant": run.get("variant"),
+                "pair_id": run.get("pair_id", run.get("pair")),
                 "positions": run_positions,
                 "signals": signals,
             },
@@ -335,6 +339,10 @@ def compute_runtime_score(
         composite=composite,
         calibration_version=scorer_config.version,
         inputs_hash=inputs_hash,
+        experiment=str(run.get("experiment", "")),
+        condition=str(run.get("condition", "")),
+        variant=str(run.get("variant", "")),
+        pair_id=str(run.get("pair_id", run.get("pair", ""))),
     )
 
 
@@ -345,9 +353,12 @@ def score_runtime_file(
     output_path: str | Path | None = None,
     config: ScorerConfig | None = None,
     difficulty_max_static_score: float | None = None,
+    task_spec_path: str | Path | None = None,
 ) -> RuntimeScoreArtifact:
     """Score one run JSON file and optionally write run_score.json."""
     run = load_json(run_path)
+    if task_spec_path is not None and not isinstance(run.get("task_spec"), dict):
+        run["task_spec"] = task_spec_from_payload(load_json(task_spec_path)).to_dict()
     static_score = load_json(static_score_path)
     canonical_paths = load_json(canonical_paths_path)
     score = compute_runtime_score(
