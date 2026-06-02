@@ -4,10 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-from typing import Any
 
+from scorer.io import dump_json, json_files, load_json
 from scorer.scoring import (
     ScorerConfig,
     compute_runtime_score,
@@ -17,40 +16,13 @@ from scorer.scoring import (
 )
 
 
-def _json_files(paths: list[str]) -> list[Path]:
-    files: list[Path] = []
-    for value in paths:
-        path = Path(value)
-        if path.is_dir():
-            files.extend(sorted(path.rglob("*.json")))
-        else:
-            files.append(path)
-    return files
-
-
-def _load_json(path: str | Path) -> dict[str, Any]:
-    with open(path, "r") as f:
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise ValueError(f"Expected a JSON object in {path}")
-    return data
-
-
-def _dump_json(path: str | Path, payload: dict[str, Any]) -> None:
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(payload, f, indent=2)
-        f.write("\n")
-
-
 def _load_config(args: argparse.Namespace) -> ScorerConfig:
     return load_scorer_config(args.config)
 
 
 def _static(args: argparse.Namespace) -> int:
     config = _load_config(args)
-    files = _json_files(args.inputs)
+    files = json_files(args.inputs)
     if not files:
         raise FileNotFoundError("No JSON files matched the static scoring inputs")
 
@@ -100,7 +72,7 @@ def _runtime(args: argparse.Namespace) -> int:
             output_dir=args.artifact_dir,
             config=config,
         )
-        run = _load_json(args.run)
+        run = load_json(args.run)
         score = compute_runtime_score(
             run,
             static_score=static_score,
@@ -108,7 +80,7 @@ def _runtime(args: argparse.Namespace) -> int:
             config=config,
             difficulty_max_static_score=args.difficulty_max_static_score,
         )
-        _dump_json(output_path, score.to_dict())
+        dump_json(output_path, score.to_dict())
 
     print(f"{score.task_id}: runtime_score={score.composite:.3f} -> {output_path}")
     return 0
@@ -154,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--difficulty-max-static-score",
         type=float,
         default=None,
-        help="Optional suite max static score for difficulty normalization.",
+        help="Suite max static score for difficulty normalization. Required unless configured.",
     )
     runtime_parser.set_defaults(func=_runtime)
 

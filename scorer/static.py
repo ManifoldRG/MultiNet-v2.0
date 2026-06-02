@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from gridworld.baselines import PlannedPath, plan_greedy_path
 from gridworld.task_spec import TaskSpecification
 from gridworld.task_validator import DifficultyReport, TaskValidator, compute_difficulty
 
 from .artifacts import ScoredDifficulty, StaticScoreArtifact
-from .config import DEFAULT_DISTRACTOR_TYPE_WEIGHTS, DIMENSION_NAMES, SCORER_VERSION, ScorerConfig
+from .config import (
+    DEFAULT_DISTRACTOR_TYPE_WEIGHTS,
+    DIMENSION_NAMES,
+    GREEDY_SOLVABILITY_FEATURE,
+    SCORER_VERSION,
+    ScorerConfig,
+)
 from .io import dump_json, load_json, stable_hash, task_spec_from_payload
 from .solvers import compute_canonical_paths, compute_greedy_solvability
 
@@ -76,6 +83,7 @@ def compute_12d_score(
     solver_output: DifficultyReport | None = None,
     weights: list[float] | None = None,
     config: ScorerConfig | None = None,
+    validator: TaskValidator | None = None,
 ) -> ScoredDifficulty:
     """
     Compute the 12-dimension static benchmark score.
@@ -84,12 +92,11 @@ def compute_12d_score(
     calibration and artifact generation into the standalone scorer package.
     """
     scorer_config = config or ScorerConfig.default()
-    validator = TaskValidator(spec)
-    _, solution, _ = validator.validate()
+    task_validator = validator or TaskValidator(spec)
     if solver_output is None:
-        solver_output = compute_difficulty(spec)
+        solver_output = compute_difficulty(spec, validator=task_validator)
 
-    fragility = validator.compute_fragility()
+    fragility = task_validator.compute_fragility()
     fragility_value = 0.0 if fragility.min_steps_to_break == -1 else 1.0 / fragility.min_steps_to_break
 
     width, height = spec.maze.dimensions
@@ -99,7 +106,11 @@ def compute_12d_score(
     dimensions = [
         float(solver_output.optimal_steps),
         float(solver_output.states_explored),
-        float(solver_output.backtrack_count if hasattr(solver_output, "backtrack_count") else _count_backtracking(solution)),
+        float(
+            solver_output.backtrack_count
+            if hasattr(solver_output, "backtrack_count")
+            else _count_backtracking(solver_output.optimal_path)
+        ),
         fragility_value,
         float(spec.dependency_chain.depth if spec.dependency_chain is not None else solver_output.dependency_depth),
         _dependency_variety(spec),
@@ -111,7 +122,13 @@ def compute_12d_score(
         _irreversibility(spec),
     ]
 
-    weight_vector = weights or scorer_config.static_weight_list()
+    weight_vector = (
+        scorer_config.static_weight_list()
+        if weights is None
+        else [float(weight) for weight in weights]
+    )
+    if len(weight_vector) != len(dimensions):
+        raise ValueError(f"Expected {len(dimensions)} static weights, got {len(weight_vector)}")
     composite = float(sum(d * w for d, w in zip(dimensions, weight_vector)))
     return ScoredDifficulty(
         dimensions=dimensions,
@@ -125,22 +142,39 @@ def compute_static_score_artifact(
     spec: TaskSpecification,
     config: ScorerConfig | None = None,
     solver_output: DifficultyReport | None = None,
+    validator: TaskValidator | None = None,
+    validation_result: tuple[bool, list[tuple[int, int]] | None, str] | None = None,
+    greedy_path: PlannedPath | None = None,
 ) -> StaticScoreArtifact:
     """Compute the Stage 2 static score artifact for one task."""
     scorer_config = config or ScorerConfig.default()
     schema_valid, schema_errors = spec.validate()
-    solver_output = solver_output or compute_difficulty(spec)
-    score = compute_12d_score(spec, solver_output=solver_output, config=scorer_config)
-    validator = TaskValidator(spec)
-    is_beatable, _, message = validator.validate()
+    task_validator = validator or TaskValidator(spec)
+    if validation_result is None:
+        validation_result = task_validator.validate()
+    is_beatable, _, message = validation_result
+    if solver_output is None:
+        solver_output = compute_difficulty(
+            spec,
+            validator=task_validator,
+            validation_result=validation_result,
+        )
+    score = compute_12d_score(
+        spec,
+        solver_output=solver_output,
+        config=scorer_config,
+        validator=task_validator,
+    )
 
     mechanism_necessity_violations: list[str] = []
     distractor_safety_violations: list[str] = []
     chain_ordering_valid = True
     if schema_valid:
-        mechanism_necessity_violations = validator.validate_mechanism_necessity()
-        distractor_safety_violations = validator.validate_distractor_safety()
-        chain_ordering_valid = validator.validate_chain_ordering()
+        mechanism_necessity_violations = task_validator.validate_mechanism_necessity()
+        distractor_safety_violations = task_validator.validate_distractor_safety(
+            base_beatable=is_beatable
+        )
+        chain_ordering_valid = task_validator.validate_chain_ordering()
 
     dimensions = score.dimensions_by_name
     static_score_unweighted = float(sum(dimensions.values()))
@@ -168,7 +202,11 @@ def compute_static_score_artifact(
             "chain_ordering_valid": chain_ordering_valid,
         },
         canonical_agent_features={
-            "greedy_solvability": compute_greedy_solvability(spec) if schema_valid else None,
+            GREEDY_SOLVABILITY_FEATURE: (
+                compute_greedy_solvability(spec, greedy_path=greedy_path)
+                if schema_valid
+                else None
+            ),
         },
         calibration_version=scorer_config.version,
         inputs_hash=inputs_hash,
@@ -182,8 +220,26 @@ def score_task_file(
 ):
     """Score a task JSON file and optionally write canonical score artifacts."""
     spec = task_spec_from_payload(load_json(task_path))
-    canonical_paths = compute_canonical_paths(spec)
-    static_score = compute_static_score_artifact(spec, config=config)
+    validator = TaskValidator(spec)
+    validation_result = validator.validate()
+    difficulty = compute_difficulty(
+        spec,
+        validator=validator,
+        validation_result=validation_result,
+    )
+    greedy_path = plan_greedy_path(spec)
+    canonical_paths = compute_canonical_paths(
+        spec,
+        greedy_path=greedy_path,
+    )
+    static_score = compute_static_score_artifact(
+        spec,
+        config=config,
+        solver_output=difficulty,
+        validator=validator,
+        validation_result=validation_result,
+        greedy_path=greedy_path,
+    )
 
     if output_dir is not None:
         out = Path(output_dir)

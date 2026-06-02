@@ -1,5 +1,11 @@
 import json
 
+import pytest
+
+from gridworld.actions import MiniGridActions
+from gridworld.baselines import plan_bfs_path, trace_planned_actions
+from gridworld.task_spec import TaskSpecification
+from gridworld.task_validator import TaskValidator
 from scorer.scoring import (
     ScorerConfig,
     compute_12d_score,
@@ -8,7 +14,6 @@ from scorer.scoring import (
     compute_static_score_artifact,
     score_task_file,
 )
-from gridworld.task_spec import TaskSpecification
 
 
 def make_spec(**overrides):
@@ -65,6 +70,15 @@ def test_static_score_uses_configurable_weights():
     assert weighted.composite != default_score.composite
 
 
+def test_static_score_rejects_partial_explicit_weight_vectors():
+    spec = make_spec()
+
+    with pytest.raises(ValueError, match="Expected 12 static weights"):
+        compute_12d_score(spec, weights=[1.0, 2.0])
+    with pytest.raises(ValueError, match="Expected 12 static weights"):
+        compute_12d_score(spec, weights=[])
+
+
 def test_score_task_file_writes_stage_two_artifacts(tmp_path):
     spec = make_spec()
     task_path = tmp_path / "task.json"
@@ -81,8 +95,29 @@ def test_score_task_file_writes_stage_two_artifacts(tmp_path):
         payload = json.load(f)
     assert payload["task_id"] == spec.task_id
     assert "dimensions_12" in payload
+    assert "dimensions" not in payload
+    assert "composite" not in payload
     assert payload["validation"]["schema_valid"] is True
     assert payload["canonical_agent_features"]["greedy_solvability"] == 1.0
+
+
+def test_score_task_file_reuses_primary_validator_result(tmp_path, monkeypatch):
+    spec = make_spec()
+    task_path = tmp_path / "task.json"
+    spec.to_json(str(task_path))
+    calls = 0
+    original_validate = TaskValidator.validate
+
+    def count_validate(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_validate(self, *args, **kwargs)
+
+    monkeypatch.setattr(TaskValidator, "validate", count_validate)
+
+    score_task_file(task_path)
+
+    assert calls == 1
 
 
 def test_runtime_score_from_episode_json_payload():
@@ -113,13 +148,17 @@ def test_runtime_score_from_episode_json_payload():
         static_score=static_score,
         canonical_paths=canonical,
         config=config,
+        difficulty_max_static_score=static_score.static_score,
     )
 
     assert score.task_id == spec.task_id
     assert score.composite == 1.0
     assert score.signals["step_ratio"] == 1.0
     assert score.signals["cell_overlap_bfs"] == 1.0
+    assert score.signals["cell_overlap_greedy"] == 1.0
     assert score.signals["token_efficiency"] == 1.0
+    assert "path_choice" not in score.signals
+    assert "distractor_interactions" not in score.signals
 
 
 def test_runtime_score_prefers_interface_state_after_over_row_col_position_after():
@@ -157,6 +196,110 @@ def test_runtime_score_prefers_interface_state_after_over_row_col_position_after
         static_score=static_score,
         canonical_paths=canonical,
         config=config,
+        difficulty_max_static_score=static_score.static_score,
     )
 
     assert score.signals["cell_overlap_bfs"] == 1.0
+
+
+def test_runtime_score_requires_suite_difficulty_normalizer():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="difficulty_max_static_score"):
+        compute_runtime_score(
+            {"success": True, "steps": 2},
+            static_score=static_score,
+            canonical_paths=canonical,
+        )
+
+
+def test_runtime_score_rejects_suite_max_smaller_than_task_score():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+
+    with pytest.raises(ValueError, match="at least the task static score"):
+        compute_runtime_score(
+            {"success": True, "steps": 2},
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score.static_score - 1,
+        )
+
+
+def test_runtime_score_rejects_unevaluated_greedy_solvability():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec).to_dict()
+    static_score["canonical_agent_features"]["greedy_solvability"] = None
+
+    with pytest.raises(ValueError, match="greedy_solvability"):
+        compute_runtime_score(
+            {"success": True, "steps": 2},
+            static_score=static_score,
+            canonical_paths=canonical,
+            difficulty_max_static_score=static_score["static_score"],
+        )
+
+
+def test_runtime_token_count_does_not_double_count_nested_step_tokens():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+    score = compute_runtime_score(
+        {
+            "success": True,
+            "steps": 2,
+            "trajectory": [{"tokens": 100, "info": {"tokens": 100}}],
+        },
+        static_score=static_score,
+        canonical_paths=canonical,
+        difficulty_max_static_score=static_score.static_score,
+    )
+
+    assert score.signals["token_count"] == 100
+
+
+def test_runtime_token_count_reads_query_transcript_usage():
+    spec = make_spec()
+    canonical = compute_canonical_paths(spec)
+    static_score = compute_static_score_artifact(spec)
+    score = compute_runtime_score(
+        {
+            "success": True,
+            "steps": 2,
+            "transcript": [
+                {
+                    "kind": "query",
+                    "usage": {"input_tokens": 80, "output_tokens": 20},
+                }
+            ],
+        },
+        static_score=static_score,
+        canonical_paths=canonical,
+        difficulty_max_static_score=static_score.static_score,
+    )
+
+    assert score.signals["token_count"] == 100
+
+
+def test_zero_step_plans_do_not_inflate_optimal_steps_with_done():
+    spec = make_spec(
+        maze={
+            "dimensions": [5, 5],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [1, 1],
+        },
+        goal={"type": "reach_position", "target": [1, 1]},
+    )
+
+    path = plan_bfs_path(spec)
+    traced_done = trace_planned_actions(spec, [int(MiniGridActions.DONE)])
+
+    assert path.success is True
+    assert path.action_labels == []
+    assert traced_done.success is True
+    assert traced_done.action_labels == []

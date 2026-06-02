@@ -18,7 +18,7 @@ This document is the single canonical source of truth for how the MultiNet v2.0 
 1. [Overview & north stars](#1-overview--north-stars)
 2. [Pipeline DAG: stages, artifacts, invalidation](#2-pipeline-dag-stages-artifacts-invalidation)
 3. [Task spec contract](#3-task-spec-contract)
-4. [Static scoring (13 dimensions)](#4-static-scoring-13-dimensions)
+4. [Static scoring (12 dimensions plus canonical-agent features)](#4-static-scoring-12-dimensions-plus-canonical-agent-features)
 5. [Runtime scoring](#5-runtime-scoring)
 6. [Backend & inference adapter contracts](#6-backend--inference-adapter-contracts)
 7. [Reporting & aggregate](#7-reporting--aggregate)
@@ -74,18 +74,18 @@ The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and
 2. **Solve & Score-static**
    - Inputs: `task.json`.
    - Outputs:
-     - `canonical_paths.json` `{ bfs: { path, steps, states_explored }, greedy: { success, path, steps }, … }`
-     - `scored.json` `{ is_beatable, dimensions[13], fragility, mechanism_necessity_violations, distractor_safety_violations, message }`
+     - `canonical_paths.json` `{ bfs: { actions, positions, optimal_steps, states_explored }, greedy: { success, actions, positions, steps }, … }`
+     - `scored_static.json` `{ is_beatable, dimensions_12, canonical_agent_features, validation, message }`
    - Hash key: `hash(solver_v, scorer_v, task.json, agent_set_v)`.
-   - If `scored.json.is_beatable == false`, downstream stages skip the task; it is logged as ineligible and surfaced in reports.
+   - If `scored_static.json.is_beatable == false`, downstream stages skip the task; it is logged as ineligible and surfaced in reports.
 
 3. **Render-and-Run**
-   - Inputs: `task.json`, `scored.json` (gate on `is_beatable`), backend choice, adapter choice, `model_id`, `seed`.
+   - Inputs: `task.json`, `scored_static.json` (gate on `is_beatable`), backend choice, adapter choice, `model_id`, `seed`.
    - Outputs: `run.json` `{ trajectory, actions, tokens, terminated, success }`.
    - Hash key: `hash(backend_v, adapter_v, model_id, task.json, seed)`.
 
 4. **Score-runtime**
-   - Inputs: `run.json`, `scored.json`, `canonical_paths.json`.
+   - Inputs: `run.json`, `scored_static.json`, `canonical_paths.json`.
    - Outputs: `run_score.json` `{ success, step_ratio, cell_overlap_*, distractor_interactions, irreversible_failures, tokens, composite }`.
    - Hash key: `hash(runtime_scorer_v, inputs)`.
 
@@ -106,7 +106,7 @@ artifacts/
 ├── tasks/<task_id>/
 │   ├── task.json                # Stage 1
 │   ├── canonical_paths.json     # Stage 2 (a)
-│   └── scored.json              # Stage 2 (b) — includes is_beatable
+│   └── scored_static.json       # Stage 2 (b) — includes is_beatable
 ├── runs/<task_id>/<backend>/<adapter>/<model_id>/<seed>/
 │   ├── run.json                 # Stage 3
 │   └── run_score.json           # Stage 4
@@ -218,9 +218,9 @@ Enforced by `TaskSpecification.validate()`:
 
 ---
 
-## 4. Static scoring (13 dimensions)
+## 4. Static scoring (12 dimensions plus canonical-agent features)
 
-Static scoring runs once per task at pipeline stage 2 (Solve & Score-static). It produces `scored.json`, which carries `is_beatable` plus a 13-dimension vector and supporting validation reports. The static scorer consumes `task.json` and `canonical_paths.json`.
+Static scoring runs once per task at pipeline stage 2 (Solve & Score-static). It produces `scored_static.json`, which carries `is_beatable`, a 12-dimension vector, canonical-agent features, and supporting validation reports. The scorer consumes `task.json` and emits this artifact alongside `canonical_paths.json`.
 
 ### 4.1 Dimensions
 
@@ -238,7 +238,7 @@ All raw values are floats (or counts cast to float). Higher = harder *unless* ex
 10. **`wall_density`** — Source: spec. Computation: `len(walls) / grid_size`. Crude (does not separate interior vs functional walls); **calibration target**.
 11. **`partial_observability`** — Source: spec rules. Computation: ordinal `{full: 0, view_cone: 1, fog_of_war: 2}` from `rules.observability`.
 12. **`irreversibility`** — Source: spec rules + mechanisms. Computation: `key_consumption × #doors + #one_shot_switches + #non_bidirectional_teleporters`.
-13. **`greedy_solvability`** — Source: Greedy canonical agent. Computation: `1.0 if greedy succeeds else 0.0`. **Penalty** (greedy-solvable tasks lower the runtime composite, on the rationale that they are less a test of spatial reasoning).
+`greedy_solvability` is recorded separately under `canonical_agent_features`, rather than appended to the calibrated 12-dimension vector. Source: Greedy canonical agent. Computation: `1.0 if greedy succeeds else 0.0`. **Penalty** (greedy-solvable tasks lower the runtime composite, on the rationale that they are less a test of spatial reasoning).
 
 ### 4.2 Static composite (difficulty score)
 
@@ -246,13 +246,13 @@ All raw values are floats (or counts cast to float). Higher = harder *unless* ex
 static_composite = Σ_i (raw_dim_i × calibration.weights[dim_name_i])
 ```
 
-- `calibration.weights` lives in `calibration.yaml`; defaults to `1.0` for all dimensions until empirical tuning.
+- Calibration weights live in `scorer/scorer_config.json` by default; optional JSON or YAML overrides may be passed explicitly. Weights default to `1.0` for all dimensions until empirical tuning.
 - `static_composite` is used for task ranking and live-benchmark filtering (e.g., reject tasks whose composite falls outside a tier's target range).
 - It is *not* used directly in runtime scoring; runtime uses individual dimensions plus a derived "difficulty weight" (Section 5).
 
-### 4.3 Validation reports (also in `scored.json`)
+### 4.3 Validation reports (also in `scored_static.json`)
 
-Beyond the dimension vector, `scored.json` carries the validator's structural reports:
+Beyond the dimension vector, `scored_static.json` carries the validator's structural reports:
 
 - `is_beatable` (bool) and `message` (str) — gate for downstream stages.
 - `mechanism_necessity_violations` (list of strings) — mechanisms whose removal still leaves the task solvable; flags accidental decoration.
@@ -272,7 +272,7 @@ These do not enter the composite but are surfaced in reports for task-quality au
 
 ## 5. Runtime scoring
 
-Runtime scoring runs at pipeline stage 4 (Score-runtime), once per `run.json`. It produces `run_score.json`. It consumes the run trajectory plus the static scoring artifacts (`scored.json`, `canonical_paths.json`).
+Runtime scoring runs at pipeline stage 4 (Score-runtime), once per `run.json`. It produces `run_score.json`. It consumes the run trajectory plus the static scoring artifacts (`scored_static.json`, `canonical_paths.json`).
 
 ### 5.1 Per-run signal vector
 
@@ -298,11 +298,11 @@ composite = success_factor × efficiency_factor × difficulty_weight − greedy_
 ```
 
 - `success_factor = 1.0 if success else 0.0` — hard gate; failed runs score 0 regardless of efficiency.
-- `efficiency_factor = α × step_ratio + β × cell_overlap_bfs + γ × token_efficiency` — weighted blend; default `α = β = γ = 1/3`. `token_efficiency = min(1, baseline_tokens / max(model_tokens, 1))` where `baseline_tokens` lives in `calibration.yaml`.
-- `difficulty_weight = normalize(static_composite)` — harder tasks contribute more. Default normalization: `f(x) = x / max_observed_static_composite_in_suite`.
+- `efficiency_factor = α × step_ratio + β × cell_overlap_bfs + γ × token_efficiency` — weighted blend; default `α = β = γ = 1/3`. `token_efficiency = min(1, baseline_tokens / max(model_tokens, 1))` where `baseline_tokens` lives in scorer config.
+- `difficulty_weight = normalize(static_composite)` — harder tasks contribute more. Default normalization: `f(x) = x / max_observed_static_composite_in_suite`. Runtime scoring requires that suite maximum either in scorer config or as an explicit runtime argument.
 - `greedy_penalty = δ × greedy_solvability × success_factor` — applied only to successful runs; `δ` is a calibration coefficient with default 0.5.
 
-All Greek-letter coefficients (`α, β, γ, δ`) and the normalization function live in `calibration.yaml`. The design commits to the *shape*, not the values.
+All Greek-letter coefficients (`α, β, γ, δ`) and the normalization value live in scorer config. The design commits to the *shape*, not the values.
 
 ### 5.4 Single-point benchmark score (ARC-AGI style)
 
@@ -340,7 +340,7 @@ Defaults to a uniform mean. Calibration may switch to a tier-weighted or difficu
 ### 5.6 Calibration notes
 
 - All composite coefficients ship as `1.0` or sensible defaults; the design does not claim correctness.
-- `calibration.yaml` is versioned in git; changes bump `calibration_version` and trigger stage-4 / stage-5 invalidation.
+- `scorer/scorer_config.json` is versioned in git; changes bump `calibration_version` and trigger stage-4 / stage-5 invalidation.
 - After a calibration update, the pipeline regenerates `run_score.json` and `reports/` from cached `run.json`. Run records do **not** re-execute model calls. This is a deliberate consequence of the DAG split.
 
 ---
@@ -533,16 +533,16 @@ Status legend:
 
 **2. Validator** — folded into Stage 2
 - ✅ `gridworld/task_validator.py::TaskValidator` does exhaustive BFS over the full mechanism state space, plus `compute_fragility`, `validate_mechanism_necessity`, `validate_chain_ordering`, `validate_distractor_safety`.
-- Delta: surface validation reports into `scored.json` instead of emitting a separate `validity.json`.
+- Delta: surface validation reports into `scored_static.json` instead of emitting a separate `validity.json`.
 
 **3. Solver suite (canonical agents)** — Stage 2
-- ⚠️ BFS exists inside `TaskValidator._find_solution`. Greedy does not yet exist as a separate canonical agent.
-- 🚧 Multi-tier solver suite pending; Greedy is the next addition, then heuristic, then random.
-- Delta: extract BFS path emission as one canonical agent, add Greedy as a peer, write combined output to `canonical_paths.json`.
+- ✅ `gridworld/baselines.py` exposes BFS and Greedy planners; `scorer/solvers.py` writes their combined output to `canonical_paths.json`.
+- 🚧 Heuristic and random canonical-agent peers remain optional future additions.
+- Delta: add calibration runs before extending the canonical-agent feature vector.
 
 **4. Static scorer** — Stage 2
-- ⚠️ `scorer/scoring.py::compute_12d_score` exists with 12 dimensions matching dimensions 1–12 of §4 (modulo formula calibration).
-- Delta: add dimension 13 (`greedy_solvability`), restructure output to `scored.json` sidecar, move composite weights to `calibration.yaml`, include validation reports.
+- ✅ `scorer/scoring.py::compute_12d_score` exposes the public interface for the 12 calibrated dimensions and writes `scored_static.json` with validation reports plus `canonical_agent_features.greedy_solvability`.
+- Delta: empirically calibrate the shipped placeholder weights.
 
 **5. `MiniGridBackend`** — backend axis
 - ✅ `gridworld/backends/minigrid_backend.py` implements `AbstractGridBackend` for square grids with discrete actions + RGB rendering.
@@ -566,8 +566,8 @@ Status legend:
 - Delta: emit canonical `run.json`; remove inline scoring (move to Stage 4); add per-step trajectory recording.
 
 **10. Runtime scorer** — Stage 4
-- 🚧 Does not exist as a component. Some scoring logic lives inside `evaluation_harness.py`.
-- Delta: new module that consumes `run.json` + `scored.json` + `canonical_paths.json` and produces `run_score.json`.
+- ✅ `scorer/runtime.py` consumes `run.json` + `scored_static.json` + `canonical_paths.json` and produces `run_score.json`.
+- Delta: populate optional interaction diagnostics in runtime producers and calibrate the suite-level difficulty maximum.
 
 **11. Aggregator / reporter** — Stage 5
 - ⚠️ Partial. `evaluation_harness.py` produces some summary dicts; nothing matches the per-run-set artifact layout.
@@ -597,7 +597,7 @@ Items the design intentionally defers. None block initial implementation.
 - DAG runner technology — Snakemake leading candidate; final pick deferred to implementation.
 - Token-efficiency baseline (`baseline_tokens`) — per-task vs global constant; needs a sensible default once a few model runs exist.
 
-### 9.2 Calibration coefficients (live in `calibration.yaml`, default to placeholders)
+### 9.2 Calibration coefficients (live in scorer config, default to placeholders)
 - Runtime composite blend weights `α, β, γ` (step ratio / cell overlap / token efficiency).
 - Greedy penalty coefficient `δ`.
 - `difficulty_weight` normalization function (currently `x / max_observed`; may switch to a percentile or log normalization).
@@ -645,7 +645,7 @@ Mapping to the canonical pipeline:
 | JSON generator | Stage 1 (Generate) | §2.1 |
 | Task spec / Validator | folded into Stage 2 (Solve & Score-static) | §2.1 |
 | BFS-greedy agents | Multi-tier canonical agent suite (Stage 2) | §2.1, §4 |
-| Score calculation (static) | Static scoring (13 dimensions) (Stage 2) | §4 |
+| Score calculation (static) | Static scoring (12 dimensions plus canonical-agent features) (Stage 2) | §4 |
 | Backend Generator | Backend axis: `MiniGridBackend` / `MultiGridBackend` / `TextBackend` | §6 |
 | Inference scripts | Adapter axis: `ModelInterface` implementations | §6 |
 | Scoring code (final score, comparison) | Runtime scoring (Stage 4) + Aggregate (Stage 5) | §5, §7 |

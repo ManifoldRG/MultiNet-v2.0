@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from gridworld.baselines import plan_bfs_path, plan_greedy_path
+from gridworld.baselines import PlannedPath, plan_bfs_path, plan_greedy_path
 from gridworld.task_spec import TaskSpecification
-from gridworld.task_validator import compute_difficulty
 
 from .artifacts import CanonicalPathReport
 
@@ -20,21 +19,26 @@ def _path_payload(path) -> dict[str, Any]:
     }
 
 
-def compute_canonical_paths(spec: TaskSpecification) -> CanonicalPathReport:
+def compute_canonical_paths(
+    spec: TaskSpecification,
+    bfs_path: PlannedPath | None = None,
+    greedy_path: PlannedPath | None = None,
+) -> CanonicalPathReport:
     """Emit canonical BFS and greedy traces using the merged baseline solvers."""
-    difficulty = compute_difficulty(spec)
-    bfs_path = plan_bfs_path(spec)
-    greedy_path = plan_greedy_path(spec)
+    if bfs_path is None:
+        bfs_path = plan_bfs_path(spec)
+    if greedy_path is None:
+        greedy_path = plan_greedy_path(spec)
 
     if bfs_path.success:
         message = (
             f"Solution found in {len(bfs_path.action_labels)} steps "
-            f"({difficulty.states_explored} states explored)"
+            f"({bfs_path.states_explored} states explored)"
         )
-    elif difficulty.states_explored:
+    elif bfs_path.states_explored:
         message = (
             "No solution found "
-            f"({difficulty.states_explored} states explored, all reachable states checked)"
+            f"({bfs_path.states_explored} states explored, all reachable states checked)"
         )
     else:
         message = "No solution found"
@@ -45,12 +49,17 @@ def compute_canonical_paths(spec: TaskSpecification) -> CanonicalPathReport:
         actions=list(bfs_path.action_labels),
         positions=list(bfs_path.positions),
         optimal_steps=len(bfs_path.action_labels) if bfs_path.success else 0,
-        states_explored=difficulty.states_explored,
+        states_explored=bfs_path.states_explored,
         message=message,
         greedy=_path_payload(greedy_path),
     )
 
 
-def compute_greedy_solvability(spec: TaskSpecification) -> float:
+def compute_greedy_solvability(
+    spec: TaskSpecification,
+    greedy_path: PlannedPath | None = None,
+) -> float:
     """Return 1 when the merged greedy planner solves the task, else 0."""
-    return 1.0 if plan_greedy_path(spec).success else 0.0
+    if greedy_path is None:
+        greedy_path = plan_greedy_path(spec)
+    return 1.0 if greedy_path.success else 0.0

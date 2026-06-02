@@ -90,7 +90,7 @@ def _anthropic_messages_http(
     system: Optional[str],
     messages: List[Dict[str, object]],
     timeout: Optional[float],
-) -> str:
+) -> tuple[str, dict[str, int] | None]:
     """POST /v1/messages (Anthropic Messages API); uses stdlib only."""
     body: Dict[str, object] = {
         "model": model,
@@ -138,7 +138,27 @@ def _anthropic_messages_http(
     for block in payload.get("content", []) or []:
         if isinstance(block, dict) and block.get("type") == "text":
             parts.append(str(block.get("text", "")))
-    return "".join(parts).strip()
+    return "".join(parts).strip(), _normalized_usage(payload.get("usage"))
+
+
+def _normalized_usage(usage: Any) -> dict[str, int] | None:
+    """Normalize provider token usage for transcript persistence."""
+    if not isinstance(usage, dict):
+        return None
+    input_tokens = usage.get("input_tokens", usage.get("prompt_tokens"))
+    output_tokens = usage.get("output_tokens", usage.get("completion_tokens"))
+    total_tokens = usage.get("total_tokens")
+    if total_tokens is None and (input_tokens is not None or output_tokens is not None):
+        total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
+
+    normalized = {}
+    if input_tokens is not None:
+        normalized["input_tokens"] = int(input_tokens)
+    if output_tokens is not None:
+        normalized["output_tokens"] = int(output_tokens)
+    if total_tokens is not None:
+        normalized["total_tokens"] = int(total_tokens)
+    return normalized or None
 
 
 @dataclass
@@ -155,6 +175,7 @@ class ClaudeAnthropicAgent:
 
     config: ClaudeAnthropicConfig = field(default_factory=ClaudeAnthropicConfig)
     api_key: Optional[str] = None
+    last_usage: dict[str, int] | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         key = (self.api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
@@ -166,7 +187,7 @@ class ClaudeAnthropicAgent:
 
     def __call__(self, messages: List[dict]) -> str:
         system, turns = _anthropic_chat_turns(messages)
-        return _anthropic_messages_http(
+        text, self.last_usage = _anthropic_messages_http(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -175,6 +196,7 @@ class ClaudeAnthropicAgent:
             messages=turns,
             timeout=self.config.timeout,
         )
+        return text
 
 
 @dataclass
@@ -195,6 +217,7 @@ class LocalTransformersAgent:
     config: LocalLLMConfig = field(default_factory=LocalLLMConfig)
     tokenizer: Any = None
     model: Any = None
+    last_usage: dict[str, int] | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -235,6 +258,11 @@ class LocalTransformersAgent:
 
         prompt_len = inputs["input_ids"].shape[1]
         new_tokens = generated[0][prompt_len:]
+        self.last_usage = {
+            "input_tokens": int(prompt_len),
+            "output_tokens": int(len(new_tokens)),
+            "total_tokens": int(prompt_len + len(new_tokens)),
+        }
         return self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 

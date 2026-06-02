@@ -5,28 +5,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from pathlib import Path
 from typing import Any
 
-
-def _json_files(paths: list[str]) -> list[Path]:
-    files: list[Path] = []
-    for value in paths:
-        path = Path(value)
-        if path.is_dir():
-            files.extend(sorted(path.rglob("*.json")))
-        else:
-            files.append(path)
-    return files
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    with open(path, "r") as f:
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise ValueError(f"Expected a JSON object in {path}")
-    return data
+from scorer.io import json_files, load_json
 
 
 def _artifact_kind(data: dict[str, Any]) -> str | None:
@@ -39,8 +21,8 @@ def _artifact_kind(data: dict[str, Any]) -> str | None:
 
 def _collect_rows(paths: list[str], kind: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for path in _json_files(paths):
-        data = _load_json(path)
+    for path in json_files(paths):
+        data = load_json(path)
         artifact_kind = _artifact_kind(data)
         if artifact_kind is None:
             continue
