@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from scorer.io import dump_json, json_files, load_json, task_spec_from_payload
+from scorer.io import dump_json, json_files, load_json
 from scorer.scoring import (
     ScorerConfig,
     compute_runtime_score,
@@ -89,7 +89,6 @@ def _runtime(args: argparse.Namespace) -> int:
             output_path=output_path,
             config=config,
             difficulty_max_static_score=args.difficulty_max_static_score,
-            task_spec_path=args.task,
         )
     else:
         if not args.task:
@@ -103,8 +102,6 @@ def _runtime(args: argparse.Namespace) -> int:
             config=config,
         )
         run = load_json(args.run)
-        if not isinstance(run.get("task_spec"), dict):
-            run["task_spec"] = task_spec_from_payload(load_json(args.task)).to_dict()
         score = compute_runtime_score(
             run,
             static_score=static_score,
