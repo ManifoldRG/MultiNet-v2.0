@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
 from .task_spec import TaskSpecification, Position
 
@@ -146,116 +146,6 @@ class TaskValidator:
             if sw["id"] in active_switches:
                 open_gates.update(sw["controls"])
         return frozenset(open_gates)
-
-    def initial_state(self) -> ValidatorState:
-        """Return the complete validator state at the beginning of the task."""
-        initial_active_switches = frozenset(
-            sw["id"] for sw in self.switches.values() if sw.get("initial_state") == "on"
-        )
-        return ValidatorState(
-            agent_pos=self.start,
-            agent_dir=0,
-            carrying_key=None,
-            collected_keys=frozenset(),
-            active_switches=initial_active_switches,
-            used_switches=frozenset(
-                sw["id"]
-                for sw in self.switches.values()
-                if sw.get("initial_state") == "on"
-                and sw.get("switch_type") == "one_shot"
-            ),
-            open_gates=self._recompute_open_gates(initial_active_switches),
-            open_doors=frozenset(
-                door["id"] for door in self.doors.values() if not door["locked"]
-            ),
-            block_positions=frozenset(
-                (block_id, pos[0], pos[1]) for pos, block_id in self.blocks.items()
-            ),
-        )
-
-    def state_from_snapshot(self, snapshot: dict[str, Any]) -> ValidatorState:
-        """Convert a backend ``GridState.to_dict`` snapshot into solver state."""
-        raw_agent_pos = snapshot.get("agent_position")
-        if not isinstance(raw_agent_pos, (list, tuple)) or len(raw_agent_pos) < 2:
-            raise ValueError("Runtime state snapshot requires agent_position")
-
-        collected_keys = frozenset(str(key_id) for key_id in snapshot.get("collected_keys", []))
-        carrying_key = snapshot.get("agent_carrying")
-        if carrying_key is not None:
-            carrying_key = str(carrying_key)
-            if carrying_key not in self.keys_by_id:
-                matching_ids = [
-                    key_id
-                    for key_id, key in self.keys_by_id.items()
-                    if key["color"] == carrying_key and key_id in collected_keys
-                ]
-                if len(matching_ids) != 1:
-                    raise ValueError(
-                        "Runtime state snapshot carries a key color that cannot be "
-                        "resolved to exactly one collected key id"
-                    )
-                carrying_key = matching_ids[0]
-
-        active_switches = frozenset(
-            str(switch_id) for switch_id in snapshot.get("active_switches", [])
-        )
-        initial_used_switches = self.initial_state().used_switches
-        used_switches = initial_used_switches | frozenset(
-            switch_id
-            for switch_id in active_switches
-            if self.switches_by_id.get(switch_id, {}).get("switch_type") == "one_shot"
-        )
-
-        raw_block_positions = snapshot.get("block_positions")
-        if raw_block_positions is None:
-            block_positions = self.initial_state().block_positions
-        elif isinstance(raw_block_positions, dict):
-            block_positions = frozenset(
-                (str(block_id), int(pos[0]), int(pos[1]))
-                for block_id, pos in raw_block_positions.items()
-                if isinstance(pos, (list, tuple)) and len(pos) >= 2
-            )
-        else:
-            raise ValueError("Runtime state snapshot block_positions must be an object")
-
-        return ValidatorState(
-            agent_pos=(int(raw_agent_pos[0]), int(raw_agent_pos[1])),
-            agent_dir=int(snapshot.get("agent_direction", 0)),
-            carrying_key=carrying_key,
-            collected_keys=collected_keys,
-            active_switches=active_switches,
-            used_switches=used_switches,
-            open_gates=frozenset(str(gate_id) for gate_id in snapshot.get("open_gates", [])),
-            open_doors=frozenset(str(door_id) for door_id in snapshot.get("open_doors", [])),
-            block_positions=block_positions,
-        )
-
-    def is_beatable_from_snapshot(self, snapshot: dict[str, Any]) -> bool:
-        """Return whether the task remains solvable after a recorded action."""
-        beatable, _, _ = self._find_solution(self.state_from_snapshot(snapshot))
-        return beatable
-
-    def action_label_matches_distractor(self, action_label: str) -> bool:
-        """Return whether an interaction label targets a configured distractor."""
-        return any(
-            self._transition_matches_distractor(action_label, candidate_id)
-            for distractor in self.spec.distractors or []
-            for candidate_id in self._distractor_candidate_ids(distractor)
-        )
-
-    def is_irreversible_action_label(self, action_label: str) -> bool:
-        """Return whether an interaction label describes an irreversible action."""
-        if action_label.startswith("push:"):
-            return True
-        if action_label.startswith("open_door:") and self.key_consumption:
-            return True
-        if action_label.startswith("toggle:"):
-            switch_id = action_label.split(":", 1)[1]
-            switch_info = self.switches_by_id.get(switch_id, {})
-            return switch_info.get("switch_type") == "one_shot"
-        if action_label.startswith("teleport:"):
-            return True
-        return False
 
     def _apply_switch_activation(
         self,
@@ -436,6 +326,7 @@ class TaskValidator:
         max_states: int = 500_000,
     ) -> tuple[bool, Optional[list[tuple[int, int]]], int]:
         """Run BFS from an arbitrary validator state."""
+        target = self.goal if goal is None else goal
         queue = deque([(initial_state, [initial_state.agent_pos])])
         visited: set[ValidatorState] = {initial_state}
         states_explored = 0
@@ -446,7 +337,7 @@ class TaskValidator:
 
             state, path = queue.popleft()
             states_explored += 1
-            if self._is_goal(state, goal=goal):
+            if state.agent_pos == target:
                 return True, path, states_explored
 
             for transition in self._successors(state):
@@ -456,31 +347,6 @@ class TaskValidator:
 
         return False, None, states_explored
 
-    def _is_goal(
-        self,
-        state: ValidatorState,
-        goal: Optional[tuple[int, int]] = None,
-    ) -> bool:
-        """Return whether a validator state satisfies the requested goal."""
-        if goal is not None:
-            return state.agent_pos == goal
-        if self.spec.goal.goal_type == "reach_position":
-            return state.agent_pos == self.goal
-        if self.spec.goal.goal_type == "collect_all":
-            return set(self.spec.goal.target_ids).issubset(state.collected_keys)
-        if self.spec.goal.goal_type == "push_block_to":
-            block_positions = {
-                block_id: (x, y) for block_id, x, y in state.block_positions
-            }
-            return all(
-                block_positions.get(block_id) == target.to_tuple()
-                for block_id, target in zip(
-                    self.spec.goal.target_ids,
-                    self.spec.goal.target_positions,
-                )
-            )
-        return False
-
     def validate(self, max_states: int = 500_000) -> tuple[bool, Optional[list[tuple[int, int]]], str]:
         """
         Check if the task is beatable.
@@ -489,7 +355,33 @@ class TaskValidator:
             (is_beatable, solution_path_or_None, message)
             solution_path is a list of (x, y) positions if beatable.
         """
-        initial_state = self.initial_state()
+        initial_block_pos = frozenset(
+            (bid, pos[0], pos[1]) for pos, bid in self.blocks.items()
+        )
+
+        initial_open_doors = frozenset(
+            d["id"] for pos, d in self.doors.items() if not d["locked"]
+        )
+
+        initial_active_switches = frozenset(
+            sw["id"] for sw in self.switches.values() if sw.get("initial_state") == "on"
+        )
+        initial_used_switches = frozenset(
+            sw["id"]
+            for sw in self.switches.values()
+            if sw.get("initial_state") == "on" and sw.get("switch_type") == "one_shot"
+        )
+        initial_state = ValidatorState(
+            agent_pos=self.start,
+            agent_dir=0,
+            carrying_key=None,
+            collected_keys=frozenset(),
+            active_switches=initial_active_switches,
+            used_switches=initial_used_switches,
+            open_gates=self._recompute_open_gates(initial_active_switches),
+            open_doors=initial_open_doors,
+            block_positions=initial_block_pos,
+        )
 
         beatable, path, states_explored = self._find_solution(initial_state, max_states=max_states)
         if beatable:
@@ -611,7 +503,31 @@ class TaskValidator:
         if not base_beatable:
             return ["Base task is not solvable"]
 
-        initial_state = self.initial_state()
+        initial_block_pos = frozenset(
+            (bid, pos[0], pos[1]) for pos, bid in self.blocks.items()
+        )
+        initial_open_doors = frozenset(
+            d["id"] for _, d in self.doors.items() if not d["locked"]
+        )
+        initial_active_switches = frozenset(
+            sw["id"] for sw in self.switches.values() if sw.get("initial_state") == "on"
+        )
+        initial_used_switches = frozenset(
+            sw["id"]
+            for sw in self.switches.values()
+            if sw.get("initial_state") == "on" and sw.get("switch_type") == "one_shot"
+        )
+        initial_state = ValidatorState(
+            agent_pos=self.start,
+            agent_dir=0,
+            carrying_key=None,
+            collected_keys=frozenset(),
+            active_switches=initial_active_switches,
+            used_switches=initial_used_switches,
+            open_gates=self._recompute_open_gates(initial_active_switches),
+            open_doors=initial_open_doors,
+            block_positions=initial_block_pos,
+        )
 
         violations = []
         for distractor in self.spec.distractors:
@@ -668,7 +584,31 @@ class TaskValidator:
 
     def compute_fragility(self, depth_limit: int = 5) -> "FragilityReport":
         """Bounded BFS over abstract transitions to find the shortest breaking sequence."""
-        initial_state = self.initial_state()
+        initial_block_pos = frozenset(
+            (bid, pos[0], pos[1]) for pos, bid in self.blocks.items()
+        )
+        initial_open_doors = frozenset(
+            d["id"] for _, d in self.doors.items() if not d["locked"]
+        )
+        initial_active_switches = frozenset(
+            sw["id"] for sw in self.switches.values() if sw.get("initial_state") == "on"
+        )
+        initial_used_switches = frozenset(
+            sw["id"]
+            for sw in self.switches.values()
+            if sw.get("initial_state") == "on" and sw.get("switch_type") == "one_shot"
+        )
+        initial_state = ValidatorState(
+            agent_pos=self.start,
+            agent_dir=0,
+            carrying_key=None,
+            collected_keys=frozenset(),
+            active_switches=initial_active_switches,
+            used_switches=initial_used_switches,
+            open_gates=self._recompute_open_gates(initial_active_switches),
+            open_doors=initial_open_doors,
+            block_positions=initial_block_pos,
+        )
 
         queue = deque([(initial_state, [])])
         visited: dict[ValidatorState, int] = {initial_state: 0}
@@ -766,7 +706,18 @@ class TaskValidator:
 
     def _is_irreversible_transition(self, state: ValidatorState, transition: SuccessorTransition) -> bool:
         """Approximate whether a transition is meaningfully irreversible."""
-        return self.is_irreversible_action_label(transition.action_label)
+        label = transition.action_label
+        if label.startswith("push:"):
+            return True
+        if label.startswith("open_door:") and self.key_consumption:
+            return True
+        if label.startswith("toggle:"):
+            switch_id = label.split(":", 1)[1]
+            switch_info = self.switches_by_id.get(switch_id, {})
+            return switch_info.get("switch_type") == "one_shot"
+        if label.startswith("teleport:"):
+            return True
+        return False
 
 
 @dataclass

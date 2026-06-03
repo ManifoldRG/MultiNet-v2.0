@@ -583,7 +583,7 @@ class CustomMiniGridEnv(MiniGridEnv):
                 self.grid.set(*fwd_pos, None)
                 self.grid.set(*behind_block_pos, fwd_cell)
                 # Agent moves forward
-                self.agent_pos = (int(fwd_pos[0]), int(fwd_pos[1]))
+                self.agent_pos = fwd_pos
 
                 # Check step count and return
                 self.step_count += 1

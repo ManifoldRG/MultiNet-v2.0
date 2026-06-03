@@ -38,7 +38,6 @@ class PlannerState:
     used_switches: frozenset[str]
     open_gates: frozenset[str]
     open_doors: frozenset[str]
-    block_positions: frozenset[tuple[str, int, int]]
 
 
 @dataclass(frozen=True)
@@ -111,10 +110,7 @@ class TaskPlanningContext:
             }
             for gate in spec.mechanisms.gates
         }
-        self.initial_block_positions = frozenset(
-            (block.id, block.position.x, block.position.y)
-            for block in spec.mechanisms.blocks
-        )
+        self.blocks = {block.position.to_tuple() for block in spec.mechanisms.blocks}
         self.hazards = {hazard.position.to_tuple() for hazard in spec.mechanisms.hazards}
         self.teleporters = {}
         for teleporter in spec.mechanisms.teleporters:
@@ -149,7 +145,6 @@ class TaskPlanningContext:
             used_switches=self.initial_used_switches,
             open_gates=self.recompute_open_gates(self.initial_active_switches),
             open_doors=self.initial_open_doors,
-            block_positions=self.initial_block_positions,
         )
 
     def recompute_open_gates(self, active_switches: frozenset[str]) -> frozenset[str]:
@@ -161,24 +156,6 @@ class TaskPlanningContext:
             if switch["id"] in active_switches:
                 open_gates.update(switch["controls"])
         return frozenset(open_gates)
-
-    def is_goal(self, state: PlannerState) -> bool:
-        """Return whether a planner state satisfies the task goal."""
-        goal = self.spec.goal
-        if goal.goal_type == "reach_position":
-            target = goal.target.to_tuple() if goal.target is not None else self.goal
-            return state.agent_pos == target
-        if goal.goal_type == "collect_all":
-            return set(goal.target_ids).issubset(state.collected_keys)
-        if goal.goal_type == "push_block_to":
-            block_positions = {
-                block_id: (x, y) for block_id, x, y in state.block_positions
-            }
-            return all(
-                block_positions.get(block_id) == target.to_tuple()
-                for block_id, target in zip(goal.target_ids, goal.target_positions)
-            )
-        return False
 
 
 def _front_pos(state: PlannerState) -> tuple[int, int]:
@@ -221,7 +198,6 @@ def _apply_switch(
         used_switches=frozenset(used),
         open_gates=ctx.recompute_open_gates(active_fs),
         open_doors=state.open_doors,
-        block_positions=state.block_positions,
     )
 
 
@@ -239,7 +215,6 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
             used_switches=state.used_switches,
             open_gates=state.open_gates,
             open_doors=state.open_doors,
-            block_positions=state.block_positions,
         ),
     )
     yield Transition(
@@ -254,7 +229,6 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
             used_switches=state.used_switches,
             open_gates=state.open_gates,
             open_doors=state.open_doors,
-            block_positions=state.block_positions,
         ),
     )
 
@@ -273,7 +247,6 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
                 used_switches=state.used_switches,
                 open_gates=state.open_gates,
                 open_doors=state.open_doors,
-                block_positions=state.block_positions,
             ),
         )
 
@@ -293,7 +266,6 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
                     used_switches=state.used_switches,
                     open_gates=state.open_gates,
                     open_doors=state.open_doors | {door["id"]},
-                    block_positions=state.block_positions,
                 ),
             )
 
@@ -319,42 +291,18 @@ def _forward_successor(
     if (
         front in ctx.walls
         or front in ctx.hazards
+        or front in ctx.blocks
         or _has_uncollected_key(ctx, state, front)
         or _has_closed_door(ctx, state, front)
         or _has_closed_gate(ctx, state, front)
     ):
         return
 
-    block_dict = {(x, y): block_id for block_id, x, y in state.block_positions}
-    block_positions = state.block_positions
-    label = "move_forward"
-    if front in block_dict:
-        dx, dy = DIRECTION_VECTORS[state.agent_dir]
-        push_pos = front[0] + dx, front[1] + dy
-        if (
-            not (0 <= push_pos[0] < ctx.width and 0 <= push_pos[1] < ctx.height)
-            or push_pos in ctx.walls
-            or push_pos in ctx.hazards
-            or push_pos in block_dict
-            or push_pos in ctx.doors_by_pos
-            or push_pos in ctx.gates_by_pos
-        ):
-            return
-        block_id = block_dict[front]
-        block_positions = (
-            state.block_positions
-            - {(block_id, front[0], front[1])}
-            | {(block_id, push_pos[0], push_pos[1])}
-        )
-        label = f"push:{block_id}:{push_pos[0]},{push_pos[1]}"
-
     next_pos = ctx.teleporters.get(front, front)
-    if label == "move_forward" and next_pos != front:
-        label = f"teleport:{front}->{next_pos}"
     active_switches = _active_switches_after_move(ctx, state, next_pos)
     yield Transition(
         action=int(MiniGridActions.MOVE_FORWARD),
-        label=label,
+        label="move_forward",
         next_state=PlannerState(
             agent_pos=next_pos,
             agent_dir=state.agent_dir,
@@ -364,7 +312,6 @@ def _forward_successor(
             used_switches=state.used_switches,
             open_gates=ctx.recompute_open_gates(active_switches),
             open_doors=state.open_doors,
-            block_positions=block_positions,
         ),
     )
 
@@ -473,7 +420,7 @@ def _is_useful_interaction(
     transition: Transition,
 ) -> bool:
     """Identify the next local objective for the greedy baseline."""
-    if ctx.is_goal(transition.next_state):
+    if transition.next_state.agent_pos == ctx.goal:
         return True
     if transition.label.startswith("open_door:"):
         return True
@@ -514,7 +461,7 @@ def _bfs_actions_with_stats(spec: TaskSpecification) -> tuple[list[int], int]:
     actions, _, states_explored = _shortest_plan(
         ctx,
         ctx.initial_state(),
-        ctx.is_goal,
+        lambda st: st.agent_pos == ctx.goal,
     )
     return actions, states_explored
 
@@ -525,14 +472,14 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
     actions: list[int] = []
 
     for _ in range(spec.max_steps):
-        if ctx.is_goal(state):
+        if state.agent_pos == ctx.goal:
             break
         chunk, next_state = _shortest_plan_to_interaction(ctx, state)
         if next_state is None:
             chunk, next_state, _ = _shortest_plan(
                 ctx,
                 state,
-                ctx.is_goal,
+                lambda st: st.agent_pos == ctx.goal,
             )
         if next_state is None or not chunk:
             break
@@ -571,7 +518,7 @@ def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> Planne
         positions.append(state.agent_pos)
 
     return PlannedPath(
-        success=ctx.is_goal(state),
+        success=state.agent_pos == ctx.goal,
         actions=executed_actions,
         action_labels=labels,
         positions=positions,
