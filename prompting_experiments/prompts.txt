@@ -316,53 +316,7 @@ prompts:
 Status: not implemented in ExperimentConfig
 ----------------------------------------------------------------------------------------
 ========================================================================================
-condition set 4: Action space
-========================================================================================
-variant name: egocentric
-description: Current interface action space.
-prompts:
-[system prompt]
-Task: move to the goal cell in the grid.
-The environment may contain:
-- Keys: pick them up to open doors of the matching color
-- Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
-- Gates: blocked passages controlled by switches
-
-Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-
-[user prompt]
-[image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
-Last result: Episode start.
-What is your next action?
-----------------------------------------------------------------------------------------
-variant name: cardinal
-description: PR #12 design axis; no cardinal action map exists in the interface yet.
-prompts:
-Status: not implemented in ExperimentConfig
-----------------------------------------------------------------------------------------
-========================================================================================
-condition set 5: Querying strategy
+condition set 4: Querying strategy
 ========================================================================================
 variant name: step_by_step
 description: Ask for one action each query.
@@ -489,7 +443,7 @@ Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 ========================================================================================
-condition set 6: In-context learning
+condition set 5: In-context learning
 ========================================================================================
 variant name: zero_shot
 description: Current interface behavior.
