@@ -334,7 +334,13 @@ class ExperimentRunner:
     def _build_message(self, state, last_feedback: str, transcript: List[dict]) -> dict:
         obs = self.config.observation
         ctx = self.config.context_window
-        obs_text = current_observation_text(obs, self.task_spec, state)
+        obs_text = current_observation_text(
+            obs,
+            self.task_spec,
+            state,
+            include_description=self.config.include_current_observation_description,
+            include_facing=self.config.observation_text_includes_facing,
+        )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
             history_text(obs, ctx, transcript),

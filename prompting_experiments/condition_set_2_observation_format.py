@@ -17,12 +17,20 @@ CONDITION_SET = ConditionSet(
         "text_only": Variant(
             name="text_only",
             description="Natural-language current observation, no image blocks.",
-            config_overrides={"observation": "text_only"},
+            config_overrides={
+                "observation": "text_only",
+                "include_current_observation_description": True,
+                "observation_text_includes_facing": True,
+            },
         ),
         "image_text": Variant(
             name="image_text",
             description="Image block plus natural-language observation.",
-            config_overrides={"observation": "image_text"},
+            config_overrides={
+                "observation": "image_text",
+                "include_current_observation_description": True,
+                "observation_text_includes_facing": True,
+            },
         ),
         "image_only": Variant(
             name="image_only",

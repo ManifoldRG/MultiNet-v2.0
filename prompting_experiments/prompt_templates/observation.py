@@ -19,6 +19,10 @@ COORDINATE_EXPLANATION = (
 START_LINE = "The start is at {start}."
 GOAL_LINE = "The goal is at {goal}."
 WALLS_LINE = "The following cells are walls: {walls}."
+TRIANGULAR_AGENT_LINE = (
+    "You are a triangular agent trying to navigate this maze. "
+    "You are facing the pointy end."
+)
 
 KEY_LINE = "There is a {color} key at ({row},{col})."
 DOOR_LINE = (
@@ -37,6 +41,7 @@ GATE_LINE = (
 CURRENT_SITUATION_HEADER = "Current situation (this step):"
 CURRENT_GOAL_LINE = "The goal is at {goal}."
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
+CURRENT_AGENT_POSITION_LINE = "You are at {position}."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates):"
 NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, or gates in the current state description.)"

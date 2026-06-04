@@ -26,18 +26,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
@@ -75,18 +67,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10
 Inventory: none
 From your perspective:
@@ -121,6 +105,7 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 Observation:
@@ -157,6 +142,7 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
@@ -218,18 +204,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
@@ -255,18 +233,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
@@ -300,18 +270,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
@@ -341,18 +303,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
@@ -384,18 +338,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
@@ -424,18 +370,10 @@ Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corne
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
+You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?

@@ -109,10 +109,13 @@ def current_observation_text(
     observation: ObservationMode,
     task_spec: TaskSpecification,
     state: GridState,
+    *,
+    include_description: bool = False,
+    include_facing: bool = False,
 ) -> str:
-    if observation == "image_only":
+    if observation == "image_only" or not include_description:
         return ""
-    return render_user_observation_text(task_spec, state)
+    return render_user_observation_text(task_spec, state, include_facing=include_facing)
 
 
 def current_image_blocks(observation: ObservationMode, rgb: np.ndarray | None) -> list[dict]:
