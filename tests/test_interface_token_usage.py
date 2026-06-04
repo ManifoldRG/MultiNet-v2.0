@@ -3,7 +3,7 @@ from interface.loader import default_maze_path, load_task
 from interface.runner import build_runner
 from interface.smoke_tests.plans import v01_empty_room_trajectory
 from interface.smoke_tests.smoke_llm import _AgentRecorder
-from scorer.telemetry import normalize_token_usage
+from interface.telemetry import normalize_token_usage
 
 
 class UsageReplayAgent:

@@ -1,7 +1,7 @@
 """Gridworld domain for MultiNet-v2.0.
 
-This module provides task schema, validation, and scoring utilities for
-gridworld puzzle specifications.
+This module provides task schema and validation utilities for gridworld
+puzzle specifications.
 """
 
 from .bootstrap import disable_gymnasium_env_plugins

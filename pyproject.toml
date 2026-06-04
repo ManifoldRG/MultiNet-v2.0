@@ -37,7 +37,6 @@ multinet-ollama-vision-check = "scripts.ollama_vision_check:main"
 multinet-ollama-maze-shape-check = "scripts.ollama_maze_shape_check:main"
 multinet-vlm-sanity = "scripts.vlm_sanity_check:main"
 multinet-score-json = "scripts.score_json:main"
-multinet-visualize-scores = "scripts.visualize_scores:main"
 
 [tool.setuptools]
 include-package-data = true

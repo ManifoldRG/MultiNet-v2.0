@@ -1,4 +1,4 @@
-"""Shared telemetry normalization for runtime producers and scoring."""
+"""Shared telemetry normalization for interface producers and scorer consumers."""
 
 from __future__ import annotations
 

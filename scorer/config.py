@@ -128,6 +128,8 @@ def load_scorer_config(path: str | Path | None = None) -> ScorerConfig:
     """Load scorer weights from JSON, or return defaults if no file exists."""
     config_path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
     if not config_path.exists():
+        if path is not None:
+            raise FileNotFoundError(f"Scorer config not found: {config_path}")
         return ScorerConfig.default()
     if config_path.suffix.lower() in {".yaml", ".yml"}:
         try:

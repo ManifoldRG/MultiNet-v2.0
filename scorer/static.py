@@ -89,8 +89,8 @@ def compute_12d_score(
     """
     Compute the 12-dimension static benchmark score.
 
-    This remains compatible with the older gridworld scoring API while moving
-    calibration and artifact generation into the standalone scorer package.
+    This keeps the old call shape while calibration and artifact generation
+    live in the standalone scorer package.
     """
     require_scorable_spec(spec)
     scorer_config = config or ScorerConfig.default()
