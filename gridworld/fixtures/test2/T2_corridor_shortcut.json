@@ -1,0 +1,41 @@
+{
+  "task_id": "T2_corridor_shortcut",
+  "version": "1.0",
+  "seed": 201,
+  "difficulty_tier": 2,
+  "description": "A short top route crosses a locked door (key near start); a long open route detours through the bottom passage. Both routes reach the goal.",
+  "maze": {
+    "dimensions": [9, 7],
+    "walls": [
+      [4, 2], [4, 3], [4, 4]
+    ],
+    "start": [1, 1],
+    "goal": [7, 1]
+  },
+  "mechanisms": {
+    "keys": [
+      {"id": "kB", "position": [1, 3], "color": "blue"}
+    ],
+    "doors": [
+      {"id": "DR", "position": [4, 1], "requires_key": "blue", "initial_state": "locked"}
+    ],
+    "switches": [],
+    "gates": [],
+    "blocks": [],
+    "teleporters": [],
+    "hazards": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [7, 1],
+    "auxiliary_conditions": []
+  },
+  "max_steps": 90
+}

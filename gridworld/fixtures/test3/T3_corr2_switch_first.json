@@ -1,0 +1,51 @@
+{
+  "task_id": "T3_corr2_switch_first",
+  "version": "1.0",
+  "seed": 304,
+  "difficulty_tier": 3,
+  "description": "Longer single-row corridor with identical topology to the key-first variant. Required order: toggle the switch to open the gate, then collect the blue key and open the door to the goal.",
+  "maze": {
+    "dimensions": [13, 3],
+    "walls": [],
+    "start": [1, 1],
+    "goal": [11, 1]
+  },
+  "mechanisms": {
+    "keys": [
+      {"id": "kB", "position": [6, 1], "color": "blue"}
+    ],
+    "doors": [
+      {"id": "DR", "position": [8, 1], "requires_key": "blue", "initial_state": "locked"}
+    ],
+    "switches": [
+      {"id": "s1", "position": [2, 1], "controls": ["g1"], "switch_type": "toggle", "initial_state": "off"}
+    ],
+    "gates": [
+      {"id": "g1", "position": [4, 1], "initial_state": "closed"}
+    ],
+    "blocks": [],
+    "teleporters": [],
+    "hazards": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [11, 1],
+    "auxiliary_conditions": []
+  },
+  "dependency_chain": {
+    "depth": 2,
+    "sequence": [
+      {"step": 1, "type": "switch-gate", "element": "s1", "unlocks": "g1"},
+      {"step": 2, "type": "key-door", "element": "kB", "unlocks": "DR"}
+    ],
+    "notation": "s1 -> g1 -> kB -> DR -> G"
+  },
+  "max_steps": 90
+}

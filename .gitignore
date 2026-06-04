@@ -38,3 +38,5 @@ interface/smoke_tests/results/
 # Generated evaluation outputs
 mazes/results/*_results.json
 mazes/results/*.progress.json
+# Bare-bones run pipeline artifact tree (regenerated locally)
+artifacts/

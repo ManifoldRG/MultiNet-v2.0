@@ -41,6 +41,7 @@ multinet-ollama-maze-shape-check = "scripts.ollama_maze_shape_check:main"
 multinet-vlm-sanity = "scripts.vlm_sanity_check:main"
 multinet-preview-prompts = "prompting_experiments.preview_prompts:main"
 multinet-score-json = "scripts.score_json:main"
+multinet-run-pipeline = "scripts.run_pipeline:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -65,6 +66,7 @@ include = [
     "interface*",
     "mazes*",
     "multigrid*",
+    "pipeline*",
     "prompting_experiments*",
     "scorer*",
     "scripts*",
