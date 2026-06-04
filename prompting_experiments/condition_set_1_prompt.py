@@ -13,11 +13,6 @@ CONDITION_SET = ConditionSet(
     ),
     decision="If delta < 5%, use standard. If > 5%, use verbose.",
     variants={
-        "minimal": Variant(
-            name="minimal",
-            description="Goal, action list, and final-output instruction only.",
-            config_overrides={"prompting": "minimal"},
-        ),
         "standard": Variant(
             name="standard",
             description="Standard task prompt with mechanism descriptions.",

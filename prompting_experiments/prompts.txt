@@ -5,37 +5,6 @@ Max steps: 5
 ========================================================================================
 condition set 1: Prompt
 ========================================================================================
-variant name: minimal
-description: Goal, action list, and final-output instruction only.
-prompts:
-[system prompt]
-Task: move to the goal cell in the grid.
-Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-
-[user prompt]
-[image block 1]
-Observation:
-Current situation (this step):
-The goal is at (6, 6).
-You are at (1, 1) facing EAST.
-Your inventory: empty.
-
-Map contents as of this step (keys on the ground, doors, switches, gates):
-(No keys on the ground, doors, switches, or gates in the current state description.)
-
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
-What is your next action?
-----------------------------------------------------------------------------------------
 variant name: standard
 description: Standard task prompt with mechanism descriptions.
 prompts:

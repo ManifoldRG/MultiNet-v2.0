@@ -46,7 +46,6 @@ class MinimalPromptStrategy:
         state: GridState,
         last_feedback: str,
     ) -> str:
-        history_block = f"{history_text}\n\n" if history_text else ""
         obs_block = (
             user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
             if obs_text
@@ -54,14 +53,14 @@ class MinimalPromptStrategy:
         )
         pos = agent_row_col(state)
         goal = goal_row_col(task_spec)
-        return user_templates.MINIMAL_USER_PROMPT.format(
-            history_block=history_block,
+        prompt = user_templates.MINIMAL_USER_PROMPT.format(
             obs_block=obs_block,
             position=pos,
             facing=agent_facing(state),
             goal=goal,
             last_feedback=last_feedback,
         )
+        return _with_history(prompt, history_text)
 
 
 class StandardPromptStrategy(MinimalPromptStrategy):
@@ -130,7 +129,6 @@ class VerbosePromptStrategy(StandardPromptStrategy):
             user_templates.NEIGHBOUR_BLOCK_HEADER + "\n".join(neighbour_lines) + "\n"
         )
         mechanism_block = _mechanism_hints_text(task_spec)
-        history_block = f"{history_text}\n\n" if history_text else ""
         obs_block = (
             user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
             if obs_text
@@ -138,8 +136,7 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         )
         inventory_str = ", ".join(inventory_list(state)) or "none"
 
-        return user_templates.VERBOSE_USER_PROMPT.format(
-            history_block=history_block,
+        prompt = user_templates.VERBOSE_USER_PROMPT.format(
             obs_block=obs_block,
             position=(row, col),
             facing=agent_facing(state),
@@ -150,9 +147,16 @@ class VerbosePromptStrategy(StandardPromptStrategy):
             mechanism_block=mechanism_block,
             last_feedback=last_feedback,
         )
+        return _with_history(prompt, history_text)
 
 
 PromptStrategy = MinimalPromptStrategy
+
+
+def _with_history(prompt: str, history_text: str) -> str:
+    if not history_text:
+        return prompt
+    return f"{history_text}\n\n{prompt}"
 
 
 def _mechanism_hints_text(task_spec: TaskSpecification) -> str:

@@ -3,7 +3,6 @@
 OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
 
 MINIMAL_USER_PROMPT = (
-    "{history_block}"
     "{obs_block}"
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
     "Last result: {last_feedback}\n"
@@ -11,7 +10,6 @@ MINIMAL_USER_PROMPT = (
 )
 
 VERBOSE_USER_PROMPT = (
-    "{history_block}"
     "{obs_block}"
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}  |  "
     "Manhattan: {manhattan}\n"
