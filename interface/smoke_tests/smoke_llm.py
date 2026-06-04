@@ -80,18 +80,34 @@ class _AgentRecorder:
     def __call__(self, messages: list[dict]) -> str:
         self._query_seq += 1
         text = self._inner(messages)
-        self._records.append(
-            {
-                "query": self._query_seq,
-                "messages_in_context": len(messages),
-                "reply": text,
-            }
-        )
+        record = {
+            "query": self._query_seq,
+            "messages_in_context": len(messages),
+            "reply": text,
+        }
+        if self.last_usage is not None:
+            record["usage"] = dict(self.last_usage)
+        self._records.append(record)
         if self._log_replies:
             print(f"\n{'=' * 72}\nLLM query {self._query_seq} (messages={len(messages)})\n{'=' * 72}")
             print(text)
             print(f"{'=' * 72}\n")
         return text
+
+    @property
+    def last_usage(self) -> dict[str, int] | None:
+        usage = getattr(self._inner, "last_usage", None)
+        return usage if isinstance(usage, dict) else None
+
+    def reset_usage(self) -> None:
+        reset_usage = getattr(self._inner, "reset_usage", None)
+        if callable(reset_usage):
+            reset_usage()
+            return
+        try:
+            setattr(self._inner, "last_usage", None)
+        except (AttributeError, TypeError):
+            pass
 
 
 def main() -> None:

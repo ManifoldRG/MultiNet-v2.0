@@ -1,0 +1,31 @@
+{
+  "version": "default-v2",
+  "static_dimension_weights": {
+    "optimal_path_length": 1.0,
+    "search_space_size": 1.0,
+    "backtracking_required": 1.0,
+    "fragility": 1.0,
+    "dependency_depth": 1.0,
+    "dependency_variety": 1.0,
+    "distractor_count": 1.0,
+    "distractor_quality": 1.0,
+    "grid_size": 1.0,
+    "wall_density": 1.0,
+    "partial_observability": 1.0,
+    "irreversibility": 1.0
+  },
+  "distractor_type_weights": {
+    "wrong_color_key": 1.0,
+    "inactive_switch": 2.0,
+    "decoy_door": 2.0,
+    "distractor_chain": 3.0
+  },
+  "runtime_weights": {
+    "step_ratio": 1.0,
+    "cell_overlap_bfs": 1.0,
+    "token_efficiency": 1.0,
+    "greedy_penalty": 0.5
+  },
+  "baseline_tokens": 1000.0,
+  "difficulty_max_static_score": null
+}
