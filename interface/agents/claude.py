@@ -17,6 +17,7 @@ from interface.agents.runner_messages import (
     parse_runner_content,
     split_system_prompt,
 )
+from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def _post_messages(
     system: Optional[str],
     messages: List[Dict[str, object]],
     timeout: Optional[float],
-) -> str:
+) -> Tuple[str, Optional[Dict[str, int]]]:
     body: Dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
@@ -136,7 +137,7 @@ def _post_messages(
     for block in payload.get("content", []) or []:
         if isinstance(block, dict) and block.get("type") == "text":
             parts.append(str(block.get("text", "")))
-    return "".join(parts).strip()
+    return "".join(parts).strip(), normalize_token_usage(payload.get("usage"))
 
 
 @dataclass
@@ -153,6 +154,7 @@ class ClaudeAnthropicAgent:
 
     config: ClaudeAnthropicConfig = field(default_factory=ClaudeAnthropicConfig)
     api_key: Optional[str] = None
+    last_usage: Optional[Dict[str, int]] = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         key = (self.api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
@@ -165,7 +167,7 @@ class ClaudeAnthropicAgent:
 
     def __call__(self, messages: List[dict]) -> str:
         system, turns = _to_anthropic_turns(messages)
-        return _post_messages(
+        text, self.last_usage = _post_messages(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -174,3 +176,4 @@ class ClaudeAnthropicAgent:
             messages=turns,
             timeout=self.config.timeout,
         )
+        return text
