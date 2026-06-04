@@ -4,6 +4,7 @@ import re
 from typing import List, Literal
 
 from interface.parser import normalize_action, parse_final_output
+from prompting_experiments.prompt_templates import querying as querying_templates
 
 QueryingKind = Literal["step_by_step", "subgoal", "full_trajectory"]
 
@@ -51,18 +52,8 @@ class QueryingMode:
         if self.kind == "step_by_step":
             return ""
         if self.kind == "subgoal":
-            return (
-                "For each turn output:\n"
-                "  SUB_GOAL: <short description of your next waypoint>\n"
-                "  ACTIONS: <comma-separated action list to reach it>"
-            )
-        return (
-            "Output your complete trajectory once as:\n"
-            "  SUB_GOAL: <short description of the full plan>\n"
-            "  ACTIONS: <comma-separated action list from start to finish>\n"
-            "The last action in ACTIONS should be DONE (when you expect to be at the goal).\n"
-            "You will not be queried again — this is your only planning turn."
-        )
+            return querying_templates.SUBGOAL_SUFFIX
+        return querying_templates.FULL_TRAJECTORY_SUFFIX
 
     def step_metadata(self) -> dict:
         if self.kind == "step_by_step":

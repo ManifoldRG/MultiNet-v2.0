@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from gridworld.backends.base import GridState
 from gridworld.task_spec import Position, TaskSpecification
+from prompting_experiments.prompt_templates import observation as observation_templates
 
 FACING_ORDER = ["NORTH", "EAST", "SOUTH", "WEST"]
 
@@ -126,29 +127,42 @@ def describe_cell(
     cols: int,
 ) -> str:
     if row < 1 or row > rows or col < 1 or col > cols:
-        return "out of bounds"
+        return observation_templates.CELL_OUT_OF_BOUNDS
     if (row, col) in walls:
-        return "wall"
+        return observation_templates.CELL_WALL
     if (row, col) == goal:
-        return f"GOAL ({row},{col})"
+        return observation_templates.CELL_GOAL.format(row=row, col=col)
 
     key_color = key_at_cell(task_spec, state, row, col)
     if key_color:
-        return f"{key_color} key ({row},{col})"
+        return observation_templates.CELL_KEY.format(
+            key_color=key_color,
+            row=row,
+            col=col,
+        )
 
     for door in task_spec.mechanisms.doors:
         if to_row_col(door.position) == (row, col):
             status = "open" if door.id in state.open_doors else door.initial_state
-            return f"{status} {door.requires_key} door ({row},{col})"
+            return observation_templates.CELL_DOOR.format(
+                status=status,
+                requires_key=door.requires_key,
+                row=row,
+                col=col,
+            )
 
     for gate in task_spec.mechanisms.gates:
         if to_row_col(gate.position) == (row, col):
             cur = "open" if gate.id in state.open_gates else gate.initial_state
-            return f"{cur} gate ({row},{col})"
+            return observation_templates.CELL_GATE.format(state=cur, row=row, col=col)
 
     for switch in task_spec.mechanisms.switches:
         if to_row_col(switch.position) == (row, col):
             on_off = "on" if switch.id in state.active_switches else switch.initial_state
-            return f"switch ({on_off}) ({row},{col})"
+            return observation_templates.CELL_SWITCH.format(
+                state=on_off,
+                row=row,
+                col=col,
+            )
 
-    return f"open ({row},{col})"
+    return observation_templates.CELL_OPEN.format(row=row, col=col)

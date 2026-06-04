@@ -33,6 +33,8 @@ from interface.prompt_strategies import (
 )
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
+from prompting_experiments.prompt_templates import feedback as feedback_templates
+from prompting_experiments.prompt_templates import system as system_templates
 
 logger = logging.getLogger(__name__)
 
@@ -100,15 +102,15 @@ class ExperimentRunner:
         system_prompt = self.prompt.build_system_prompt(self.querying.system_prompt_suffix())
         if self.config.observation in ("text_only", "image_text"):
             system_prompt = (
-                f"{system_prompt}\n\nInitial maze (fixed for this episode):\n"
-                f"{render_initial_maze_text(self.task_spec)}"
+                f"{system_prompt}\n\n"
+                f"{system_templates.INITIAL_MAZE_SECTION.format(maze_text=render_initial_maze_text(self.task_spec))}"
             )
         system_message = {"role": "system", "content": system_prompt}
         chat_history = self.config.chat_history
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
 
         action_queue: List[str] = []
-        last_feedback = "Episode start."
+        last_feedback = feedback_templates.INITIAL_FEEDBACK
         consecutive_failures = 0
         transcript: List[dict] = []
         max_steps = self.task_spec.max_steps
@@ -205,8 +207,9 @@ class ExperimentRunner:
                         self.config.max_parse_retries,
                     )
                     last_feedback = (
-                        f"Could not parse FINAL_OUTPUT (one or more valid actions). "
-                        f"Use only: {ACTIONS_HINT}."
+                        feedback_templates.PARSE_FAILURE_FEEDBACK.format(
+                            actions_hint=ACTIONS_HINT
+                        )
                     )
                     if parse_failures >= self.config.max_parse_retries:
                         end_reason = "parse_failed"

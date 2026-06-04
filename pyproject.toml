@@ -39,6 +39,7 @@ multinet-probe-vlm = "scripts.probe_vlm:main"
 multinet-ollama-vision-check = "scripts.ollama_vision_check:main"
 multinet-ollama-maze-shape-check = "scripts.ollama_maze_shape_check:main"
 multinet-vlm-sanity = "scripts.vlm_sanity_check:main"
+multinet-preview-prompts = "prompting_experiments.preview_prompts:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -63,6 +64,7 @@ include = [
     "interface*",
     "mazes*",
     "multigrid*",
+    "prompting_experiments*",
     "scripts*",
 ]
 
