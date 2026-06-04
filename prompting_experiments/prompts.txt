@@ -27,13 +27,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -65,13 +64,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -115,15 +113,13 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10  |  Step 1/5 (5 left)
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10
 Inventory: none
-  WARNING: Only 5 steps remaining!
 From your perspective:
   AHEAD: open (1,2)
   RIGHT: open (2,1)
@@ -162,13 +158,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -200,13 +195,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -227,7 +221,7 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -262,13 +256,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -300,13 +293,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -346,13 +338,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -388,13 +379,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -432,13 +422,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
@@ -473,13 +462,12 @@ Observation:
 Current situation (this step):
 The goal is at (6, 6).
 You are at (1, 1) facing EAST.
-Environment steps used so far: 0 (max 5 before timeout).
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Step 1/5
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------

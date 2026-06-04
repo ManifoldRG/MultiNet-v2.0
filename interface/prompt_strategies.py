@@ -60,8 +60,6 @@ class MinimalPromptStrategy:
             position=pos,
             facing=agent_facing(state),
             goal=goal,
-            step_num=state.step_count + 1,
-            max_steps=state.max_steps,
             last_feedback=last_feedback,
         )
 
@@ -95,12 +93,6 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         state: GridState,
         last_feedback: str,
     ) -> str:
-        steps_left = state.max_steps - state.step_count
-        budget_warn = (
-            user_templates.BUDGET_WARNING.format(steps_left=steps_left)
-            if steps_left <= max(5, state.max_steps // 5)
-            else ""
-        )
         row, col = agent_row_col(state)
         grow, gcol = goal_row_col(task_spec)
         manhattan = abs(row - grow) + abs(col - gcol)
@@ -153,11 +145,7 @@ class VerbosePromptStrategy(StandardPromptStrategy):
             facing=agent_facing(state),
             goal=(grow, gcol),
             manhattan=manhattan,
-            step_num=state.step_count + 1,
-            max_steps=state.max_steps,
-            steps_left=steps_left,
             inventory=inventory_str,
-            budget_warn=budget_warn,
             neighbour_block=neighbour_block,
             mechanism_block=mechanism_block,
             last_feedback=last_feedback,

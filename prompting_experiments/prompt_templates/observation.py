@@ -37,7 +37,6 @@ GATE_LINE = (
 CURRENT_SITUATION_HEADER = "Current situation (this step):"
 CURRENT_GOAL_LINE = "The goal is at {goal}."
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
-CURRENT_STEPS_LINE = "Environment steps used so far: {step_count} (max {max_steps} before timeout)."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates):"
 NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, or gates in the current state description.)"

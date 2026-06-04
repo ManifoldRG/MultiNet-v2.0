@@ -124,10 +124,6 @@ def render_user_observation_text(task_spec: TaskSpecification, state: GridState)
             position=pos,
             facing=agent_facing(state),
         ),
-        observation_templates.CURRENT_STEPS_LINE.format(
-            step_count=state.step_count,
-            max_steps=state.max_steps,
-        ),
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv),
         "",
         observation_templates.CURRENT_MAP_CONTENTS_HEADER,
