@@ -8,7 +8,7 @@ from typing import Any
 from .artifacts import CanonicalPathReport, RuntimeScoreArtifact, StaticScoreArtifact
 from .config import SCORER_VERSION, ScorerConfig
 from .io import dump_json, load_json, stable_hash
-from .telemetry import token_count_from_record
+from interface.telemetry import token_count_from_record
 
 
 def _artifact_dict(value: dict[str, Any] | StaticScoreArtifact | CanonicalPathReport) -> dict[str, Any]:

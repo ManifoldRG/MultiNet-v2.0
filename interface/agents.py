@@ -10,7 +10,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from scorer.telemetry import normalize_token_usage
+from interface.telemetry import normalize_token_usage
 
 # Stable defaults for HF Hub downloads on Windows (local Transformers path).
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")

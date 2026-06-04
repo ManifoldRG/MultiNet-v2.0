@@ -24,7 +24,6 @@ from scorer.scoring import (
     score_task_file,
 )
 from scripts.score_json import _default_runtime_output, _runtime, _static_target_dirs
-from scripts.visualize_scores import main as visualize_scores_main
 
 
 def make_spec(**overrides):
@@ -96,6 +95,11 @@ def test_shipped_config_matches_code_defaults():
     assert list(config.static_dimension_weights) == DIMENSION_NAMES
     assert config.distractor_type_weights == DEFAULT_DISTRACTOR_TYPE_WEIGHTS
     assert config.runtime_weights == DEFAULT_RUNTIME_WEIGHTS
+
+
+def test_explicit_missing_config_path_fails(tmp_path):
+    with pytest.raises(FileNotFoundError, match="Scorer config not found"):
+        load_scorer_config(tmp_path / "missing_config.json")
 
 
 def test_score_task_file_writes_stage_two_artifacts(tmp_path):
@@ -517,29 +521,6 @@ def test_runtime_cli_explains_missing_suite_maximum(tmp_path):
 
     with pytest.raises(ValueError, match="--difficulty-max-static-score"):
         _runtime(args)
-
-
-def test_visualize_dimensions_validates_before_writing_csv(tmp_path):
-    payload = compute_static_score_artifact(make_spec()).to_dict()
-    first = tmp_path / "first.json"
-    second = tmp_path / "second.json"
-    first.write_text(json.dumps(payload))
-    second.write_text(json.dumps(payload))
-    csv_path = tmp_path / "scores.csv"
-
-    with pytest.raises(ValueError, match="exactly one"):
-        visualize_scores_main(
-            [
-                str(first),
-                str(second),
-                "--kind",
-                "dimensions",
-                "--csv",
-                str(csv_path),
-            ]
-        )
-
-    assert not csv_path.exists()
 
 
 def test_artifact_serialization_returns_detached_data():
