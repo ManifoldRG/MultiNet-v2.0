@@ -72,17 +72,17 @@ class ProbeAgent:
             isinstance(blk, dict) and blk.get("type") == "image_url" for blk in user_content
         )
 
-        full_mode = "You will not be queried again" in user_text
-        subgoal_mode = "SUB_GOAL:" in user_text and "ACTIONS:" in user_text
+        full_mode = "full sequence of actions" in user_text
+        subgoal_mode = "SUB_GOAL:" in user_text and "valid actions to reach it" in user_text
 
         if full_mode:
             reply = (
                 "SUB_GOAL: Execute maze-aware end-to-end plan.\n"
-                f"ACTIONS: {', '.join(self._full_trajectory_actions)}"
+                f"FINAL_OUTPUT: {', '.join(self._full_trajectory_actions)}"
             )
         elif subgoal_mode:
             chunk = _plan_to_goal_from_prompt(user_text, budget=4)
-            reply = f"SUB_GOAL: Advance toward goal.\nACTIONS: {', '.join(chunk)}"
+            reply = f"SUB_GOAL: Advance toward goal.\nFINAL_OUTPUT: {', '.join(chunk)}"
         else:
             step = _plan_to_goal_from_prompt(user_text, budget=1)[0]
             reply = f"FINAL_OUTPUT: {step}"

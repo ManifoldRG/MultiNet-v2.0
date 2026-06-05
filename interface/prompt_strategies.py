@@ -15,7 +15,6 @@ from prompting_experiments.prompt_templates import user as user_templates
 
 MECHANISM_LIST = system_templates.MECHANISM_LIST
 MECHANISM_RULES = system_templates.MECHANISM_RULES
-FINAL_OUTPUT_INSTRUCTION = system_templates.FINAL_OUTPUT_INSTRUCTION
 
 
 class MinimalPromptStrategy:
@@ -28,9 +27,8 @@ class MinimalPromptStrategy:
             system_templates.TASK_PREFIX,
             MECHANISM_LIST,
             system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
-            FINAL_OUTPUT_INSTRUCTION,
         ]
-        return "\n".join(chunks[:3]) + "\n" + "\n\n".join(chunks[3:])
+        return "\n".join(chunks)
 
     def build_user_prompt(
         self,

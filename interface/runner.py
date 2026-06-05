@@ -68,6 +68,18 @@ def _replace_current_question(prompt_text: str, question: str) -> str:
     return f"{before}{question}{after}"
 
 
+def _append_after_current_question(prompt_text: str, instruction: str) -> str:
+    questions = (
+        "What is the full sequence of actions you will take to complete the task?",
+        "What is your next action?",
+    )
+    for question in questions:
+        before, match, after = prompt_text.rpartition(question)
+        if match:
+            return f"{before}{match}\n\n{instruction}{after}"
+    return f"{prompt_text}\n\n{instruction}"
+
+
 def build_runner(
     config: ExperimentConfig,
     backend: MiniGridBackend,
@@ -368,6 +380,10 @@ class ExperimentRunner:
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)
+        prompt_text = _append_after_current_question(
+            prompt_text,
+            self.querying.final_output_instruction(),
+        )
         sections = []
         if self.config.observation in ("text_only", "image_text"):
             sections.append(

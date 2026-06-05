@@ -18,12 +18,13 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: verbose
 description: Standard prompt plus explicit domain rules.
@@ -37,8 +38,6 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 RULES (domain logic):
   - PICKUP: pick up a key from the adjacent cell you are facing. Keys block movement — you
@@ -55,6 +54,9 @@ RULES (domain logic):
 [user prompt]
 [image block 1]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 2: Observation format
@@ -71,8 +73,6 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 Initial maze (fixed for this episode):
@@ -91,6 +91,9 @@ Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: image_text
 description: Image block plus natural-language observation.
@@ -104,8 +107,6 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
@@ -125,6 +126,9 @@ Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: image_only
 description: Image block with no initial natural-language maze map.
@@ -138,12 +142,13 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 3: Context window
@@ -160,12 +165,13 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: last3
 description: Include up to the last three executed steps.
@@ -179,8 +185,6 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 Recent steps (oldest first). Each image is the maze view from which the following action was chosen.
@@ -200,6 +204,9 @@ Action: TURN_LEFT
 
 [image block 4]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: text_summary
 description: PR #12 design axis; no ExperimentConfig summary mode exists yet.
@@ -221,12 +228,13 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: subgoal
 description: Ask for a short subgoal and action chunk.
@@ -240,16 +248,14 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is your next action?
 
-For each turn output:
-  SUB_GOAL: <short description of your next waypoint>
-  ACTIONS: <comma-separated action list to reach it>
+Output exactly:
+SUB_GOAL: <short description of your next sub_goal>
+FINAL_OUTPUT:  <a>, <b>, ...  (comma-separated; one or more valid actions to reach it)
 ----------------------------------------------------------------------------------------
 variant name: full_trajectory
 description: Ask once for a complete action trajectory.
@@ -263,12 +269,13 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is the full sequence of actions you will take to complete the task?
+
+Output exactly:
+FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 5: In-context learning
@@ -285,12 +292,13 @@ The environment may contain:
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-On the last line, output exactly:
-FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
 [image block 1]
 What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: one_shot
 description: PR #12 design axis; example selection/injection is not implemented yet.

@@ -60,6 +60,13 @@ class QueryingMode:
             return querying_templates.FULL_TRAJECTORY_QUESTION
         return ""
 
+    def final_output_instruction(self) -> str:
+        if self.kind == "full_trajectory":
+            return querying_templates.FULL_TRAJECTORY_FINAL_OUTPUT_INSTRUCTION
+        if self.kind == "subgoal":
+            return querying_templates.SUBGOAL_FINAL_OUTPUT_INSTRUCTION
+        return querying_templates.SINGLE_ACTION_FINAL_OUTPUT_INSTRUCTION
+
     def system_prompt_suffix(self) -> str:
         return ""
 

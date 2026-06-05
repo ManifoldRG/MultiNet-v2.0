@@ -25,10 +25,4 @@ MECHANISM_RULES = (
 
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 
-FINAL_OUTPUT_INSTRUCTION = (
-    "On the last line, output exactly:\n"
-    "FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  "
-    "(comma-separated; one or more valid actions)"
-)
-
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
