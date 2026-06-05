@@ -72,17 +72,17 @@ class ProbeAgent:
             isinstance(blk, dict) and blk.get("type") == "image_url" for blk in user_content
         )
 
-        full_mode = "You will not be queried again" in system_text
-        subgoal_mode = "SUB_GOAL:" in system_text and "ACTIONS:" in system_text
+        full_mode = "full sequence of actions" in user_text
+        subgoal_mode = "SUB_GOAL:" in user_text and "valid actions to reach it" in user_text
 
         if full_mode:
             reply = (
                 "SUB_GOAL: Execute maze-aware end-to-end plan.\n"
-                f"ACTIONS: {', '.join(self._full_trajectory_actions)}"
+                f"FINAL_OUTPUT: {', '.join(self._full_trajectory_actions)}"
             )
         elif subgoal_mode:
             chunk = _plan_to_goal_from_prompt(user_text, budget=4)
-            reply = f"SUB_GOAL: Advance toward goal.\nACTIONS: {', '.join(chunk)}"
+            reply = f"SUB_GOAL: Advance toward goal.\nFINAL_OUTPUT: {', '.join(chunk)}"
         else:
             step = _plan_to_goal_from_prompt(user_text, budget=1)[0]
             reply = f"FINAL_OUTPUT: {step}"
@@ -121,12 +121,8 @@ def _collect_checks(cfg: ExperimentConfig, calls: list[dict[str, Any]]) -> list[
     system = first["system"]
     checks: list[dict[str, Any]] = []
 
-    if cfg.prompting == "minimal":
-        checks.append(_check("minimal omits mechanism list", "The environment may contain:" not in system))
-    if cfg.prompting == "standard":
-        checks.append(_check("standard includes mechanism list", "The environment may contain:" in system))
-    if cfg.prompting == "verbose":
-        checks.append(_check("verbose includes rules block", "RULES (domain logic):" in system))
+    checks.append(_check("system includes mechanism list", "The environment may contain:" in system))
+    checks.append(_check("system includes rules block", "RULES (domain logic):" in system))
 
     if cfg.observation == "text_only":
         checks.append(_check("text_only user content is plain string", first["user_content_type"] == "str"))
@@ -137,11 +133,11 @@ def _collect_checks(cfg: ExperimentConfig, calls: list[dict[str, Any]]) -> list[
 
     if cfg.observation == "image_only":
         checks.append(
-            _check("image_only omits initial NL map in system", "Initial maze (fixed for this episode):" not in system)
+            _check("image_only omits initial NL map in user", "Initial maze (fixed for this episode):" not in first["user_text"])
         )
     elif cfg.observation in ("text_only", "image_text"):
         checks.append(
-            _check(f"{cfg.observation} includes initial NL map in system", "Initial maze (fixed for this episode):" in system)
+            _check(f"{cfg.observation} includes initial NL map in user", "Initial maze (fixed for this episode):" in first["user_text"])
         )
 
     if cfg.querying == "full_trajectory":

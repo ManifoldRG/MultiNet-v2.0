@@ -1,0 +1,47 @@
+"""Step feedback templates."""
+
+INITIAL_FEEDBACK = "Episode start."
+OPENED_AND_MOVED = "Opened {color} door {door_id} and moved to {position}."
+OPENED_DOOR = "Opened {color} door {door_id}."
+NOW_FACING = "Now facing {facing}."
+ACTION_NO_EFFECT = "{action} had no effect."
+MOVE_BLOCKED_BY_KEY = (
+    "MOVE_FORWARD blocked by a {key_color} key at {position}. "
+    "Keys occupy their cell; you cannot walk onto them. "
+    "Face the key and use PICKUP from your current cell."
+)
+MOVE_BLOCKED_BY_GATE_WITH_SWITCHES = (
+    "MOVE_FORWARD blocked by closed gate {gate_id} at {position}. "
+    "Activate switch(es) {switches} to open it."
+)
+MOVE_BLOCKED_BY_GATE = "MOVE_FORWARD blocked by closed gate {gate_id} at {position}."
+MOVE_BLOCKED_GENERIC = "MOVE_FORWARD blocked by wall or closed door/gate."
+REACHED_GOAL = "Reached goal at {goal}."
+MOVED_TO = "Moved to {position}."
+PICKED_UP_KEY = "Picked up {key_color} key."
+NOTHING_TO_PICK_UP = "Nothing to pick up here."
+TOGGLED_STATE_CHANGED = "Toggled switch or gate state changed."
+TOGGLE_HOLD_SWITCH_HINT = (
+    "TOGGLE had no effect. MOVE_FORWARD onto the switch at {position} "
+    "(hold switches activate while you stand on them)."
+)
+TOGGLE_SWITCH_HINT = "TOGGLE had no effect. MOVE_FORWARD onto the switch at {position}, then TOGGLE."
+GATE_TOGGLE_WITH_SWITCHES = "Gates cannot be toggled directly. Activate switch(es) {switches} instead."
+GATE_TOGGLE_GENERIC = "Gates cannot be toggled directly. Activate a linked switch instead."
+TOGGLE_NO_EFFECT = "TOGGLE had no effect. Stand on a switch and TOGGLE, or use PICKUP/keys for doors."
+TASK_COMPLETE = "Task complete at {goal}."
+WRONG_DONE = "DONE called but not at goal {goal}."
+UNKNOWN_ACTION = "Unknown or unsupported action {action}."
+
+BLOCKED_FEEDBACK = "BLOCKED — {action}: {message} You remain at {position}."
+TURNED_FEEDBACK = "TURNED — {action}: {message}"
+MOVED_FEEDBACK = "MOVED — {action}: {message}"
+SUCCESS_FEEDBACK = "SUCCESS — {action}: {message}"
+PICKUP_FEEDBACK = "PICKUP — {action}: {message}"
+NOTHING_FEEDBACK = "NOTHING — {action}: {message} You remain at {position}."
+OPENED_FEEDBACK = "OPENED — {action}: {message}"
+TOGGLED_FEEDBACK = "TOGGLED — {action}: {message}"
+WRONG_DONE_FEEDBACK = "WRONG DONE — {action}: {message} You remain at {position}."
+INVALID_FEEDBACK = "INVALID — {action}: {message} You remain at {position}."
+DEFAULT_FEEDBACK = "{event_type} — {action}: {message}"
+PARSE_FAILURE_FEEDBACK = "Could not parse FINAL_OUTPUT (one or more valid actions). Use only: {actions_hint}."
