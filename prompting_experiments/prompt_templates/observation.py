@@ -19,10 +19,6 @@ COORDINATE_EXPLANATION = (
 START_LINE = "The start is at {start}."
 GOAL_LINE = "The goal is at {goal}."
 WALLS_LINE = "The following cells are walls: {walls}."
-TRIANGULAR_AGENT_LINE = (
-    "You are a triangular agent trying to navigate this maze. "
-    "You are facing the pointy end."
-)
 
 KEY_LINE = "There is a {color} key at ({row},{col})."
 DOOR_LINE = (

@@ -9,7 +9,7 @@ class ExperimentConfig:
     """Selects one implementation along each experimental axis."""
 
     prompting: Literal["minimal", "standard", "verbose"] = "standard"
-    observation: Literal["text_only", "image_text", "image_only"] = "image_text"
+    observation: Literal["text_only", "image_text", "image_only"] = "image_only"
     include_current_observation_description: bool = False
     observation_text_includes_facing: bool = False
     context_window: Literal["current", "last3"] = "current"

@@ -99,12 +99,7 @@ class ExperimentRunner:
         self.last_rgb, state, reset_info = self.backend.reset(seed=self.task_spec.seed)
         self.querying.reset()
 
-        system_prompt = self.prompt.build_system_prompt(self.querying.system_prompt_suffix())
-        if self.config.observation in ("text_only", "image_text"):
-            system_prompt = (
-                f"{system_prompt}\n\n"
-                f"{system_templates.INITIAL_MAZE_SECTION.format(maze_text=render_initial_maze_text(self.task_spec))}"
-            )
+        system_prompt = self.prompt.build_system_prompt()
         system_message = {"role": "system", "content": system_prompt}
         chat_history = self.config.chat_history
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
@@ -348,6 +343,18 @@ class ExperimentRunner:
             state,
             last_feedback,
         )
+        sections = []
+        if self.config.observation in ("text_only", "image_text"):
+            sections.append(
+                system_templates.INITIAL_MAZE_SECTION.format(
+                    maze_text=render_initial_maze_text(self.task_spec)
+                )
+            )
+        sections.append(prompt_text)
+        querying_suffix = self.querying.user_prompt_suffix()
+        if querying_suffix:
+            sections.append(querying_suffix)
+        prompt_text = "\n\n".join(sections)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
         text_block = {"type": "text", "text": prompt_text}

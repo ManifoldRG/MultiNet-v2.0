@@ -1,6 +1,5 @@
-"""System prompt templates."""
 
-TASK_PREFIX = "Task: move to the goal cell in the grid."
+TASK_PREFIX = "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid."
 
 MECHANISM_LIST = (
     "The environment may contain:\n"

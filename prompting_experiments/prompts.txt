@@ -9,7 +9,7 @@ variant name: standard
 description: Standard task prompt with mechanism descriptions.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -19,14 +19,6 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
@@ -38,7 +30,7 @@ variant name: verbose
 description: Standard prompt plus explicit domain rules and local hints.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -61,14 +53,6 @@ RULES (domain logic):
   - Closed gates and doors you lack a key for block movement like walls until resolved.
   - Use DONE only when you are standing on the goal cell.
 
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
-
 [user prompt]
 [image block 1]
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10
@@ -88,7 +72,7 @@ variant name: text_only
 description: Natural-language current observation, no image blocks.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -99,15 +83,14 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
+[user prompt]
 Initial maze (fixed for this episode):
 The world is a 8 by 8 grid.
 Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
-[user prompt]
 Observation:
 Current situation (this step):
 The goal is at (6, 6).
@@ -125,7 +108,7 @@ variant name: image_text
 description: Image block plus natural-language observation.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -136,16 +119,15 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
+[user prompt]
+[image block 1]
 Initial maze (fixed for this episode):
 The world is a 8 by 8 grid.
 Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
-[user prompt]
-[image block 1]
 Observation:
 Current situation (this step):
 The goal is at (6, 6).
@@ -163,7 +145,7 @@ variant name: image_only
 description: Image block with no initial natural-language maze map.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -187,7 +169,7 @@ variant name: current
 description: Prompt only with the current observation.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -197,14 +179,6 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
@@ -216,7 +190,7 @@ variant name: last3
 description: Include up to the last three executed steps.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -226,14 +200,6 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
@@ -253,7 +219,7 @@ variant name: step_by_step
 description: Ask for one action each query.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -263,14 +229,6 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
@@ -282,7 +240,7 @@ variant name: subgoal
 description: Ask for a short subgoal and action chunk.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -292,30 +250,22 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-For each turn output:
-  SUB_GOAL: <short description of your next waypoint>
-  ACTIONS: <comma-separated action list to reach it>
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]
 Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
 Last result: Episode start.
 What is your next action?
+
+For each turn output:
+  SUB_GOAL: <short description of your next waypoint>
+  ACTIONS: <comma-separated action list to reach it>
 ----------------------------------------------------------------------------------------
 variant name: full_trajectory
 description: Ask once for a complete action trajectory.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -325,26 +275,18 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+[user prompt]
+[image block 1]
+Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
+Last result: Episode start.
+What is your next action?
 
 Output your complete trajectory once as:
   SUB_GOAL: <short description of the full plan>
   ACTIONS: <comma-separated action list from start to finish>
 The last action in ACTIONS should be DONE (when you expect to be at the goal).
 You will not be queried again — this is your only planning turn.
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
-
-[user prompt]
-[image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
-What is your next action?
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 5: In-context learning
@@ -353,7 +295,7 @@ variant name: zero_shot
 description: Current interface behavior.
 prompts:
 [system prompt]
-Task: move to the goal cell in the grid.
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
@@ -363,14 +305,6 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
-
-Initial maze (fixed for this episode):
-The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
-The start is at (1, 1).
-The goal is at (6, 6).
-The following cells are walls: none.
-You are a triangular agent trying to navigate this maze. You are facing the pointy end.
 
 [user prompt]
 [image block 1]

@@ -49,8 +49,7 @@ def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
         observation_templates.COORDINATE_EXPLANATION,
         observation_templates.START_LINE.format(start=start),
         observation_templates.GOAL_LINE.format(goal=goal),
-        observation_templates.WALLS_LINE.format(walls=wall_str),
-        observation_templates.TRIANGULAR_AGENT_LINE,
+        observation_templates.WALLS_LINE.format(walls=wall_str)
     ]
 
 

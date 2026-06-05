@@ -8,7 +8,6 @@ from typing import Any
 
 from prompting_experiments import CONDITION_SETS
 from prompting_experiments.prompt_templates import feedback as feedback_templates
-from prompting_experiments.prompt_templates import system as system_templates
 
 
 def _content_to_text(content: Any) -> str:
@@ -41,7 +40,6 @@ def _prompt_preview(config, maze_path: Path, max_steps: int) -> tuple[str, str]:
     try:
         from interface.loader import load_task
         from interface.runner import build_runner
-        from interface.renderer import render_initial_maze_text
     except ModuleNotFoundError as exc:
         raise SystemExit(_missing_dependency_message(exc)) from exc
 
@@ -50,12 +48,7 @@ def _prompt_preview(config, maze_path: Path, max_steps: int) -> tuple[str, str]:
     runner = build_runner(config, backend, spec)
     runner.last_rgb, state, _reset_info = backend.reset(seed=spec.seed)
 
-    system_prompt = runner.prompt.build_system_prompt(runner.querying.system_prompt_suffix())
-    if config.observation in ("text_only", "image_text"):
-        system_prompt = (
-            f"{system_prompt}\n\n"
-            f"{system_templates.INITIAL_MAZE_SECTION.format(maze_text=render_initial_maze_text(spec))}"
-        )
+    system_prompt = runner.prompt.build_system_prompt()
 
     user_message = runner._build_message(state, feedback_templates.INITIAL_FEEDBACK, [])
     return system_prompt, _content_to_text(user_message.get("content"))

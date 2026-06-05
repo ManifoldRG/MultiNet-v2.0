@@ -2,7 +2,7 @@
 
 OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
 
-MINIMAL_USER_PROMPT = (
+STANDARD_USER_PROMPT = (
     "{obs_block}"
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
     "Last result: {last_feedback}\n"

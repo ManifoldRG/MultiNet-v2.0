@@ -29,14 +29,14 @@ class MinimalPromptStrategy:
         self._actions_hint = actions_hint
 
     def build_system_prompt(self, querying_suffix: str = "") -> str:
+        del querying_suffix
         chunks = [
             system_templates.TASK_PREFIX,
+            MECHANISM_LIST,
             system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
             FINAL_OUTPUT_INSTRUCTION,
         ]
-        if querying_suffix:
-            chunks.append(querying_suffix)
-        return "\n".join(chunks[:2]) + "\n" + "\n\n".join(chunks[2:])
+        return "\n".join(chunks[:3]) + "\n" + "\n\n".join(chunks[3:])
 
     def build_user_prompt(
         self,
@@ -53,7 +53,7 @@ class MinimalPromptStrategy:
         )
         pos = agent_row_col(state)
         goal = goal_row_col(task_spec)
-        prompt = user_templates.MINIMAL_USER_PROMPT.format(
+        prompt = user_templates.STANDARD_USER_PROMPT.format(
             obs_block=obs_block,
             position=pos,
             facing=agent_facing(state),
@@ -64,25 +64,16 @@ class MinimalPromptStrategy:
 
 
 class StandardPromptStrategy(MinimalPromptStrategy):
-    def build_system_prompt(self, querying_suffix: str = "") -> str:
-        chunks = [
-            system_templates.TASK_PREFIX,
-            MECHANISM_LIST,
-            system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
-            FINAL_OUTPUT_INSTRUCTION,
-        ]
-        if querying_suffix:
-            chunks.append(querying_suffix)
-        return "\n".join(chunks[:3]) + "\n" + "\n\n".join(chunks[3:])
+    pass
 
 
 class VerbosePromptStrategy(StandardPromptStrategy):
+    include_mechanism_hints = False
+
     def build_system_prompt(self, querying_suffix: str = "") -> str:
-        std = StandardPromptStrategy.build_system_prompt(self, "").rstrip()
-        chunks = [std, MECHANISM_RULES]
-        if querying_suffix:
-            chunks.append(querying_suffix)
-        return "\n\n".join(chunks)
+        del querying_suffix
+        std = StandardPromptStrategy.build_system_prompt(self).rstrip()
+        return "\n\n".join([std, MECHANISM_RULES])
 
     def build_user_prompt(
         self,
@@ -128,7 +119,9 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         neighbour_block = (
             user_templates.NEIGHBOUR_BLOCK_HEADER + "\n".join(neighbour_lines) + "\n"
         )
-        mechanism_block = _mechanism_hints_text(task_spec)
+        mechanism_block = (
+            _mechanism_hints_text(task_spec) if self.include_mechanism_hints else ""
+        )
         obs_block = (
             user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
             if obs_text
