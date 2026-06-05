@@ -16,7 +16,6 @@ CONDITION_SET = ConditionSet(
         "standard": Variant(
             name="standard",
             description="Standard task prompt with mechanism descriptions.",
-            config_overrides={"prompting": "standard"},
         ),
         "verbose": Variant(
             name="verbose",

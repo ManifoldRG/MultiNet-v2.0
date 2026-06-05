@@ -8,16 +8,15 @@ from .core import ConditionSet, Variant
 CONDITION_SET = ConditionSet(
     name="Context window",
     comparisons=(
-        "0 history: current observation only",
+        "Standard 0 history: current observation only",
         "Last 3 executed steps",
         "Current observation + text summary of prior actions",
     ),
     decision="Compare current-state-only prompting against recent history.",
     variants={
-        "current": Variant(
+        "standard": Variant(
             name="current",
-            description="Prompt only with the current observation.",
-            config_overrides={"context_window": "current"},
+            description="Prompt only with the current observation-same as the standard prompt.",
         ),
         "last3": Variant(
             name="last3",

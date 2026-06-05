@@ -115,7 +115,7 @@ def test_observation_format_text_variants_keep_facing():
 
 def test_observation_format_image_only_still_omits_text_description():
     spec, state = _initial_spec_and_state()
-    cfg = CONDITION_SET.variants["image_only"].build_config(
+    cfg = CONDITION_SET.variants["standard"].build_config(
         replace(ExperimentConfig(), observation_text_includes_facing=False)
     )
 
@@ -223,10 +223,22 @@ def test_last3_prompt_omits_current_status_footer_with_history_context():
 def test_observation_format_image_only_matches_standard_prompt_text():
     standard_text = _initial_user_prompt_text(ExperimentConfig())
     image_only_text = _initial_user_prompt_text(
-        CONDITION_SET.variants["image_only"].build_config(ExperimentConfig())
+        CONDITION_SET.variants["standard"].build_config(ExperimentConfig())
     )
 
     assert image_only_text == standard_text
+
+
+def test_standard_variants_use_default_config_without_overrides():
+    for condition in CONDITION_SETS.values():
+        variant = condition.variants.get("standard")
+        if variant is None or not variant.implemented:
+            continue
+
+        cfg = variant.build_config()
+
+        assert cfg == ExperimentConfig()
+        assert variant.config_overrides is None
 
 
 def test_implemented_non_verbose_conditions_share_standard_system_prompt():
