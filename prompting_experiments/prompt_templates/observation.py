@@ -6,7 +6,7 @@ RECENT_HISTORY_STEP = "  ({row}, {col}) facing {facing} -> {action} -> {feedback
 IMAGE_HISTORY_ACTION = "Action: {action}\n\n"
 IMAGE_ONLY_HISTORY_INTRO = (
     "Recent steps (oldest first). Each image is the maze view from which the "
-    "following action was chosen; infer pose and environment state from the image.\n\n"
+    "following action was chosen.\n\n"
 )
 IMAGE_TEXT_HISTORY_INTRO = "Recent step views (oldest first):\n\n"
 

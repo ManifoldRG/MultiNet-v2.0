@@ -1,6 +1,7 @@
 Prompt Experiment Preview
 Maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/validation_10/V01_empty_room.json
 Max steps: 5
+Preview prompt state: after 3 random steps (seed: 0)
 
 ========================================================================================
 condition set 1: Prompt
@@ -13,7 +14,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -25,14 +26,14 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: verbose
-description: Standard prompt plus explicit domain rules and local hints.
+description: Standard prompt plus explicit domain rules.
 prompts:
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -53,12 +54,6 @@ RULES (domain logic):
 
 [user prompt]
 [image block 1]
-Inventory: none
-From your perspective:
-  AHEAD: open (1,2)
-  RIGHT: open (2,1)
-  BEHIND: out of bounds
-  LEFT: out of bounds
 What is your next action?
 ----------------------------------------------------------------------------------------
 ========================================================================================
@@ -72,7 +67,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -89,7 +84,7 @@ The following cells are walls: none.
 
 Observation:
 Current situation (this step):
-You are at (1, 1) facing EAST.
+You are at (1, 1) facing NORTH.
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
@@ -105,7 +100,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -123,7 +118,7 @@ The following cells are walls: none.
 
 Observation:
 Current situation (this step):
-You are at (1, 1) facing EAST.
+You are at (1, 1) facing NORTH.
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
@@ -139,7 +134,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -161,7 +156,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -180,7 +175,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -188,7 +183,22 @@ On the last line, output exactly:
 FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 
 [user prompt]
+Recent steps (oldest first). Each image is the maze view from which the following action was chosen.
+
+
 [image block 1]
+Action: PICKUP
+
+
+[image block 2]
+Action: PICKUP
+
+
+[image block 3]
+Action: TURN_LEFT
+
+
+[image block 4]
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: text_summary
@@ -207,7 +217,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -226,7 +236,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -249,7 +259,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
@@ -277,7 +287,7 @@ Task: You are the triangular agent trying to navigate this maze. You are facing 
 The environment may contain:
 - Keys: pick them up to open doors of the matching color
 - Doors: blocked passages that require a matching key
-- Switches: step onto them to activate (hold) or TOGGLE while standing on them
+- Switches: TOGGLE while standing on them
 - Gates: blocked passages controlled by switches
 
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.

@@ -90,6 +90,18 @@ class ExperimentRunner:
         self.querying = querying
         self.last_rgb: np.ndarray | None = None
 
+    def build_prompt_message(
+        self,
+        state,
+        last_feedback: str,
+        transcript: List[dict],
+    ) -> tuple[str, dict]:
+        return self.prompt.build_system_prompt(), self._build_message(
+            state,
+            last_feedback,
+            transcript,
+        )
+
     def run(
         self,
         agent: Callable[[List[dict]], str],
@@ -343,7 +355,7 @@ class ExperimentRunner:
             self.task_spec,
             state,
             last_feedback,
-            include_status_footer=bool(recent_history_steps(transcript, ctx)),
+            include_status_footer=False,
         )
         sections = []
         if self.config.observation in ("text_only", "image_text"):

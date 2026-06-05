@@ -6,15 +6,9 @@ from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
 from interface.coords import (
-    FACING_ORDER,
-    FACING_TO_DELTA,
     agent_facing,
     agent_row_col,
-    describe_cell,
     goal_row_col,
-    inventory_list,
-    maze_rows_cols,
-    wall_cells,
 )
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
@@ -91,41 +85,6 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         *,
         include_status_footer: bool = False,
     ) -> str:
-        row, col = agent_row_col(state)
-        grow, gcol = goal_row_col(task_spec)
-        rows, cols = maze_rows_cols(task_spec)
-        walls = wall_cells(task_spec)
-
-        facing_idx = FACING_ORDER.index(agent_facing(state))
-        rel_dirs = [
-            ("AHEAD", FACING_ORDER[facing_idx % 4]),
-            ("RIGHT", FACING_ORDER[(facing_idx + 1) % 4]),
-            ("BEHIND", FACING_ORDER[(facing_idx + 2) % 4]),
-            ("LEFT", FACING_ORDER[(facing_idx + 3) % 4]),
-        ]
-        neighbour_lines = []
-        for rel, cardinal in rel_dirs:
-            dr, dc = FACING_TO_DELTA[cardinal]
-            nr, nc = row + dr, col + dc
-            desc = describe_cell(
-                task_spec,
-                state,
-                nr,
-                nc,
-                walls=walls,
-                goal=(grow, gcol),
-                rows=rows,
-                cols=cols,
-            )
-            neighbour_lines.append(
-                user_templates.NEIGHBOUR_LINE.format(
-                    relative_direction=rel,
-                    description=desc,
-                )
-            )
-        neighbour_block = (
-            user_templates.NEIGHBOUR_BLOCK_HEADER + "\n".join(neighbour_lines) + "\n"
-        )
         mechanism_block = (
             _mechanism_hints_text(task_spec) if self.include_mechanism_hints else ""
         )
@@ -134,19 +93,18 @@ class VerbosePromptStrategy(StandardPromptStrategy):
             if obs_text
             else ""
         )
-        inventory_str = ", ".join(inventory_list(state)) or "none"
+        pos = agent_row_col(state)
+        goal = goal_row_col(task_spec)
         status_block = _status_block(
             include_status_footer,
-            position=(row, col),
+            position=pos,
             facing=agent_facing(state),
-            goal=(grow, gcol),
+            goal=goal,
             last_feedback=last_feedback,
         )
 
         prompt = user_templates.VERBOSE_USER_PROMPT.format(
             obs_block=obs_block,
-            inventory=inventory_str,
-            neighbour_block=neighbour_block,
             mechanism_block=mechanism_block,
             status_block=status_block,
         )

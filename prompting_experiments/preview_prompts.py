@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import random
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,78 @@ def _missing_dependency_message(exc: ModuleNotFoundError) -> str:
     )
 
 
-def _prompt_preview(config, maze_path: Path, max_steps: int) -> tuple[str, str]:
+def _rollout_preview_steps(
+    runner,
+    state,
+    steps: int,
+    seed: int,
+) -> tuple[Any, str, list[dict]]:
+    from interface.actions_map import nlu_action_to_int
+    from interface.coords import agent_facing, agent_row_col
+    from interface.episode_log import state_snapshot
+    from interface.feedback import format_step_feedback
+    from interface.parser import ACTION_ORDER
+
+    rng = random.Random(seed)
+    actions = [action for action in ACTION_ORDER if action != "DONE"]
+    last_feedback = feedback_templates.INITIAL_FEEDBACK
+    transcript: list[dict] = []
+
+    for step_index in range(1, steps + 1):
+        action = rng.choice(actions)
+        position_before = agent_row_col(state)
+        facing_before = agent_facing(state)
+        state_before = state_snapshot(state)
+        decision_frame_rgb = runner.last_rgb
+        prev_state = state
+
+        runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
+            nlu_action_to_int(action)
+        )
+        step_detail, event_type = format_step_feedback(
+            action, prev_state, state, reward, terminated, runner.task_spec
+        )
+        last_feedback = step_detail
+        transcript.append(
+            {
+                "kind": "step",
+                "step_index": step_index,
+                "query_index": 0,
+                "action_queue_index": 0,
+                "env_step_count": state.step_count,
+                "action": action,
+                "event_type": event_type,
+                "feedback": step_detail,
+                "prompt_feedback": last_feedback,
+                "facing_before": facing_before,
+                "facing_after": agent_facing(state),
+                "position_before": list(position_before),
+                "position_after": list(agent_row_col(state)),
+                "state_before": state_before,
+                "state_after": state_snapshot(state),
+                "reward": reward,
+                "terminated": terminated,
+                "truncated": truncated,
+                "backend_info": info,
+                "actions_remaining_after": [],
+                "consecutive_failures_after": 0,
+                "_decision_frame_rgb": decision_frame_rgb,
+                "_post_step_rgb": runner.last_rgb,
+            }
+        )
+        if terminated or truncated:
+            break
+
+    return state, last_feedback, transcript
+
+
+def _prompt_preview(
+    config,
+    maze_path: Path,
+    max_steps: int,
+    preview_steps: int,
+    rollout_seed: int,
+) -> tuple[str, str]:
     try:
         from interface.loader import load_task
         from interface.runner import build_runner
@@ -47,18 +119,31 @@ def _prompt_preview(config, maze_path: Path, max_steps: int) -> tuple[str, str]:
     spec.max_steps = max_steps
     runner = build_runner(config, backend, spec)
     runner.last_rgb, state, _reset_info = backend.reset(seed=spec.seed)
-
-    system_prompt = runner.prompt.build_system_prompt()
-
-    user_message = runner._build_message(state, feedback_templates.INITIAL_FEEDBACK, [])
+    state, last_feedback, transcript = _rollout_preview_steps(
+        runner,
+        state,
+        preview_steps,
+        rollout_seed,
+    )
+    system_prompt, user_message = runner.build_prompt_message(
+        state,
+        last_feedback,
+        transcript,
+    )
     return system_prompt, _content_to_text(user_message.get("content"))
 
 
-def build_preview(maze_path: Path, max_steps: int) -> str:
+def build_preview(
+    maze_path: Path,
+    max_steps: int,
+    preview_steps: int,
+    rollout_seed: int,
+) -> str:
     chunks = [
         "Prompt Experiment Preview",
         f"Maze: {maze_path}",
         f"Max steps: {max_steps}",
+        f"Preview prompt state: after {preview_steps} random steps (seed: {rollout_seed})",
         "",
     ]
 
@@ -91,7 +176,13 @@ def build_preview(maze_path: Path, max_steps: int) -> str:
                 config = variant.build_config()
             except ModuleNotFoundError as exc:
                 raise SystemExit(_missing_dependency_message(exc)) from exc
-            system_prompt, user_prompt = _prompt_preview(config, maze_path, max_steps)
+            system_prompt, user_prompt = _prompt_preview(
+                config,
+                maze_path,
+                max_steps,
+                preview_steps,
+                rollout_seed,
+            )
             chunks.extend(
                 [
                     "[system prompt]",
@@ -114,6 +205,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Write prompt experiment previews to prompts.txt.")
     parser.add_argument("--maze", default="V01_empty_room.json")
     parser.add_argument("--max-steps", type=int, default=5)
+    parser.add_argument("--preview-steps", type=int, default=3)
+    parser.add_argument("--rollout-seed", type=int, default=0)
     parser.add_argument(
         "--output",
         type=Path,
@@ -125,7 +218,12 @@ def main() -> None:
     if not maze_path.is_file():
         maze_path = _default_maze_path(args.maze)
 
-    preview = build_preview(maze_path, args.max_steps)
+    preview = build_preview(
+        maze_path,
+        args.max_steps,
+        args.preview_steps,
+        args.rollout_seed,
+    )
     args.output.write_text(preview, encoding="utf-8")
     print(f"wrote {args.output}")
 

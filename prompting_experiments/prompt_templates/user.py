@@ -10,8 +10,6 @@ STANDARD_USER_PROMPT = (
 
 VERBOSE_USER_PROMPT = (
     "{obs_block}"
-    "Inventory: {inventory}\n"
-    "{neighbour_block}"
     "{mechanism_block}"
     "{status_block}"
     "What is your next action?"
@@ -21,9 +19,6 @@ STATUS_BLOCK = (
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
     "Last result: {last_feedback}\n"
 )
-
-NEIGHBOUR_BLOCK_HEADER = "From your perspective:\n"
-NEIGHBOUR_LINE = "  {relative_direction}: {description}"
 
 MECHANISM_HINTS_HEADER = "Hints:\n"
 KEY_DOOR_HINT = (

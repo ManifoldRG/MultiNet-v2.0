@@ -20,7 +20,7 @@ CONDITION_SET = ConditionSet(
         ),
         "verbose": Variant(
             name="verbose",
-            description="Standard prompt plus explicit domain rules and local hints.",
+            description="Standard prompt plus explicit domain rules.",
             config_overrides={"prompting": "verbose"},
         ),
     },
