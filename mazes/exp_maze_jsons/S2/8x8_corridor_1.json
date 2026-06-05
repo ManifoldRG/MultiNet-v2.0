@@ -1,0 +1,44 @@
+{
+  "task_id": "8x8_corridor_1",
+  "version": "1.0",
+  "seed": 0,
+  "difficulty_tier": 2,
+  "description": "8x8 corridor with turns and a vertical layout.",
+  "maze": {
+    "dimensions": [8, 8],
+    "walls": [
+      [2, 1], [6, 1],
+      [2, 2], [4, 2], [6, 2],
+      [2, 3], [4, 3], [6, 3],
+      [2, 4], [4, 4], [6, 4],
+      [2, 5], [4, 5], [6, 5],
+      [4, 6]
+    ],
+    "start": [1, 1],
+    "goal": [6, 6]
+  },
+  "mechanisms": {
+    "keys": [],
+    "doors": [],
+    "switches": [],
+    "gates": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [6, 6],
+    "auxiliary_conditions": []
+  },
+  "metadata": {
+    "chain_pattern": "none",
+    "tiling": "square",
+    "wall_topology": "winding"
+  },
+  "max_steps": 1000
+}
