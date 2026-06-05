@@ -5,7 +5,7 @@ MECHANISM_LIST = (
     "The environment may contain:\n"
     "- Keys: pick them up to open doors of the matching color\n"
     "- Doors: blocked passages that require a matching key\n"
-    "- Switches: step onto them to activate (hold) or TOGGLE while standing on them\n"
+    "- Switches: TOGGLE while standing on them\n"
     "- Gates: blocked passages controlled by switches\n"
 )
 

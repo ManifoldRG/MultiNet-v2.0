@@ -45,6 +45,8 @@ class MinimalPromptStrategy:
         task_spec: TaskSpecification,
         state: GridState,
         last_feedback: str,
+        *,
+        include_status_footer: bool = False,
     ) -> str:
         obs_block = (
             user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
@@ -53,12 +55,16 @@ class MinimalPromptStrategy:
         )
         pos = agent_row_col(state)
         goal = goal_row_col(task_spec)
-        prompt = user_templates.STANDARD_USER_PROMPT.format(
-            obs_block=obs_block,
+        status_block = _status_block(
+            include_status_footer,
             position=pos,
             facing=agent_facing(state),
             goal=goal,
             last_feedback=last_feedback,
+        )
+        prompt = user_templates.STANDARD_USER_PROMPT.format(
+            obs_block=obs_block,
+            status_block=status_block,
         )
         return _with_history(prompt, history_text)
 
@@ -82,10 +88,11 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         task_spec: TaskSpecification,
         state: GridState,
         last_feedback: str,
+        *,
+        include_status_footer: bool = False,
     ) -> str:
         row, col = agent_row_col(state)
         grow, gcol = goal_row_col(task_spec)
-        manhattan = abs(row - grow) + abs(col - gcol)
         rows, cols = maze_rows_cols(task_spec)
         walls = wall_cells(task_spec)
 
@@ -128,17 +135,20 @@ class VerbosePromptStrategy(StandardPromptStrategy):
             else ""
         )
         inventory_str = ", ".join(inventory_list(state)) or "none"
-
-        prompt = user_templates.VERBOSE_USER_PROMPT.format(
-            obs_block=obs_block,
+        status_block = _status_block(
+            include_status_footer,
             position=(row, col),
             facing=agent_facing(state),
             goal=(grow, gcol),
-            manhattan=manhattan,
+            last_feedback=last_feedback,
+        )
+
+        prompt = user_templates.VERBOSE_USER_PROMPT.format(
+            obs_block=obs_block,
             inventory=inventory_str,
             neighbour_block=neighbour_block,
             mechanism_block=mechanism_block,
-            last_feedback=last_feedback,
+            status_block=status_block,
         )
         return _with_history(prompt, history_text)
 
@@ -150,6 +160,24 @@ def _with_history(prompt: str, history_text: str) -> str:
     if not history_text:
         return prompt
     return f"{history_text}\n\n{prompt}"
+
+
+def _status_block(
+    include: bool,
+    *,
+    position: tuple[int, int],
+    facing: str,
+    goal: tuple[int, int],
+    last_feedback: str,
+) -> str:
+    if not include:
+        return ""
+    return user_templates.STATUS_BLOCK.format(
+        position=position,
+        facing=facing,
+        goal=goal,
+        last_feedback=last_feedback,
+    )
 
 
 def _mechanism_hints_text(task_spec: TaskSpecification) -> str:

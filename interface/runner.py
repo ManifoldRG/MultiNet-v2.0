@@ -23,6 +23,7 @@ from interface.observation import (
     current_observation_text,
     history_content_blocks,
     history_text,
+    recent_history_steps,
 )
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
@@ -342,6 +343,7 @@ class ExperimentRunner:
             self.task_spec,
             state,
             last_feedback,
+            include_status_footer=bool(recent_history_steps(transcript, ctx)),
         )
         sections = []
         if self.config.observation in ("text_only", "image_text"):

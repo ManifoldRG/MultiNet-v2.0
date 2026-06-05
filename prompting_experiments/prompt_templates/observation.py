@@ -35,7 +35,6 @@ GATE_LINE = (
 )
 
 CURRENT_SITUATION_HEADER = "Current situation (this step):"
-CURRENT_GOAL_LINE = "The goal is at {goal}."
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
 CURRENT_AGENT_POSITION_LINE = "You are at {position}."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."

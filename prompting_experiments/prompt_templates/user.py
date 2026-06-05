@@ -4,20 +4,22 @@ OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
 
 STANDARD_USER_PROMPT = (
     "{obs_block}"
-    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
-    "Last result: {last_feedback}\n"
+    "{status_block}"
     "What is your next action?"
 )
 
 VERBOSE_USER_PROMPT = (
     "{obs_block}"
-    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}  |  "
-    "Manhattan: {manhattan}\n"
     "Inventory: {inventory}\n"
     "{neighbour_block}"
     "{mechanism_block}"
-    "Last result: {last_feedback}\n"
+    "{status_block}"
     "What is your next action?"
+)
+
+STATUS_BLOCK = (
+    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
+    "Last result: {last_feedback}\n"
 )
 
 NEIGHBOUR_BLOCK_HEADER = "From your perspective:\n"

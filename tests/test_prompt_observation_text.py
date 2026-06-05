@@ -38,6 +38,23 @@ def _initial_user_prompt_text(cfg: ExperimentConfig) -> str:
     return content
 
 
+def _user_prompt_text_with_transcript(
+    cfg: ExperimentConfig, transcript: list[dict]
+) -> str:
+    backend, spec = load_task(default_maze_path())
+    runner = build_runner(cfg, backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+    message = runner._build_message(state, feedback_templates.INITIAL_FEEDBACK, transcript)
+    content = message["content"]
+    if isinstance(content, list):
+        return "\n".join(
+            block["text"]
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return content
+
+
 def _initial_user_prompt_text_for_maze(cfg: ExperimentConfig, maze_name: str) -> str:
     backend, spec = load_task(default_maze_path(maze_name))
     runner = build_runner(cfg, backend, spec)
@@ -72,6 +89,7 @@ def test_current_observation_can_render_without_facing():
     )
 
     assert "Current situation (this step):" in text
+    assert "The goal is at" not in text
     assert "You are at (1, 1)." in text
     assert "You are at (1, 1) facing EAST." not in text
 
@@ -91,6 +109,7 @@ def test_observation_format_text_variants_keep_facing():
         )
 
         assert "Current situation (this step):" in text
+        assert "The goal is at" not in text
         assert "You are at (1, 1) facing EAST." in text
 
 
@@ -167,6 +186,38 @@ def test_observation_format_initial_maze_only_for_text_variants():
         has_initial_maze = "Initial maze (fixed for this episode):" in prompt_text
 
         assert has_initial_maze is (variant_name in text_variants), variant_name
+
+
+def test_initial_prompts_omit_current_status_footer_without_history_context():
+    for variant in CONDITION_SET.variants.values():
+        cfg = variant.build_config(ExperimentConfig())
+        prompt_text = _initial_user_prompt_text(cfg)
+
+        assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
+        assert "Last result: Episode start." not in prompt_text
+
+
+def test_last3_prompt_keeps_current_status_footer_with_history_context():
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "position_after": (1, 2),
+            "facing_after": "EAST",
+            "action": "MOVE_FORWARD",
+            "prompt_feedback": "MOVED",
+        }
+    ]
+    cfg = ExperimentConfig(context_window="last3")
+
+    prompt_text = _user_prompt_text_with_transcript(
+        cfg,
+        transcript,
+    )
+
+    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" in prompt_text
+    assert "Last result: Episode start." in prompt_text
 
 
 def test_observation_format_image_only_matches_standard_prompt_text():

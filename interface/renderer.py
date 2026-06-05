@@ -119,7 +119,6 @@ def render_user_observation_text(
     *,
     include_facing: bool = False,
 ) -> str:
-    goal = goal_row_col(task_spec)
     pos = agent_row_col(state)
     inv = ", ".join(inventory_list(state)) or "empty"
     agent_line = (
@@ -132,7 +131,6 @@ def render_user_observation_text(
     )
     head = [
         observation_templates.CURRENT_SITUATION_HEADER,
-        observation_templates.CURRENT_GOAL_LINE.format(goal=goal),
         agent_line,
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv),
         "",

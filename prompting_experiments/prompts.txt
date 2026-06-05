@@ -22,8 +22,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: verbose
@@ -55,14 +53,12 @@ RULES (domain logic):
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)  |  Manhattan: 10
 Inventory: none
 From your perspective:
   AHEAD: open (1,2)
   RIGHT: open (2,1)
   BEHIND: out of bounds
   LEFT: out of bounds
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 ========================================================================================
@@ -93,15 +89,12 @@ The following cells are walls: none.
 
 Observation:
 Current situation (this step):
-The goal is at (6, 6).
 You are at (1, 1) facing EAST.
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: image_text
@@ -130,15 +123,12 @@ The following cells are walls: none.
 
 Observation:
 Current situation (this step):
-The goal is at (6, 6).
 You are at (1, 1) facing EAST.
 Your inventory: empty.
 
 Map contents as of this step (keys on the ground, doors, switches, gates):
 (No keys on the ground, doors, switches, or gates in the current state description.)
 
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: image_only
@@ -158,8 +148,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 ========================================================================================
@@ -182,8 +170,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: last3
@@ -203,8 +189,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: text_summary
@@ -232,8 +216,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: subgoal
@@ -253,8 +235,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 
 For each turn output:
@@ -278,8 +258,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 
 Output your complete trajectory once as:
@@ -308,8 +286,6 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)
-Last result: Episode start.
 What is your next action?
 ----------------------------------------------------------------------------------------
 variant name: one_shot
