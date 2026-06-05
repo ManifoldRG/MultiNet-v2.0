@@ -1,24 +1,28 @@
 """Bare-bones run-pipeline orchestrator for MultiNet v2.0 (tests 1-3).
 
-Sequential, inspectable Stage 1->5 driver. No DAG runner. Runs the chosen
-experiment over the manifest, writing the ``artifacts/`` tree:
+Sequential, inspectable Stage 1->5 driver. No DAG runner. Writes the
+``artifacts/`` tree:
 
     artifacts/
       tasks/<task_id>/{canonical_paths.json, scored_static.json}
       tasks/_suite.json
-      runs/<task_id>/<backend>/<agent>/seed_<seed>/<condition>/{episode.json, run_score.json}
+      runs/<task_id>/<backend>/<model>/seed_<seed>/<condition>/{episode.json, run_score.json}
       episode_runs.jsonl
       reports/<run_set_id>/{scoring_calibration_summary,complexity_distance_summary,mechanism_ordering_pairs}.json
 
-Stage 3 uses the ``interface/`` runner (Stack A) with a live-model agent; the CLI
-builds the agent from ``--agent``. Programmatic callers can pass any agent
-callable to :func:`run_pipeline` (e.g. a stub for testing).
+Selection is data-driven via a **run-config** that maps each model to the task
+files it should run (plus its provider/params); the **manifest** is a separate
+task *catalog* that supplies per-task scoring metadata (experiment, condition,
+expected_mechanisms, test-2 route cells). Stage 3 uses the ``interface/`` runner
+(Stack A) with a live-model agent. Programmatic callers can inject any agent
+callable, e.g. a stub for testing.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
@@ -31,11 +35,20 @@ from pipeline import episode_metrics, reports
 from pipeline.run_stage3 import run_episode
 
 Agent = Callable[[list[dict]], str]
+# A factory used by tests to supply stub agents: (model_name, model_cfg) -> (agent, label).
+AgentFactory = Callable[[str, dict[str, Any]], "tuple[Agent, str]"]
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_MANIFEST = _REPO_ROOT / "gridworld" / "fixtures" / "manifest.json"
+_EXPERIMENT_KEYWORDS = {"test1", "test2", "test3", "all"}
+
+
+def _sanitize(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "model"
 
 
 # --------------------------------------------------------------------------- #
-# Manifest
+# Manifest catalog + task resolution
 # --------------------------------------------------------------------------- #
 def load_manifest(manifest_path: str | Path) -> list[dict[str, Any]]:
     data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -45,15 +58,81 @@ def load_manifest(manifest_path: str | Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _resolve_path(source: str, manifest_path: Path) -> Optional[Path]:
+    candidate = Path(source)
+    if candidate.is_absolute():
+        return candidate if candidate.exists() else None
+    for base in (Path.cwd(), manifest_path.parent, _REPO_ROOT):
+        resolved = (base / source).resolve()
+        if resolved.exists():
+            return resolved
+    return None
+
+
 def _resolve_source(row: dict[str, Any], manifest_path: Path) -> Path:
-    source = Path(row["source"])
-    if source.is_absolute() and source.exists():
-        return source
-    for base in (manifest_path.parent, _REPO_ROOT):
-        candidate = (base / source).resolve()
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError(f"Task source not found for {row.get('task_id')}: {row['source']}")
+    resolved = _resolve_path(row["source"], manifest_path)
+    if resolved is None:
+        raise FileNotFoundError(f"Task source not found for {row.get('task_id')}: {row['source']}")
+    return resolved
+
+
+def _synth_row(path: Path) -> dict[str, Any]:
+    """A plain task file with no catalog entry runs as a test-1 nav task."""
+    return {
+        "task_id": path.stem,
+        "experiment": "test1",
+        "condition": "default",
+        "variant": path.stem,
+        "source": str(path),
+        "expected_mechanisms": [],
+        "notes": "Synthesized (not in manifest catalog).",
+    }
+
+
+def resolve_task_rows(
+    entries: Iterable[str],
+    catalog: list[dict[str, Any]],
+    manifest_path: Path,
+) -> list[dict[str, Any]]:
+    """Resolve run-config task entries to manifest-style rows (metadata attached).
+
+    Each entry may be an experiment keyword (``test1``/``test2``/``test3``/``all``),
+    a catalog ``task_id``, or a path to a task ``.json``. Paths are matched against
+    the catalog (by resolved path) so test-2/test-3 metadata is preserved; an
+    unmatched path is synthesized as a plain test-1 task. Duplicate task_ids are
+    de-duplicated, keeping first occurrence.
+    """
+    by_id = {r["task_id"]: r for r in catalog}
+    by_path: dict[Path, list[dict[str, Any]]] = {}
+    for r in catalog:
+        resolved = _resolve_path(r["source"], manifest_path)
+        if resolved is not None:
+            by_path.setdefault(resolved, []).append(r)
+
+    resolved_rows: list[dict[str, Any]] = []
+    for entry in entries:
+        if entry in _EXPERIMENT_KEYWORDS:
+            matches = catalog if entry == "all" else [r for r in catalog if r.get("experiment") == entry]
+            if not matches:
+                raise ValueError(f"No catalog tasks for experiment {entry!r}.")
+            resolved_rows.extend(matches)
+            continue
+        if entry in by_id:
+            resolved_rows.append(by_id[entry])
+            continue
+        path = _resolve_path(entry, manifest_path)
+        if path is not None:
+            matches = by_path.get(path)
+            resolved_rows.append(matches[0] if matches else _synth_row(path))
+            continue
+        raise ValueError(
+            f"Cannot resolve task entry {entry!r} (not an experiment keyword, catalog task_id, or file path)."
+        )
+
+    deduped: dict[str, dict[str, Any]] = {}
+    for row in resolved_rows:
+        deduped.setdefault(row["task_id"], row)
+    return list(deduped.values())
 
 
 def _condition_configs(conditions: Optional[str]) -> list[tuple[str, ExperimentConfig]]:
@@ -87,18 +166,135 @@ def score_tasks(
     return static_by_task
 
 
-def _suite_max(static_by_task: dict[str, dict[str, Any]]) -> float:
+def _score_suite(
+    rows: list[dict[str, Any]],
+    manifest_path: Path,
+    artifacts_root: Path,
+    config: ScorerConfig,
+    force: bool,
+) -> tuple[dict[str, dict[str, Any]], float]:
+    static_by_task = score_tasks(rows, manifest_path, artifacts_root, config, force=force)
     scores = [float(s.get("static_score", 0.0)) for s in static_by_task.values()]
-    return max(scores) if scores else 1.0
+    difficulty_max = max(scores) if scores else 1.0
+    suite_path = artifacts_root / "tasks" / "_suite.json"
+    suite_path.parent.mkdir(parents=True, exist_ok=True)
+    suite_path.write_text(
+        json.dumps(
+            {
+                "difficulty_max_static_score": difficulty_max,
+                "tasks": {t: s.get("static_score") for t, s in static_by_task.items()},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return static_by_task, difficulty_max
 
 
 # --------------------------------------------------------------------------- #
-# Stages 3-4 — runs + runtime score
+# Stages 3-4 — runs + runtime score (per model)
 # --------------------------------------------------------------------------- #
-def _run_dir(artifacts_root: Path, task_id: str, agent_name: str, seed: int, condition: str) -> Path:
-    return artifacts_root / "runs" / task_id / "minigrid" / agent_name / f"seed_{seed}" / condition
+def _run_dir(artifacts_root: Path, task_id: str, model: str, seed: int, condition: str) -> Path:
+    return artifacts_root / "runs" / task_id / "minigrid" / model / f"seed_{seed}" / condition
 
 
+def _run_one_model(
+    rows: list[dict[str, Any]],
+    agent: Agent,
+    model_name: str,
+    *,
+    manifest_path: Path,
+    artifacts_root: Path,
+    static_by_task: dict[str, dict[str, Any]],
+    difficulty_max: float,
+    config: ScorerConfig,
+    seeds: Iterable[int],
+    conditions: Optional[str],
+    force: bool,
+) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
+    condition_configs = _condition_configs(conditions)
+    run_rows: list[dict[str, Any]] = []
+    composites: dict[tuple, Optional[float]] = {}
+
+    for row in rows:
+        task_id = row["task_id"]
+        source = _resolve_source(row, manifest_path)
+        canonical = json.loads(
+            (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
+        )
+        scored_static = static_by_task[task_id]
+
+        for seed in seeds:
+            for variant, cfg in condition_configs:
+                run_dir = _run_dir(artifacts_root, task_id, model_name, seed, variant)
+                run_score_path = run_dir / "run_score.json"
+                episode_path = run_dir / "episode.json"
+
+                manifest_row = dict(row)
+                manifest_row.setdefault("condition", variant)
+
+                if run_score_path.exists() and episode_path.exists() and not force:
+                    episode = json.loads(episode_path.read_text(encoding="utf-8"))
+                    run_score = json.loads(run_score_path.read_text(encoding="utf-8"))
+                else:
+                    episode = run_episode(source, cfg, agent, seed, run_dir)
+                    enriched = episode_metrics.enrich_run_for_scoring(
+                        episode, manifest_row, agent_or_model=model_name, seed=seed
+                    )
+                    run_score = compute_runtime_score(
+                        enriched,
+                        static_score=scored_static,
+                        canonical_paths=canonical,
+                        config=config,
+                        difficulty_max_static_score=difficulty_max,
+                    ).to_dict()
+                    run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
+
+                run_rows.append(
+                    episode_metrics.build_run_row(
+                        episode,
+                        canonical,
+                        manifest_row,
+                        agent_or_model=model_name,
+                        seed=seed,
+                        raw_output_ref=str(episode_path.relative_to(artifacts_root)),
+                    )
+                )
+                composites[(task_id, model_name, seed, manifest_row["condition"])] = run_score.get("composite")
+
+    return run_rows, composites
+
+
+def _write_aggregate(
+    run_rows: list[dict[str, Any]],
+    composites: dict[tuple, Optional[float]],
+    static_by_task: dict[str, dict[str, Any]],
+    metadata_rows: list[dict[str, Any]],
+    artifacts_root: Path,
+    run_set_id: str,
+) -> dict[str, Any]:
+    jsonl_path = artifacts_root / "episode_runs.jsonl"
+    with jsonl_path.open("w", encoding="utf-8") as handle:
+        for run_row in run_rows:
+            handle.write(json.dumps(run_row) + "\n")
+
+    report_dir = artifacts_root / "reports" / run_set_id
+    report_dir.mkdir(parents=True, exist_ok=True)
+    payloads = {
+        "scoring_calibration_summary": reports.scoring_calibration_summary(
+            run_rows, composites, static_by_task
+        ),
+        "complexity_distance_summary": reports.complexity_distance_summary(run_rows),
+        "mechanism_ordering_pairs": reports.mechanism_ordering_pairs(run_rows, metadata_rows),
+    }
+    for name, payload in payloads.items():
+        (report_dir / f"{name}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return payloads
+
+
+# --------------------------------------------------------------------------- #
+# Entry points
+# --------------------------------------------------------------------------- #
 def run_pipeline(
     *,
     manifest_path: str | Path,
@@ -112,150 +308,167 @@ def run_pipeline(
     scorer_config: Optional[ScorerConfig] = None,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Execute Stage 1->5 for one experiment and return the report payloads."""
+    """Single-model convenience entry: run one experiment with one agent."""
     manifest_path = Path(manifest_path)
     artifacts_root = Path(artifacts_root)
     config = scorer_config or load_scorer_config()
 
-    all_rows = load_manifest(manifest_path)
-    rows = all_rows if experiment == "all" else [r for r in all_rows if r.get("experiment") == experiment]
-    if not rows:
-        raise ValueError(f"No manifest rows for experiment={experiment!r}.")
-
-    # Stage 2 (score the full suite so difficulty_max is stable across experiments).
-    static_by_task = score_tasks(all_rows, manifest_path, artifacts_root, config, force=force)
-    difficulty_max = _suite_max(static_by_task)
-    suite_path = artifacts_root / "tasks" / "_suite.json"
-    suite_path.parent.mkdir(parents=True, exist_ok=True)
-    suite_path.write_text(
-        json.dumps(
-            {
-                "difficulty_max_static_score": difficulty_max,
-                "tasks": {t: s.get("static_score") for t, s in static_by_task.items()},
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
+    catalog = load_manifest(manifest_path)
+    rows = resolve_task_rows([experiment], catalog, manifest_path)
+    static_by_task, difficulty_max = _score_suite(rows, manifest_path, artifacts_root, config, force)
+    run_rows, composites = _run_one_model(
+        rows,
+        agent,
+        _sanitize(agent_name),
+        manifest_path=manifest_path,
+        artifacts_root=artifacts_root,
+        static_by_task=static_by_task,
+        difficulty_max=difficulty_max,
+        config=config,
+        seeds=seeds,
+        conditions=conditions,
+        force=force,
     )
+    return _write_aggregate(run_rows, composites, static_by_task, rows, artifacts_root, run_set_id)
 
-    condition_configs = _condition_configs(conditions)
 
-    run_rows: list[dict[str, Any]] = []
-    composites: dict[tuple, float] = {}
+def run_from_config(
+    *,
+    run_config_path: str | Path,
+    manifest_path: str | Path = _DEFAULT_MANIFEST,
+    seeds: Iterable[int] = (0,),
+    conditions: Optional[str] = None,
+    artifacts_root: str | Path = "artifacts",
+    run_set_id: str = "default",
+    scorer_config: Optional[ScorerConfig] = None,
+    force: bool = False,
+    agent_factory: Optional[AgentFactory] = None,
+) -> dict[str, Any]:
+    """Run-config entry: each model runs its own task selection (model -> task files)."""
+    manifest_path = Path(manifest_path)
+    artifacts_root = Path(artifacts_root)
+    config = scorer_config or load_scorer_config()
+    factory = agent_factory or _build_agent_from_spec
 
-    for row in rows:
-        task_id = row["task_id"]
-        source = _resolve_source(row, manifest_path)
-        canonical_path = artifacts_root / "tasks" / task_id / "canonical_paths.json"
-        canonical = json.loads(canonical_path.read_text(encoding="utf-8"))
-        scored_static = static_by_task[task_id]
+    run_config = load_run_config(run_config_path)
+    catalog = load_manifest(manifest_path)
 
-        for seed in seeds:
-            for condition, cfg in condition_configs:
-                run_dir = _run_dir(artifacts_root, task_id, agent_name, seed, condition)
-                run_score_path = run_dir / "run_score.json"
-                episode_path = run_dir / "episode.json"
+    # Resolve each model's task rows + build its agent.
+    plans: list[tuple[str, Agent, list[dict[str, Any]]]] = []
+    union: dict[str, dict[str, Any]] = {}
+    for name, model_cfg in run_config["models"].items():
+        entries = model_cfg.get("tasks") or model_cfg.get("runs") or []
+        if not entries:
+            raise ValueError(f"Model {name!r} lists no tasks/runs.")
+        rows = resolve_task_rows(entries, catalog, manifest_path)
+        agent, label = factory(name, model_cfg)
+        plans.append((_sanitize(label), agent, rows))
+        for r in rows:
+            union.setdefault(r["task_id"], r)
 
-                # Bind the manifest condition (overrides the prompt-variant name when
-                # the manifest already encodes an experimental condition).
-                manifest_row = dict(row)
-                manifest_row.setdefault("condition", condition)
+    union_rows = list(union.values())
+    static_by_task, difficulty_max = _score_suite(union_rows, manifest_path, artifacts_root, config, force)
 
-                if run_score_path.exists() and episode_path.exists() and not force:
-                    episode = json.loads(episode_path.read_text(encoding="utf-8"))
-                    run_score = json.loads(run_score_path.read_text(encoding="utf-8"))
-                else:
-                    episode = run_episode(source, cfg, agent, seed, run_dir)
-                    enriched = episode_metrics.enrich_run_for_scoring(
-                        episode, manifest_row, agent_or_model=agent_name, seed=seed
-                    )
-                    score = compute_runtime_score(
-                        enriched,
-                        static_score=scored_static,
-                        canonical_paths=canonical,
-                        config=config,
-                        difficulty_max_static_score=difficulty_max,
-                    )
-                    run_score = score.to_dict()
-                    run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
+    all_run_rows: list[dict[str, Any]] = []
+    composites: dict[tuple, Optional[float]] = {}
+    for model_name, agent, rows in plans:
+        rr, comp = _run_one_model(
+            rows,
+            agent,
+            model_name,
+            manifest_path=manifest_path,
+            artifacts_root=artifacts_root,
+            static_by_task=static_by_task,
+            difficulty_max=difficulty_max,
+            config=config,
+            seeds=seeds,
+            conditions=conditions,
+            force=force,
+        )
+        all_run_rows.extend(rr)
+        composites.update(comp)
 
-                raw_ref = str(episode_path.relative_to(artifacts_root))
-                run_row = episode_metrics.build_run_row(
-                    episode,
-                    canonical,
-                    manifest_row,
-                    agent_or_model=agent_name,
-                    seed=seed,
-                    raw_output_ref=raw_ref,
-                )
-                run_rows.append(run_row)
-                composites[(task_id, agent_name, seed, manifest_row["condition"])] = run_score.get("composite")
-
-    # Stage 3 artifact: episode_runs.jsonl (one row per run).
-    jsonl_path = artifacts_root / "episode_runs.jsonl"
-    with jsonl_path.open("w", encoding="utf-8") as handle:
-        for run_row in run_rows:
-            handle.write(json.dumps(run_row) + "\n")
-
-    # Stage 5: reports.
-    report_dir = artifacts_root / "reports" / run_set_id
-    report_dir.mkdir(parents=True, exist_ok=True)
-    payloads = {
-        "scoring_calibration_summary": reports.scoring_calibration_summary(
-            run_rows, composites, static_by_task
-        ),
-        "complexity_distance_summary": reports.complexity_distance_summary(run_rows),
-        "mechanism_ordering_pairs": reports.mechanism_ordering_pairs(run_rows, all_rows),
-    }
-    for name, payload in payloads.items():
-        (report_dir / f"{name}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-    return payloads
+    return _write_aggregate(all_run_rows, composites, static_by_task, union_rows, artifacts_root, run_set_id)
 
 
 # --------------------------------------------------------------------------- #
-# Agent construction (CLI only)
+# Run-config + agent construction
 # --------------------------------------------------------------------------- #
-def _build_agent(agent: str) -> tuple[Agent, str]:
-    if agent == "claude":
-        from interface.agents import ClaudeAnthropicAgent
+def load_run_config(path: str | Path) -> dict[str, Any]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or "models" not in data or not isinstance(data["models"], dict):
+        raise ValueError("Run-config must be an object with a 'models' mapping.")
+    return data
 
-        instance = ClaudeAnthropicAgent()
-        return instance, instance.config.model
-    if agent == "qwen":
-        from interface.agents import Qwen35VLAgent
 
-        instance = Qwen35VLAgent()
-        return instance, instance.config.model
-    raise ValueError(f"Unknown agent {agent!r} (expected 'claude' or 'qwen').")
+def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent, str]:
+    """Construct a live agent from a run-config model entry."""
+    provider = (model_cfg.get("provider") or "").lower()
+    model = model_cfg.get("model")
+    temperature = float(model_cfg.get("temperature", 0.0))
+    max_tokens = model_cfg.get("max_tokens")
+
+    if provider == "claude":
+        from interface.agents import ClaudeAnthropicAgent, ClaudeAnthropicConfig
+
+        cfg = ClaudeAnthropicConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        return ClaudeAnthropicAgent(config=cfg), model or cfg.model
+    if provider == "qwen":
+        from interface.agents import Qwen35VLAgent, Qwen35VLConfig
+
+        cfg = Qwen35VLConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_new_tokens = int(max_tokens)
+        return Qwen35VLAgent(config=cfg), model or cfg.model
+    raise ValueError(f"Model {name!r}: unknown provider {provider!r} (expected 'claude' or 'qwen').")
 
 
 def main(argv: Optional[list[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="MultiNet v2.0 bare-bones run pipeline (tests 1-3).")
-    parser.add_argument("--experiment", choices=["test1", "test2", "test3", "all"], default="all")
-    parser.add_argument(
-        "--manifest", default=str(_REPO_ROOT / "gridworld" / "fixtures" / "manifest.json")
-    )
-    parser.add_argument("--agent", choices=["claude", "qwen"], default="claude")
-    parser.add_argument("--conditions", default=None, help="Prompt condition-set name (optional).")
+    parser.add_argument("--run-config", help="JSON run-config mapping models to task files (preferred).")
+    parser.add_argument("--manifest", default=str(_DEFAULT_MANIFEST), help="Task catalog (metadata).")
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
+    parser.add_argument("--conditions", default=None, help="Prompt condition-set name (optional).")
     parser.add_argument("--artifacts-root", default=str(_REPO_ROOT / "artifacts"))
     parser.add_argument("--run-set-id", default="default")
     parser.add_argument("--force", action="store_true", help="Recompute existing artifacts.")
+    # Single-model fallback (when --run-config is not supplied):
+    parser.add_argument("--experiment", choices=["test1", "test2", "test3", "all"], default="all")
+    parser.add_argument("--agent", choices=["claude", "qwen"], help="Single-model provider.")
     args = parser.parse_args(argv)
 
-    agent, agent_name = _build_agent(args.agent)
-    payloads = run_pipeline(
-        manifest_path=args.manifest,
-        experiment=args.experiment,
-        agent=agent,
-        agent_name=agent_name,
-        seeds=args.seeds,
-        conditions=args.conditions,
-        artifacts_root=args.artifacts_root,
-        run_set_id=args.run_set_id,
-        force=args.force,
-    )
+    if args.run_config:
+        payloads = run_from_config(
+            run_config_path=args.run_config,
+            manifest_path=args.manifest,
+            seeds=args.seeds,
+            conditions=args.conditions,
+            artifacts_root=args.artifacts_root,
+            run_set_id=args.run_set_id,
+            force=args.force,
+        )
+    else:
+        if not args.agent:
+            parser.error("provide --run-config, or --agent for a single-model run.")
+        agent, label = _build_agent_from_spec(args.agent, {"provider": args.agent})
+        payloads = run_pipeline(
+            manifest_path=args.manifest,
+            experiment=args.experiment,
+            agent=agent,
+            agent_name=label,
+            seeds=args.seeds,
+            conditions=args.conditions,
+            artifacts_root=args.artifacts_root,
+            run_set_id=args.run_set_id,
+            force=args.force,
+        )
+
     summary = payloads["scoring_calibration_summary"]
     print(
         f"Pipeline complete: {summary['run_count']} runs over {summary['task_count']} tasks "
