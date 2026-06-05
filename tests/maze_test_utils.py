@@ -27,10 +27,18 @@ def assert_navigation_contract(test_case, spec):
 	walls = {tuple(wall) for wall in maze['walls']}
 
 	test_case.assertEqual(spec['goal']['type'], 'reach_position')
+	if spec['goal'].get('target') is not None:
+		test_case.assertEqual(spec['goal']['target'], goal)
 	test_case.assertEqual(len(start), 2)
 	test_case.assertEqual(len(goal), 2)
 	test_case.assertNotEqual(start, goal)
 	for label, point in (('start', start), ('goal', goal)):
+		x, y = point
+		test_case.assertGreaterEqual(x, 0, label)
+		test_case.assertLess(x, width, label)
+		test_case.assertGreaterEqual(y, 0, label)
+		test_case.assertLess(y, height, label)
+		test_case.assertNotIn(tuple(point), walls, label)
 		x, y = point
 		test_case.assertGreaterEqual(x, 0, label)
 		test_case.assertLess(x, width, label)
