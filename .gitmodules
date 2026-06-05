@@ -1,0 +1,4 @@
+[submodule "ogbench"]
+	path = ogbench
+	url = https://github.com/ManifoldRG/ogbench.git
+	branch = master
