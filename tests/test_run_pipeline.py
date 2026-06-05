@@ -167,3 +167,123 @@ def test_run_from_config_drives_per_model_tasks(tmp_path):
     assert (run_dir / "episode.json").exists()
     assert (run_dir / "run_score.json").exists()
     assert payloads["scoring_calibration_summary"]["run_count"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# Content-hash invalidation
+# --------------------------------------------------------------------------- #
+import itertools
+import shutil
+
+from scorer import load_scorer_config, score_task_file
+from scorer.io import load_json, task_spec_from_payload
+from scripts.run_pipeline import _expected_static_hash
+
+
+class CountingReplayAgent:
+    """Cycles a fixed plan (one full pass per episode) and counts model calls."""
+
+    def __init__(self, actions):
+        self._actions = itertools.cycle(actions)
+        self.last_usage = None
+        self.calls = 0
+
+    def __call__(self, messages):
+        self.calls += 1
+        self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
+        return f"FINAL_OUTPUT: {next(self._actions)}"
+
+
+def _single_task_manifest(tmp_path, source):
+    manifest = {"tasks": [{
+        "task_id": "copy_v01", "experiment": "test1", "condition": "default",
+        "variant": "copy", "source": str(source), "expected_mechanisms": [],
+    }]}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    return path
+
+
+def test_expected_static_hash_matches_scorer(tmp_path):
+    source = default_maze_path("V06_chain_ks.json")
+    cfg = load_scorer_config()
+    _, static = score_task_file(source, output_dir=tmp_path / "t", config=cfg)
+    spec = task_spec_from_payload(load_json(source))
+    assert _expected_static_hash(spec, cfg) == static.to_dict()["inputs_hash"]
+
+
+def test_canonical_paths_carry_inputs_hash(tmp_path):
+    source = default_maze_path("V06_chain_ks.json")
+    score_task_file(source, output_dir=tmp_path / "t")
+    canonical = load_json(tmp_path / "t" / "canonical_paths.json")
+    assert canonical.get("inputs_hash")
+
+
+def test_unchanged_rerun_reuses_episode_and_static(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    manifest = _single_task_manifest(tmp_path, task_file)
+    artifacts = tmp_path / "artifacts"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+    calls_after_first = agent.calls
+    assert calls_after_first > 0
+
+    # Second identical run: episode cache hit -> agent not called again.
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+    assert agent.calls == calls_after_first
+
+
+def test_task_edit_invalidates_static_and_episode(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    manifest = _single_task_manifest(tmp_path, task_file)
+    artifacts = tmp_path / "artifacts"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+    first_calls = agent.calls
+    first_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
+
+    # Mutate the task spec -> both static and run hashes must change.
+    data = json.loads(task_file.read_text())
+    data["max_steps"] = data["max_steps"] + 5
+    task_file.write_text(json.dumps(data), encoding="utf-8")
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+    new_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
+    assert new_static_hash != first_static_hash  # Stage 2 recomputed
+    assert agent.calls > first_calls             # Stage 3 episode re-run
+
+
+def test_scorer_config_change_rescore_without_rerunning_model(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    manifest = _single_task_manifest(tmp_path, task_file)
+    artifacts = tmp_path / "artifacts"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    # Small baselines (below the run's token count) so token_efficiency stays < 1
+    # and actually moves with the config.
+    cfg_a = load_scorer_config()
+    cfg_a.baseline_tokens = 1.0
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent, agent_name="stub",
+                 artifacts_root=artifacts, run_set_id="r", scorer_config=cfg_a)
+    calls_after_first = agent.calls
+    run_dir = artifacts / "runs" / "copy_v01" / "minigrid" / "stub" / "seed_0" / "default"
+    eff_a = load_json(run_dir / "run_score.json")["signals"]["token_efficiency"]
+
+    cfg_b = load_scorer_config()
+    cfg_b.baseline_tokens = 5.0
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent, agent_name="stub",
+                 artifacts_root=artifacts, run_set_id="r", scorer_config=cfg_b)
+
+    # Episode reused (model not re-called) but run_score reflects the new config.
+    assert agent.calls == calls_after_first
+    eff_b = load_json(run_dir / "run_score.json")["signals"]["token_efficiency"]
+    assert eff_b != eff_a

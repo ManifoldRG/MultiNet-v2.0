@@ -8,6 +8,8 @@ from gridworld.baselines import PlannedPath, plan_bfs_path, plan_greedy_path
 from gridworld.task_spec import TaskSpecification
 
 from .artifacts import CanonicalPathReport
+from .config import SCORER_VERSION
+from .io import stable_hash
 
 
 def _path_payload(path) -> dict[str, Any]:
@@ -52,6 +54,8 @@ def compute_canonical_paths(
     else:
         message = "No solution found"
 
+    inputs_hash = stable_hash({"task": spec.to_dict(), "scorer_version": SCORER_VERSION})
+
     return CanonicalPathReport(
         task_id=spec.task_id,
         success=bfs_path.success,
@@ -61,6 +65,7 @@ def compute_canonical_paths(
         states_explored=bfs_path.states_explored,
         message=message,
         greedy=_path_payload(greedy_path),
+        inputs_hash=inputs_hash,
     )
 
 

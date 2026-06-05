@@ -6,7 +6,7 @@ Sequential, inspectable Stage 1->5 driver. No DAG runner. Writes the
     artifacts/
       tasks/<task_id>/{canonical_paths.json, scored_static.json}
       tasks/_suite.json
-      runs/<task_id>/<backend>/<model>/seed_<seed>/<condition>/{episode.json, run_score.json}
+      runs/<task_id>/<backend>/<model>/seed_<seed>/<condition>/{episode.json, run_inputs.json, run_score.json}
       episode_runs.jsonl
       reports/<run_set_id>/{scoring_calibration_summary,complexity_distance_summary,mechanism_ordering_pairs}.json
 
@@ -29,10 +29,14 @@ from typing import Any, Callable, Iterable, Optional
 from interface.config import ExperimentConfig
 from prompting_experiments import iter_condition_configs
 from scorer import compute_runtime_score, load_scorer_config, score_task_file
-from scorer.config import ScorerConfig
+from scorer.config import SCORER_VERSION, ScorerConfig
+from scorer.io import stable_hash, task_spec_from_payload
 
 from pipeline import episode_metrics, reports
 from pipeline.run_stage3 import run_episode
+
+# Bump when Stage-3 run production changes in a way that invalidates cached episodes.
+PIPELINE_VERSION = "0.1.0"
 
 Agent = Callable[[list[dict]], str]
 # A factory used by tests to supply stub agents: (model_name, model_cfg) -> (agent, label).
@@ -142,6 +146,31 @@ def _condition_configs(conditions: Optional[str]) -> list[tuple[str, ExperimentC
 
 
 # --------------------------------------------------------------------------- #
+# Content-hash invalidation
+# --------------------------------------------------------------------------- #
+def _expected_static_hash(spec, config: ScorerConfig) -> str:
+    """Mirror scorer.static's scored_static inputs_hash recipe (task + config)."""
+    return stable_hash(
+        {"task": spec.to_dict(), "config": config.to_dict(), "scorer_version": SCORER_VERSION}
+    )
+
+
+def _expected_run_hash(spec, model_name: str, seed: int, cfg: ExperimentConfig, backend: str) -> str:
+    """Hash the inputs that determine a Stage-3 episode (no scorer config:
+    scorer-config changes invalidate run_score, not the model call)."""
+    return stable_hash(
+        {
+            "task": spec.to_dict(),
+            "model_id": model_name,
+            "seed": seed,
+            "prompt_config": cfg.to_dict(),
+            "backend": backend,
+            "pipeline_version": PIPELINE_VERSION,
+        }
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Stage 2 — static solve & score
 # --------------------------------------------------------------------------- #
 def score_tasks(
@@ -151,7 +180,13 @@ def score_tasks(
     config: ScorerConfig,
     force: bool = False,
 ) -> dict[str, dict[str, Any]]:
-    """Run Stage 2 over every task; return ``task_id -> scored_static dict``."""
+    """Run Stage 2 over every task; return ``task_id -> scored_static dict``.
+
+    Hash-aware: a cached ``scored_static.json`` is reused only when its
+    ``inputs_hash`` matches the hash recomputed from the current task spec and
+    scorer config; otherwise the task bundle (canonical_paths + scored_static)
+    is regenerated. ``force`` always regenerates.
+    """
     static_by_task: dict[str, dict[str, Any]] = {}
     for row in rows:
         task_id = row["task_id"]
@@ -159,8 +194,11 @@ def score_tasks(
         out_dir = artifacts_root / "tasks" / task_id
         scored_path = out_dir / "scored_static.json"
         if scored_path.exists() and not force:
-            static_by_task[task_id] = json.loads(scored_path.read_text(encoding="utf-8"))
-            continue
+            cached = json.loads(scored_path.read_text(encoding="utf-8"))
+            spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
+            if cached.get("inputs_hash") == _expected_static_hash(spec, config):
+                static_by_task[task_id] = cached
+                continue
         _, static_score = score_task_file(source, output_dir=out_dir, config=config)
         static_by_task[task_id] = static_score.to_dict()
     return static_by_task
@@ -219,6 +257,7 @@ def _run_one_model(
     for row in rows:
         task_id = row["task_id"]
         source = _resolve_source(row, manifest_path)
+        spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
         canonical = json.loads(
             (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
         )
@@ -227,28 +266,56 @@ def _run_one_model(
         for seed in seeds:
             for variant, cfg in condition_configs:
                 run_dir = _run_dir(artifacts_root, task_id, model_name, seed, variant)
-                run_score_path = run_dir / "run_score.json"
                 episode_path = run_dir / "episode.json"
+                sidecar_path = run_dir / "run_inputs.json"
+                run_score_path = run_dir / "run_score.json"
 
                 manifest_row = dict(row)
                 manifest_row.setdefault("condition", variant)
 
-                if run_score_path.exists() and episode_path.exists() and not force:
+                # Stage 3 (expensive: model calls) is hash-cached. Reuse a cached
+                # episode only when its stamped run-inputs hash still matches.
+                expected_hash = _expected_run_hash(spec, model_name, seed, cfg, "minigrid")
+                reuse = (
+                    not force
+                    and episode_path.exists()
+                    and sidecar_path.exists()
+                    and json.loads(sidecar_path.read_text(encoding="utf-8")).get("inputs_hash")
+                    == expected_hash
+                )
+                if reuse:
                     episode = json.loads(episode_path.read_text(encoding="utf-8"))
-                    run_score = json.loads(run_score_path.read_text(encoding="utf-8"))
                 else:
                     episode = run_episode(source, cfg, agent, seed, run_dir)
-                    enriched = episode_metrics.enrich_run_for_scoring(
-                        episode, manifest_row, agent_or_model=model_name, seed=seed
+                    sidecar_path.write_text(
+                        json.dumps(
+                            {
+                                "inputs_hash": expected_hash,
+                                "producer_version": PIPELINE_VERSION,
+                                "task_id": task_id,
+                                "model_id": model_name,
+                                "seed": seed,
+                                "backend": "minigrid",
+                                "condition": variant,
+                            },
+                            indent=2,
+                        ),
+                        encoding="utf-8",
                     )
-                    run_score = compute_runtime_score(
-                        enriched,
-                        static_score=scored_static,
-                        canonical_paths=canonical,
-                        config=config,
-                        difficulty_max_static_score=difficulty_max,
-                    ).to_dict()
-                    run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
+
+                # Stage 4 is cheap + deterministic: always (re)score from the
+                # episode so scorer-config / static / canonical changes propagate.
+                enriched = episode_metrics.enrich_run_for_scoring(
+                    episode, manifest_row, agent_or_model=model_name, seed=seed
+                )
+                run_score = compute_runtime_score(
+                    enriched,
+                    static_score=scored_static,
+                    canonical_paths=canonical,
+                    config=config,
+                    difficulty_max_static_score=difficulty_max,
+                ).to_dict()
+                run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
 
                 run_rows.append(
                     episode_metrics.build_run_row(
