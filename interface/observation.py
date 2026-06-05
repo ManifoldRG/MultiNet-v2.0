@@ -3,7 +3,7 @@
 History when ``context_window == "last3"`` (last 3 executed steps, oldest first):
 
 * **text_only** — full text history only (position, facing, action, feedback).
-* **image_only** — prior decision-frame PNGs + ``Action: …`` labels (no text history).
+* **image_only** — prior decision-frame PNGs + inventory/action labels (no text history).
 * **image_text** — full text history **and** prior decision-frame PNGs.
 
 History is derived from enriched ``transcript`` step records.
@@ -18,7 +18,11 @@ import numpy as np
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
-from interface.renderer import render_user_observation_text, rgb_to_image_block
+from interface.renderer import (
+    render_current_inventory_text,
+    render_user_observation_text,
+    rgb_to_image_block,
+)
 from prompting_experiments.prompt_templates import observation as observation_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
@@ -84,15 +88,16 @@ def history_content_blocks(
         if rgb is None:
             continue
         blocks.append(rgb_to_image_block(rgb))
-        if observation == "image_only":
-            blocks.append(
-                {
-                    "type": "text",
-                    "text": observation_templates.IMAGE_HISTORY_ACTION.format(
-                        action=rec["action"]
-                    ),
-                }
+        inventory = _history_record_inventory(rec)
+        text = (
+            observation_templates.IMAGE_HISTORY_INVENTORY_ACTION.format(
+                inventory=inventory,
+                action=rec["action"],
             )
+            if observation == "image_only"
+            else observation_templates.IMAGE_HISTORY_INVENTORY.format(inventory=inventory)
+        )
+        blocks.append({"type": "text", "text": text})
 
     if not blocks:
         return []
@@ -113,7 +118,9 @@ def current_observation_text(
     include_description: bool = False,
     include_facing: bool = False,
 ) -> str:
-    if observation == "image_only" or not include_description:
+    if observation == "image_only":
+        return render_current_inventory_text(state)
+    if not include_description:
         return ""
     return render_user_observation_text(task_spec, state, include_facing=include_facing)
 
@@ -122,3 +129,19 @@ def current_image_blocks(observation: ObservationMode, rgb: np.ndarray | None) -
     if observation == "text_only" or rgb is None:
         return []
     return [rgb_to_image_block(rgb)]
+
+
+def _history_record_inventory(rec: dict[str, Any]) -> str:
+    state_before = rec.get("state_before")
+    if isinstance(state_before, dict):
+        inventory = state_before.get("inventory")
+        if isinstance(inventory, list):
+            return ", ".join(str(item) for item in inventory) or "empty"
+
+    state_after = rec.get("state_after")
+    if isinstance(state_after, dict):
+        inventory = state_after.get("inventory")
+        if isinstance(inventory, list):
+            return ", ".join(str(item) for item in inventory) or "empty"
+
+    return "unknown"

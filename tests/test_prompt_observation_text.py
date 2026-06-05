@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
+
 from interface.config import ExperimentConfig
 from interface.loader import default_maze_path, load_task
-from interface.observation import current_observation_text
+from interface.observation import current_observation_text, history_content_blocks
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     StandardPromptStrategy,
@@ -113,7 +115,7 @@ def test_observation_format_text_variants_keep_facing():
         assert "You are at (1, 1) facing EAST." in text
 
 
-def test_observation_format_image_only_still_omits_text_description():
+def test_observation_format_image_only_includes_inventory_only_text():
     spec, state = _initial_spec_and_state()
     cfg = CONDITION_SET.variants["standard"].build_config(
         replace(ExperimentConfig(), observation_text_includes_facing=False)
@@ -127,7 +129,57 @@ def test_observation_format_image_only_still_omits_text_description():
         include_facing=cfg.observation_text_includes_facing,
     )
 
-    assert text == ""
+    assert text == "Your inventory: empty."
+    assert "Current situation (this step):" not in text
+    assert "You are at" not in text
+
+
+def test_image_only_prompt_puts_inventory_text_after_current_image():
+    backend, spec = load_task(default_maze_path())
+    runner = build_runner(ExperimentConfig(observation="image_only"), backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+
+    message = runner._build_message(state, feedback_templates.INITIAL_FEEDBACK, [])
+    content = message["content"]
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "image_url"
+    assert content[1]["type"] == "text"
+    assert "Your inventory: empty." in content[1]["text"]
+
+
+def test_image_only_last3_history_puts_inventory_before_action_under_images():
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "action": "MOVE_FORWARD",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        },
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "action": "PICKUP",
+            "state_before": {"inventory": ["red"]},
+            "_decision_frame_rgb": frame,
+        },
+    ]
+
+    blocks = history_content_blocks("image_only", "last3", transcript)
+
+    assert blocks[0]["type"] == "text"
+    assert blocks[1]["type"] == "image_url"
+    assert blocks[2] == {
+        "type": "text",
+        "text": "Your inventory: empty.\nAction: MOVE_FORWARD\n\n",
+    }
+    assert blocks[3]["type"] == "image_url"
+    assert blocks[4] == {
+        "type": "text",
+        "text": "Your inventory: red.\nAction: PICKUP\n\n",
+    }
 
 
 def test_non_observation_format_conditions_omit_current_description_from_prompt():

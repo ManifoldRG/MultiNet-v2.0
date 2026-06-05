@@ -21,6 +21,9 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:
@@ -53,6 +56,9 @@ RULES (domain logic):
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:
@@ -61,6 +67,29 @@ FINAL_OUTPUT: <action>
 ========================================================================================
 condition set 2: Observation format
 ========================================================================================
+variant name: standard
+description: Image block with no initial natural-language maze map-same as the standard prompt.
+prompts:
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+- Keys: pick them up to open doors of the matching color
+- Doors: blocked passages that require a matching key
+- Switches: TOGGLE while standing on them
+- Gates: blocked passages controlled by switches
+
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+[user prompt]
+[image block 1]
+Observation:
+Your inventory: empty.
+
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+----------------------------------------------------------------------------------------
 variant name: text_only
 description: Natural-language current observation, no image blocks.
 prompts:
@@ -130,31 +159,11 @@ What is your next action?
 Output exactly:
 FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
-variant name: image_only
-description: Image block with no initial natural-language maze map.
-prompts:
-[system prompt]
-Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
-The environment may contain:
-- Keys: pick them up to open doors of the matching color
-- Doors: blocked passages that require a matching key
-- Switches: TOGGLE while standing on them
-- Gates: blocked passages controlled by switches
-
-Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
-
-[user prompt]
-[image block 1]
-What is your next action?
-
-Output exactly:
-FINAL_OUTPUT: <action>
-----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 3: Context window
 ========================================================================================
-variant name: current
-description: Prompt only with the current observation.
+variant name: standard
+description: Prompt only with the current observation-same as the standard prompt.
 prompts:
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
@@ -168,6 +177,9 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:
@@ -191,18 +203,24 @@ Recent steps (oldest first). Each image is the maze view from which the followin
 
 
 [image block 1]
+Your inventory: empty.
 Action: PICKUP
 
 
 [image block 2]
+Your inventory: empty.
 Action: PICKUP
 
 
 [image block 3]
+Your inventory: empty.
 Action: TURN_LEFT
 
 
 [image block 4]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:
@@ -216,8 +234,8 @@ Status: not implemented in ExperimentConfig
 ========================================================================================
 condition set 4: Querying strategy
 ========================================================================================
-variant name: step_by_step
-description: Ask for one action each query.
+variant name: standard
+description: Ask for one action each query-same as the standard prompt.
 prompts:
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
@@ -231,6 +249,9 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:
@@ -251,6 +272,9 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:
@@ -272,6 +296,9 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is the full sequence of actions you will take to complete the task?
 
 Output exactly:
@@ -280,8 +307,8 @@ FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 ========================================================================================
 condition set 5: In-context learning
 ========================================================================================
-variant name: zero_shot
-description: Current interface behavior.
+variant name: standard
+description: No examples-same as the standard prompt.
 prompts:
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
@@ -295,6 +322,9 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 [image block 1]
+Observation:
+Your inventory: empty.
+
 What is your next action?
 
 Output exactly:

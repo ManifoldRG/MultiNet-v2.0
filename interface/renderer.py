@@ -142,3 +142,8 @@ def render_user_observation_text(
     else:
         head.append(observation_templates.NO_MECHANISMS_LINE)
     return "\n".join(head)
+
+
+def render_current_inventory_text(state: GridState) -> str:
+    inv = ", ".join(inventory_list(state)) or "empty"
+    return observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv)

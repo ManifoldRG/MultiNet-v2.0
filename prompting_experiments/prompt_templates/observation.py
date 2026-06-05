@@ -3,7 +3,8 @@
 RECENT_HISTORY_HEADER = "Recent history (last 3 steps, oldest first):"
 RECENT_HISTORY_STEP = "  ({row}, {col}) facing {facing} -> {action} -> {feedback}"
 
-IMAGE_HISTORY_ACTION = "Action: {action}\n\n"
+IMAGE_HISTORY_INVENTORY = "Your inventory: {inventory}.\n\n"
+IMAGE_HISTORY_INVENTORY_ACTION = "Your inventory: {inventory}.\nAction: {action}\n\n"
 IMAGE_ONLY_HISTORY_INTRO = (
     "Recent steps (oldest first). Each image is the maze view from which the "
     "following action was chosen.\n\n"
