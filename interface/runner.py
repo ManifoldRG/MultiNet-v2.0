@@ -60,6 +60,14 @@ def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
         del messages[1 : 1 + (tail_len - cap)]
 
 
+def _replace_current_question(prompt_text: str, question: str) -> str:
+    standard_question = "What is your next action?"
+    before, match, after = prompt_text.rpartition(standard_question)
+    if not match:
+        return prompt_text
+    return f"{before}{question}{after}"
+
+
 def build_runner(
     config: ExperimentConfig,
     backend: MiniGridBackend,
@@ -357,6 +365,9 @@ class ExperimentRunner:
             last_feedback,
             include_status_footer=False,
         )
+        prompt_question = self.querying.user_prompt_question()
+        if prompt_question:
+            prompt_text = _replace_current_question(prompt_text, prompt_question)
         sections = []
         if self.config.observation in ("text_only", "image_text"):
             sections.append(

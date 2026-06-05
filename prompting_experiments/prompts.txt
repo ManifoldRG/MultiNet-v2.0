@@ -268,13 +268,7 @@ FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one o
 
 [user prompt]
 [image block 1]
-What is your next action?
-
-Output your complete trajectory once as:
-  SUB_GOAL: <short description of the full plan>
-  ACTIONS: <comma-separated action list from start to finish>
-The last action in ACTIONS should be DONE (when you expect to be at the goal).
-You will not be queried again — this is your only planning turn.
+What is the full sequence of actions you will take to complete the task?
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 5: In-context learning

@@ -55,6 +55,11 @@ class QueryingMode:
             return querying_templates.SUBGOAL_SUFFIX
         return querying_templates.FULL_TRAJECTORY_SUFFIX
 
+    def user_prompt_question(self) -> str:
+        if self.kind == "full_trajectory":
+            return querying_templates.FULL_TRAJECTORY_QUESTION
+        return ""
+
     def system_prompt_suffix(self) -> str:
         return ""
 

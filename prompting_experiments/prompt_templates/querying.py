@@ -6,10 +6,8 @@ SUBGOAL_SUFFIX = (
     "  ACTIONS: <comma-separated action list to reach it>"
 )
 
-FULL_TRAJECTORY_SUFFIX = (
-    "Output your complete trajectory once as:\n"
-    "  SUB_GOAL: <short description of the full plan>\n"
-    "  ACTIONS: <comma-separated action list from start to finish>\n"
-    "The last action in ACTIONS should be DONE (when you expect to be at the goal).\n"
-    "You will not be queried again — this is your only planning turn."
+FULL_TRAJECTORY_QUESTION = (
+    "What is the full sequence of actions you will take to complete the task?"
 )
+
+FULL_TRAJECTORY_SUFFIX = ""
