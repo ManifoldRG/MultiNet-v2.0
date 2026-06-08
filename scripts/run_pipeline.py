@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
 from interface.config import ExperimentConfig
-from prompting_experiments import iter_condition_configs
+from prompting_experiments import CONDITION_SETS, iter_condition_configs
 from scorer import compute_runtime_score, load_scorer_config, score_task_file
 from scorer.config import SCORER_VERSION, ScorerConfig
 from scorer.io import stable_hash, task_spec_from_payload
@@ -142,6 +142,10 @@ def resolve_task_rows(
 def _condition_configs(conditions: Optional[str]) -> list[tuple[str, ExperimentConfig]]:
     if not conditions:
         return [("default", ExperimentConfig())]
+    if conditions not in CONDITION_SETS:
+        raise ValueError(
+            f"Unknown --conditions {conditions!r}; available: {sorted(CONDITION_SETS)}."
+        )
     return list(iter_condition_configs(conditions, ExperimentConfig()))
 
 
@@ -198,7 +202,10 @@ def score_tasks(
         source = _resolve_source(row, manifest_path)
         out_dir = artifacts_root / "tasks" / task_id
         scored_path = out_dir / "scored_static.json"
-        if scored_path.exists() and not force:
+        canonical_path = out_dir / "canonical_paths.json"
+        # Stage 3 reads canonical_paths.json unconditionally, so both halves of
+        # the task bundle must be present to honor the cache.
+        if scored_path.exists() and canonical_path.exists() and not force:
             cached = json.loads(scored_path.read_text(encoding="utf-8"))
             spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
             if cached.get("inputs_hash") == _expected_static_hash(spec, config):
@@ -275,8 +282,11 @@ def _run_one_model(
                 sidecar_path = run_dir / "run_inputs.json"
                 run_score_path = run_dir / "run_score.json"
 
+                # ``condition`` is the task-intrinsic axis (test-3 mechanism
+                # order, carried by the manifest); ``variant`` is the orthogonal
+                # prompt axis from --conditions. Keep them separate so prompt
+                # variants do not collapse onto the manifest condition.
                 manifest_row = dict(row)
-                manifest_row.setdefault("condition", variant)
 
                 # Stage 3 (expensive: model calls) is hash-cached. Reuse a cached
                 # episode only when its stamped run-inputs hash still matches.
@@ -308,10 +318,15 @@ def _run_one_model(
                         encoding="utf-8",
                     )
 
+                # Derive the test-2/test-3 signals once and share them between the
+                # scorer-facing dict and the jsonl row (each call would otherwise
+                # re-walk the whole transcript).
+                metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
+
                 # Stage 4 is cheap + deterministic: always (re)score from the
                 # episode so scorer-config / static / canonical changes propagate.
                 enriched = episode_metrics.enrich_run_for_scoring(
-                    episode, manifest_row, agent_or_model=model_name, seed=seed
+                    episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
                 )
                 run_score = compute_runtime_score(
                     enriched,
@@ -330,9 +345,13 @@ def _run_one_model(
                         agent_or_model=model_name,
                         seed=seed,
                         raw_output_ref=str(episode_path.relative_to(artifacts_root)),
+                        metrics=metrics,
+                        prompt_variant=variant,
                     )
                 )
-                composites[(task_id, model_name, seed, manifest_row["condition"])] = run_score.get("composite")
+                composites[
+                    (task_id, model_name, seed, manifest_row.get("condition"), variant)
+                ] = run_score.get("composite")
 
     return run_rows, composites
 

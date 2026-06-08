@@ -17,7 +17,13 @@ from scorer.config import DIMENSION_NAMES
 
 
 def _run_key(row: dict[str, Any]) -> tuple:
-    return (row.get("task_id"), row.get("agent_or_model"), row.get("seed"), row.get("condition"))
+    return (
+        row.get("task_id"),
+        row.get("agent_or_model"),
+        row.get("seed"),
+        row.get("condition"),
+        row.get("prompt_variant"),
+    )
 
 
 def _mean(values: list[float]) -> Optional[float]:
@@ -104,6 +110,7 @@ def scoring_calibration_summary(
         "task_count": len(static_by_task),
         "success_rate_by_task": _group_success(rows, "task_id"),
         "success_rate_by_condition": _group_success(rows, "condition"),
+        "success_rate_by_prompt_variant": _group_success(rows, "prompt_variant"),
         "success_rate_by_model": _group_success(rows, "agent_or_model"),
         "optimality_ratio_mean": _mean(successful_opt),
         "optimality_ratio_median": _median(successful_opt),
@@ -120,7 +127,10 @@ def complexity_distance_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     overall: dict[str, int] = defaultdict(int)
     for r in test2:
         choice = r.get("path_choice") or "none"
-        group = f"{r.get('task_id')}|{r.get('condition')}|{r.get('agent_or_model')}"
+        group = (
+            f"{r.get('task_id')}|{r.get('condition')}|"
+            f"{r.get('prompt_variant')}|{r.get('agent_or_model')}"
+        )
         by_group[group][choice] += 1
         overall[choice] += 1
     return {
@@ -164,8 +174,15 @@ def mechanism_ordering_pairs(
                     fp = r.get("failure_point") or {}
                     failures[str(fp.get("mechanism"))] += 1
                 expected = expected_of.get(r.get("task_id"), [])
+                # The interaction order also carries downstream effects (opened
+                # doors/gates) that are not in expected_mechanisms; compare only
+                # the actuated mechanisms' relative order so a correct solve matches.
+                expected_set = set(expected)
+                engaged_order = [
+                    m for m in (r.get("mechanism_interaction_order") or []) if m in expected_set
+                ]
                 order_match.append(
-                    float(r.get("mechanism_interaction_order") == expected) if expected else 0.0
+                    float(engaged_order == expected) if expected else 0.0
                 )
             cond_stats[cond] = {
                 "n": len(cond_rows),

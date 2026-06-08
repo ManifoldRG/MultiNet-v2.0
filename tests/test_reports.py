@@ -10,6 +10,7 @@ def _row(**kw):
         "task_id": "t",
         "experiment": "test1",
         "condition": "default",
+        "prompt_variant": "default",
         "agent_or_model": "m",
         "seed": 0,
         "success": True,
@@ -27,7 +28,10 @@ def test_scoring_calibration_summary_groups_and_correlates():
         _row(task_id="a", success=True, optimality_ratio=1.0),
         _row(task_id="b", success=False, optimality_ratio=0.0),
     ]
-    composites = {("a", "m", 0, "default"): 0.2, ("b", "m", 0, "default"): 0.8}
+    composites = {
+        ("a", "m", 0, "default", "default"): 0.2,
+        ("b", "m", 0, "default", "default"): 0.8,
+    }
     static_by_task = {
         "a": {"static_score": 1.0, "dimensions_12": {"grid_size": 9.0, "optimal_path_length": 3.0}},
         "b": {"static_score": 5.0, "dimensions_12": {"grid_size": 25.0, "optimal_path_length": 9.0}},
@@ -43,6 +47,27 @@ def test_scoring_calibration_summary_groups_and_correlates():
     # Two tasks with variance -> correlation defined for the populated dims.
     assert summary["dimension_correlation"]["grid_size"] is not None
     assert "p33" in summary["tier_boundary_candidates"]
+
+
+def test_prompt_variants_do_not_collide():
+    # Same task + manifest condition, two prompt variants: their composites and
+    # success must stay distinct (regression for the setdefault collapse bug).
+    rows = [
+        _row(task_id="a", prompt_variant="step_by_step", success=True),
+        _row(task_id="a", prompt_variant="bulk", success=False),
+    ]
+    composites = {
+        ("a", "m", 0, "default", "step_by_step"): 0.9,
+        ("a", "m", 0, "default", "bulk"): 0.1,
+    }
+    static_by_task = {"a": {"static_score": 1.0, "dimensions_12": {}}}
+    summary = reports.scoring_calibration_summary(rows, composites, static_by_task)
+
+    by_variant = summary["success_rate_by_prompt_variant"]
+    assert by_variant["step_by_step"]["success_rate"] == 1.0
+    assert by_variant["bulk"]["success_rate"] == 0.0
+    # Both per-variant composites are reachable (neither overwrote the other).
+    assert summary["run_count"] == 2
 
 
 def test_complexity_distance_summary_counts_path_choice():

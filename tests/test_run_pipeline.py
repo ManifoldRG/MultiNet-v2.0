@@ -84,12 +84,13 @@ def test_pipeline_writes_full_artifact_tree(tmp_path):
     assert len(jsonl) == 1
     row = json.loads(jsonl[0])
     for field in (
-        "task_id", "experiment", "condition", "backend", "agent_or_model", "seed",
-        "success", "terminated", "truncated", "reward", "steps", "optimal_steps",
-        "optimality_ratio", "path_choice", "mechanism_interaction_order",
-        "failure_point", "tokens", "raw_output_ref",
+        "task_id", "experiment", "condition", "prompt_variant", "backend",
+        "agent_or_model", "seed", "success", "terminated", "truncated", "reward",
+        "steps", "optimal_steps", "optimality_ratio", "path_choice",
+        "mechanism_interaction_order", "failure_point", "tokens", "raw_output_ref",
     ):
         assert field in row, f"missing episode_runs field: {field}"
+    assert row["prompt_variant"] == "default"
     assert row["tokens"] and row["tokens"] > 0
 
     report_dir = artifacts / "reports" / "smoke"
@@ -287,3 +288,40 @@ def test_scorer_config_change_rescore_without_rerunning_model(tmp_path):
     assert agent.calls == calls_after_first
     eff_b = load_json(run_dir / "run_score.json")["signals"]["token_efficiency"]
     assert eff_b != eff_a
+
+
+# --------------------------------------------------------------------------- #
+# Prompt variants are an axis distinct from the manifest condition
+# --------------------------------------------------------------------------- #
+def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
+    # Two prompt variants over one task must produce two distinct runs that do
+    # not collapse onto the manifest condition (regression for the setdefault bug).
+    manifest_path = _write_manifest(tmp_path)
+    artifacts = tmp_path / "artifacts"
+
+    payloads = run_pipeline(
+        manifest_path=manifest_path,
+        experiment="test1",
+        agent=CountingReplayAgent(v01_empty_room_trajectory()),
+        agent_name="replay-stub",
+        seeds=[0],
+        conditions="Prompt",  # implemented variants: standard, verbose
+        artifacts_root=artifacts,
+        run_set_id="variants",
+    )
+
+    task_id = "validation_10_v01_empty_room"
+    base = artifacts / "runs" / task_id / "minigrid" / "replay-stub" / "seed_0"
+    assert (base / "standard" / "episode.json").exists()
+    assert (base / "verbose" / "episode.json").exists()
+
+    rows = [
+        json.loads(line)
+        for line in (artifacts / "episode_runs.jsonl").read_text().strip().splitlines()
+    ]
+    assert {r["prompt_variant"] for r in rows} == {"standard", "verbose"}
+    # Same task-intrinsic condition, distinct prompt variants -> distinct rows.
+    assert all(r["condition"] == "default" for r in rows)
+    summary = payloads["scoring_calibration_summary"]
+    assert summary["run_count"] == 2
+    assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "verbose"}

@@ -170,6 +170,12 @@ def _canonical_optimal_steps(canonical_paths: dict[str, Any]) -> Optional[int]:
     return None
 
 
+def _episode_reward(episode: dict[str, Any]) -> Any:
+    """Final-state reward, guarding an explicit ``final_state: null``."""
+    final = episode.get("final_state")
+    return final.get("reward") if isinstance(final, dict) else None
+
+
 def build_metrics(
     episode: dict[str, Any],
     canonical_paths: dict[str, Any],
@@ -199,28 +205,40 @@ def build_run_row(
     backend: str = "minigrid",
     raw_output_ref: Optional[str] = None,
     metrics: Optional[dict[str, Any]] = None,
+    prompt_variant: str = "default",
 ) -> dict[str, Any]:
-    """Build one ``episode_runs.jsonl`` row (Appendix A.3 fields)."""
+    """Build one ``episode_runs.jsonl`` row (Appendix A.3 fields).
+
+    ``condition`` is the task-intrinsic axis (e.g. the test-3 mechanism order);
+    ``prompt_variant`` is the orthogonal prompt axis selected by ``--conditions``.
+    The two are kept distinct so prompt variants do not collapse onto the
+    manifest condition.
+    """
     metrics = metrics if metrics is not None else build_metrics(episode, canonical_paths, manifest_row)
     success = bool(episode.get("success"))
     end_reason = episode.get("end_reason")
     steps = int(episode.get("steps_used", 0))
     optimal_steps = _canonical_optimal_steps(canonical_paths)
-    if success and optimal_steps:
-        optimality_ratio = optimal_steps / max(steps, optimal_steps)
-    else:
+    # Mirror scorer.runtime's step_ratio: optimal_steps == 0 is a perfect 0-step
+    # solve, not a zero ratio, so the jsonl and run_score.json agree.
+    if not success or optimal_steps is None:
         optimality_ratio = 0.0
+    elif optimal_steps == 0:
+        optimality_ratio = 1.0 if steps == 0 else 0.0
+    else:
+        optimality_ratio = optimal_steps / max(steps, optimal_steps)
     return {
         "task_id": manifest_row.get("task_id") or episode.get("task_spec", {}).get("task_id"),
         "experiment": manifest_row.get("experiment"),
         "condition": manifest_row.get("condition"),
+        "prompt_variant": prompt_variant,
         "backend": backend,
         "agent_or_model": agent_or_model,
         "seed": seed,
         "success": success,
         "terminated": end_reason == "success",
         "truncated": end_reason == "truncated",
-        "reward": episode.get("final_state", {}).get("reward"),
+        "reward": _episode_reward(episode),
         "steps": steps,
         "optimal_steps": optimal_steps,
         "optimality_ratio": optimality_ratio,
@@ -257,6 +275,11 @@ def enrich_run_for_scoring(
     run["seed"] = seed
     run["terminated"] = episode.get("end_reason") == "success"
     run["truncated"] = episode.get("end_reason") == "truncated"
+    # episode_log nests reward under final_state; the scorer only reads a
+    # top-level ``reward``, so lift it (keeps run_score.json reward in sync
+    # with the episode_runs.jsonl row).
+    if run.get("reward") is None:
+        run["reward"] = _episode_reward(episode)
     for key in ("path_choice", "mechanism_interaction_order", "failure_point"):
         if metrics.get(key) is not None:
             run[key] = metrics[key]
