@@ -155,15 +155,20 @@ def _expected_static_hash(spec, config: ScorerConfig) -> str:
     )
 
 
-def _expected_run_hash(spec, model_name: str, seed: int, cfg: ExperimentConfig, backend: str) -> str:
-    """Hash the inputs that determine a Stage-3 episode (no scorer config:
-    scorer-config changes invalidate run_score, not the model call)."""
+def _expected_run_hash(spec, model_name: str, seed: int, backend: str) -> str:
+    """Hash the inputs that determine a Stage-3 episode.
+
+    Excludes scorer config (that invalidates run_score, not the model call) and,
+    pre-v1, the prompt/ExperimentConfig (prompts are not yet versioned while we
+    iterate; the prompt variant still separates runs via the <condition> dir).
+    TODO(release): fold in backend_version + adapter/model code version so code
+    changes invalidate cached episodes at v1.
+    """
     return stable_hash(
         {
             "task": spec.to_dict(),
             "model_id": model_name,
             "seed": seed,
-            "prompt_config": cfg.to_dict(),
             "backend": backend,
             "pipeline_version": PIPELINE_VERSION,
         }
@@ -275,7 +280,7 @@ def _run_one_model(
 
                 # Stage 3 (expensive: model calls) is hash-cached. Reuse a cached
                 # episode only when its stamped run-inputs hash still matches.
-                expected_hash = _expected_run_hash(spec, model_name, seed, cfg, "minigrid")
+                expected_hash = _expected_run_hash(spec, model_name, seed, "minigrid")
                 reuse = (
                     not force
                     and episode_path.exists()
