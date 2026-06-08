@@ -15,8 +15,6 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from interface.telemetry import token_count_from_record
-
 # Mechanism id sets carried on every state snapshot, in direct-actuation priority
 # order (keys/switches the agent acts on, then doors/gates that open as effects).
 _MECHANISM_FIELDS = ("collected_keys", "active_switches", "open_doors", "open_gates")
@@ -149,6 +147,8 @@ def path_choice(
 
 def episode_token_count(episode: dict[str, Any]) -> Optional[int]:
     """Sum token usage over ``kind == "query"`` transcript records."""
+    from interface.telemetry import token_count_from_record
+
     total = 0
     found = False
     for rec in episode.get("transcript", []):

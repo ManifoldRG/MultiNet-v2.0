@@ -31,3 +31,9 @@ def _pulls_interface(module: str) -> bool:
 
 def test_scorer_import_is_interface_free():
     assert not _pulls_interface("scorer"), "import scorer pulled in interface"
+
+
+def test_episode_metrics_import_is_interface_free():
+    assert not _pulls_interface("pipeline.episode_metrics"), (
+        "import pipeline.episode_metrics pulled in interface"
+    )
