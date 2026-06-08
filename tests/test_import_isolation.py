@@ -37,3 +37,9 @@ def test_episode_metrics_import_is_interface_free():
     assert not _pulls_interface("pipeline.episode_metrics"), (
         "import pipeline.episode_metrics pulled in interface"
     )
+
+
+def test_run_pipeline_import_is_interface_free():
+    assert not _pulls_interface("scripts.run_pipeline"), (
+        "import scripts.run_pipeline pulled in interface"
+    )

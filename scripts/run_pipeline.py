@@ -26,14 +26,12 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
-from interface.config import ExperimentConfig
 from prompting_experiments import CONDITION_SETS, iter_condition_configs
 from scorer import compute_runtime_score, load_scorer_config, score_task_file
 from scorer.config import SCORER_VERSION, ScorerConfig
 from scorer.io import stable_hash, task_spec_from_payload
 
 from pipeline import episode_metrics, reports
-from pipeline.run_stage3 import run_episode
 
 # Bump when Stage-3 run production changes in a way that invalidates cached episodes.
 PIPELINE_VERSION = "0.1.0"
@@ -140,6 +138,8 @@ def resolve_task_rows(
 
 
 def _condition_configs(conditions: Optional[str]) -> list[tuple[str, ExperimentConfig]]:
+    from interface.config import ExperimentConfig
+
     if not conditions:
         return [("default", ExperimentConfig())]
     if conditions not in CONDITION_SETS:
@@ -262,6 +262,8 @@ def _run_one_model(
     conditions: Optional[str],
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
+    from pipeline.run_stage3 import run_episode
+
     condition_configs = _condition_configs(conditions)
     run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
