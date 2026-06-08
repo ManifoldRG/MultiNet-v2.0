@@ -204,3 +204,80 @@ def mechanism_ordering_pairs(
         "run_count": len(test3),
         "pairs": pair_reports,
     }
+
+
+def _summary(
+    rows: list[dict[str, Any]], composites: dict[tuple, Optional[float]]
+) -> dict[str, Any]:
+    """Aggregate model-performance metrics over a set of run rows."""
+    opt = [
+        float(r["optimality_ratio"])
+        for r in rows
+        if r.get("success") and r.get("optimality_ratio") is not None
+    ]
+    tokens = [int(r["tokens"]) for r in rows if r.get("tokens") is not None]
+    comps = [
+        c for c in (composites.get(_run_key(r)) for r in rows) if c is not None
+    ]
+    return {
+        "n": len(rows),
+        "success_rate": _mean([float(bool(r.get("success"))) for r in rows]),
+        "optimality_ratio_mean": _mean(opt),
+        "optimality_ratio_median": _median(opt),
+        "steps_mean": _mean([float(r.get("steps", 0)) for r in rows]),
+        "tokens_mean": _mean([float(t) for t in tokens]),
+        "tokens_total": float(sum(tokens)) if tokens else None,
+        "composite_mean": _mean([float(c) for c in comps]),
+    }
+
+
+def model_report(
+    run_rows: list[dict[str, Any]],
+    composites: dict[tuple, Optional[float]],
+    model_id: str,
+    run_set_id: str,
+) -> dict[str, Any]:
+    """Machine-readable per-model performance report.
+
+    Provisional: the raw metrics (success/steps/optimality/tokens) are
+    meaningful now, but composite fields are placeholders until the scorer is
+    tuned. Shares one schema across models so an external tool can compare them.
+    """
+    rows = [r for r in run_rows if r.get("agent_or_model") == model_id]
+
+    def _group(key: str) -> dict[str, Any]:
+        buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for r in rows:
+            buckets[str(r.get(key))].append(r)
+        return {name: _summary(group, composites) for name, group in buckets.items()}
+
+    return {
+        "schema_version": "0.1.0",
+        "model_id": model_id,
+        "run_set_id": run_set_id,
+        "backend": rows[0].get("backend", "minigrid") if rows else "minigrid",
+        "seeds": sorted({r.get("seed") for r in rows if r.get("seed") is not None}),
+        "task_count": len({r.get("task_id") for r in rows}),
+        "run_count": len(rows),
+        "provisional": True,
+        "overall": _summary(rows, composites),
+        "by_experiment": _group("experiment"),
+        "by_prompt_variant": _group("prompt_variant"),
+        "tasks": [
+            {
+                "task_id": r.get("task_id"),
+                "experiment": r.get("experiment"),
+                "condition": r.get("condition"),
+                "prompt_variant": r.get("prompt_variant"),
+                "seed": r.get("seed"),
+                "success": bool(r.get("success")),
+                "steps": r.get("steps"),
+                "optimal_steps": r.get("optimal_steps"),
+                "optimality_ratio": r.get("optimality_ratio"),
+                "path_choice": r.get("path_choice"),
+                "tokens": r.get("tokens"),
+                "composite": composites.get(_run_key(r)),
+            }
+            for r in rows
+        ],
+    }

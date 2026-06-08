@@ -103,3 +103,40 @@ def test_mechanism_ordering_pairs_paired_delta():
     assert pair["conditions"]["switch_first"]["failure_point_counts"]["kB"] == 1
     # sorted conditions: ["key_first", "switch_first"] -> delta = 1.0 - 0.0
     assert pair["paired_success_delta"]["success_delta"] == 1.0
+
+
+def test_model_report_aggregates_per_model():
+    rows = [
+        _row(task_id="a", agent_or_model="m1", experiment="test1",
+             success=True, optimality_ratio=1.0, steps=3, optimal_steps=3, tokens=10),
+        _row(task_id="b", agent_or_model="m1", experiment="test1",
+             success=False, optimality_ratio=0.0, steps=9, optimal_steps=3, tokens=20),
+        _row(task_id="a", agent_or_model="m2", experiment="test1",
+             success=True, optimality_ratio=0.5, steps=6, optimal_steps=3, tokens=5),
+    ]
+    composites = {
+        ("a", "m1", 0, "default", "default"): 0.4,
+        ("b", "m1", 0, "default", "default"): 0.0,
+        ("a", "m2", 0, "default", "default"): 0.2,
+    }
+
+    rep = reports.model_report(rows, composites, "m1", "rs")
+    assert rep["schema_version"] == "0.1.0"
+    assert rep["model_id"] == "m1"
+    assert rep["run_set_id"] == "rs"
+    assert rep["provisional"] is True
+    assert rep["run_count"] == 2
+    assert rep["task_count"] == 2
+    assert rep["overall"]["success_rate"] == 0.5
+    assert rep["overall"]["optimality_ratio_mean"] == 1.0  # successful runs only
+    assert rep["overall"]["tokens_total"] == 30.0
+    assert rep["overall"]["composite_mean"] == 0.2  # mean(0.4, 0.0)
+    assert "test1" in rep["by_experiment"]
+    assert "default" in rep["by_prompt_variant"]
+    assert len(rep["tasks"]) == 2
+    assert {t["task_id"] for t in rep["tasks"]} == {"a", "b"}
+
+    # A second model is fully independent (no collision).
+    rep2 = reports.model_report(rows, composites, "m2", "rs")
+    assert rep2["run_count"] == 1
+    assert rep2["overall"]["success_rate"] == 1.0
