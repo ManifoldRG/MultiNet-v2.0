@@ -224,7 +224,7 @@ def _summary(
         "success_rate": _mean([float(bool(r.get("success"))) for r in rows]),
         "optimality_ratio_mean": _mean(opt),
         "optimality_ratio_median": _median(opt),
-        "steps_mean": _mean([float(r.get("steps", 0)) for r in rows]),
+        "steps_mean": _mean([float(r["steps"]) for r in rows if r.get("steps") is not None]),
         "tokens_mean": _mean([float(t) for t in tokens]),
         "tokens_total": float(sum(tokens)) if tokens else None,
         "composite_mean": _mean([float(c) for c in comps]),
