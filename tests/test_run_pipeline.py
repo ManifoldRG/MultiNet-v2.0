@@ -325,3 +325,28 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
     summary = payloads["scoring_calibration_summary"]
     assert summary["run_count"] == 2
     assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "verbose"}
+
+
+def test_pipeline_writes_per_model_report(tmp_path):
+    manifest_path = _write_manifest(tmp_path)
+    artifacts = tmp_path / "artifacts"
+
+    payloads = run_pipeline(
+        manifest_path=manifest_path,
+        experiment="test1",
+        agent=ReplayAgent(v01_empty_room_trajectory()),
+        agent_name="replay-stub",
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="smoke",
+    )
+
+    report_path = artifacts / "reports" / "smoke" / "models" / "replay-stub.json"
+    assert report_path.exists()
+    rep = json.loads(report_path.read_text())
+    assert rep["schema_version"] == "0.1.0"
+    assert rep["model_id"] == "replay-stub"
+    assert rep["provisional"] is True
+    assert rep["run_count"] == 1
+    assert "overall" in rep and "by_experiment" in rep and "tasks" in rep
+    assert payloads["model_reports"]["replay-stub"]["run_count"] == 1

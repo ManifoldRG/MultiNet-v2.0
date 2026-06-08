@@ -382,6 +382,19 @@ def _write_aggregate(
     }
     for name, payload in payloads.items():
         (report_dir / f"{name}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    # Per-model reports: machine-readable, one file per model, kept separate
+    # from the scorer-calibration ("tuning") artifacts above.
+    models_dir = report_dir / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    model_reports: dict[str, Any] = {}
+    for model_id in sorted({str(r.get("agent_or_model")) for r in run_rows}):
+        report = reports.model_report(run_rows, composites, model_id, run_set_id)
+        (models_dir / f"{_sanitize(model_id)}.json").write_text(
+            json.dumps(report, indent=2), encoding="utf-8"
+        )
+        model_reports[model_id] = report
+    payloads["model_reports"] = model_reports
     return payloads
 
 
