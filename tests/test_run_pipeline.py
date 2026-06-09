@@ -350,3 +350,30 @@ def test_pipeline_writes_per_model_report(tmp_path):
     assert rep["run_count"] == 1
     assert "overall" in rep and "by_experiment" in rep and "tasks" in rep
     assert payloads["model_reports"]["replay-stub"]["run_count"] == 1
+
+
+def test_run_one_model_skips_unbeatable_tasks(tmp_path):
+    # A task Stage 2 marks unbeatable must not enter Stage 3/4: no model call,
+    # no run rows, no composites — without even resolving its (missing) source.
+    from scripts.run_pipeline import _run_one_model
+
+    calls = []
+
+    def agent(messages):
+        calls.append(messages)
+        return "FINAL_OUTPUT: DONE"
+
+    rows = [{"task_id": "dead", "source": "missing.json",
+             "experiment": "test1", "condition": "default"}]
+    run_rows, composites = _run_one_model(
+        rows, agent, "m",
+        manifest_path=tmp_path / "manifest.json",
+        artifacts_root=tmp_path / "artifacts",
+        static_by_task={"dead": {"is_beatable": False}},
+        difficulty_max=1.0,
+        config=load_scorer_config(),
+        seeds=[0], conditions=None, force=False,
+    )
+    assert run_rows == []
+    assert composites == {}
+    assert calls == []  # ineligible task -> model never invoked

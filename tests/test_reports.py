@@ -140,3 +140,14 @@ def test_model_report_aggregates_per_model():
     rep2 = reports.model_report(rows, composites, "m2", "rs")
     assert rep2["run_count"] == 1
     assert rep2["overall"]["success_rate"] == 1.0
+
+
+def test_scoring_calibration_summary_lists_ineligible_tasks():
+    rows = [_row(task_id="a", success=True)]
+    composites = {("a", "m", 0, "default", "default"): 0.5}
+    static_by_task = {
+        "a": {"static_score": 1.0, "dimensions_12": {}, "is_beatable": True},
+        "dead": {"static_score": 0.0, "dimensions_12": {}, "is_beatable": False},
+    }
+    summary = reports.scoring_calibration_summary(rows, composites, static_by_task)
+    assert summary["ineligible_tasks"] == ["dead"]

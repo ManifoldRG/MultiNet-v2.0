@@ -108,6 +108,9 @@ def scoring_calibration_summary(
         "experiment": "test1",
         "run_count": len(rows),
         "task_count": len(static_by_task),
+        "ineligible_tasks": sorted(
+            t for t, s in static_by_task.items() if not s.get("is_beatable", True)
+        ),
         "success_rate_by_task": _group_success(rows, "task_id"),
         "success_rate_by_condition": _group_success(rows, "condition"),
         "success_rate_by_prompt_variant": _group_success(rows, "prompt_variant"),

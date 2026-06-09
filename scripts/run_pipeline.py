@@ -270,12 +270,17 @@ def _run_one_model(
 
     for row in rows:
         task_id = row["task_id"]
+        scored_static = static_by_task[task_id]
+        # Tasks Stage 2 marks unbeatable are ineligible: skip the expensive
+        # Stage 3/4 work (model/API calls + scoring) entirely. The reports
+        # surface them via scoring_calibration_summary's ineligible_tasks.
+        if not scored_static.get("is_beatable", True):
+            continue
         source = _resolve_source(row, manifest_path)
         spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
         canonical = json.loads(
             (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
         )
-        scored_static = static_by_task[task_id]
 
         for seed in seeds:
             for variant, cfg in condition_configs:
