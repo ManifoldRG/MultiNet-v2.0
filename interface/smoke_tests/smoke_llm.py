@@ -20,9 +20,9 @@ if str(ROOT) not in sys.path:
 from interface.agents import (
     ClaudeAnthropicAgent,
     ClaudeAnthropicConfig,
-    DEFAULT_LOCAL_MODEL,
-    LocalLLMConfig,
-    LocalTransformersAgent,
+    DEFAULT_QWEN35_VL_MODEL,
+    Qwen35VLAgent,
+    Qwen35VLConfig,
 )
 from interface.config import ExperimentConfig
 from interface.episode_log import flush_episode_log
@@ -115,7 +115,7 @@ def main() -> None:
         description=(
             "End-to-end LLM maze episode. Writes llm_queries.jsonl plus exhaustive "
             "episode log (episode.json, frames/, queries/). "
-            "Anthropic runs in the cloud; --backend local uses Hugging Face. "
+            "Anthropic runs in the cloud; --backend qwen uses local Qwen 3.5 VL. "
             "-v prints full model replies; --log-level INFO adds query timing logs."
         ),
     )
@@ -135,19 +135,19 @@ def main() -> None:
     )
     parser.add_argument(
         "--backend",
-        choices=("anthropic", "local"),
+        choices=("anthropic", "qwen"),
         default="anthropic",
-        help="anthropic: Claude API. local: Hugging Face Transformers on this machine.",
+        help="anthropic: Claude Sonnet API. qwen: Qwen 3.5 VL via Hugging Face on this machine.",
     )
     parser.add_argument(
-        "--hf-model",
-        default=DEFAULT_LOCAL_MODEL,
-        help="With --backend local: Hugging Face model id (default: %(default)s).",
+        "--qwen-model",
+        default=DEFAULT_QWEN35_VL_MODEL,
+        help="With --backend qwen: Hugging Face model id (default: %(default)s).",
     )
     parser.add_argument(
         "--device-map",
         default="auto",
-        help='With --backend local: device_map for from_pretrained (e.g. "auto", "cuda:0").',
+        help='With --backend qwen: device_map for from_pretrained (e.g. "auto", "cuda:0").',
     )
     parser.add_argument("--prompting", default="standard", choices=["minimal", "standard", "verbose"])
     parser.add_argument("--observation", default="image_text", choices=["text_only", "image_text", "image_only"])
@@ -175,7 +175,7 @@ def main() -> None:
         type=float,
         default=180.0,
         metavar="SECS",
-        help="Anthropic API read timeout in seconds (default: 180). Ignored for --backend local.",
+        help="Anthropic API read timeout in seconds (default: 180). Ignored for --backend qwen.",
     )
     args = parser.parse_args()
     _configure_logging(args.log_level)
@@ -186,7 +186,7 @@ def main() -> None:
 
     maze_stem = maze_path.stem
     suffix = f"_{args.tag}" if args.tag else ""
-    out_slug = "claude" if args.backend == "anthropic" else "local"
+    out_slug = "claude" if args.backend == "anthropic" else "qwen35vl"
     out_dir = Path(__file__).resolve().parent / "results" / f"smoke_{maze_stem}_{out_slug}{suffix}"
 
     backend, spec = load_task(maze_path)
@@ -207,9 +207,9 @@ def main() -> None:
         agent_inner = ClaudeAnthropicAgent(config=claude_cfg)
         model_id = claude_cfg.model
     else:
-        llm_cfg = LocalLLMConfig(model=args.hf_model, device_map=args.device_map)
-        agent_inner = LocalTransformersAgent(config=llm_cfg)
-        model_id = llm_cfg.model
+        qwen_cfg = Qwen35VLConfig(model=args.qwen_model, device_map=args.device_map)
+        agent_inner = Qwen35VLAgent(config=qwen_cfg)
+        model_id = qwen_cfg.model
 
     agent = _AgentRecorder(
         agent_inner,

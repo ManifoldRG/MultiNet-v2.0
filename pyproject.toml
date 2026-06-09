@@ -25,7 +25,10 @@ visual = [
 ]
 hf = [
     "torch",
+    "torchvision",
     "transformers",
+    "accelerate",
+    "safetensors",
 ]
 
 [project.scripts]
