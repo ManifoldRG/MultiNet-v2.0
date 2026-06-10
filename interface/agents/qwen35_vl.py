@@ -69,6 +69,12 @@ class Qwen35VLConfig:
     temperature: float = 0.0
     max_new_tokens: int = 1024
     device_map: str = "auto"
+    local_files_only: bool = True
+    trust_remote_code: bool = False
+    torch_dtype: str | None = "auto"
+    load_in_4bit: bool = False
+    attn_implementation: str | None = None
+    max_memory: dict[str, str] | None = None
 
 
 @dataclass
@@ -81,15 +87,79 @@ class Qwen35VLAgent:
     last_usage: dict[str, int] | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
-        from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration
+        from transformers import AutoProcessor
 
         if self.processor is None:
-            self.processor = AutoProcessor.from_pretrained(self.config.model)
-        if self.model is None:
-            self.model = Qwen3_5ForConditionalGeneration.from_pretrained(
+            self.processor = AutoProcessor.from_pretrained(
                 self.config.model,
-                device_map=self.config.device_map,
+                local_files_only=self.config.local_files_only,
+                trust_remote_code=self.config.trust_remote_code,
             )
+        if self.model is None:
+            model_cls = self._model_class()
+            self.model = model_cls.from_pretrained(
+                self.config.model,
+                **self._model_kwargs(),
+            )
+
+    def reset_usage(self) -> None:
+        self.last_usage = None
+
+    def _model_class(self):
+        import transformers
+
+        for name in (
+            "Qwen3_5ForConditionalGeneration",
+            "AutoModelForImageTextToText",
+            "AutoModelForVision2Seq",
+            "AutoModelForCausalLM",
+        ):
+            model_cls = getattr(transformers, name, None)
+            if model_cls is not None:
+                return model_cls
+        raise ImportError("Transformers does not provide a usable Qwen 3.5 model class.")
+
+    def _torch_dtype(self):
+        dtype = self.config.torch_dtype
+        if dtype is None or dtype == "auto":
+            return dtype
+        import torch
+
+        return getattr(torch, dtype)
+
+    def _model_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "device_map": self.config.device_map,
+            "local_files_only": self.config.local_files_only,
+            "trust_remote_code": self.config.trust_remote_code,
+        }
+        torch_dtype = self._torch_dtype()
+        if torch_dtype is not None:
+            kwargs["torch_dtype"] = torch_dtype
+        if self.config.attn_implementation:
+            kwargs["attn_implementation"] = self.config.attn_implementation
+        if self.config.max_memory:
+            kwargs["max_memory"] = dict(self.config.max_memory)
+        if self.config.load_in_4bit:
+            import torch
+            from transformers import BitsAndBytesConfig
+
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
+        return kwargs
+
+    def _input_device(self):
+        device = getattr(self.model, "device", None)
+        if device is not None:
+            return device
+        try:
+            return next(self.model.parameters()).device
+        except StopIteration:
+            return None
 
     def __call__(self, messages: List[dict]) -> str:
         qwen_messages = _to_qwen_messages(messages)
@@ -100,8 +170,9 @@ class Qwen35VLAgent:
             return_dict=True,
             return_tensors="pt",
         )
+        input_device = self._input_device()
         inputs = {
-            key: value.to(self.model.device) if hasattr(value, "to") else value
+            key: value.to(input_device) if input_device is not None and hasattr(value, "to") else value
             for key, value in inputs.items()
         }
 

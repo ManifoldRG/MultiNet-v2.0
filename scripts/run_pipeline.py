@@ -536,6 +536,17 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.model = model
         if max_tokens:
             cfg.max_new_tokens = int(max_tokens)
+        for key in (
+            "device_map",
+            "local_files_only",
+            "trust_remote_code",
+            "torch_dtype",
+            "load_in_4bit",
+            "attn_implementation",
+            "max_memory",
+        ):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
         return Qwen35VLAgent(config=cfg), model or cfg.model
     raise ValueError(f"Model {name!r}: unknown provider {provider!r} (expected 'claude' or 'qwen').")
 
