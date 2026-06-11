@@ -75,6 +75,7 @@ class Qwen35VLConfig:
     load_in_4bit: bool = False
     attn_implementation: str | None = None
     max_memory: dict[str, str] | None = None
+    enable_thinking: bool = False
 
 
 @dataclass
@@ -167,6 +168,7 @@ class Qwen35VLAgent:
             qwen_messages,
             tokenize=True,
             add_generation_prompt=True,
+            enable_thinking=self.config.enable_thinking,
             return_dict=True,
             return_tensors="pt",
         )

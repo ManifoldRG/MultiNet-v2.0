@@ -6,7 +6,8 @@ MINIMAL_USER_PROMPT = (
     "{obs_block}"
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
     "Last result: {last_feedback}\n"
-    "What is your next action?"
+    "What is your next action?\n"
+    "Reply exactly as one line: FINAL_OUTPUT: <one valid action>"
 )
 
 VERBOSE_USER_PROMPT = (
@@ -17,7 +18,8 @@ VERBOSE_USER_PROMPT = (
     "{neighbour_block}"
     "{mechanism_block}"
     "Last result: {last_feedback}\n"
-    "What is your next action?"
+    "What is your next action?\n"
+    "Reply exactly as one line: FINAL_OUTPUT: <one valid action>"
 )
 
 NEIGHBOUR_BLOCK_HEADER = "From your perspective:\n"

@@ -27,6 +27,7 @@ MECHANISM_RULES = (
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 
 FINAL_OUTPUT_INSTRUCTION = (
+    "Do not explain, reason, summarize the map, or include any text before the answer.\n"
     "On the last line, output exactly:\n"
     "FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  "
     "(comma-separated; one or more valid actions)"

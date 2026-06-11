@@ -544,6 +544,7 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             "load_in_4bit",
             "attn_implementation",
             "max_memory",
+            "enable_thinking",
         ):
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])

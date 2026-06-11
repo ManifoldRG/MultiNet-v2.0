@@ -44,4 +44,7 @@ TOGGLED_FEEDBACK = "TOGGLED — {action}: {message}"
 WRONG_DONE_FEEDBACK = "WRONG DONE — {action}: {message} You remain at {position}."
 INVALID_FEEDBACK = "INVALID — {action}: {message} You remain at {position}."
 DEFAULT_FEEDBACK = "{event_type} — {action}: {message}"
-PARSE_FAILURE_FEEDBACK = "Could not parse FINAL_OUTPUT (one or more valid actions). Use only: {actions_hint}."
+PARSE_FAILURE_FEEDBACK = (
+    "Could not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: "
+    "FINAL_OUTPUT: <one of {actions_hint}>."
+)

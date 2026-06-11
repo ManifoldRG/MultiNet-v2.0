@@ -136,7 +136,9 @@ class ExperimentRunner:
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(
-                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s chat_history=%s",
+                "Episode start: task_id=%s seed=%s max_steps=%s querying=%s observation=%s context_window=%s chat_history=%s",
+                self.task_spec.task_id,
+                self.task_spec.seed,
                 max_steps,
                 self.config.querying,
                 self.config.observation,
@@ -168,8 +170,10 @@ class ExperimentRunner:
                     agent_messages = messages
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
-                        "LLM query #%d: messages_in_context=%d current_turn_has_image=%s",
+                        "LLM query #%d: task_id=%s observation=%s messages_in_context=%d current_turn_has_image=%s",
                         query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
                         len(agent_messages),
                         has_image,
                     )
@@ -184,14 +188,22 @@ class ExperimentRunner:
                 action_queue = self.querying.parse_actions(model_text)
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
-                        "LLM query #%d finished in %.2fs: reply_chars=%d actions_parsed=%d",
+                        "LLM query #%d finished: task_id=%s observation=%s elapsed=%.2fs reply_chars=%d actions_parsed=%d",
                         query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
                         llm_s,
                         len(model_text),
                         len(action_queue),
                     )
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("LLM query #%d reply:\n%s", query_count, model_text)
+                    logger.debug(
+                        "LLM query #%d reply: task_id=%s observation=%s\n%s",
+                        query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
+                        model_text,
+                    )
                 query_record = {
                     "kind": "query",
                     "query_index": query_count,
@@ -216,8 +228,10 @@ class ExperimentRunner:
                 if not action_queue:
                     parse_failures += 1
                     logger.warning(
-                        "LLM query #%d: no valid actions parsed; parse failure %d/%d",
+                        "LLM query #%d: task_id=%s observation=%s no valid actions parsed; parse failure %d/%d",
                         query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
                         parse_failures,
                         self.config.max_parse_retries,
                     )
