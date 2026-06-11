@@ -17,7 +17,7 @@ def json_default(value: Any) -> Any:
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
         raise ValueError(f"Expected a JSON object in {path}")
@@ -27,7 +27,7 @@ def load_json(path: str | Path) -> dict[str, Any]:
 def dump_json(path: str | Path, payload: dict[str, Any]) -> None:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, default=json_default)
         f.write("\n")
 
