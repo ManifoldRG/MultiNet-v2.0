@@ -15,6 +15,7 @@ from scorer.config import (
     DIMENSION_NAMES,
     load_scorer_config,
 )
+from scorer.io import dump_json, load_json
 from scorer.scoring import (
     ScorerConfig,
     compute_12d_score,
@@ -23,7 +24,7 @@ from scorer.scoring import (
     compute_static_score_artifact,
     score_task_file,
 )
-from scripts.score_json import _default_runtime_output, _runtime, _static_target_dirs
+from scripts.score_json import _default_runtime_output, _runtime, _static, _static_target_dirs
 
 
 def make_spec(**overrides):
@@ -58,6 +59,54 @@ def test_canonical_paths_include_bfs_actions_and_positions():
     assert report.states_explored > 0
     assert report.greedy is not None
     assert report.greedy["success"] is True
+
+
+def test_planner_toggle_trace_matches_current_cell_switch_precedence():
+    spec = make_spec(
+        maze={
+            "dimensions": [7, 5],
+            "walls": [[1, 2], [2, 2], [3, 2], [4, 2], [5, 2]],
+            "start": [1, 1],
+            "goal": [5, 1],
+        },
+        mechanisms={
+            "keys": [{"id": "k1", "position": [2, 1], "color": "red"}],
+            "doors": [
+                {
+                    "id": "d1",
+                    "position": [4, 1],
+                    "requires_key": "red",
+                    "initial_state": "locked",
+                }
+            ],
+            "switches": [
+                {
+                    "id": "s1",
+                    "position": [3, 1],
+                    "controls": [],
+                    "switch_type": "toggle",
+                    "initial_state": "off",
+                }
+            ],
+        },
+        goal={"type": "reach_position", "target": [5, 1]},
+        max_steps=30,
+    )
+
+    traced = trace_planned_actions(
+        spec,
+        [
+            int(MiniGridActions.PICKUP),
+            int(MiniGridActions.MOVE_FORWARD),
+            int(MiniGridActions.MOVE_FORWARD),
+            int(MiniGridActions.TOGGLE),
+        ],
+    )
+    bfs_path = plan_bfs_path(spec)
+
+    assert traced.action_labels[-1] == "toggle:s1"
+    assert "open_door:d1" not in traced.action_labels
+    assert bfs_path.success is False
 
 
 def test_static_score_uses_configurable_weights():
@@ -114,7 +163,7 @@ def test_score_task_file_writes_stage_two_artifacts(tmp_path):
     assert (tmp_path / "artifacts" / "canonical_paths.json").exists()
     scored_path = tmp_path / "artifacts" / "scored_static.json"
     assert scored_path.exists()
-    with open(scored_path) as f:
+    with open(scored_path, encoding="utf-8") as f:
         payload = json.load(f)
     assert payload["task_id"] == spec.task_id
     assert "dimensions_12" in payload
@@ -122,6 +171,25 @@ def test_score_task_file_writes_stage_two_artifacts(tmp_path):
     assert "composite" not in payload
     assert payload["validation"]["schema_valid"] is True
     assert payload["canonical_agent_features"]["greedy_solvability"] == 1.0
+
+
+def test_scorer_json_io_uses_utf8_encoding(tmp_path, monkeypatch):
+    real_open = open
+    observed: list[tuple[str, str, str | None]] = []
+
+    def tracking_open(path, mode="r", *args, **kwargs):
+        observed.append((str(path), mode, kwargs.get("encoding")))
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", tracking_open)
+
+    payload = {"message": "reach \u2192 caf\u00e9", "label": "caf\u00e9"}
+    path = tmp_path / "unicode.json"
+    dump_json(path, payload)
+
+    assert load_json(path) == payload
+    assert (str(path), "w", "utf-8") in observed
+    assert (str(path), "r", "utf-8") in observed
 
 
 def test_score_task_file_reuses_primary_validator_result(tmp_path, monkeypatch):
@@ -484,6 +552,37 @@ def test_static_cli_target_dirs_reject_same_stem_collisions(tmp_path):
 
     with pytest.raises(ValueError, match="collide"):
         _static_target_dirs(files, tmp_path / "scores")
+
+
+def test_static_cli_continues_after_file_failure_and_summarizes(tmp_path, capsys):
+    task_a = tmp_path / "task_a.json"
+    task_b = tmp_path / "task_b.json"
+    bad_task = tmp_path / "bad.json"
+    dump_json(task_a, make_spec(task_id="ok_a").to_dict())
+    dump_json(task_b, make_spec(task_id="ok_b").to_dict())
+    bad_task.write_text("{", encoding="utf-8")
+
+    exit_code = _static(
+        argparse.Namespace(
+            config=None,
+            inputs=[str(task_a), str(bad_task), str(task_b)],
+            output_dir=str(tmp_path / "scores"),
+        )
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "static: ok input=" in captured.out
+    assert "task_id=ok_a" in captured.out
+    assert "task_id=ok_b" in captured.out
+    assert "static: error input=" in captured.err
+    assert "bad.json" in captured.err
+    assert "JSONDecodeError" in captured.err
+    assert "Traceback" not in captured.err
+    assert "static: summary scored=2 failed=1 total=3" in captured.err
+    assert (tmp_path / "scores" / "task_a" / "scored_static.json").exists()
+    assert (tmp_path / "scores" / "task_b" / "scored_static.json").exists()
+    assert not (tmp_path / "scores" / "bad" / "scored_static.json").exists()
 
 
 def test_runtime_cli_default_output_uses_source_stem(tmp_path):
