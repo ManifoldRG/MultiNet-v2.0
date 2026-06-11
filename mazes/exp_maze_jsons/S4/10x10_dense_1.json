@@ -37,7 +37,6 @@
     "target": [8, 1],
     "auxiliary_conditions": []
   },
-  },
   "metadata": {
     "chain_pattern": "none",
     "tiling": "square",
