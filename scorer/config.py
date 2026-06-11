@@ -138,7 +138,7 @@ def load_scorer_config(path: str | Path | None = None) -> ScorerConfig:
             raise ImportError(
                 "YAML scorer configs require PyYAML. Use JSON or install PyYAML."
             ) from exc
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         if not isinstance(data, dict):
             raise ValueError(f"Expected a YAML object in {config_path}")

@@ -250,25 +250,6 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
             ),
         )
 
-    door = ctx.doors_by_pos.get(front)
-    if door and door["id"] not in state.open_doors and state.carrying_key is not None:
-        held_color = ctx.keys_by_id[state.carrying_key]["color"]
-        if held_color == door["color"]:
-            yield Transition(
-                action=int(MiniGridActions.TOGGLE),
-                label=f"open_door:{door['id']}",
-                next_state=PlannerState(
-                    agent_pos=state.agent_pos,
-                    agent_dir=state.agent_dir,
-                    carrying_key=None if ctx.key_consumption else state.carrying_key,
-                    collected_keys=state.collected_keys,
-                    active_switches=state.active_switches,
-                    used_switches=state.used_switches,
-                    open_gates=state.open_gates,
-                    open_doors=state.open_doors | {door["id"]},
-                ),
-            )
-
     switch = ctx.switches_by_pos.get(state.agent_pos)
     if switch and switch["switch_type"] != "hold":
         toggled = _apply_switch(ctx, state, switch)
@@ -278,6 +259,27 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
                 label=f"toggle:{switch['id']}",
                 next_state=toggled,
             )
+
+    # Runtime consumes TOGGLE on the current-cell switch before checking front doors.
+    if switch is None:
+        door = ctx.doors_by_pos.get(front)
+        if door and door["id"] not in state.open_doors and state.carrying_key is not None:
+            held_color = ctx.keys_by_id[state.carrying_key]["color"]
+            if held_color == door["color"]:
+                yield Transition(
+                    action=int(MiniGridActions.TOGGLE),
+                    label=f"open_door:{door['id']}",
+                    next_state=PlannerState(
+                        agent_pos=state.agent_pos,
+                        agent_dir=state.agent_dir,
+                        carrying_key=None if ctx.key_consumption else state.carrying_key,
+                        collected_keys=state.collected_keys,
+                        active_switches=state.active_switches,
+                        used_switches=state.used_switches,
+                        open_gates=state.open_gates,
+                        open_doors=state.open_doors | {door["id"]},
+                    ),
+                )
 
     yield from _forward_successor(ctx, state, front)
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from scorer.io import dump_json, json_files, load_json
@@ -54,17 +55,39 @@ def _static(args: argparse.Namespace) -> int:
         raise FileNotFoundError("No JSON files matched the static scoring inputs")
 
     output_root = Path(args.output_dir) if args.output_dir else None
+    succeeded = 0
+    failed = 0
     for task_path, target_dir in zip(files, _static_target_dirs(files, output_root)):
-        canonical, static_score = score_task_file(
-            task_path,
-            output_dir=target_dir,
-            config=config,
-        )
+        try:
+            canonical, static_score = score_task_file(
+                task_path,
+                output_dir=target_dir,
+                config=config,
+            )
+        except Exception as exc:
+            failed += 1
+            print(
+                "static: error "
+                f"input={task_path} output_dir={target_dir} "
+                f"error={exc.__class__.__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
+
+        succeeded += 1
         print(
-            f"{static_score.task_id}: static_score={static_score.static_score:.3f}, "
-            f"beatable={static_score.is_beatable}, optimal_steps={canonical.optimal_steps} -> {target_dir}"
+            "static: ok "
+            f"input={task_path} task_id={static_score.task_id} "
+            f"static_score={static_score.static_score:.3f} "
+            f"beatable={static_score.is_beatable} "
+            f"optimal_steps={canonical.optimal_steps} output_dir={target_dir}",
+            flush=True,
         )
-    return 0
+
+    summary = f"static: summary scored={succeeded} failed={failed} total={len(files)}"
+    print(summary, file=sys.stderr if failed else sys.stdout, flush=True)
+    return 1 if failed else 0
 
 
 def _runtime(args: argparse.Namespace) -> int:
