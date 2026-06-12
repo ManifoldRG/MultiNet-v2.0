@@ -22,7 +22,8 @@ try:
     from .gridworld.task_spec import TaskSpecification
     from .gridworld.actions import ACTION_NAMES, ACTION_DESCRIPTIONS
     from .gridworld.task_validator import compute_difficulty
-    from .gridworld.scoring import compute_12d_score
+    from .scorer.io import json_default as _json_default
+    from .scorer.scoring import compute_12d_score
 except ImportError:
     from model_interface import ModelInterface, ModelInput, ModelOutput
     from gridworld.runner.grid_runner import GridRunner, EpisodeResult
@@ -31,14 +32,8 @@ except ImportError:
     from gridworld.task_spec import TaskSpecification
     from gridworld.actions import ACTION_NAMES, ACTION_DESCRIPTIONS
     from gridworld.task_validator import compute_difficulty
-    from gridworld.scoring import compute_12d_score
-
-
-def _json_default(value):
-    """Convert NumPy scalars to native Python types for JSON serialization."""
-    if isinstance(value, np.generic):
-        return value.item()
-    raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
+    from scorer.io import json_default as _json_default
+    from scorer.scoring import compute_12d_score
 
 
 @dataclass

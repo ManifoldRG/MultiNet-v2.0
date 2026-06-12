@@ -78,6 +78,7 @@ class Qwen35VLAgent:
     config: Qwen35VLConfig = field(default_factory=Qwen35VLConfig)
     processor: Any = None
     model: Any = None
+    last_usage: dict[str, int] | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration
@@ -121,4 +122,9 @@ class Qwen35VLAgent:
             )
 
         new_tokens = generated[0][prompt_len:]
+        self.last_usage = {
+            "input_tokens": int(prompt_len),
+            "output_tokens": int(len(new_tokens)),
+            "total_tokens": int(prompt_len + len(new_tokens)),
+        }
         return self.processor.decode(new_tokens, skip_special_tokens=True).strip()

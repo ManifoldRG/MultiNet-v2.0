@@ -39,6 +39,7 @@ multinet-probe-vlm = "scripts.probe_vlm:main"
 multinet-ollama-vision-check = "scripts.ollama_vision_check:main"
 multinet-ollama-maze-shape-check = "scripts.ollama_maze_shape_check:main"
 multinet-vlm-sanity = "scripts.vlm_sanity_check:main"
+multinet-score-json = "scripts.score_json:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -63,9 +64,11 @@ include = [
     "interface*",
     "mazes*",
     "multigrid*",
+    "scorer*",
     "scripts*",
 ]
 
 [tool.setuptools.package-data]
 gridworld = ["tasks/**/*.json", "tasks/*.json"]
 mazes = ["validation_10/**/*.json", "validation_10/*.json"]
+scorer = ["scorer_config.json"]

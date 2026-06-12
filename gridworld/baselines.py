@@ -49,6 +49,17 @@ class Transition:
     next_state: PlannerState
 
 
+@dataclass(frozen=True)
+class PlannedPath:
+    """Planner output with replayed positions for scorer/reporting artifacts."""
+
+    success: bool
+    actions: list[int]
+    action_labels: list[str]
+    positions: list[tuple[int, int]]
+    states_explored: int = 0
+
+
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
@@ -239,25 +250,6 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
             ),
         )
 
-    door = ctx.doors_by_pos.get(front)
-    if door and door["id"] not in state.open_doors and state.carrying_key is not None:
-        held_color = ctx.keys_by_id[state.carrying_key]["color"]
-        if held_color == door["color"]:
-            yield Transition(
-                action=int(MiniGridActions.TOGGLE),
-                label=f"open_door:{door['id']}",
-                next_state=PlannerState(
-                    agent_pos=state.agent_pos,
-                    agent_dir=state.agent_dir,
-                    carrying_key=None if ctx.key_consumption else state.carrying_key,
-                    collected_keys=state.collected_keys,
-                    active_switches=state.active_switches,
-                    used_switches=state.used_switches,
-                    open_gates=state.open_gates,
-                    open_doors=state.open_doors | {door["id"]},
-                ),
-            )
-
     switch = ctx.switches_by_pos.get(state.agent_pos)
     if switch and switch["switch_type"] != "hold":
         toggled = _apply_switch(ctx, state, switch)
@@ -267,6 +259,27 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
                 label=f"toggle:{switch['id']}",
                 next_state=toggled,
             )
+
+    # Runtime consumes TOGGLE on the current-cell switch before checking front doors.
+    if switch is None:
+        door = ctx.doors_by_pos.get(front)
+        if door and door["id"] not in state.open_doors and state.carrying_key is not None:
+            held_color = ctx.keys_by_id[state.carrying_key]["color"]
+            if held_color == door["color"]:
+                yield Transition(
+                    action=int(MiniGridActions.TOGGLE),
+                    label=f"open_door:{door['id']}",
+                    next_state=PlannerState(
+                        agent_pos=state.agent_pos,
+                        agent_dir=state.agent_dir,
+                        carrying_key=None if ctx.key_consumption else state.carrying_key,
+                        collected_keys=state.collected_keys,
+                        active_switches=state.active_switches,
+                        used_switches=state.used_switches,
+                        open_gates=state.open_gates,
+                        open_doors=state.open_doors | {door["id"]},
+                    ),
+                )
 
     yield from _forward_successor(ctx, state, front)
 
@@ -353,10 +366,10 @@ def _shortest_plan(
     ctx: TaskPlanningContext,
     start: PlannerState,
     is_goal: Callable[[PlannerState], bool],
-) -> tuple[list[int], PlannerState | None]:
+) -> tuple[list[int], PlannerState | None, int]:
     """Run BFS over executable actions and return the first shortest plan."""
     if is_goal(start):
-        return [], start
+        return [], start, 1
 
     queue = deque([start])
     parent: dict[PlannerState, tuple[PlannerState, int]] = {}
@@ -370,10 +383,14 @@ def _shortest_plan(
             visited.add(transition.next_state)
             parent[transition.next_state] = (state, transition.action)
             if is_goal(transition.next_state):
-                return _reconstruct_actions(parent, transition.next_state), transition.next_state
+                return (
+                    _reconstruct_actions(parent, transition.next_state),
+                    transition.next_state,
+                    len(visited),
+                )
             queue.append(transition.next_state)
 
-    return [], None
+    return [], None, len(visited)
 
 
 def _shortest_plan_to_interaction(
@@ -437,9 +454,18 @@ def _reconstruct_actions(
 
 
 def _bfs_actions(spec: TaskSpecification) -> list[int]:
+    actions, _ = _bfs_actions_with_stats(spec)
+    return actions
+
+
+def _bfs_actions_with_stats(spec: TaskSpecification) -> tuple[list[int], int]:
     ctx = TaskPlanningContext(spec)
-    actions, _ = _shortest_plan(ctx, ctx.initial_state(), lambda st: st.agent_pos == ctx.goal)
-    return actions or [int(MiniGridActions.DONE)]
+    actions, _, states_explored = _shortest_plan(
+        ctx,
+        ctx.initial_state(),
+        lambda st: st.agent_pos == ctx.goal,
+    )
+    return actions, states_explored
 
 
 def _greedy_actions(spec: TaskSpecification) -> list[int]:
@@ -452,13 +478,81 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
             break
         chunk, next_state = _shortest_plan_to_interaction(ctx, state)
         if next_state is None:
-            chunk, next_state = _shortest_plan(ctx, state, lambda st: st.agent_pos == ctx.goal)
+            chunk, next_state, _ = _shortest_plan(
+                ctx,
+                state,
+                lambda st: st.agent_pos == ctx.goal,
+            )
         if next_state is None or not chunk:
             break
         actions.extend(chunk)
         state = next_state
 
-    return actions or [int(MiniGridActions.DONE)]
+    return actions
+
+
+def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> PlannedPath:
+    """Replay planner actions through the planner graph without running a backend."""
+    ctx = TaskPlanningContext(spec)
+    state = ctx.initial_state()
+    positions = [state.agent_pos]
+    executed_actions: list[int] = []
+    labels: list[str] = []
+
+    for action in actions:
+        if action == int(MiniGridActions.DONE):
+            break
+        executed_actions.append(action)
+        transition = next(
+            (candidate for candidate in _successors(ctx, state) if candidate.action == action),
+            None,
+        )
+        if transition is None:
+            labels.append(f"invalid:{action}")
+            return PlannedPath(
+                success=False,
+                actions=executed_actions,
+                action_labels=labels,
+                positions=positions,
+            )
+        labels.append(transition.label)
+        state = transition.next_state
+        positions.append(state.agent_pos)
+
+    return PlannedPath(
+        success=state.agent_pos == ctx.goal,
+        actions=executed_actions,
+        action_labels=labels,
+        positions=positions,
+    )
+
+
+def plan_bfs_actions(spec: TaskSpecification) -> list[int]:
+    """Return the deterministic BFS baseline action plan."""
+    return _bfs_actions(spec)
+
+
+def plan_greedy_actions(spec: TaskSpecification) -> list[int]:
+    """Return the deterministic greedy baseline action plan."""
+    return _greedy_actions(spec)
+
+
+def plan_bfs_path(spec: TaskSpecification) -> PlannedPath:
+    """Return the BFS baseline plan plus replayed positions."""
+    actions, states_explored = _bfs_actions_with_stats(spec)
+    path = trace_planned_actions(spec, actions)
+    return PlannedPath(
+        success=path.success,
+        actions=path.actions,
+        action_labels=path.action_labels,
+        positions=path.positions,
+        states_explored=states_explored,
+    )
+
+
+def plan_greedy_path(spec: TaskSpecification) -> PlannedPath:
+    """Return the greedy baseline plan plus replayed positions."""
+    return trace_planned_actions(spec, plan_greedy_actions(spec))
 
 
 class PlannedBaselineModel(ModelInterface):

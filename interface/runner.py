@@ -57,6 +57,18 @@ def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
         del messages[1 : 1 + (tail_len - cap)]
 
 
+def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
+    """Clear per-call telemetry so stale usage cannot leak into a later query."""
+    reset_usage = getattr(agent, "reset_usage", None)
+    if callable(reset_usage):
+        reset_usage()
+        return
+    try:
+        setattr(agent, "last_usage", None)
+    except (AttributeError, TypeError):
+        pass
+
+
 def build_runner(
     config: ExperimentConfig,
     backend: MiniGridBackend,
@@ -159,6 +171,7 @@ class ExperimentRunner:
                         len(agent_messages),
                         has_image,
                     )
+                _reset_agent_usage(agent)
                 t_llm = time.perf_counter()
                 model_text = agent(agent_messages)
                 llm_s = time.perf_counter() - t_llm
@@ -177,22 +190,24 @@ class ExperimentRunner:
                     )
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("LLM query #%d reply:\n%s", query_count, model_text)
-                transcript.append(
-                    {
-                        "kind": "query",
-                        "query_index": query_count,
-                        "env_step_count": state.step_count,
-                        "agent_messages": copy.deepcopy(agent_messages),
-                        "assistant_reply": model_text,
-                        "parsed_actions": list(action_queue),
-                        "parse_ok": bool(action_queue),
-                        "has_image": has_image,
-                        "llm_latency_s": llm_s,
-                        "chat_history_mode": chat_history,
-                        "agent_message_count": len(agent_messages),
-                        "actions_remaining_before_step": len(action_queue),
-                    }
-                )
+                query_record = {
+                    "kind": "query",
+                    "query_index": query_count,
+                    "env_step_count": state.step_count,
+                    "agent_messages": copy.deepcopy(agent_messages),
+                    "assistant_reply": model_text,
+                    "parsed_actions": list(action_queue),
+                    "parse_ok": bool(action_queue),
+                    "has_image": has_image,
+                    "llm_latency_s": llm_s,
+                    "chat_history_mode": chat_history,
+                    "agent_message_count": len(agent_messages),
+                    "actions_remaining_before_step": len(action_queue),
+                }
+                usage = getattr(agent, "last_usage", None)
+                if isinstance(usage, dict):
+                    query_record["usage"] = dict(usage)
+                transcript.append(query_record)
                 # check if we got any valid actions; 
                 # if not, we'll count it as a parse failure and give feedback, 
                 # but still allow retries until max_parse_retries is reached
