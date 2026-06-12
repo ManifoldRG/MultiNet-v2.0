@@ -12,6 +12,12 @@ build/
 venv/
 env/
 
+# IDE configurations
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
 # Test / tooling caches
 .pytest_cache/
 .mypy_cache/
@@ -32,3 +38,5 @@ interface/smoke_tests/results/
 # Generated evaluation outputs
 mazes/results/*_results.json
 mazes/results/*.progress.json
+# Bare-bones run pipeline artifact tree (regenerated locally)
+artifacts/

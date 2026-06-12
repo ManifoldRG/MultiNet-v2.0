@@ -8,7 +8,6 @@ from typing import Any
 from .artifacts import CanonicalPathReport, RuntimeScoreArtifact, StaticScoreArtifact
 from .config import SCORER_VERSION, ScorerConfig
 from .io import dump_json, load_json, stable_hash
-from interface.telemetry import token_count_from_record
 
 
 def _artifact_dict(value: dict[str, Any] | StaticScoreArtifact | CanonicalPathReport) -> dict[str, Any]:
@@ -71,6 +70,8 @@ def _extract_token_count(run: dict[str, Any]) -> int | None:
 
 
 def _sum_record_tokens(records: Any, kind: str | None = None) -> int | None:
+    from interface.telemetry import token_count_from_record
+
     if not isinstance(records, list):
         return None
     total = 0

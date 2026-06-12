@@ -1,0 +1,27 @@
+{
+  "description": "Example run-config: maps each model to the task files (or experiment keywords / task_ids) it should run. Per-task scoring metadata is looked up from the manifest catalog by path. Run with: multinet-run-pipeline --run-config gridworld/fixtures/run_config.example.json",
+  "models": {
+    "sonnet": {
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "temperature": 0.0,
+      "max_tokens": 1024,
+      "tasks": [
+        "mazes/validation_10/V01_empty_room.json",
+        "mazes/validation_10/V04_single_key.json",
+        "gridworld/fixtures/test2/T2_corridor_shortcut.json",
+        "gridworld/fixtures/test3/T3_corr_key_first.json",
+        "gridworld/fixtures/test3/T3_corr_switch_first.json"
+      ]
+    },
+    "qwen35vl": {
+      "provider": "qwen",
+      "model": "Qwen/Qwen3.5-4B",
+      "temperature": 0.0,
+      "max_tokens": 1024,
+      "tasks": [
+        "test3"
+      ]
+    }
+  }
+}
