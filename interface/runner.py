@@ -399,8 +399,12 @@ class ExperimentRunner:
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
         text_block = {"type": "text", "text": prompt_text}
-        if hist_blocks or images:
-            return {"role": "user", "content": hist_blocks + images + [text_block]}
+        one_shot_blocks: list[dict] = []
+        if self.config.in_context_learning == "one_shot":
+            from interface.one_shot import one_shot_content_blocks
+            one_shot_blocks = one_shot_content_blocks(obs)
+        if one_shot_blocks or hist_blocks or images:
+            return {"role": "user", "content": one_shot_blocks + hist_blocks + images + [text_block]}
         return {"role": "user", "content": prompt_text}
 
     def _result(

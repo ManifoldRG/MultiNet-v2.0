@@ -17,6 +17,7 @@ class ExperimentConfig:
     chat_history: Literal["stateless", "rolling", "full"] = "stateless"
     chat_turns_max: int = 3
     max_parse_retries: int = 3
+    in_context_learning: Literal["zero_shot", "one_shot"] = "zero_shot"
 
     def to_dict(self) -> dict:
         return asdict(self)

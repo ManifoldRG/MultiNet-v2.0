@@ -18,14 +18,16 @@ CONDITION_SET = ConditionSet(
     variants={
         "standard": Variant(
             name="zero_shot",
-            description="No examples-same as the standard prompt.",
+            description="No examples — same as the standard prompt.",
         ),
         "one_shot": Variant(
             name="one_shot",
-            description="PR #12 design axis; example selection/injection is not implemented yet.",
-            implemented=False,
+            description=(
+                "One example trajectory prepended to each user message "
+                "(14x14 dense kr_sg_kb maze, separate from evaluation mazes)."
+            ),
+            config_overrides={"in_context_learning": "one_shot"},
         ),
     },
-    implemented=False,
     notes="ICL examples must not use evaluation mazes.",
 )

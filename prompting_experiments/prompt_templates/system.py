@@ -15,11 +15,17 @@ MECHANISM_RULES = (
     "    cannot MOVE_FORWARD onto a key; stand beside it, face it, and PICKUP.\n"
     "  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n"
     "    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n"
-    "  - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE. "
+    "  - Switches: face the switch, then TOGGLE. "
     "    Linked gates are open if its linked switch is on, and closed if it is off.\n"
-    "  - Gates: CLOSED gates block movement; OPEN gates do not. Toggle linked switches to control them.\n"
+    "  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n"
     "  - Closed doors you lack a key for block movement like walls until resolved.\n"
     "  - Use DONE only when you are standing on the goal cell."
+)
+
+ONE_SHOT_EXAMPLE = (
+    "Example maze and solution (14x14 maze with a key, switch, and gate):\n"
+    "{example_14x14_dense_kr_sg_kb_2_image}\n"
+    "actions to solve: {example_solution_14x14_dense_kr_sg_kb_2}\n"
 )
 
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."

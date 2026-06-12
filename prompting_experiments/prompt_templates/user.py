@@ -27,5 +27,5 @@ KEY_DOOR_HINT = (
 )
 SWITCH_GATE_HINT = (
     "  - MOVE_FORWARD onto a switch, then TOGGLE (hold switches activate on step). "
-    "Gates cannot be toggled — activate their linked switch(es)."
+    "Gates cannot be toggled directly — activate their linked switch(es)."
 )
