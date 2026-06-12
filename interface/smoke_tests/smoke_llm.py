@@ -1,4 +1,4 @@
-"""End-to-end smoke test with a real LLM agent (Anthropic Claude or local Transformers).
+"""End-to-end smoke test with a real LLM agent (Anthropic Claude, Kimi K2.6, or local Transformers).
 
 Replaces PR1 ``smoke_claude.py``; uses ``flush_episode_log`` for on-disk artifacts.
 """
@@ -20,10 +20,14 @@ if str(ROOT) not in sys.path:
 from interface.agents import (
     ClaudeAnthropicAgent,
     ClaudeAnthropicConfig,
+    DEFAULT_KIMI_K26_MODEL,
     DEFAULT_QWEN35_VL_MODEL,
+    KimiK26Agent,
+    KimiK26Config,
     Qwen35VLAgent,
     Qwen35VLConfig,
 )
+from interface.agents.api_keys import ensure_api_keys_from_file
 from interface.config import ExperimentConfig
 from interface.episode_log import flush_episode_log
 from interface.loader import default_maze_path, load_task
@@ -39,16 +43,6 @@ def _configure_logging(level_name: str) -> None:
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
     )
-
-
-def _ensure_anthropic_api_key() -> None:
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return
-    for directory in Path(__file__).resolve().parents:
-        key_file = directory / "api_key.txt"
-        if key_file.is_file():
-            os.environ["ANTHROPIC_API_KEY"] = key_file.read_text().strip()
-            return
 
 
 def _persist_llm_queries_jsonl(out_dir: Path, records: list[dict[str, Any]]) -> None:
@@ -115,7 +109,8 @@ def main() -> None:
         description=(
             "End-to-end LLM maze episode. Writes llm_queries.jsonl plus exhaustive "
             "episode log (episode.json, frames/, queries/). "
-            "Anthropic runs in the cloud; --backend qwen uses local Qwen 3.5 VL. "
+            "Anthropic runs in the cloud; --backend kimi uses Moonshot Kimi K2.6 API; "
+            "--backend qwen uses local Qwen 3.5 VL. "
             "-v prints full model replies; --log-level INFO adds query timing logs."
         ),
     )
@@ -135,9 +130,18 @@ def main() -> None:
     )
     parser.add_argument(
         "--backend",
-        choices=("anthropic", "qwen"),
+        choices=("anthropic", "kimi", "qwen"),
         default="anthropic",
-        help="anthropic: Claude Sonnet API. qwen: Qwen 3.5 VL via Hugging Face on this machine.",
+        help=(
+            "anthropic: Claude Sonnet API. "
+            "kimi: Kimi K2.6 via Moonshot OpenAI-compatible API. "
+            "qwen: Qwen 3.5 VL via Hugging Face on this machine."
+        ),
+    )
+    parser.add_argument(
+        "--kimi-model",
+        default=DEFAULT_KIMI_K26_MODEL,
+        help="With --backend kimi: Moonshot model id (default: %(default)s).",
     )
     parser.add_argument(
         "--qwen-model",
@@ -175,10 +179,11 @@ def main() -> None:
         type=float,
         default=180.0,
         metavar="SECS",
-        help="Anthropic API read timeout in seconds (default: 180). Ignored for --backend qwen.",
+        help="Anthropic/Kimi API read timeout in seconds (default: 180). Ignored for --backend qwen.",
     )
     args = parser.parse_args()
     _configure_logging(args.log_level)
+    ensure_api_keys_from_file()
 
     maze_path = default_maze_path(args.maze)
     if not maze_path.is_file():
@@ -186,7 +191,11 @@ def main() -> None:
 
     maze_stem = maze_path.stem
     suffix = f"_{args.tag}" if args.tag else ""
-    out_slug = "claude" if args.backend == "anthropic" else "qwen35vl"
+    out_slug = {
+        "anthropic": "claude",
+        "kimi": "kimi_k26",
+        "qwen": "qwen35vl",
+    }[args.backend]
     out_dir = Path(__file__).resolve().parent / "results" / f"smoke_{maze_stem}_{out_slug}{suffix}"
 
     backend, spec = load_task(maze_path)
@@ -202,10 +211,13 @@ def main() -> None:
 
     query_log: list[dict[str, Any]] = []
     if args.backend == "anthropic":
-        _ensure_anthropic_api_key()
         claude_cfg = ClaudeAnthropicConfig(timeout=args.timeout)
         agent_inner = ClaudeAnthropicAgent(config=claude_cfg)
         model_id = claude_cfg.model
+    elif args.backend == "kimi":
+        kimi_cfg = KimiK26Config(model=args.kimi_model, timeout=args.timeout)
+        agent_inner = KimiK26Agent(config=kimi_cfg)
+        model_id = kimi_cfg.model
     else:
         qwen_cfg = Qwen35VLConfig(model=args.qwen_model, device_map=args.device_map)
         agent_inner = Qwen35VLAgent(config=qwen_cfg)
