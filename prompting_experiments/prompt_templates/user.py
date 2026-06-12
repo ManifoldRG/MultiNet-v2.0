@@ -2,6 +2,12 @@
 
 OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
 
+ONE_SHOT_EXAMPLE = (
+    "Example maze and solution (14x14 maze with a key, switch, and gate):\n"
+    "{example_14x14_dense_kr_sg_kb_2_image}\n"
+    "actions to solve: {example_solution_14x14_dense_kr_sg_kb_2}\n"
+)
+
 STANDARD_USER_PROMPT = (
     "{obs_block}"
     "{status_block}"

@@ -22,12 +22,6 @@ MECHANISM_RULES = (
     "  - Use DONE only when you are standing on the goal cell."
 )
 
-ONE_SHOT_EXAMPLE = (
-    "Example maze and solution (14x14 maze with a key, switch, and gate):\n"
-    "{example_14x14_dense_kr_sg_kb_2_image}\n"
-    "actions to solve: {example_solution_14x14_dense_kr_sg_kb_2}\n"
-)
-
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
