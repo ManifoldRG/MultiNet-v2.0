@@ -121,9 +121,11 @@ def _collect_checks(cfg: ExperimentConfig, calls: list[dict[str, Any]]) -> list[
     system = first["system"]
     checks: list[dict[str, Any]] = []
 
-    checks.append(_check("system includes mechanism list", "The environment may contain:" in system))
-    checks.append(_check("system includes rules block", "RULES (domain logic):" in system))
-
+checks.append(_check("system includes mechanism list", "The environment may contain:" in system))
+if cfg.prompting == "verbose":
+    checks.append(_check("verbose includes rules block", "RULES (domain logic):" in system))
+else:
+    checks.append(_check("non-verbose omits rules block", "RULES (domain logic):" not in system))
     if cfg.observation == "text_only":
         checks.append(_check("text_only user content is plain string", first["user_content_type"] == "str"))
         checks.append(_check("text_only omits image blocks", not first["has_image"]))
