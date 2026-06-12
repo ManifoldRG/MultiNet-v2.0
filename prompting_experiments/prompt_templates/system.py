@@ -15,11 +15,10 @@ MECHANISM_RULES = (
     "    cannot MOVE_FORWARD onto a key; stand beside it, face it, and PICKUP.\n"
     "  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n"
     "    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n"
-    "  - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE (toggle/one-shot types). Hold-type\n"
-    "    switches activate automatically while you stand on them. Only switches are toggled. Linked\n"
-    "    gates are open if at least one linked switch is on, and closed if all are off.\n"
-    "  - Gates: you cannot TOGGLE a gate. CLOSED gates block movement; OPEN gates do not.\n"
-    "  - Closed gates and doors you lack a key for block movement like walls until resolved.\n"
+    "  - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE. "
+    "    Linked gates are open if its linked switch is on, and closed if it is off.\n"
+    "  - Gates: CLOSED gates block movement; OPEN gates do not. Toggle linked switches to control them.\n"
+    "  - Closed doors you lack a key for block movement like walls until resolved.\n"
     "  - Use DONE only when you are standing on the goal cell."
 )
 
