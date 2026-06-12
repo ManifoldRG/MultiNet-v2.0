@@ -17,6 +17,9 @@ class Variant:
     description: str
     config_overrides: Mapping[str, object] | None = None
     implemented: bool = True
+    preview_steps: int | None = None  # overrides the global preview_steps when set
+    preview_rollout_seed: int | None = None  # overrides the global rollout seed when set
+    preview_move_only: bool = False  # restrict rollout to TURN_LEFT/TURN_RIGHT/MOVE_FORWARD
 
     def build_config(self, base: ExperimentConfig | None = None) -> ExperimentConfig:
         if not self.implemented:

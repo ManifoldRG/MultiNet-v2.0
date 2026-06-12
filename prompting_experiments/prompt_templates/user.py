@@ -15,6 +15,19 @@ VERBOSE_USER_PROMPT = (
     "What is your next action?"
 )
 
+TEXT_HISTORY_BLOCK = (
+    "Recent history:"
+)
+
+TEXT_SUMMARY_BLOCK_HEADER = "Activity summary:"
+TEXT_SUMMARY_PICKUP_KEY = "picked up the {key_id} key"
+TEXT_SUMMARY_OPEN_DOOR = "opened door {door_id}"
+TEXT_SUMMARY_OPEN_GATE = "opened gate {gate_id}"
+TEXT_SUMMARY_CLOSE_GATE = "closed gate {gate_id}"
+TEXT_SUMMARY_NAV_TO = "navigated to ({row}, {col})"
+TEXT_SUMMARY_PASSED = "passed ({row}, {col})"
+TEXT_SUMMARY_EMPTY = "you haven't done anything yet"
+
 STATUS_BLOCK = (
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
     "Last result: {last_feedback}\n"

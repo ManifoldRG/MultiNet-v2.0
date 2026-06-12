@@ -24,9 +24,10 @@ from interface.renderer import (
     rgb_to_image_block,
 )
 from prompting_experiments.prompt_templates import observation as observation_templates
+from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3"]
+ContextWindow = Literal["current", "last3", "text_summary"]
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -50,6 +51,8 @@ def history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
 ) -> str:
+    if context_window == "text_summary":
+        return text_summary_history(transcript)
     if observation not in ("text_only", "image_text"):
         return ""
     recs = recent_history_steps(transcript, context_window)
@@ -69,6 +72,91 @@ def history_text(
             )
         )
     return "\n".join(lines)
+
+
+def text_summary_history(transcript: list[dict[str, Any]]) -> str:
+    """Build a one-sentence summary of all prior mechanism events or path waypoints."""
+    steps = history_steps(transcript)
+    mechanism_events = _extract_mechanism_events(steps)
+
+    if mechanism_events:
+        summary = _format_summary_chain(mechanism_events)
+    else:
+        move_steps = [rec for rec in steps if rec.get("event_type") == "MOVED"]
+        if move_steps:
+            waypoints = _pick_waypoints(move_steps, 3)
+            nav_parts: list[str] = []
+            for i, (row, col) in enumerate(waypoints):
+                if i == len(waypoints) - 1:
+                    nav_parts.append(user_templates.TEXT_SUMMARY_PASSED.format(row=row, col=col))
+                else:
+                    nav_parts.append(user_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col))
+            summary = _format_summary_chain(nav_parts)
+        else:
+            return user_templates.TEXT_SUMMARY_EMPTY
+
+    return f"{user_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
+
+
+def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
+    events: list[str] = []
+    for rec in steps:
+        event_type = rec.get("event_type", "")
+        sb = rec.get("state_before") or {}
+        sa = rec.get("state_after") or {}
+
+        if event_type == "PICKUP":
+            before_keys = set(sb.get("collected_keys") or [])
+            after_keys = set(sa.get("collected_keys") or [])
+            new_keys = after_keys - before_keys
+            if new_keys:
+                key_id = sorted(new_keys)[0]
+            else:
+                key_id = sa.get("agent_carrying") or sb.get("agent_carrying") or "a"
+            events.append(user_templates.TEXT_SUMMARY_PICKUP_KEY.format(key_id=key_id))
+
+        elif event_type == "OPENED":
+            before_doors = set(sb.get("open_doors") or [])
+            after_doors = set(sa.get("open_doors") or [])
+            new_doors = after_doors - before_doors
+            door_id = sorted(new_doors)[0] if new_doors else "a"
+            events.append(user_templates.TEXT_SUMMARY_OPEN_DOOR.format(door_id=door_id))
+
+        elif event_type == "TOGGLED":
+            before_gates = set(sb.get("open_gates") or [])
+            after_gates = set(sa.get("open_gates") or [])
+            opened = after_gates - before_gates
+            closed = before_gates - after_gates
+            if opened:
+                events.append(user_templates.TEXT_SUMMARY_OPEN_GATE.format(gate_id=sorted(opened)[0]))
+            elif closed:
+                events.append(user_templates.TEXT_SUMMARY_CLOSE_GATE.format(gate_id=sorted(closed)[0]))
+
+    return events
+
+
+def _format_summary_chain(events: list[str]) -> str:
+    if not events:
+        return ""
+    if len(events) == 1:
+        return f"first you {events[0]}"
+    parts = [f"first you {events[0]}"]
+    parts.extend(f"then you {e}" for e in events[1:-1])
+    parts.append(f"finally you {events[-1]}")
+    return ", ".join(parts)
+
+
+def _pick_waypoints(steps: list[dict[str, Any]], count: int) -> list[tuple[int, int]]:
+    n = len(steps)
+    if n <= count:
+        return [tuple(rec["position_after"]) for rec in steps]  # type: ignore[return-value]
+    indices = [round(i * (n - 1) / (count - 1)) for i in range(count)]
+    seen: list[tuple[int, int]] = []
+    for i in indices:
+        pos: tuple[int, int] = tuple(steps[i]["position_after"])  # type: ignore[assignment]
+        if pos not in seen:
+            seen.append(pos)
+    return seen
 
 
 def history_content_blocks(

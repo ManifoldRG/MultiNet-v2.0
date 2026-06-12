@@ -42,6 +42,8 @@ def _rollout_preview_steps(
     state,
     steps: int,
     seed: int,
+    *,
+    move_only: bool = False,
 ) -> tuple[Any, str, list[dict]]:
     from interface.actions_map import nlu_action_to_int
     from interface.coords import agent_facing, agent_row_col
@@ -50,7 +52,11 @@ def _rollout_preview_steps(
     from interface.parser import ACTION_ORDER
 
     rng = random.Random(seed)
-    actions = [action for action in ACTION_ORDER if action != "DONE"]
+    _nav_actions = {"TURN_LEFT", "TURN_RIGHT", "MOVE_FORWARD"}
+    actions = [
+        action for action in ACTION_ORDER
+        if action != "DONE" and (not move_only or action in _nav_actions)
+    ]
     last_feedback = feedback_templates.INITIAL_FEEDBACK
     transcript: list[dict] = []
 
@@ -108,6 +114,8 @@ def _prompt_preview(
     max_steps: int,
     preview_steps: int,
     rollout_seed: int,
+    *,
+    move_only: bool = False,
 ) -> tuple[str, str]:
     try:
         from interface.loader import load_task
@@ -124,6 +132,7 @@ def _prompt_preview(
         state,
         preview_steps,
         rollout_seed,
+        move_only=move_only,
     )
     system_prompt, user_message = runner.build_prompt_message(
         state,
@@ -176,15 +185,19 @@ def build_preview(
                 config = variant.build_config()
             except ModuleNotFoundError as exc:
                 raise SystemExit(_missing_dependency_message(exc)) from exc
+            steps_for_variant = variant.preview_steps if variant.preview_steps is not None else preview_steps
+            seed_for_variant = variant.preview_rollout_seed if variant.preview_rollout_seed is not None else rollout_seed
             system_prompt, user_prompt = _prompt_preview(
                 config,
                 maze_path,
                 max_steps,
-                preview_steps,
-                rollout_seed,
+                steps_for_variant,
+                seed_for_variant,
+                move_only=variant.preview_move_only,
             )
             chunks.extend(
                 [
+                    f"preview steps: {steps_for_variant}  rollout seed: {seed_for_variant}",
                     "[system prompt]",
                     system_prompt,
                     "",

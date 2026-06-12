@@ -25,8 +25,11 @@ CONDITION_SET = ConditionSet(
         ),
         "text_summary": Variant(
             name="text_summary",
-            description="PR #12 design axis; no ExperimentConfig summary mode exists yet.",
-            implemented=False,
+            description="One-sentence summary of all prior mechanism events or path waypoints.",
+            config_overrides={"context_window": "text_summary"},
+            preview_steps=10,
+            preview_rollout_seed=5,
+            preview_move_only=True,
         ),
     },
 )
