@@ -6,22 +6,15 @@ from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
 from interface.coords import (
-    FACING_ORDER,
-    FACING_TO_DELTA,
     agent_facing,
     agent_row_col,
-    describe_cell,
     goal_row_col,
-    inventory_list,
-    maze_rows_cols,
-    wall_cells,
 )
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
 
 MECHANISM_LIST = system_templates.MECHANISM_LIST
 MECHANISM_RULES = system_templates.MECHANISM_RULES
-FINAL_OUTPUT_INSTRUCTION = system_templates.FINAL_OUTPUT_INSTRUCTION
 
 
 class MinimalPromptStrategy:
@@ -29,14 +22,13 @@ class MinimalPromptStrategy:
         self._actions_hint = actions_hint
 
     def build_system_prompt(self, querying_suffix: str = "") -> str:
+        del querying_suffix
         chunks = [
             system_templates.TASK_PREFIX,
+            MECHANISM_LIST,
             system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
-            FINAL_OUTPUT_INSTRUCTION,
         ]
-        if querying_suffix:
-            chunks.append(querying_suffix)
-        return "\n".join(chunks[:2]) + "\n" + "\n\n".join(chunks[2:])
+        return "\n".join(chunks)
 
     def build_user_prompt(
         self,
@@ -45,6 +37,8 @@ class MinimalPromptStrategy:
         task_spec: TaskSpecification,
         state: GridState,
         last_feedback: str,
+        *,
+        include_status_footer: bool = False,
     ) -> str:
         obs_block = (
             user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
@@ -53,36 +47,31 @@ class MinimalPromptStrategy:
         )
         pos = agent_row_col(state)
         goal = goal_row_col(task_spec)
-        prompt = user_templates.MINIMAL_USER_PROMPT.format(
-            obs_block=obs_block,
+        status_block = _status_block(
+            include_status_footer,
             position=pos,
             facing=agent_facing(state),
             goal=goal,
             last_feedback=last_feedback,
         )
+        prompt = user_templates.STANDARD_USER_PROMPT.format(
+            obs_block=obs_block,
+            status_block=status_block,
+        )
         return _with_history(prompt, history_text)
 
 
 class StandardPromptStrategy(MinimalPromptStrategy):
-    def build_system_prompt(self, querying_suffix: str = "") -> str:
-        chunks = [
-            system_templates.TASK_PREFIX,
-            MECHANISM_LIST,
-            system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
-            FINAL_OUTPUT_INSTRUCTION,
-        ]
-        if querying_suffix:
-            chunks.append(querying_suffix)
-        return "\n".join(chunks[:3]) + "\n" + "\n\n".join(chunks[3:])
+    pass
 
 
 class VerbosePromptStrategy(StandardPromptStrategy):
+    include_mechanism_hints = False
+
     def build_system_prompt(self, querying_suffix: str = "") -> str:
-        std = StandardPromptStrategy.build_system_prompt(self, "").rstrip()
-        chunks = [std, MECHANISM_RULES]
-        if querying_suffix:
-            chunks.append(querying_suffix)
-        return "\n\n".join(chunks)
+        del querying_suffix
+        std = StandardPromptStrategy.build_system_prompt(self).rstrip()
+        return "\n\n".join([std, MECHANISM_RULES])
 
     def build_user_prompt(
         self,
@@ -91,61 +80,31 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         task_spec: TaskSpecification,
         state: GridState,
         last_feedback: str,
+        *,
+        include_status_footer: bool = False,
     ) -> str:
-        row, col = agent_row_col(state)
-        grow, gcol = goal_row_col(task_spec)
-        manhattan = abs(row - grow) + abs(col - gcol)
-        rows, cols = maze_rows_cols(task_spec)
-        walls = wall_cells(task_spec)
-
-        facing_idx = FACING_ORDER.index(agent_facing(state))
-        rel_dirs = [
-            ("AHEAD", FACING_ORDER[facing_idx % 4]),
-            ("RIGHT", FACING_ORDER[(facing_idx + 1) % 4]),
-            ("BEHIND", FACING_ORDER[(facing_idx + 2) % 4]),
-            ("LEFT", FACING_ORDER[(facing_idx + 3) % 4]),
-        ]
-        neighbour_lines = []
-        for rel, cardinal in rel_dirs:
-            dr, dc = FACING_TO_DELTA[cardinal]
-            nr, nc = row + dr, col + dc
-            desc = describe_cell(
-                task_spec,
-                state,
-                nr,
-                nc,
-                walls=walls,
-                goal=(grow, gcol),
-                rows=rows,
-                cols=cols,
-            )
-            neighbour_lines.append(
-                user_templates.NEIGHBOUR_LINE.format(
-                    relative_direction=rel,
-                    description=desc,
-                )
-            )
-        neighbour_block = (
-            user_templates.NEIGHBOUR_BLOCK_HEADER + "\n".join(neighbour_lines) + "\n"
+        mechanism_block = (
+            _mechanism_hints_text(task_spec) if self.include_mechanism_hints else ""
         )
-        mechanism_block = _mechanism_hints_text(task_spec)
         obs_block = (
             user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
             if obs_text
             else ""
         )
-        inventory_str = ", ".join(inventory_list(state)) or "none"
+        pos = agent_row_col(state)
+        goal = goal_row_col(task_spec)
+        status_block = _status_block(
+            include_status_footer,
+            position=pos,
+            facing=agent_facing(state),
+            goal=goal,
+            last_feedback=last_feedback,
+        )
 
         prompt = user_templates.VERBOSE_USER_PROMPT.format(
             obs_block=obs_block,
-            position=(row, col),
-            facing=agent_facing(state),
-            goal=(grow, gcol),
-            manhattan=manhattan,
-            inventory=inventory_str,
-            neighbour_block=neighbour_block,
             mechanism_block=mechanism_block,
-            last_feedback=last_feedback,
+            status_block=status_block,
         )
         return _with_history(prompt, history_text)
 
@@ -157,6 +116,24 @@ def _with_history(prompt: str, history_text: str) -> str:
     if not history_text:
         return prompt
     return f"{history_text}\n\n{prompt}"
+
+
+def _status_block(
+    include: bool,
+    *,
+    position: tuple[int, int],
+    facing: str,
+    goal: tuple[int, int],
+    last_feedback: str,
+) -> str:
+    if not include:
+        return ""
+    return user_templates.STATUS_BLOCK.format(
+        position=position,
+        facing=facing,
+        goal=goal,
+        last_feedback=last_feedback,
+    )
 
 
 def _mechanism_hints_text(task_spec: TaskSpecification) -> str:

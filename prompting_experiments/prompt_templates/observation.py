@@ -3,10 +3,11 @@
 RECENT_HISTORY_HEADER = "Recent history (last 3 steps, oldest first):"
 RECENT_HISTORY_STEP = "  ({row}, {col}) facing {facing} -> {action} -> {feedback}"
 
-IMAGE_HISTORY_ACTION = "Action: {action}\n\n"
+IMAGE_HISTORY_INVENTORY = "Your inventory: {inventory}.\n\n"
+IMAGE_HISTORY_INVENTORY_ACTION = "Your inventory: {inventory}.\nAction: {action}\n\n"
 IMAGE_ONLY_HISTORY_INTRO = (
     "Recent steps (oldest first). Each image is the maze view from which the "
-    "following action was chosen; infer pose and environment state from the image.\n\n"
+    "following action was chosen.\n\n"
 )
 IMAGE_TEXT_HISTORY_INTRO = "Recent step views (oldest first):\n\n"
 
@@ -35,8 +36,8 @@ GATE_LINE = (
 )
 
 CURRENT_SITUATION_HEADER = "Current situation (this step):"
-CURRENT_GOAL_LINE = "The goal is at {goal}."
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
+CURRENT_AGENT_POSITION_LINE = "You are at {position}."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates):"
 NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, or gates in the current state description.)"

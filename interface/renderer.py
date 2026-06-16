@@ -49,7 +49,7 @@ def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
         observation_templates.COORDINATE_EXPLANATION,
         observation_templates.START_LINE.format(start=start),
         observation_templates.GOAL_LINE.format(goal=goal),
-        observation_templates.WALLS_LINE.format(walls=wall_str),
+        observation_templates.WALLS_LINE.format(walls=wall_str)
     ]
 
 
@@ -113,17 +113,25 @@ def render_initial_maze_text(task_spec: TaskSpecification) -> str:
     return "\n".join(_static_layout_lines(task_spec) + _mechanism_lines(task_spec))
 
 
-def render_user_observation_text(task_spec: TaskSpecification, state: GridState) -> str:
-    goal = goal_row_col(task_spec)
+def render_user_observation_text(
+    task_spec: TaskSpecification,
+    state: GridState,
+    *,
+    include_facing: bool = False,
+) -> str:
     pos = agent_row_col(state)
     inv = ", ".join(inventory_list(state)) or "empty"
-    head = [
-        observation_templates.CURRENT_SITUATION_HEADER,
-        observation_templates.CURRENT_GOAL_LINE.format(goal=goal),
+    agent_line = (
         observation_templates.CURRENT_AGENT_LINE.format(
             position=pos,
             facing=agent_facing(state),
-        ),
+        )
+        if include_facing
+        else observation_templates.CURRENT_AGENT_POSITION_LINE.format(position=pos)
+    )
+    head = [
+        observation_templates.CURRENT_SITUATION_HEADER,
+        agent_line,
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv),
         "",
         observation_templates.CURRENT_MAP_CONTENTS_HEADER,
@@ -134,3 +142,8 @@ def render_user_observation_text(task_spec: TaskSpecification, state: GridState)
     else:
         head.append(observation_templates.NO_MECHANISMS_LINE)
     return "\n".join(head)
+
+
+def render_current_inventory_text(state: GridState) -> str:
+    inv = ", ".join(inventory_list(state)) or "empty"
+    return observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv)

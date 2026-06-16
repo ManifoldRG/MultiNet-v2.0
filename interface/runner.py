@@ -23,6 +23,7 @@ from interface.observation import (
     current_observation_text,
     history_content_blocks,
     history_text,
+    recent_history_steps,
 )
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
@@ -71,6 +72,26 @@ def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
         pass
 
 
+def _replace_current_question(prompt_text: str, question: str) -> str:
+    standard_question = "What is your next action?"
+    before, match, after = prompt_text.rpartition(standard_question)
+    if not match:
+        return prompt_text
+    return f"{before}{question}{after}"
+
+
+def _append_after_current_question(prompt_text: str, instruction: str) -> str:
+    questions = (
+        "What is the full sequence of actions you will take to complete the task?",
+        "What is your next action?",
+    )
+    for question in questions:
+        before, match, after = prompt_text.rpartition(question)
+        if match:
+            return f"{before}{match}\n\n{instruction}{after}"
+    return f"{prompt_text}\n\n{instruction}"
+
+
 def build_runner(
     config: ExperimentConfig,
     backend: MiniGridBackend,
@@ -101,6 +122,18 @@ class ExperimentRunner:
         self.querying = querying
         self.last_rgb: np.ndarray | None = None
 
+    def build_prompt_message(
+        self,
+        state,
+        last_feedback: str,
+        transcript: List[dict],
+    ) -> tuple[str, dict]:
+        return self.prompt.build_system_prompt(), self._build_message(
+            state,
+            last_feedback,
+            transcript,
+        )
+
     def run(
         self,
         agent: Callable[[List[dict]], str],
@@ -111,12 +144,7 @@ class ExperimentRunner:
         self.last_rgb, state, reset_info = self.backend.reset(seed=self.task_spec.seed)
         self.querying.reset()
 
-        system_prompt = self.prompt.build_system_prompt(self.querying.system_prompt_suffix())
-        if self.config.observation in ("text_only", "image_text"):
-            system_prompt = (
-                f"{system_prompt}\n\n"
-                f"{system_templates.INITIAL_MAZE_SECTION.format(maze_text=render_initial_maze_text(self.task_spec))}"
-            )
+        system_prompt = self.prompt.build_system_prompt()
         system_message = {"role": "system", "content": system_prompt}
         chat_history = self.config.chat_history
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
@@ -367,14 +395,40 @@ class ExperimentRunner:
     def _build_message(self, state, last_feedback: str, transcript: List[dict]) -> dict:
         obs = self.config.observation
         ctx = self.config.context_window
-        obs_text = current_observation_text(obs, self.task_spec, state)
+        obs_text = current_observation_text(
+            obs,
+            self.task_spec,
+            state,
+            include_description=self.config.include_current_observation_description,
+            include_facing=self.config.observation_text_includes_facing,
+        )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
             history_text(obs, ctx, transcript),
             self.task_spec,
             state,
             last_feedback,
+            include_status_footer=False,
         )
+        prompt_question = self.querying.user_prompt_question()
+        if prompt_question:
+            prompt_text = _replace_current_question(prompt_text, prompt_question)
+        prompt_text = _append_after_current_question(
+            prompt_text,
+            self.querying.final_output_instruction(),
+        )
+        sections = []
+        if self.config.observation in ("text_only", "image_text"):
+            sections.append(
+                system_templates.INITIAL_MAZE_SECTION.format(
+                    maze_text=render_initial_maze_text(self.task_spec)
+                )
+            )
+        sections.append(prompt_text)
+        querying_suffix = self.querying.user_prompt_suffix()
+        if querying_suffix:
+            sections.append(querying_suffix)
+        prompt_text = "\n\n".join(sections)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
         text_block = {"type": "text", "text": prompt_text}

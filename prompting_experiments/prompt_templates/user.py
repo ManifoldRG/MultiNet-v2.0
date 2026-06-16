@@ -2,28 +2,23 @@
 
 OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
 
-MINIMAL_USER_PROMPT = (
+STANDARD_USER_PROMPT = (
     "{obs_block}"
-    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
-    "Last result: {last_feedback}\n"
-    "What is your next action?\n"
-    "Reply exactly as one line: FINAL_OUTPUT: <one valid action>"
+    "{status_block}"
+    "What is your next action?"
 )
 
 VERBOSE_USER_PROMPT = (
     "{obs_block}"
-    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}  |  "
-    "Manhattan: {manhattan}\n"
-    "Inventory: {inventory}\n"
-    "{neighbour_block}"
     "{mechanism_block}"
-    "Last result: {last_feedback}\n"
-    "What is your next action?\n"
-    "Reply exactly as one line: FINAL_OUTPUT: <one valid action>"
+    "{status_block}"
+    "What is your next action?"
 )
 
-NEIGHBOUR_BLOCK_HEADER = "From your perspective:\n"
-NEIGHBOUR_LINE = "  {relative_direction}: {description}"
+STATUS_BLOCK = (
+    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
+    "Last result: {last_feedback}\n"
+)
 
 MECHANISM_HINTS_HEADER = "Hints:\n"
 KEY_DOOR_HINT = (

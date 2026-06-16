@@ -1,15 +1,25 @@
 """Querying strategy prompt templates."""
 
-SUBGOAL_SUFFIX = (
-    "For each turn output:\n"
-    "  SUB_GOAL: <short description of your next waypoint>\n"
-    "  ACTIONS: <comma-separated action list to reach it>"
+SUBGOAL_SUFFIX = ""
+
+FULL_TRAJECTORY_QUESTION = (
+    "What is the full sequence of actions you will take to complete the task?"
 )
 
-FULL_TRAJECTORY_SUFFIX = (
-    "Output your complete trajectory once as:\n"
-    "  SUB_GOAL: <short description of the full plan>\n"
-    "  ACTIONS: <comma-separated action list from start to finish>\n"
-    "The last action in ACTIONS should be DONE (when you expect to be at the goal).\n"
-    "You will not be queried again — this is your only planning turn."
+SINGLE_ACTION_FINAL_OUTPUT_INSTRUCTION = (
+    "Output exactly:\n"
+    "FINAL_OUTPUT: <action>"
 )
+
+SUBGOAL_FINAL_OUTPUT_INSTRUCTION = (
+    "Output exactly:\n"
+    "SUB_GOAL: <short description of your next sub_goal>\n"
+    "FINAL_OUTPUT:  <a>, <b>, ...  (comma-separated; one or more valid actions to reach it)"
+)
+
+FULL_TRAJECTORY_FINAL_OUTPUT_INSTRUCTION = (
+    "Output exactly:\n"
+    "FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)"
+)
+
+FULL_TRAJECTORY_SUFFIX = ""

@@ -8,16 +8,15 @@ from .core import ConditionSet, Variant
 CONDITION_SET = ConditionSet(
     name="Querying strategy",
     comparisons=(
-        "Step-by-step: one action per query",
+        "Standard step-by-step: one action per query",
         "Subgoal planning: model outputs a subgoal and action chunk",
         "Full trajectory: model outputs a complete plan once",
     ),
     decision="Determine whether chunked or one-shot planning improves performance.",
     variants={
-        "step_by_step": Variant(
+        "standard": Variant(
             name="step_by_step",
-            description="Ask for one action each query.",
-            config_overrides={"querying": "step_by_step"},
+            description="Ask for one action each query-same as the standard prompt.",
         ),
         "subgoal": Variant(
             name="subgoal",

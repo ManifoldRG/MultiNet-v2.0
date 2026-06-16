@@ -8,7 +8,7 @@ from .core import ConditionSet, Variant
 CONDITION_SET = ConditionSet(
     name="In-context learning",
     comparisons=(
-        "Zero-shot: no examples",
+        "Standard zero-shot: no examples",
         "1-shot: one example trajectory from a different maze",
     ),
     decision=(
@@ -16,10 +16,9 @@ CONDITION_SET = ConditionSet(
         "task understanding rather than navigation capability."
     ),
     variants={
-        "zero_shot": Variant(
+        "standard": Variant(
             name="zero_shot",
-            description="Current interface behavior.",
-            config_overrides={},
+            description="No examples-same as the standard prompt.",
         ),
         "one_shot": Variant(
             name="one_shot",

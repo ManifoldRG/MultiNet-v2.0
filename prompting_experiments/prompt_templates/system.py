@@ -1,12 +1,11 @@
-"""System prompt templates."""
 
-TASK_PREFIX = "Task: move to the goal cell in the grid."
+TASK_PREFIX = "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid."
 
 MECHANISM_LIST = (
     "The environment may contain:\n"
     "- Keys: pick them up to open doors of the matching color\n"
     "- Doors: blocked passages that require a matching key\n"
-    "- Switches: step onto them to activate (hold) or TOGGLE while standing on them\n"
+    "- Switches: TOGGLE while standing on them\n"
     "- Gates: blocked passages controlled by switches\n"
 )
 
@@ -25,12 +24,5 @@ MECHANISM_RULES = (
 )
 
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
-
-FINAL_OUTPUT_INSTRUCTION = (
-    "Do not explain, reason, summarize the map, or include any text before the answer.\n"
-    "On the last line, output exactly:\n"
-    "FINAL_OUTPUT: <action>  or  FINAL_OUTPUT: <a>, <b>, ...  "
-    "(comma-separated; one or more valid actions)"
-)
 
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"

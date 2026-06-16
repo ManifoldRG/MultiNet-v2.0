@@ -48,12 +48,27 @@ class QueryingMode:
             self._trajectory_loaded = True
         return actions
 
-    def system_prompt_suffix(self) -> str:
+    def user_prompt_suffix(self) -> str:
         if self.kind == "step_by_step":
             return ""
         if self.kind == "subgoal":
             return querying_templates.SUBGOAL_SUFFIX
         return querying_templates.FULL_TRAJECTORY_SUFFIX
+
+    def user_prompt_question(self) -> str:
+        if self.kind == "full_trajectory":
+            return querying_templates.FULL_TRAJECTORY_QUESTION
+        return ""
+
+    def final_output_instruction(self) -> str:
+        if self.kind == "full_trajectory":
+            return querying_templates.FULL_TRAJECTORY_FINAL_OUTPUT_INSTRUCTION
+        if self.kind == "subgoal":
+            return querying_templates.SUBGOAL_FINAL_OUTPUT_INSTRUCTION
+        return querying_templates.SINGLE_ACTION_FINAL_OUTPUT_INSTRUCTION
+
+    def system_prompt_suffix(self) -> str:
+        return ""
 
     def step_metadata(self) -> dict:
         if self.kind == "step_by_step":
