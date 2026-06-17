@@ -40,13 +40,14 @@ def _post_chat_completions(
     temperature: float,
     messages: List[Dict[str, object]],
     timeout: Optional[float],
-) -> str:
+    enable_thinking: bool,
+) -> tuple[str, Dict[str, int]]:
     body: Dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": messages,
         "temperature": temperature,
-        "thinking": {"type": "disabled"},
+        "thinking": {"type": "enabled" if enable_thinking else "disabled"},
     }
 
     raw = json.dumps(body).encode("utf-8")
@@ -89,15 +90,17 @@ def _post_chat_completions(
 
     choice = (payload.get("choices") or [{}])[0]
     message = choice.get("message") or {}
-    return str(message.get("content") or "").strip()
+    text = str(message.get("content") or "").strip()
+    return text, payload["usage"]
 
 
 @dataclass
 class KimiK26Config:
     model: str = DEFAULT_KIMI_K26_MODEL
-    temperature: float = 0.6
+    temperature: float = 0.0
     max_tokens: int = 4096
     timeout: Optional[float] = 180.0
+    enable_thinking: bool = False
 
 
 @dataclass
@@ -106,6 +109,7 @@ class KimiK26Agent:
 
     config: KimiK26Config = field(default_factory=KimiK26Config)
     api_key: Optional[str] = None
+    last_usage: Dict[str, int] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         key = (self.api_key or os.environ.get("MOONSHOT_API_KEY") or "").strip()
@@ -117,11 +121,14 @@ class KimiK26Agent:
         self.api_key = key
 
     def __call__(self, messages: List[dict]) -> str:
-        return _post_chat_completions(
+        text, usage = _post_chat_completions(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             messages=_to_openai_messages(messages),
             timeout=self.config.timeout,
+            enable_thinking=self.config.enable_thinking,
         )
+        self.last_usage = usage
+        return text
