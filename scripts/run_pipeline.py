@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
@@ -47,6 +48,36 @@ _EXPERIMENT_KEYWORDS = {"test1", "test2", "test3", "all"}
 
 def _sanitize(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "model"
+
+
+def _load_json_object_if_valid(path: Path) -> Optional[dict[str, Any]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            tmp_path = Path(handle.name)
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+        tmp_path.replace(path)
+        tmp_path = None
+    finally:
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
 
 
 # --------------------------------------------------------------------------- #
@@ -222,21 +253,36 @@ def _score_suite(
     artifacts_root: Path,
     config: ScorerConfig,
     force: bool,
+    difficulty_max_static_score: Optional[float] = None,
 ) -> tuple[dict[str, dict[str, Any]], float]:
     static_by_task = score_tasks(rows, manifest_path, artifacts_root, config, force=force)
     scores = [float(s.get("static_score", 0.0)) for s in static_by_task.values()]
-    difficulty_max = max(scores) if scores else 1.0
+    observed_max = max(scores) if scores else 0.0
+    difficulty_max = (
+        float(difficulty_max_static_score)
+        if difficulty_max_static_score is not None
+        else config.difficulty_max_static_score
+    )
+    if difficulty_max is None:
+        raise ValueError(
+            "Pipeline requires difficulty_max_static_score from --difficulty-max-static-score "
+            "or scorer config."
+        )
+    if difficulty_max <= 0:
+        raise ValueError("difficulty_max_static_score must be greater than zero.")
+    if observed_max > difficulty_max:
+        raise ValueError(
+            "difficulty_max_static_score must be at least the largest selected task "
+            f"static score ({observed_max})."
+        )
     suite_path = artifacts_root / "tasks" / "_suite.json"
-    suite_path.parent.mkdir(parents=True, exist_ok=True)
-    suite_path.write_text(
-        json.dumps(
-            {
-                "difficulty_max_static_score": difficulty_max,
-                "tasks": {t: s.get("static_score") for t, s in static_by_task.items()},
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
+    _write_json_atomic(
+        suite_path,
+        {
+            "difficulty_max_static_score": difficulty_max,
+            "observed_max_static_score": observed_max,
+            "tasks": {t: s.get("static_score") for t, s in static_by_task.items()},
+        },
     )
     return static_by_task, difficulty_max
 
@@ -298,31 +344,25 @@ def _run_one_model(
                 # Stage 3 (expensive: model calls) is hash-cached. Reuse a cached
                 # episode only when its stamped run-inputs hash still matches.
                 expected_hash = _expected_run_hash(spec, model_name, seed, "minigrid")
-                reuse = (
-                    not force
-                    and episode_path.exists()
-                    and sidecar_path.exists()
-                    and json.loads(sidecar_path.read_text(encoding="utf-8")).get("inputs_hash")
-                    == expected_hash
-                )
-                if reuse:
-                    episode = json.loads(episode_path.read_text(encoding="utf-8"))
-                else:
+                episode = None
+                if not force and episode_path.exists() and sidecar_path.exists():
+                    sidecar = _load_json_object_if_valid(sidecar_path)
+                    if sidecar is not None and sidecar.get("inputs_hash") == expected_hash:
+                        episode = _load_json_object_if_valid(episode_path)
+
+                if episode is None:
                     episode = run_episode(source, cfg, agent, seed, run_dir)
-                    sidecar_path.write_text(
-                        json.dumps(
-                            {
-                                "inputs_hash": expected_hash,
-                                "producer_version": PIPELINE_VERSION,
-                                "task_id": task_id,
-                                "model_id": model_name,
-                                "seed": seed,
-                                "backend": "minigrid",
-                                "condition": variant,
-                            },
-                            indent=2,
-                        ),
-                        encoding="utf-8",
+                    _write_json_atomic(
+                        sidecar_path,
+                        {
+                            "inputs_hash": expected_hash,
+                            "producer_version": PIPELINE_VERSION,
+                            "task_id": task_id,
+                            "model_id": model_name,
+                            "seed": seed,
+                            "backend": "minigrid",
+                            "condition": variant,
+                        },
                     )
 
                 # Derive the test-2/test-3 signals once and share them between the
@@ -417,6 +457,7 @@ def run_pipeline(
     artifacts_root: str | Path = "artifacts",
     run_set_id: str = "default",
     scorer_config: Optional[ScorerConfig] = None,
+    difficulty_max_static_score: Optional[float] = None,
     force: bool = False,
 ) -> dict[str, Any]:
     """Single-model convenience entry: run one experiment with one agent."""
@@ -426,7 +467,14 @@ def run_pipeline(
 
     catalog = load_manifest(manifest_path)
     rows = resolve_task_rows([experiment], catalog, manifest_path)
-    static_by_task, difficulty_max = _score_suite(rows, manifest_path, artifacts_root, config, force)
+    static_by_task, difficulty_max = _score_suite(
+        rows,
+        manifest_path,
+        artifacts_root,
+        config,
+        force,
+        difficulty_max_static_score=difficulty_max_static_score,
+    )
     run_rows, composites = _run_one_model(
         rows,
         agent,
@@ -452,6 +500,7 @@ def run_from_config(
     artifacts_root: str | Path = "artifacts",
     run_set_id: str = "default",
     scorer_config: Optional[ScorerConfig] = None,
+    difficulty_max_static_score: Optional[float] = None,
     force: bool = False,
     agent_factory: Optional[AgentFactory] = None,
 ) -> dict[str, Any]:
@@ -478,7 +527,14 @@ def run_from_config(
             union.setdefault(r["task_id"], r)
 
     union_rows = list(union.values())
-    static_by_task, difficulty_max = _score_suite(union_rows, manifest_path, artifacts_root, config, force)
+    static_by_task, difficulty_max = _score_suite(
+        union_rows,
+        manifest_path,
+        artifacts_root,
+        config,
+        force,
+        difficulty_max_static_score=difficulty_max_static_score,
+    )
 
     all_run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
@@ -560,6 +616,12 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--conditions", default=None, help="Prompt condition-set name (optional).")
     parser.add_argument("--artifacts-root", default=str(_REPO_ROOT / "artifacts"))
     parser.add_argument("--run-set-id", default="default")
+    parser.add_argument(
+        "--difficulty-max-static-score",
+        type=float,
+        default=None,
+        help="Stable task-suite static-score maximum for runtime normalization.",
+    )
     parser.add_argument("--force", action="store_true", help="Recompute existing artifacts.")
     # Single-model fallback (when --run-config is not supplied):
     parser.add_argument("--experiment", choices=["test1", "test2", "test3", "all"], default="all")
@@ -574,6 +636,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             conditions=args.conditions,
             artifacts_root=args.artifacts_root,
             run_set_id=args.run_set_id,
+            difficulty_max_static_score=args.difficulty_max_static_score,
             force=args.force,
         )
     else:
@@ -589,6 +652,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             conditions=args.conditions,
             artifacts_root=args.artifacts_root,
             run_set_id=args.run_set_id,
+            difficulty_max_static_score=args.difficulty_max_static_score,
             force=args.force,
         )
 

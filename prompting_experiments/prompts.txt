@@ -1,5 +1,5 @@
 Prompt Experiment Preview
-Maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/validation_10/V01_empty_room.json
+Maze: /home/sean/AI_training/Manifold/MultiNet-v2.0/mazes/validation_10/V01_empty_room.json
 Max steps: 5
 Preview prompt state: after 3 random steps (seed: 0)
 
@@ -43,8 +43,7 @@ The environment may contain:
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 RULES (domain logic):
-  - PICKUP: pick up a key from the adjacent cell you are facing. Keys block movement — you
-    cannot MOVE_FORWARD onto a key; stand beside it, face it, and PICKUP.
+  - PICKUP: pick up a key from the cell you are standing on.
   - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then
     MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.
   - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE (toggle/one-shot types). Hold-type

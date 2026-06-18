@@ -7,15 +7,22 @@ Stage 1->5 chain (real MiniGrid backend, episode log, and scorer) with no API.
 
 from __future__ import annotations
 
+import itertools
 import json
+import shutil
 from pathlib import Path
+
+import pytest
 
 from interface.loader import default_maze_path
 from interface.smoke_tests.plans import v01_empty_room_trajectory
+from scorer import load_scorer_config, score_task_file
+from scorer.io import load_json, task_spec_from_payload
 
-from scripts.run_pipeline import resolve_task_rows, run_from_config, run_pipeline
+from scripts.run_pipeline import _expected_static_hash, resolve_task_rows, run_from_config, run_pipeline
 
 _MANIFEST = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures" / "manifest.json"
+_STABLE_DIFFICULTY_MAX = 1000.0
 
 
 class ReplayAgent:
@@ -66,6 +73,7 @@ def test_pipeline_writes_full_artifact_tree(tmp_path):
         conditions=None,
         artifacts_root=artifacts,
         run_set_id="smoke",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
     )
 
     task_id = "validation_10_v01_empty_room"
@@ -103,6 +111,50 @@ def test_pipeline_writes_full_artifact_tree(tmp_path):
     assert payloads["scoring_calibration_summary"]["run_count"] == 1
 
 
+def test_pipeline_requires_stable_difficulty_max(tmp_path):
+    manifest_path = _write_manifest(tmp_path)
+
+    with pytest.raises(ValueError, match="difficulty_max_static_score"):
+        run_pipeline(
+            manifest_path=manifest_path,
+            experiment="test1",
+            agent=ReplayAgent(v01_empty_room_trajectory()),
+            agent_name="replay-stub",
+            seeds=[0],
+            artifacts_root=tmp_path / "artifacts",
+            run_set_id="smoke",
+        )
+
+
+def test_pipeline_uses_configured_difficulty_max(tmp_path):
+    manifest_path = _write_manifest(tmp_path)
+    artifacts = tmp_path / "artifacts"
+    config = load_scorer_config()
+    config.difficulty_max_static_score = _STABLE_DIFFICULTY_MAX
+
+    run_pipeline(
+        manifest_path=manifest_path,
+        experiment="test1",
+        agent=ReplayAgent(v01_empty_room_trajectory()),
+        agent_name="replay-stub",
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="smoke",
+        scorer_config=config,
+    )
+
+    task_id = "validation_10_v01_empty_room"
+    suite = load_json(artifacts / "tasks" / "_suite.json")
+    static_score = load_json(artifacts / "tasks" / task_id / "scored_static.json")
+    run_score = load_json(
+        artifacts / "runs" / task_id / "minigrid" / "replay-stub" / "seed_0" / "default" / "run_score.json"
+    )
+    assert suite["difficulty_max_static_score"] == _STABLE_DIFFICULTY_MAX
+    assert run_score["signals"]["difficulty_weight"] == pytest.approx(
+        static_score["static_score"] / _STABLE_DIFFICULTY_MAX
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Task resolution (run-config entries -> catalog rows with metadata)
 # --------------------------------------------------------------------------- #
@@ -133,6 +185,35 @@ def test_resolve_unknown_file_synthesizes_test1_row(tmp_path):
     assert rows[0]["task_id"] == "validation_10_v01_empty_room"
 
 
+def test_validate_fixtures_reports_missing_source_without_traceback(tmp_path, capsys):
+    from scripts.validate_fixtures import main as validate_fixtures_main
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "tasks": [
+                    {
+                        "task_id": "missing_task",
+                        "experiment": "test1",
+                        "source": "does_not_exist.json",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = validate_fixtures_main(["--manifest", str(manifest_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Fixture validation FAILED:" in captured.out
+    assert "missing_task: Task source not found: does_not_exist.json" in captured.out
+    assert "Traceback" not in captured.out
+    assert "Traceback" not in captured.err
+
+
 # --------------------------------------------------------------------------- #
 # Config-driven multi-model run (stub agent factory, no API)
 # --------------------------------------------------------------------------- #
@@ -160,6 +241,7 @@ def test_run_from_config_drives_per_model_tasks(tmp_path):
         artifacts_root=artifacts,
         run_set_id="cfg",
         agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
     )
 
     run_dir = (
@@ -173,14 +255,6 @@ def test_run_from_config_drives_per_model_tasks(tmp_path):
 # --------------------------------------------------------------------------- #
 # Content-hash invalidation
 # --------------------------------------------------------------------------- #
-import itertools
-import shutil
-
-from scorer import load_scorer_config, score_task_file
-from scorer.io import load_json, task_spec_from_payload
-from scripts.run_pipeline import _expected_static_hash
-
-
 class CountingReplayAgent:
     """Cycles a fixed plan (one full pass per episode) and counts model calls."""
 
@@ -228,14 +302,38 @@ def test_unchanged_rerun_reuses_episode_and_static(tmp_path):
     agent = CountingReplayAgent(v01_empty_room_trajectory())
 
     run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
-                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
     calls_after_first = agent.calls
     assert calls_after_first > 0
 
     # Second identical run: episode cache hit -> agent not called again.
     run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
-                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
     assert agent.calls == calls_after_first
+
+
+def test_corrupted_sidecar_reruns_episode_cache(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    manifest = _single_task_manifest(tmp_path, task_file)
+    artifacts = tmp_path / "artifacts"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
+    calls_after_first = agent.calls
+    sidecar = artifacts / "runs" / "copy_v01" / "minigrid" / "stub" / "seed_0" / "default" / "run_inputs.json"
+    sidecar.write_text("{", encoding="utf-8")
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
+
+    assert agent.calls > calls_after_first
+    assert load_json(sidecar)["inputs_hash"]
 
 
 def test_task_edit_invalidates_static_and_episode(tmp_path):
@@ -246,7 +344,8 @@ def test_task_edit_invalidates_static_and_episode(tmp_path):
     agent = CountingReplayAgent(v01_empty_room_trajectory())
 
     run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
-                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
     first_calls = agent.calls
     first_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
 
@@ -256,7 +355,8 @@ def test_task_edit_invalidates_static_and_episode(tmp_path):
     task_file.write_text(json.dumps(data), encoding="utf-8")
 
     run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
-                 agent_name="stub", artifacts_root=artifacts, run_set_id="r")
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
     new_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
     assert new_static_hash != first_static_hash  # Stage 2 recomputed
     assert agent.calls > first_calls             # Stage 3 episode re-run
@@ -273,6 +373,7 @@ def test_scorer_config_change_rescore_without_rerunning_model(tmp_path):
     # and actually moves with the config.
     cfg_a = load_scorer_config()
     cfg_a.baseline_tokens = 1.0
+    cfg_a.difficulty_max_static_score = _STABLE_DIFFICULTY_MAX
     run_pipeline(manifest_path=manifest, experiment="test1", agent=agent, agent_name="stub",
                  artifacts_root=artifacts, run_set_id="r", scorer_config=cfg_a)
     calls_after_first = agent.calls
@@ -281,6 +382,7 @@ def test_scorer_config_change_rescore_without_rerunning_model(tmp_path):
 
     cfg_b = load_scorer_config()
     cfg_b.baseline_tokens = 5.0
+    cfg_b.difficulty_max_static_score = _STABLE_DIFFICULTY_MAX
     run_pipeline(manifest_path=manifest, experiment="test1", agent=agent, agent_name="stub",
                  artifacts_root=artifacts, run_set_id="r", scorer_config=cfg_b)
 
@@ -308,6 +410,7 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
         conditions="Prompt",  # implemented variants: standard, verbose
         artifacts_root=artifacts,
         run_set_id="variants",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
     )
 
     task_id = "validation_10_v01_empty_room"
@@ -339,6 +442,7 @@ def test_pipeline_writes_per_model_report(tmp_path):
         seeds=[0],
         artifacts_root=artifacts,
         run_set_id="smoke",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
     )
 
     report_path = artifacts / "reports" / "smoke" / "models" / "replay-stub.json"

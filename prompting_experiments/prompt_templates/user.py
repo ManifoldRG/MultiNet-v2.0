@@ -22,7 +22,7 @@ STATUS_BLOCK = (
 
 MECHANISM_HINTS_HEADER = "Hints:\n"
 KEY_DOOR_HINT = (
-    "  - Face an adjacent key and PICKUP (do not walk onto the key). "
+    "  - Step on a key and PICKUP. "
     "Face a locked door with the matching key and TOGGLE to open it, then MOVE_FORWARD through."
 )
 SWITCH_GATE_HINT = (

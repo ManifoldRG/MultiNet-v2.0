@@ -11,8 +11,7 @@ MECHANISM_LIST = (
 
 MECHANISM_RULES = (
     "RULES (domain logic):\n"
-    "  - PICKUP: pick up a key from the adjacent cell you are facing. Keys block movement — you\n"
-    "    cannot MOVE_FORWARD onto a key; stand beside it, face it, and PICKUP.\n"
+    "  - PICKUP: pick up a key from the cell you are standing on.\n"
     "  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n"
     "    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n"
     "  - Switches: MOVE_FORWARD onto the switch cell, then TOGGLE (toggle/one-shot types). Hold-type\n"

@@ -322,7 +322,7 @@ def test_verbose_prompt_omits_mechanism_hints_by_default():
     )
 
     assert "Hints:" not in prompt_text
-    assert "Face an adjacent key and PICKUP" not in prompt_text
+    assert "Step on a key and PICKUP" not in prompt_text
     assert "Inventory:" not in prompt_text
     assert "From your perspective:" not in prompt_text
 
@@ -332,7 +332,7 @@ def test_mechanism_hint_insertion_helper_still_generates_hints():
     hints = _mechanism_hints_text(spec)
 
     assert "Hints:" in hints
-    assert "Face an adjacent key and PICKUP" in hints
+    assert "Step on a key and PICKUP" in hints
 
 
 def test_verbose_prompt_can_insert_mechanism_hints_when_enabled():
@@ -353,4 +353,4 @@ def test_verbose_prompt_can_insert_mechanism_hints_when_enabled():
     )
 
     assert "Hints:" in prompt_text
-    assert "Face an adjacent key and PICKUP" in prompt_text
+    assert "Step on a key and PICKUP" in prompt_text

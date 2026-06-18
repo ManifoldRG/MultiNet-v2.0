@@ -41,6 +41,10 @@ def _load_spec(path: Path) -> TaskSpecification:
     return TaskSpecification.from_json(str(path))
 
 
+def _task_id(row: dict[str, Any]) -> str:
+    return str(row.get("task_id", "<unknown>"))
+
+
 def _spec_with_extra_wall(spec: TaskSpecification, cell: list[int]) -> TaskSpecification:
     data = spec.to_dict()
     walls = [list(w) for w in data["maze"].get("walls", [])]
@@ -52,7 +56,10 @@ def _spec_with_extra_wall(spec: TaskSpecification, cell: list[int]) -> TaskSpeci
 
 def _validate_one(row: dict[str, Any], manifest_path: Path) -> list[str]:
     errors: list[str] = []
-    source = _resolve(row["source"], manifest_path)
+    try:
+        source = _resolve(row["source"], manifest_path)
+    except FileNotFoundError as exc:
+        return [f"{_task_id(row)}: {exc}"]
     spec = _load_spec(source)
     ok, messages = spec.validate()
     if not ok:
@@ -66,7 +73,10 @@ def _validate_one(row: dict[str, Any], manifest_path: Path) -> list[str]:
 
 def _derive_test2_routes(row: dict[str, Any], manifest_path: Path) -> list[str]:
     errors: list[str] = []
-    source = _resolve(row["source"], manifest_path)
+    try:
+        source = _resolve(row["source"], manifest_path)
+    except FileNotFoundError as exc:
+        return [f"{_task_id(row)}: {exc}"]
     spec = _load_spec(source)
 
     short = plan_bfs_path(spec)
@@ -111,7 +121,14 @@ def _check_test3_pairs(rows: list[dict[str, Any]], manifest_path: Path) -> list[
         if len(members) < 2:
             errors.append(f"pair {pair_id}: needs >= 2 members, found {len(members)}")
             continue
-        specs = [_load_spec(_resolve(m["source"], manifest_path)) for m in members]
+        specs = []
+        for member in members:
+            try:
+                specs.append(_load_spec(_resolve(member["source"], manifest_path)))
+            except FileNotFoundError as exc:
+                errors.append(f"{_task_id(member)}: {exc}")
+        if len(specs) != len(members):
+            continue
         dims = {tuple(s.maze.dimensions) for s in specs}
         walls = {frozenset((w.x, w.y) for w in s.maze.walls) for s in specs}
         if len(dims) != 1:
@@ -138,11 +155,16 @@ def validate_manifest(manifest_path: Path) -> tuple[dict[str, Any], list[str]]:
     rows = data["tasks"] if isinstance(data, dict) else data
 
     errors: list[str] = []
+    valid_rows: list[dict[str, Any]] = []
     for row in rows:
-        errors.extend(_validate_one(row, manifest_path))
+        row_errors = _validate_one(row, manifest_path)
+        errors.extend(row_errors)
+        if row_errors:
+            continue
+        valid_rows.append(row)
         if row.get("experiment") == "test2":
             errors.extend(_derive_test2_routes(row, manifest_path))
-    errors.extend(_check_test3_pairs(rows, manifest_path))
+    errors.extend(_check_test3_pairs(valid_rows, manifest_path))
     return data, errors
 
 
