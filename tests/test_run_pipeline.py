@@ -8,8 +8,10 @@ Stage 1->5 chain (real MiniGrid backend, episode log, and scorer) with no API.
 from __future__ import annotations
 
 import itertools
+import io
 import json
 import shutil
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -481,3 +483,293 @@ def test_run_one_model_skips_unbeatable_tasks(tmp_path):
     assert run_rows == []
     assert composites == {}
     assert calls == []  # ineligible task -> model never invoked
+
+
+# --------------------------------------------------------------------------- #
+# Distributed coordinator mode
+# --------------------------------------------------------------------------- #
+def _write_run_config(tmp_path: Path, models: dict) -> Path:
+    path = tmp_path / "run_config.json"
+    path.write_text(json.dumps({"models": models}), encoding="utf-8")
+    return path
+
+
+def _dummy_run_archive(files: dict[str, str] | None = None) -> bytes:
+    files = files or {
+        "episode.json": "{}",
+        "run_inputs.json": "{}",
+        "run_score.json": "{}",
+    }
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        for name, content in files.items():
+            raw = content.encode("utf-8")
+            info = tarfile.TarInfo(name)
+            info.size = len(raw)
+            tar.addfile(info, io.BytesIO(raw))
+    return buffer.getvalue()
+
+
+def test_distributed_prepare_supports_qwen_groups_without_hardcoding(tmp_path):
+    from scripts.distributed_run_pipeline import prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {
+            "qwen35": {
+                "provider": "qwen",
+                "model": "Qwen/Qwen3.5-35B",
+                "group": "qwen-35b",
+                "worker_count": 2,
+                "hardware_profile": "a100-80gb",
+                "worker_tags": ["qwen", "35b"],
+                "max_in_flight": 2,
+                "tasks": [task],
+            },
+            "qwen122": {
+                "provider": "qwen",
+                "model": "Qwen/Qwen3.5-122B",
+                "group": "qwen-122b",
+                "hardware_profile": "h100-8x",
+                "worker_tags": ["qwen", "122b"],
+                "tasks": [task],
+            },
+            "qwen36": {
+                "provider": "qwen",
+                "model": "Qwen/Qwen3.6-35B",
+                "group": "qwen-36-35b",
+                "tasks": [task],
+            },
+        },
+    )
+
+    plan = prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=tmp_path / "artifacts",
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    assert len(plan["units"]) == 3
+    assert {u["model_group"] for u in plan["units"]} == {
+        "qwen-35b", "qwen-122b", "qwen-36-35b",
+    }
+    assert plan["models"]["qwen122"]["hardware_profile"] == "h100-8x"
+    assert plan["models"]["qwen35"]["max_in_flight"] == 2
+    assert {u["model_config"]["model"] for u in plan["units"]} == {
+        "Qwen/Qwen3.5-35B", "Qwen/Qwen3.5-122B", "Qwen/Qwen3.6-35B",
+    }
+
+
+def test_distributed_assignment_filters_group_and_reassigns_stale(tmp_path):
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job, state_path
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {
+            "a": {"provider": "qwen", "model": "model-a", "group": "group-a", "tasks": [task]},
+            "b": {"provider": "qwen", "model": "model-b", "group": "group-b", "tasks": [task]},
+        },
+    )
+    artifacts = tmp_path / "artifacts"
+    prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(artifacts, stale_after_seconds=1.0)
+
+    w1 = store.register({"worker_id": "w1", "capabilities": {"model_group": "group-a"}})["worker_id"]
+    first = store.assign(w1)["unit"]
+    assert first["model_group"] == "group-a"
+    assert store.assign(w1)["unit"]["unit_id"] == first["unit_id"]
+
+    state = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+    state["units"][first["unit_id"]]["heartbeat_at"] = 0
+    state_path(artifacts).write_text(json.dumps(state), encoding="utf-8")
+
+    w2 = store.register({"worker_id": "w2", "capabilities": {"model_group": "group-a"}})["worker_id"]
+    reassigned = store.assign(w2)["unit"]
+    assert reassigned["unit_id"] == first["unit_id"]
+
+    w3 = store.register({"worker_id": "w3", "capabilities": {"model_group": "group-b"}})["worker_id"]
+    group_b = store.assign(w3)["unit"]
+    assert group_b["model_group"] == "group-b"
+
+
+def test_distributed_upload_validates_and_extracts_archive(tmp_path):
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "stub-model", "group": "stub", "tasks": [task]}},
+    )
+    artifacts = tmp_path / "artifacts"
+    prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(artifacts)
+    worker_id = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(worker_id)["unit"]
+
+    result = store.upload(worker_id, unit["unit_id"], _dummy_run_archive())
+
+    assert result["status"] == "verified"
+    run_dir = artifacts / unit["run_dir"]
+    assert (run_dir / "episode.json").exists()
+    assert (run_dir / "run_inputs.json").exists()
+    assert (run_dir / "run_score.json").exists()
+
+
+def test_distributed_worker_upload_finalize_local_integration(tmp_path):
+    from scripts.distributed_run_pipeline import (
+        CoordinatorStore,
+        finalize_job,
+        package_run_archive,
+        prepare_job,
+        run_assigned_unit,
+    )
+
+    manifest_path = _write_manifest(tmp_path)
+    cfg_path = _write_run_config(
+        tmp_path,
+        {
+            "stub": {
+                "provider": "claude",
+                "model": "replay-stub",
+                "group": "stub",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+    )
+    coordinator_artifacts = tmp_path / "coordinator"
+    prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=manifest_path,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=coordinator_artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(coordinator_artifacts)
+    worker_id = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(worker_id)["unit"]
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    worker_artifacts = tmp_path / "worker"
+    run_assigned_unit(unit, artifacts_root=worker_artifacts, agent_factory=factory)
+    archive = package_run_archive(unit, artifacts_root=worker_artifacts)
+    store.upload(worker_id, unit["unit_id"], archive.read_bytes())
+
+    result = finalize_job(artifacts_root=coordinator_artifacts)
+
+    assert result["run_count"] == 1
+    assert result["missing_units"] == []
+    rows = [
+        json.loads(line)
+        for line in (coordinator_artifacts / "episode_runs.jsonl").read_text().splitlines()
+    ]
+    assert len(rows) == 1
+    assert rows[0]["agent_or_model"] == "replay-stub"
+    assert rows[0]["prompt_variant"] == "default"
+    assert (
+        coordinator_artifacts / "reports" / "dist" / "models" / "replay-stub.json"
+    ).exists()
+
+
+def test_distributed_coordinator_runs_api_client_locally(tmp_path):
+    from scripts.distributed_run_pipeline import (
+        CoordinatorStore,
+        finalize_job,
+        prepare_job,
+        run_coordinator_api_client,
+    )
+
+    manifest_path = _write_manifest(tmp_path)
+    cfg_path = _write_run_config(
+        tmp_path,
+        {
+            "claude-api": {
+                "provider": "claude",
+                "model": "replay-api",
+                "group": "api-clients",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+    )
+    artifacts = tmp_path / "coordinator"
+    prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=manifest_path,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="api",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    result = run_coordinator_api_client(
+        artifacts_root=artifacts,
+        model_group="api-clients",
+        agent_factory=factory,
+    )
+    finalized = finalize_job(artifacts_root=artifacts)
+    status = CoordinatorStore(artifacts).status()
+
+    assert result["completed"] == 1
+    assert status["units"] == {"verified": 1}
+    assert finalized["run_count"] == 1
+    rows = [
+        json.loads(line)
+        for line in (artifacts / "episode_runs.jsonl").read_text().splitlines()
+    ]
+    assert rows[0]["agent_or_model"] == "replay-api"
+
+
+def test_distributed_finalize_requires_complete_work_by_default(tmp_path):
+    from scripts.distributed_run_pipeline import finalize_job, prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "stub-model", "group": "stub", "tasks": [task]}},
+    )
+    artifacts = tmp_path / "artifacts"
+    prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    with pytest.raises(RuntimeError, match="Missing distributed work units"):
+        finalize_job(artifacts_root=artifacts)
+
+    partial = finalize_job(artifacts_root=artifacts, allow_partial=True)
+    assert partial["run_count"] == 0
+    assert len(partial["missing_units"]) == 1

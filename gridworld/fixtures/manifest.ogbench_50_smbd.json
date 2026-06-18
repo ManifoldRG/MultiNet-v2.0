@@ -1,0 +1,650 @@
+{
+  "description": "Deterministic 50-maze ogbench setup selection: 10 S, 10 M, 10 B, and 20 D/distractor mazes.",
+  "selection": {
+    "source": "ogbench/origin/setup:ogbench/procgen/maze_jsons",
+    "source_commit": "cc74267",
+    "counts": {
+      "S": 10,
+      "M": 10,
+      "B": 10,
+      "D": 20
+    },
+    "policy": "Manual deterministic balanced subset across available categories, sizes, mechanism chains, and distractor types."
+  },
+  "tasks": [
+    {
+      "task_id": "ogbench50_s_s1_8x8_empty_room_0",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "8x8_empty_room_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S1/8x8_empty_room_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S1"
+    },
+    {
+      "task_id": "ogbench50_s_s1_8x8_empty_room_1",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "8x8_empty_room_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S1/8x8_empty_room_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S1"
+    },
+    {
+      "task_id": "ogbench50_s_s2_8x8_corridor_0",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "8x8_corridor_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S2/8x8_corridor_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S2"
+    },
+    {
+      "task_id": "ogbench50_s_s2_8x8_corridor_1",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "8x8_corridor_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S2/8x8_corridor_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S2"
+    },
+    {
+      "task_id": "ogbench50_s_s3_10x10_corridor_0",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "10x10_corridor_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S3/10x10_corridor_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S3"
+    },
+    {
+      "task_id": "ogbench50_s_s3_10x10_corridor_1",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "10x10_corridor_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S3/10x10_corridor_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S3"
+    },
+    {
+      "task_id": "ogbench50_s_s4_10x10_dense_0",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "10x10_dense_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S4"
+    },
+    {
+      "task_id": "ogbench50_s_s4_10x10_dense_1",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "10x10_dense_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S4"
+    },
+    {
+      "task_id": "ogbench50_s_s5_14x14_corridor_0",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "14x14_corridor_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S5/14x14_corridor_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S5"
+    },
+    {
+      "task_id": "ogbench50_s_s6_14x14_dense_0",
+      "experiment": "ogbench50",
+      "condition": "S",
+      "variant": "14x14_dense_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S6/14x14_dense_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S6"
+    },
+    {
+      "task_id": "ogbench50_m_m1_8x8_corridor_kr_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "8x8_corridor_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M1/8x8_corridor_kr_0.json",
+      "expected_mechanisms": [
+        "kR"
+      ],
+      "maze_family": "M",
+      "maze_category": "M1"
+    },
+    {
+      "task_id": "ogbench50_m_m1_10x10_dense_kr_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "10x10_dense_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M1/10x10_dense_kr_0.json",
+      "expected_mechanisms": [
+        "kR"
+      ],
+      "maze_family": "M",
+      "maze_category": "M1"
+    },
+    {
+      "task_id": "ogbench50_m_m2_8x8_corridor_sg_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "8x8_corridor_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M2/8x8_corridor_sg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M2"
+    },
+    {
+      "task_id": "ogbench50_m_m2_10x10_dense_sg_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "10x10_dense_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M2/10x10_dense_sg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M2"
+    },
+    {
+      "task_id": "ogbench50_m_m3_10x10_corridor_kr_sg_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "10x10_corridor_kr_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M3/10x10_corridor_kr_sg_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M3"
+    },
+    {
+      "task_id": "ogbench50_m_m3_14x14_dense_kr_sg_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "14x14_dense_kr_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M3/14x14_dense_kr_sg_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M3"
+    },
+    {
+      "task_id": "ogbench50_m_m4_10x10_corridor_sg_kr_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "10x10_corridor_sg_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M4/10x10_corridor_sg_kr_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M4"
+    },
+    {
+      "task_id": "ogbench50_m_m4_14x14_dense_sg_kr_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "14x14_dense_sg_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M4/14x14_dense_sg_kr_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M4"
+    },
+    {
+      "task_id": "ogbench50_m_m5_10x10_corridor_kr_kb_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "10x10_corridor_kr_kb_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M5/10x10_corridor_kr_kb_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "kB"
+      ],
+      "maze_family": "M",
+      "maze_category": "M5"
+    },
+    {
+      "task_id": "ogbench50_m_m6_14x14_dense_kr_sg_kb_0",
+      "experiment": "ogbench50",
+      "condition": "M",
+      "variant": "14x14_dense_kr_sg_kb_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M6/14x14_dense_kr_sg_kb_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "kB",
+        "s1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M6"
+    },
+    {
+      "task_id": "ogbench50_b_b1_8x8_corridor_swg_0",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "8x8_corridor_swg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/8x8_corridor_swg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_8x8_corridor_swg_1",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "8x8_corridor_swg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/8x8_corridor_swg_1.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_10x10_corridor_swg_0",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "10x10_corridor_swg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/10x10_corridor_swg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_10x10_corridor_swg_1",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "10x10_corridor_swg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/10x10_corridor_swg_1.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_10x10_dense_swg_0",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "10x10_dense_swg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/10x10_dense_swg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_10x10_dense_swg_1",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "10x10_dense_swg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/10x10_dense_swg_1.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_14x14_corridor_swg_0",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "14x14_corridor_swg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/14x14_corridor_swg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_14x14_corridor_swg_1",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "14x14_corridor_swg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/14x14_corridor_swg_1.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_14x14_dense_swg_0",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "14x14_dense_swg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/14x14_dense_swg_0.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_b_b1_14x14_dense_swg_1",
+      "experiment": "ogbench50",
+      "condition": "B",
+      "variant": "14x14_dense_swg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/B1/14x14_dense_swg_1.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "maze_family": "B",
+      "maze_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_8x8_corridor_wrong_ky_sg_1",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "8x8_corridor_wrong_ky_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/8x8_corridor_wrong_ky_sg_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_8x8_corridor_wrong_ky_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "8x8_corridor_wrong_ky_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/8x8_corridor_wrong_ky_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_10x10_corridor_wrong_ky_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_10x10_corridor_wrong_ky_sg_1",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_sg_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_10x10_dense_wrong_ky_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_wrong_ky_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_10x10_dense_wrong_ky_sg_1",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_wrong_ky_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_sg_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_14x14_corridor_wrong_ky_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "14x14_corridor_wrong_ky_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/14x14_corridor_wrong_ky_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d1_14x14_dense_wrong_ky_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "14x14_dense_wrong_ky_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/14x14_dense_wrong_ky_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1"
+    },
+    {
+      "task_id": "ogbench50_d_d2_8x8_corridor_wrong_ky_inactive_sb_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "8x8_corridor_wrong_ky_inactive_sb_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D2/8x8_corridor_wrong_ky_inactive_sb_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1",
+        "inactive_sb"
+      ],
+      "maze_family": "D",
+      "maze_category": "D2",
+      "distractor_type": "inactive_blue_switch"
+    },
+    {
+      "task_id": "ogbench50_d_d2_8x8_corridor_wrong_ky_inactive_sb_sg_1",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "8x8_corridor_wrong_ky_inactive_sb_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D2/8x8_corridor_wrong_ky_inactive_sb_sg_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1",
+        "inactive_sb"
+      ],
+      "maze_family": "D",
+      "maze_category": "D2",
+      "distractor_type": "inactive_blue_switch"
+    },
+    {
+      "task_id": "ogbench50_d_d2_10x10_corridor_wrong_ky_inactive_sb_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_inactive_sb_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D2/10x10_corridor_wrong_ky_inactive_sb_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1",
+        "inactive_sb"
+      ],
+      "maze_family": "D",
+      "maze_category": "D2",
+      "distractor_type": "inactive_blue_switch"
+    },
+    {
+      "task_id": "ogbench50_d_d2_10x10_corridor_wrong_ky_inactive_sb_sg_1",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_inactive_sb_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D2/10x10_corridor_wrong_ky_inactive_sb_sg_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1",
+        "inactive_sb"
+      ],
+      "maze_family": "D",
+      "maze_category": "D2",
+      "distractor_type": "inactive_blue_switch"
+    },
+    {
+      "task_id": "ogbench50_d_d2_10x10_dense_wrong_ky_inactive_sb_sg_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_wrong_ky_inactive_sb_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D2/10x10_dense_wrong_ky_inactive_sb_sg_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1",
+        "inactive_sb"
+      ],
+      "maze_family": "D",
+      "maze_category": "D2",
+      "distractor_type": "inactive_blue_switch"
+    },
+    {
+      "task_id": "ogbench50_d_d2_10x10_dense_wrong_ky_inactive_sb_sg_1",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_wrong_ky_inactive_sb_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D2/10x10_dense_wrong_ky_inactive_sb_sg_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1",
+        "inactive_sb"
+      ],
+      "maze_family": "D",
+      "maze_category": "D2",
+      "distractor_type": "inactive_blue_switch"
+    },
+    {
+      "task_id": "ogbench50_d_d3_10x10_dense_deadend_ky_dy_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_deadend_ky_dy_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_deadend_ky_dy_0.json",
+      "expected_mechanisms": [
+        "kY"
+      ],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "distractor_type": "deadend_yellow_key_door",
+      "source_category": "S4"
+    },
+    {
+      "task_id": "ogbench50_d_d3_10x10_dense_kr_deadend_ky_dy_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_kr_deadend_ky_dy_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_kr_deadend_ky_dy_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "kY"
+      ],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "distractor_type": "deadend_yellow_key_door",
+      "source_category": "M1"
+    },
+    {
+      "task_id": "ogbench50_d_d3_10x10_dense_sg_kr_deadend_ky_dy_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_sg_kr_deadend_ky_dy_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_sg_kr_deadend_ky_dy_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "distractor_type": "deadend_yellow_key_door",
+      "source_category": "M4"
+    },
+    {
+      "task_id": "ogbench50_d_d3_10x10_dense_swg_deadend_ky_dy_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "10x10_dense_swg_deadend_ky_dy_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_swg_deadend_ky_dy_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "distractor_type": "deadend_yellow_key_door",
+      "source_category": "B1"
+    },
+    {
+      "task_id": "ogbench50_d_d3_14x14_dense_kr_sg_deadend_ky_dy_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "14x14_dense_kr_sg_deadend_ky_dy_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/14x14_dense_kr_sg_deadend_ky_dy_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "distractor_type": "deadend_yellow_key_door",
+      "source_category": "M3"
+    },
+    {
+      "task_id": "ogbench50_d_d3_14x14_dense_kr_sg_kb_deadend_ky_dy_0",
+      "experiment": "ogbench50",
+      "condition": "D",
+      "variant": "14x14_dense_kr_sg_kb_deadend_ky_dy_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/14x14_dense_kr_sg_kb_deadend_ky_dy_0.json",
+      "expected_mechanisms": [
+        "kR",
+        "kB",
+        "kY",
+        "s1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "distractor_type": "deadend_yellow_key_door",
+      "source_category": "M6"
+    }
+  ]
+}
