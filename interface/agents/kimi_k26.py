@@ -10,7 +10,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from interface.telemetry import normalize_token_usage
 
@@ -42,13 +42,14 @@ def _post_chat_completions(
     temperature: float,
     messages: List[Dict[str, object]],
     timeout: Optional[float],
+    enable_thinking: bool,
 ) -> tuple[str, Optional[Dict[str, int]]]:
     body: Dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": messages,
         "temperature": temperature,
-        "thinking": {"type": "disabled"},
+        "thinking": {"type": "enabled" if enable_thinking else "disabled"},
     }
 
     raw = json.dumps(body).encode("utf-8")
@@ -91,15 +92,17 @@ def _post_chat_completions(
 
     choice = (payload.get("choices") or [{}])[0]
     message = choice.get("message") or {}
-    return str(message.get("content") or "").strip(), normalize_token_usage(payload.get("usage"))
+    text = str(message.get("content") or "").strip()
+    return text, normalize_token_usage(payload.get("usage"))
 
 
 @dataclass
 class KimiK26Config:
     model: str = DEFAULT_KIMI_K26_MODEL
-    temperature: float = 0.6
+    temperature: float = 0.0
     max_tokens: int = 4096
     timeout: Optional[float] = 180.0
+    enable_thinking: bool = False
 
 
 @dataclass
@@ -127,5 +130,6 @@ class KimiK26Agent:
             temperature=self.config.temperature,
             messages=_to_openai_messages(messages),
             timeout=self.config.timeout,
+            enable_thinking=self.config.enable_thinking,
         )
         return text
