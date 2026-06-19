@@ -224,7 +224,7 @@ FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 additional text_summary example: one_shot_example maze after one_shot_example_solution
 maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/one_shot_example/one_shot_example_14x14_dense_kr_sg_kb_2.json
-solution steps replayed: 52
+solution steps replayed: 51
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
 The environment may contain:
@@ -233,7 +233,7 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 Activity summary:
-first you navigated to (1, 2), then you navigated to (4, 3), finally you passed (6, 3)
+first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, finally you opened the blue door
 
 
 [image block 1]

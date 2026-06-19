@@ -75,9 +75,35 @@ def _rollout_preview_steps(
         decision_frame_rgb = runner.last_rgb
         prev_state = state
 
-        runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
-            nlu_action_to_int(action)
-        )
+        # Handle DONE token (no environment step) and map NLU action token to backend-specific integer.
+        if action == 'DONE':
+            break
+        try:
+            from gridworld.backends.multigrid_backend import MultiGridBackend
+            from multigrid.agent import Action as MGAction
+        except Exception:
+            MultiGridBackend = None
+            MGAction = None
+
+        if MultiGridBackend is not None and isinstance(runner.backend, MultiGridBackend):
+            act = MGAction.FORWARD if action == 'MOVE_FORWARD' else getattr(MGAction, action)
+            # Call the underlying MultiGrid environment directly with the
+            # MultiGrid action index. `MultiGridBackend.step` expects a
+            # MiniGrid-style action index and would remap the value, so
+            # use `env.step` to execute the native MultiGrid action.
+            runner.last_rgb, reward, terminated, truncated, info = runner.backend.env.step(int(act))
+            # Maintain backend step bookkeeping and rebuild GridState so
+            # GridState fields (including goal_reached) are correct.
+            runner.backend._step_count += 1
+            state = runner.backend._build_grid_state()
+            state.terminated = terminated
+            state.truncated = truncated
+            state.reward = reward
+            state.step_count = runner.backend._step_count
+        else:
+            runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
+                nlu_action_to_int(action)
+            )
         step_detail, event_type = format_step_feedback(
             action, prev_state, state, reward, terminated, runner.task_spec
         )
@@ -131,9 +157,33 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
         decision_frame_rgb = runner.last_rgb
         prev_state = state
 
-        runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
-            nlu_action_to_int(action)
-        )
+        # Handle DONE token (no environment step) and map NLU action token to backend-specific integer.
+        if action == 'DONE':
+            break
+        try:
+            from gridworld.backends.multigrid_backend import MultiGridBackend
+            from multigrid.agent import Action as MGAction
+        except Exception:
+            MultiGridBackend = None
+            MGAction = None
+
+        if MultiGridBackend is not None and isinstance(runner.backend, MultiGridBackend):
+            act = MGAction.FORWARD if action == 'MOVE_FORWARD' else getattr(MGAction, action)
+            # Use the native MultiGrid env.step so the action index is treated
+            # as a MultiGrid action. `MultiGridBackend.step` would remap the
+            # integer assuming a MiniGrid action space, which is not desired
+            # when we already have a native MultiGrid `Action` value.
+            runner.last_rgb, reward, terminated, truncated, info = runner.backend.env.step(int(act))
+            runner.backend._step_count += 1
+            state = runner.backend._build_grid_state()
+            state.terminated = terminated
+            state.truncated = truncated
+            state.reward = reward
+            state.step_count = runner.backend._step_count
+        else:
+            runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
+                nlu_action_to_int(action)
+            )
         step_detail, event_type = format_step_feedback(
             action, prev_state, state, reward, terminated, runner.task_spec
         )
@@ -214,8 +264,15 @@ def _one_shot_text_summary_preview(config) -> tuple[int, str, str]:
 
     solution = json.loads(_ONE_SHOT_SOLUTION_PATH.read_text(encoding="utf-8"))
     actions = solution["actions"]
-    backend, spec = load_task(_ONE_SHOT_MAZE_PATH)
+    # Use the MultiGrid backend for the one-shot example so the replay
+    # executes the full mechanism semantics (keys, doors, switches, gates).
+    from gridworld.task_spec import TaskSpecification
+    from gridworld.backends.multigrid_backend import MultiGridBackend
+
+    spec = TaskSpecification.from_json(str(_ONE_SHOT_MAZE_PATH))
     spec.max_steps = len(actions)
+    backend = MultiGridBackend(tiling='square', render_mode='state_dict')
+    backend.configure(spec)
     runner = build_runner(config, backend, spec)
     runner.last_rgb, state, _reset_info = backend.reset(seed=spec.seed)
     state, last_feedback, transcript = _solution_preview_steps(runner, state, actions)
@@ -224,6 +281,19 @@ def _one_shot_text_summary_preview(config) -> tuple[int, str, str]:
         last_feedback,
         transcript,
     )
+    # Ensure the replay actually reached the goal in the live environment
+    # Prefer calling `check_goal()` if the state is a native MultiGrid state,
+    # otherwise fall back to the backend-agnostic GridState `goal_reached`.
+    try:
+        check = getattr(state, "check_goal", None)
+        if callable(check):
+            reached = state.check_goal()
+        else:
+            reached = getattr(state, "goal_reached", False)
+    except Exception:
+        reached = False
+    if not reached:
+        raise RuntimeError("Replayed one-shot solution did not reach the goal when executed in the environment")
     return len(transcript), system_prompt, _content_to_text(user_message.get("content"))
 
 
