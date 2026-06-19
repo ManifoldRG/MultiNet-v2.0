@@ -9,6 +9,7 @@ from interface.coords import (
     agent_facing,
     agent_row_col,
     goal_row_col,
+    inventory_list,
 )
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
@@ -21,6 +22,36 @@ class MinimalPromptStrategy:
     def __init__(self, actions_hint: str) -> None:
         self._actions_hint = actions_hint
 
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        del querying_suffix
+        chunks = [
+            system_templates.MIN_TASK_PREFIX,
+            system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
+        ]
+        return "\n".join(chunks)
+
+    def build_user_prompt(
+        self,
+        obs_text: str,
+        history_text: str,
+        task_spec: TaskSpecification,
+        state: GridState,
+        last_feedback: str,
+        *,
+        include_status_footer: bool = False,
+    ) -> str:
+        del obs_text, task_spec, last_feedback, include_status_footer
+        inventory = ", ".join(inventory_list(state)) or "empty"
+        status_block = user_templates.MINIMAL_STATUS_BLOCK.format(
+            inventory=inventory,
+        )
+        prompt = user_templates.MINIMAL_USER_PROMPT.format(
+            status_block=status_block,
+        )
+        return _with_history(prompt, history_text)
+
+
+class StandardPromptStrategy(MinimalPromptStrategy):
     def build_system_prompt(self, querying_suffix: str = "") -> str:
         del querying_suffix
         chunks = [
@@ -59,10 +90,6 @@ class MinimalPromptStrategy:
             status_block=status_block,
         )
         return _with_history(prompt, history_text)
-
-
-class StandardPromptStrategy(MinimalPromptStrategy):
-    pass
 
 
 class VerbosePromptStrategy(StandardPromptStrategy):

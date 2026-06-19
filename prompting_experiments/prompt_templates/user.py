@@ -2,6 +2,11 @@
 
 OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
 
+MINIMAL_USER_PROMPT = (
+    "{status_block}"
+    "What is your next action?"
+)
+
 STANDARD_USER_PROMPT = (
     "{obs_block}"
     "{status_block}"
@@ -15,9 +20,6 @@ VERBOSE_USER_PROMPT = (
     "What is your next action?"
 )
 
-TEXT_HISTORY_BLOCK = (
-    "Recent history:"
-)
 
 TEXT_SUMMARY_BLOCK_HEADER = "Activity summary:"
 TEXT_SUMMARY_PICKUP_KEY = "picked up the {key_id} key"
@@ -32,6 +34,8 @@ STATUS_BLOCK = (
     "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
     "Last result: {last_feedback}\n"
 )
+
+MINIMAL_STATUS_BLOCK = "Your inventory: {inventory}.\n"
 
 MECHANISM_HINTS_HEADER = "Hints:\n"
 KEY_DOOR_HINT = (

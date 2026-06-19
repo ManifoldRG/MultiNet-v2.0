@@ -9,6 +9,7 @@ from interface.loader import default_maze_path, load_task
 from interface.observation import current_observation_text, history_content_blocks
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
+    MinimalPromptStrategy,
     StandardPromptStrategy,
     VerbosePromptStrategy,
     _mechanism_hints_text,
@@ -281,6 +282,20 @@ def test_observation_format_image_only_matches_standard_prompt_text():
     assert image_only_text == standard_text
 
 
+def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
+    system_prompt = MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
+    prompt_text = _initial_user_prompt_text(ExperimentConfig(prompting="minimal"))
+
+    assert system_prompt.startswith("Task: Solve the maze by reaching the goal.")
+    assert "The environment may contain:" not in system_prompt
+    assert prompt_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert "Observation:" not in prompt_text
+    assert "Position:" not in prompt_text
+    assert "Facing:" not in prompt_text
+    assert "Goal:" not in prompt_text
+    assert "Last result:" not in prompt_text
+
+
 def test_standard_variants_use_default_config_without_overrides():
     for condition in CONDITION_SETS.values():
         variant = condition.variants.get("standard")
@@ -308,6 +323,8 @@ def test_implemented_non_verbose_conditions_share_standard_system_prompt():
 
             if variant.name == "verbose":
                 verbose_prompt = system_prompt
+            elif variant.name == "minimal":
+                assert system_prompt == MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
             else:
                 assert system_prompt == standard_prompt, (condition_name, variant.name)
 

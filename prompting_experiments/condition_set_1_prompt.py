@@ -17,6 +17,11 @@ CONDITION_SET = ConditionSet(
             name="standard",
             description="Standard task prompt with mechanism descriptions.",
         ),
+        "minimal": Variant(
+            name="minimal",
+            description="Minimal prompt with action list only.",
+            config_overrides={"prompting": "minimal"},
+        ),
         "verbose": Variant(
             name="verbose",
             description="Standard prompt plus explicit domain rules.",
