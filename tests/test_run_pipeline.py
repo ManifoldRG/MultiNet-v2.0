@@ -26,8 +26,10 @@ from scripts.run_pipeline import (
     _condition_configs,
     _expected_run_hash,
     _expected_static_hash,
+    _resolve_source,
     check_run_config_expectations,
     condition_variant_names,
+    load_manifest,
     load_run_config,
     resolve_task_rows,
     run_from_config,
@@ -1186,6 +1188,109 @@ def test_episode_log_write_leaves_no_tmp_and_valid_json(tmp_path):
     run_dir = artifacts / "runs" / "validation_10_v01_empty_room" / "minigrid" / "stub" / "seed_0" / "default"
     assert load_json(run_dir / "episode.json")  # valid JSON, fully written
     assert not list(run_dir.glob("*.tmp"))  # atomic write cleaned up its temp
+
+
+def test_expected_run_hash_is_stable_across_processes(tmp_path):
+    """Coordinator and workers run on different machines/interpreters; the run
+    hash must be byte-identical or every worker re-pays for cached episodes."""
+    import subprocess
+    import sys
+    import textwrap
+
+    source = str(default_maze_path("V06_chain_ks.json"))
+    snippet = textwrap.dedent(
+        f"""
+        from scorer.io import load_json, task_spec_from_payload
+        from scripts.run_pipeline import _expected_run_hash
+        spec = task_spec_from_payload(load_json(r"{source}"))
+        print(_expected_run_hash(
+            spec, "model-x", 0, "minigrid",
+            condition_set=None, prompt_variant="default",
+            experiment_config={{"a": 1, "b": [2, 3]}},
+            model_config={{"temperature": 0.0, "max_tokens": 128, "z": 1, "a": 2}},
+        ))
+        """
+    )
+    outs = [
+        subprocess.run(
+            [sys.executable, "-c", snippet], cwd=str(_REPO_ROOT),
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        for _ in range(2)
+    ]
+    assert outs[0] == outs[1] and len(outs[0]) == 64
+
+
+def test_max_in_flight_blocks_second_concurrent_assignment(tmp_path):
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
+
+    t1 = str(default_maze_path("V01_empty_room.json"))
+    t2 = str(default_maze_path("V06_chain_ks.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"g": {"provider": "qwen", "model": "m", "group": "g", "max_in_flight": 1, "tasks": [t1, t2]}},
+    )
+    artifacts = tmp_path / "artifacts"
+    prepare_job(
+        run_config_path=cfg_path, manifest_path=_MANIFEST, seeds=[0], conditions=None,
+        artifacts_root=artifacts, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(artifacts)
+    w1 = store.register({"worker_id": "w1", "capabilities": {"model_group": "g"}})["worker_id"]
+    w2 = store.register({"worker_id": "w2", "capabilities": {"model_group": "g"}})["worker_id"]
+    assert store.assign(w1)["unit"] is not None       # 1 in flight
+    assert store.assign(w2)["unit"] is None            # capped -> no second concurrent unit
+
+
+def test_distributed_upload_rejects_path_traversal_member(tmp_path):
+    artifacts, store, wid, unit = _stub_unit_store(tmp_path)
+    evil = _dummy_run_archive(
+        {"episode.json": "{}", "run_inputs.json": "{}", "run_score.json": "{}", "../escape.json": "{}"}
+    )
+    with pytest.raises(ValueError, match="Unsafe archive path"):
+        store.upload(wid, unit["unit_id"], evil)
+    assert not (artifacts.parent / "escape.json").exists()
+
+
+@pytest.mark.parametrize("manifest", sorted(_FIXTURES.glob("manifest*.json")))
+def test_all_committed_manifest_sources_resolve(manifest):
+    """A source-path typo in a committed manifest must fail here, not after
+    spinning workers / spending tokens."""
+    for row in load_manifest(manifest):
+        _resolve_source(row, manifest)  # raises FileNotFoundError on a bad path
+
+
+def test_distributed_finalize_is_idempotent(tmp_path):
+    from scripts.distributed_run_pipeline import (
+        CoordinatorStore, finalize_job, package_run_archive, prepare_job, run_assigned_unit,
+    )
+
+    manifest_path = _write_manifest(tmp_path)
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "replay-stub", "group": "stub",
+                  "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
+    )
+    art = tmp_path / "coordinator"
+    prepare_job(
+        run_config_path=cfg_path, manifest_path=manifest_path, seeds=[0], conditions=None,
+        artifacts_root=art, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(art)
+    wid = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(wid)["unit"]
+    run_assigned_unit(
+        unit, artifacts_root=tmp_path / "worker",
+        agent_factory=lambda n, mc: (ReplayAgent(v01_empty_room_trajectory()), mc["model"]),
+    )
+    store.upload(wid, unit["unit_id"],
+                 package_run_archive(unit, artifacts_root=tmp_path / "worker").read_bytes())
+
+    first = finalize_job(artifacts_root=art)
+    second = finalize_job(artifacts_root=art)  # a retry after a crash must not double-count
+    rows = (art / "episode_runs.jsonl").read_text().strip().splitlines()
+    assert first["run_count"] == second["run_count"] == 1
+    assert len(rows) == 1
 
 
 def test_distributed_worker_upload_finalize_local_integration(tmp_path):
