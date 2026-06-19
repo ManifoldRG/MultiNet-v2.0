@@ -395,7 +395,7 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript),
+            history_text(obs, ctx, transcript, self.task_spec),
             state,
             observation=obs,
             initial_maze_text=initial_maze_text,

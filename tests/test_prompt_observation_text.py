@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import numpy as np
 
+from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
+from interface.coords import inventory_list
 from interface.loader import default_maze_path, load_task
 from interface.observation import current_observation_text, history_content_blocks
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
     StandardPromptStrategy,
-    VerbosePromptStrategy,
 )
 from interface.runner import build_runner
 from prompting_experiments import CONDITION_SETS
@@ -143,6 +144,17 @@ def test_image_only_prompt_puts_inventory_text_after_current_image():
     assert content[1]["type"] == "text"
     assert "Current situation (this step):" not in content[1]["text"]
     assert content[1]["text"].startswith("Your inventory: empty.\nWhat is your next action?")
+
+
+def test_inventory_list_omits_consumed_or_removed_keys():
+    state = GridState(
+        agent_position=(1, 1),
+        agent_direction=0,
+        agent_carrying=None,
+        collected_keys={"kR"},
+    )
+
+    assert inventory_list(state) == []
 
 
 def test_image_only_last3_history_puts_inventory_before_action_under_images():

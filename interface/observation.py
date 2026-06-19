@@ -49,17 +49,21 @@ def history_text(
     observation: ObservationMode,
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
 ) -> str:
     del observation
     if context_window == "text_summary":
-        return text_summary_history(transcript)
+        return text_summary_history(transcript, task_spec)
     return ""
 
 
-def text_summary_history(transcript: list[dict[str, Any]]) -> str:
+def text_summary_history(
+    transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+) -> str:
     """Build a one-sentence summary of all prior mechanism events or path waypoints."""
     steps = history_steps(transcript)
-    mechanism_events = _extract_mechanism_events(steps)
+    mechanism_events = _extract_mechanism_events(steps, task_spec)
 
     if mechanism_events:
         summary = _format_summary_chain(mechanism_events)
@@ -84,8 +88,20 @@ def text_summary_history(transcript: list[dict[str, Any]]) -> str:
     return f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
 
 
-def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
+def _extract_mechanism_events(
+    steps: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+) -> list[str]:
     events: list[str] = []
+    key_colors = {
+        key.id: key.color for key in task_spec.mechanisms.keys
+    } if task_spec else {}
+    door_colors = {
+        door.id: door.requires_key for door in task_spec.mechanisms.doors
+    } if task_spec else {}
+    gate_colors = {
+        gate.id: getattr(gate, "color", "black") for gate in task_spec.mechanisms.gates
+    } if task_spec else {}
     for rec in steps:
         event_type = rec.get("event_type", "")
         sb = rec.get("state_before") or {}
@@ -100,7 +116,9 @@ def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
             else:
                 key_id = sa.get("agent_carrying") or sb.get("agent_carrying") or "a"
             events.append(
-                observation_templates.TEXT_SUMMARY_PICKUP_KEY.format(key_id=key_id)
+                observation_templates.TEXT_SUMMARY_PICKUP_KEY.format(
+                    key_color=key_colors.get(key_id, sa.get("agent_carrying") or key_id)
+                )
             )
 
         elif event_type == "OPENED":
@@ -109,7 +127,9 @@ def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
             new_doors = after_doors - before_doors
             door_id = sorted(new_doors)[0] if new_doors else "a"
             events.append(
-                observation_templates.TEXT_SUMMARY_OPEN_DOOR.format(door_id=door_id)
+                observation_templates.TEXT_SUMMARY_OPEN_DOOR.format(
+                    door_color=door_colors.get(door_id, door_id)
+                )
             )
 
         elif event_type == "TOGGLED":
@@ -120,13 +140,13 @@ def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
             if opened:
                 events.append(
                     observation_templates.TEXT_SUMMARY_OPEN_GATE.format(
-                        gate_id=sorted(opened)[0]
+                        gate_color=gate_colors.get(sorted(opened)[0], sorted(opened)[0])
                     )
                 )
             elif closed:
                 events.append(
                     observation_templates.TEXT_SUMMARY_CLOSE_GATE.format(
-                        gate_id=sorted(closed)[0]
+                        gate_color=gate_colors.get(sorted(closed)[0], sorted(closed)[0])
                     )
                 )
 

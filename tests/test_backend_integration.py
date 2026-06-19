@@ -89,6 +89,41 @@ def test_switch_colors_are_preserved_across_backends():
     assert multigrid.env.state.objects["s1"].color == "white"
 
 
+def test_gate_color_is_preserved_in_task_spec_and_multigrid():
+    spec = TaskSpecification.from_dict({
+        "task_id": "colored_gate",
+        "seed": 16,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [8, 8],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [6, 6],
+        },
+        "mechanisms": {
+            "switches": [{"id": "s1", "position": [2, 2], "controls": ["g1"]}],
+            "gates": [
+                {
+                    "id": "g1",
+                    "position": [4, 4],
+                    "color": "black",
+                    "initial_state": "closed",
+                }
+            ],
+        },
+        "goal": {"type": "reach_position", "target": [6, 6]},
+        "max_steps": 40,
+    })
+
+    assert spec.mechanisms.gates[0].color == "black"
+    assert spec.to_dict()["mechanisms"]["gates"][0]["color"] == "black"
+
+    multigrid = MultiGridBackend(tiling="square", render_mode="rgb_array")
+    multigrid.configure(spec)
+    multigrid.reset(seed=16)
+    assert multigrid.env.state.objects["g1"].color == "black"
+
+
 def test_doors_and_gates_may_replace_wall_cells():
     spec = TaskSpecification.from_dict({
         "task_id": "barriers_replace_walls",
@@ -171,6 +206,45 @@ def test_minigrid_replays_validator_same_cell_switch_plan():
     assert terminated is True
     assert reward > 0
     assert state.goal_reached is True
+
+
+def test_minigrid_picks_up_key_from_same_cell():
+    spec = TaskSpecification.from_dict({
+        "task_id": "same_cell_key_runtime",
+        "seed": 15,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [5, 5],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [3, 1],
+        },
+        "mechanisms": {
+            "keys": [{"id": "k1", "position": [2, 1], "color": "red"}],
+        },
+        "goal": {"type": "pickup_key", "target_ids": ["k1"]},
+        "max_steps": 20,
+    })
+
+    backend = MiniGridBackend(render_mode="rgb_array")
+    backend.configure(spec)
+    backend.reset(seed=15)
+
+    _, reward, terminated, _, state, _ = backend.step(MiniGridActions.PICKUP)
+    assert terminated is False
+    assert reward == 0
+    assert state.agent_carrying is None
+    assert "k1" not in state.collected_keys
+
+    _, _, terminated, _, state, _ = backend.step(MiniGridActions.MOVE_FORWARD)
+    assert terminated is False
+    assert state.agent_position == (2, 1)
+
+    _, reward, terminated, _, state, _ = backend.step(MiniGridActions.PICKUP)
+    assert terminated is True
+    assert reward > 0
+    assert state.agent_carrying == "red"
+    assert "k1" in state.collected_keys
 
 
 def test_minigrid_activate_switch_goal_terminates_from_toggle_branch():

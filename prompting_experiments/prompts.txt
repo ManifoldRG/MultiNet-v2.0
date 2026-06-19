@@ -222,6 +222,27 @@ What is your next action?
 Output exactly:
 FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
+additional text_summary example: one_shot_example maze after one_shot_example_solution
+maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/one_shot_example/one_shot_example_14x14_dense_kr_sg_kb_2.json
+solution steps replayed: 52
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+[user prompt]
+Activity summary:
+first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, finally you opened the blue door
+
+
+[image block 1]
+Your inventory: empty.
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 4: Querying strategy
 ========================================================================================
@@ -316,7 +337,7 @@ Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue
 
 [image block 1]
 
-Actions to solve: MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_RIGHT, TURN_RIGHT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+Actions to solve: MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, PICKUP, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_LEFT, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
 
 
 [image block 2]

@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import random
 from pathlib import Path
 from typing import Any
 
 from prompting_experiments import CONDITION_SETS
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+
+_ONE_SHOT_EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "mazes" / "one_shot_example"
+_ONE_SHOT_MAZE_PATH = (
+    _ONE_SHOT_EXAMPLE_DIR / "one_shot_example_14x14_dense_kr_sg_kb_2.json"
+)
+_ONE_SHOT_SOLUTION_PATH = _ONE_SHOT_EXAMPLE_DIR / "one_shot_example_solution.json"
 
 
 def _content_to_text(content: Any) -> str:
@@ -108,6 +115,62 @@ def _rollout_preview_steps(
     return state, last_feedback, transcript
 
 
+def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str, list[dict]]:
+    from interface.actions_map import nlu_action_to_int
+    from interface.coords import agent_facing, agent_row_col
+    from interface.episode_log import state_snapshot
+    from interface.feedback import format_step_feedback
+
+    last_feedback = feedback_templates.INITIAL_FEEDBACK
+    transcript: list[dict] = []
+
+    for step_index, action in enumerate(actions, start=1):
+        position_before = agent_row_col(state)
+        facing_before = agent_facing(state)
+        state_before = state_snapshot(state)
+        decision_frame_rgb = runner.last_rgb
+        prev_state = state
+
+        runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
+            nlu_action_to_int(action)
+        )
+        step_detail, event_type = format_step_feedback(
+            action, prev_state, state, reward, terminated, runner.task_spec
+        )
+        last_feedback = step_detail
+        transcript.append(
+            {
+                "kind": "step",
+                "step_index": step_index,
+                "query_index": 0,
+                "action_queue_index": step_index - 1,
+                "env_step_count": state.step_count,
+                "action": action,
+                "event_type": event_type,
+                "feedback": step_detail,
+                "prompt_feedback": last_feedback,
+                "facing_before": facing_before,
+                "facing_after": agent_facing(state),
+                "position_before": list(position_before),
+                "position_after": list(agent_row_col(state)),
+                "state_before": state_before,
+                "state_after": state_snapshot(state),
+                "reward": reward,
+                "terminated": terminated,
+                "truncated": truncated,
+                "backend_info": info,
+                "actions_remaining_after": actions[step_index:],
+                "consecutive_failures_after": 0,
+                "_decision_frame_rgb": decision_frame_rgb,
+                "_post_step_rgb": runner.last_rgb,
+            }
+        )
+        if terminated or truncated:
+            break
+
+    return state, last_feedback, transcript
+
+
 def _prompt_preview(
     config,
     maze_path: Path,
@@ -140,6 +203,28 @@ def _prompt_preview(
         transcript,
     )
     return system_prompt, _content_to_text(user_message.get("content"))
+
+
+def _one_shot_text_summary_preview(config) -> tuple[int, str, str]:
+    try:
+        from interface.loader import load_task
+        from interface.runner import build_runner
+    except ModuleNotFoundError as exc:
+        raise SystemExit(_missing_dependency_message(exc)) from exc
+
+    solution = json.loads(_ONE_SHOT_SOLUTION_PATH.read_text(encoding="utf-8"))
+    actions = solution["actions"]
+    backend, spec = load_task(_ONE_SHOT_MAZE_PATH)
+    spec.max_steps = len(actions)
+    runner = build_runner(config, backend, spec)
+    runner.last_rgb, state, _reset_info = backend.reset(seed=spec.seed)
+    state, last_feedback, transcript = _solution_preview_steps(runner, state, actions)
+    system_prompt, user_message = runner.build_prompt_message(
+        state,
+        last_feedback,
+        transcript,
+    )
+    return len(transcript), system_prompt, _content_to_text(user_message.get("content"))
 
 
 def build_preview(
@@ -206,6 +291,23 @@ def build_preview(
                     "-" * 88,
                 ]
             )
+            if condition.name == "Context window" and variant_name == "text_summary":
+                solution_steps, system_prompt, user_prompt = _one_shot_text_summary_preview(
+                    config
+                )
+                chunks.extend(
+                    [
+                        "additional text_summary example: one_shot_example maze after one_shot_example_solution",
+                        f"maze: {_ONE_SHOT_MAZE_PATH}",
+                        f"solution steps replayed: {solution_steps}",
+                        "[system prompt]",
+                        system_prompt,
+                        "",
+                        "[user prompt]",
+                        user_prompt,
+                        "-" * 88,
+                    ]
+                )
 
     return "\n".join(chunks).rstrip() + "\n"
 
