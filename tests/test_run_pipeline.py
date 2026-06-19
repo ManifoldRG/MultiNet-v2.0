@@ -934,6 +934,36 @@ def test_distributed_assignment_filters_group_and_reassigns_stale(tmp_path):
     assert group_b["model_group"] == "group-b"
 
 
+def test_failed_unit_is_reassigned_until_attempt_cap(tmp_path):
+    """A transient worker crash must not permanently strand a paid unit, but a
+    poison unit must stop being re-handed-out once the attempt cap is hit."""
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path, {"a": {"provider": "qwen", "model": "m", "group": "g", "tasks": [task]}},
+    )
+    artifacts = tmp_path / "artifacts"
+    prepare_job(
+        run_config_path=cfg_path, manifest_path=_MANIFEST, seeds=[0], conditions=None,
+        artifacts_root=artifacts, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(artifacts, max_unit_attempts=2)
+
+    w1 = store.register({"worker_id": "w1", "capabilities": {"model_group": "g"}})["worker_id"]
+    u1 = store.assign(w1)["unit"]
+    assert u1 is not None
+    store.fail(w1, u1["unit_id"], "crash")
+
+    w2 = store.register({"worker_id": "w2", "capabilities": {"model_group": "g"}})["worker_id"]
+    u2 = store.assign(w2)["unit"]
+    assert u2 is not None and u2["unit_id"] == u1["unit_id"]  # reassigned after failure
+    store.fail(w2, u2["unit_id"], "crash again")
+
+    w3 = store.register({"worker_id": "w3", "capabilities": {"model_group": "g"}})["worker_id"]
+    assert store.assign(w3)["unit"] is None  # attempt cap reached -> terminal
+
+
 def test_distributed_upload_validates_and_extracts_archive(tmp_path):
     from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
 
@@ -1078,6 +1108,53 @@ def test_distributed_finalize_mirrors_aggregate_to_bucket(tmp_path, monkeypatch)
 
     assert any(d.endswith("/dist/episode_runs.jsonl") for d in dests)
     assert any(d.endswith("/dist/reports/dist") for d in dests)
+
+
+def test_safe_heartbeat_swallows_transient_errors():
+    from scripts.distributed_run_pipeline import _safe_heartbeat
+
+    class _BadClient:
+        def heartbeat(self, *a):
+            raise RuntimeError("coordinator down")
+
+    # Must not raise: a heartbeat blip can't be allowed to kill the heartbeat thread.
+    assert _safe_heartbeat(_BadClient(), "w", "u") is False
+
+    class _GoodClient:
+        def __init__(self):
+            self.calls = 0
+
+        def heartbeat(self, *a):
+            self.calls += 1
+
+    good = _GoodClient()
+    assert _safe_heartbeat(good, "w", "u") is True
+    assert good.calls == 1
+
+
+def test_distributed_upload_rejects_truncated_json(tmp_path):
+    artifacts, store, wid, unit = _stub_unit_store(tmp_path)
+    bad = _dummy_run_archive(
+        {"episode.json": "{ truncated", "run_inputs.json": "{}", "run_score.json": "{}"}
+    )
+    with pytest.raises(ValueError, match="not valid JSON"):
+        store.upload(wid, unit["unit_id"], bad)
+    # A failed verification must not leave a half-extracted run dir.
+    assert not (artifacts / unit["run_dir"] / "episode.json").exists()
+
+
+def test_episode_log_write_leaves_no_tmp_and_valid_json(tmp_path):
+    manifest_path = _write_manifest(tmp_path)
+    artifacts = tmp_path / "artifacts"
+    run_pipeline(
+        manifest_path=manifest_path, experiment="test1",
+        agent=CountingReplayAgent(v01_empty_room_trajectory()), agent_name="stub",
+        seeds=[0], artifacts_root=artifacts, run_set_id="r",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    run_dir = artifacts / "runs" / "validation_10_v01_empty_room" / "minigrid" / "stub" / "seed_0" / "default"
+    assert load_json(run_dir / "episode.json")  # valid JSON, fully written
+    assert not list(run_dir.glob("*.tmp"))  # atomic write cleaned up its temp
 
 
 def test_distributed_worker_upload_finalize_local_integration(tmp_path):

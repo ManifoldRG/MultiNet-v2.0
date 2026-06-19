@@ -292,15 +292,22 @@ def prepare_job(
 class CoordinatorStore:
     """Durable coordinator state backed by JSON files under artifacts_root."""
 
+    # Statuses a unit can be (re)handed out from. "failed"/"stale" units are
+    # retried so a transient worker/upload failure does not strand a paid unit;
+    # the attempt cap stops a poison unit from re-spending tokens forever.
+    REASSIGNABLE_STATUSES = frozenset({"pending", "stale", "failed"})
+
     def __init__(
         self,
         artifacts_root: str | Path,
         stale_after_seconds: float = 300.0,
         storage: Optional[StorageConfig] = None,
+        max_unit_attempts: int = 3,
     ):
         self.artifacts_root = Path(artifacts_root)
         self.stale_after_seconds = float(stale_after_seconds)
         self.storage = storage
+        self.max_unit_attempts = int(max_unit_attempts)
         self._lock = threading.RLock()
 
     def load_plan(self) -> dict[str, Any]:
@@ -381,8 +388,10 @@ class CoordinatorStore:
 
             for unit in plan["units"]:
                 unit_state = state["units"][unit["unit_id"]]
-                if unit_state.get("status") not in {"pending", "stale"}:
+                if unit_state.get("status") not in self.REASSIGNABLE_STATUSES:
                     continue
+                if int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
+                    continue  # attempt cap reached -> leave terminal, report at finalize
                 if not self._unit_matches_worker(unit, worker):
                     continue
                 if not self._below_max_in_flight(unit, state, plan):
@@ -649,8 +658,17 @@ class CoordinatorStore:
             try:
                 tar.extractall(tmp)
                 for name in expected:
-                    if not (tmp / name).exists():
+                    fpath = tmp / name
+                    if not fpath.exists():
                         raise ValueError(f"Extracted archive missing {name}")
+                    # A present-but-truncated JSON file would otherwise pass
+                    # verification and crash finalize; reject it here so the unit
+                    # is retried instead.
+                    if name.endswith(".json"):
+                        try:
+                            json.loads(fpath.read_text(encoding="utf-8"))
+                        except (ValueError, OSError) as exc:
+                            raise ValueError(f"Extracted {name} is not valid JSON: {exc}") from exc
                 if dest.exists():
                     shutil.rmtree(dest)
                 dest.parent.mkdir(parents=True, exist_ok=True)
@@ -884,6 +902,18 @@ def _load_worker_state(path: Path) -> dict[str, Any]:
     return {}
 
 
+def _safe_heartbeat(client: Any, worker_id: str, unit_id: str) -> bool:
+    """Send a heartbeat, swallowing transient errors so a brief coordinator
+    outage cannot kill the heartbeat thread (which would let the unit go stale
+    and be double-assigned while this worker is still running it)."""
+    try:
+        client.heartbeat(worker_id, unit_id)
+        return True
+    except Exception as exc:
+        logger.warning("Heartbeat failed for unit %s (will retry next interval): %s", unit_id, exc)
+        return False
+
+
 def run_worker_loop(
     *,
     coordinator_url: str,
@@ -925,7 +955,7 @@ def run_worker_loop(
 
         def heartbeat_loop() -> None:
             while not stop_heartbeat.wait(heartbeat_interval_seconds):
-                client.heartbeat(worker_id, unit_id)
+                _safe_heartbeat(client, worker_id, unit_id)
 
         thread = threading.Thread(target=heartbeat_loop, daemon=True)
         try:
