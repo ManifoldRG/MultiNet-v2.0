@@ -19,16 +19,16 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 | # | Set (`--conditions`) | Variants (target) | Baseline | Implemented today | Gap |
 |---|---|---|---|---|---|
 | 1 | Prompt | minimal, **standard**, verbose (3) | standard | standard, verbose | add `minimal` (PR #23) |
-| 2 | Observation format | image_text, **image_only** (2) | image_only | image_only, text_only, image_text | ⚠️ **D1: drop `text_only`?** spec says 2 |
+| 2 | Observation format | image_text, **image_only** (2) | image_only | image_only, text_only, image_text | **D1**: run image_only + image_text; keep `text_only` implemented but omit from the launch rollout (no code change) |
 | 3 | Context window | **current**, last3, text_summary (3) | current | current, last3 (text_summary = not impl) | wire `text_summary` (PR #23 history summary) |
 | 4 | **Action space** (NEW) | **egocentric**, cardinal (2) | egocentric | none — no config knob | add `action_space` knob + cardinal translation + new condition set; re-introduce cardinal (removed in 410f5f7) |
-| 5 | Querying strategy | **step_by_step**, subgoal (2) | step_by_step | step_by_step, subgoal, full_trajectory | ⚠️ **D2: drop `full_trajectory`?** spec says 2 |
+| 5 | Querying strategy | **step_by_step**, subgoal, full_trajectory (3) | step_by_step | step_by_step, subgoal, full_trajectory | **D2**: run all 3 — no code change |
 | 6 | In-context learning | **zero_shot**, 1-shot (2) | zero_shot | set marked not-impl; one_shot not-impl | enable set; wire `one_shot` (PR #23); add ICL example trajectories |
 
 **Counts** (3 models = qwen[local] + kimi + claude; 15 mazes):
-- Variant-slots: 3+2+3+2+2+2 = **14**; unique configs after baseline dedup: **9**.
-- Episode-cells (dedup): 9 × 3 × 15 = **405** (paid = kimi+claude only: 9 × 2 × 15 = **270**).
-- Without dedup: 14 × 3 × 15 = 630 (paid 420). Use `--prompt-variant` dedup (see
+- Variant-slots: 3+2+3+2+3+2 = **15**; unique configs after baseline dedup: **10**.
+- Episode-cells (dedup): 10 × 3 × 15 = **450** (paid = kimi+claude only: 10 × 2 × 15 = **300**).
+- Without dedup: 15 × 3 × 15 = 675 (paid 450). Use `--prompt-variant` dedup (see
   `docs/validation10_condition_sweep_rollout.md`).
 
 ## 2. Dependencies to merge (into `Distributed-run-pipeline`, never main)
@@ -42,9 +42,9 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 
 - [ ] **Set 1**: register `minimal` variant in `condition_set_1_prompt.py` (config knob
       `prompting="minimal"` already exists).
-- [ ] **Set 2** (⚠️ after D1): set `condition_set_2_observation_format.py` to
-      `image_text` + `image_only` only (drop/disable `text_only`). Update
-      `test_launch_condition_sets_expose_expected_variants`.
+- [ ] **Set 2** (D1 = run 2): no registry change; the Set-2 launch rollout runs
+      `image_only` + `image_text` only and omits `text_only` (kept implemented for
+      later). text_only stays in the coverage tests as implemented.
 - [ ] **Set 3**: implement `text_summary` variant in `condition_set_3_context_window.py`
       (currently `implemented=False`); wire to PR #23's summary capability. Confirm
       `ExperimentConfig.context_window` (or `chat_history`) gains the summary option.
@@ -52,8 +52,8 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
       to `ExperimentConfig`; implement cardinal action set (MOVE_NORTH/SOUTH/EAST/WEST,
       INTERACT) in the interface (`querying`/action parsing/`coords`); create
       `condition_set_action_space.py`; register in `CONDITION_SETS`.
-- [ ] **Set 5** (⚠️ after D2): set `condition_set_4_querying_strategy.py` to
-      `step_by_step` + `subgoal` (drop `full_trajectory`).
+- [ ] **Set 5** (D2 = run all 3): no code change — `step_by_step`, `subgoal`,
+      `full_trajectory` are all implemented; include all three in the launch rollout.
 - [ ] **Set 6**: set `condition_set_5_in_context_learning.py` `implemented=True`;
       implement `one_shot` (PR #23); add ICL example trajectories. **Constraint: ICL
       examples must NOT use any evaluation maze** (add a test asserting disjointness).
@@ -67,9 +67,9 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 
 - [ ] **Generate the blind box probe maze** (not generated yet).
 - [ ] **Render the blind maze in 2D once merged** (TODO).
-- [ ] ⚠️ **D3: is the blind probe maze the 16th maze, or does it replace one of the
-      S/M/B/D/D set (keeping 15)?**
-- [ ] Create `manifest.conditional_eval.json` = validation_10 + S/M/B/D/D (incl. blind).
+- [ ] **D3 = the blind probe maze is one of the 5 (S/M/B/D/D); conditional set stays 15.**
+- [ ] Create `manifest.conditional_eval.json` = validation_10 + S/M/B/D/D (one of the
+      5 is the blind probe maze) = 15 total.
 - [ ] Create `manifest.smoke_eval.json` = 3 mazes.
 - [ ] Confirm/alias `manifest.ogbench_50_smbd.json` as the "Phase 1 full run".
 
@@ -92,9 +92,9 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 
 ## 7. Cost estimate
 
-- [ ] Local weekend Qwen run over the 15-maze conditional set (9 unique configs ×
-      15 = 135 local episodes) to get rough tokens/episode.
-- [ ] Extrapolate to paid models (kimi+claude) for conditional eval (270 paid
+- [ ] Local weekend Qwen run over the 15-maze conditional set (10 unique configs ×
+      15 = 150 local episodes) to get rough tokens/episode.
+- [ ] Extrapolate to paid models (kimi+claude) for conditional eval (300 paid
       episodes) and to Phase 1 full run (50 mazes).
 
 ## 8. Outstanding Medium items (from the launch review)
@@ -106,10 +106,12 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 - [ ] **M4**: make `_jsonable` fallback `str(value)` raise instead of stringifying,
       so a non-primitive can't poison the cross-machine cache hash.
 
-## 9. Decisions needed (consolidated)
+## 9. Decisions (resolved)
 
-- **D1** — Set 2: drop `text_only` (run image_only vs image_text only)? Spec says 2.
-- **D2** — Set 5: drop `full_trajectory` (run step_by_step vs subgoal only)? Spec says 2.
-- **D3** — Blind probe maze: 16th maze, or replaces one of S/M/B/D/D (stays 15)?
-- **D4** — Per-set decision rules (deltas) are analysis-time, not code; confirm where
-      they're recorded (this doc / reports) so monitoring applies them consistently.
+- **D1** ✅ Set 2: run `image_only` + `image_text`; keep `text_only` implemented but
+  omit from the launch rollout.
+- **D2** ✅ Set 5: run all 3 (`step_by_step`, `subgoal`, `full_trajectory`) → Set 5 is
+  3 variants, total 15 variant-slots / 10 unique configs.
+- **D3** ✅ Blind probe maze is one of the S/M/B/D/D 5; conditional set stays 15.
+- **D4** (open) — Per-set decision rules (deltas: <5% / >5% / >15%) are analysis-time,
+  not code; confirm where they're recorded so monitoring applies them consistently.
