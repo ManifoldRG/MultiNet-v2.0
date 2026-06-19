@@ -128,6 +128,7 @@ def prepare_job(
     conditions: Optional[str],
     artifacts_root: str | Path,
     run_set_id: str,
+    prompt_variant: Optional[str] = None,
     difficulty_max_static_score: Optional[float] = None,
     force: bool = False,
     job_id: Optional[str] = None,
@@ -141,6 +142,13 @@ def prepare_job(
     run_config = pipeline.load_run_config(run_config_path)
     catalog = pipeline.load_manifest(manifest_path)
     prompt_variants = pipeline.condition_variant_names(conditions)
+    if prompt_variant is not None:
+        if prompt_variant not in prompt_variants:
+            raise ValueError(
+                f"Unknown prompt variant {prompt_variant!r} for --conditions {conditions!r}; "
+                f"available: {prompt_variants}."
+            )
+        prompt_variants = [prompt_variant]
 
     model_plans: list[tuple[str, str, str, dict[str, Any], list[dict[str, Any]]]] = []
     models: dict[str, dict[str, Any]] = {}
@@ -200,14 +208,14 @@ def prepare_job(
             source = pipeline._resolve_source(row, manifest_path)
             source_payload = json.loads(source.read_text(encoding="utf-8"))
             for seed in seeds:
-                for prompt_variant in prompt_variants:
+                for variant in prompt_variants:
                     run_rel = (
                         Path("runs")
                         / task_id
                         / "minigrid"
                         / model_id
                         / f"seed_{int(seed)}"
-                        / prompt_variant
+                        / variant
                     )
                     unit = {
                         "job_id": job_id,
@@ -224,7 +232,7 @@ def prepare_job(
                         },
                         "task_payload": source_payload,
                         "seed": int(seed),
-                        "prompt_variant": prompt_variant,
+                        "prompt_variant": variant,
                         "condition_set": conditions,
                         "backend": "minigrid",
                         "run_dir": run_rel.as_posix(),
@@ -1090,6 +1098,7 @@ def dispatch_distributed_role(args: Any) -> None:
             manifest_path=args.manifest,
             seeds=[int(s) for s in args.seeds],
             conditions=args.conditions,
+            prompt_variant=args.prompt_variant,
             artifacts_root=args.artifacts_root,
             run_set_id=args.run_set_id,
             difficulty_max_static_score=args.difficulty_max_static_score,

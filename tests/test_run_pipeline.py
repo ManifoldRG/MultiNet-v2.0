@@ -23,6 +23,7 @@ from scorer import load_scorer_config, score_task_file
 from scorer.io import load_json, task_spec_from_payload
 
 from scripts.run_pipeline import (
+    _condition_configs,
     _expected_static_hash,
     condition_variant_names,
     load_run_config,
@@ -743,6 +744,104 @@ def test_distributed_prepare_supports_qwen_groups_without_hardcoding(tmp_path):
     assert {u["model_config"]["model"] for u in plan["units"]} == {
         "Qwen/Qwen3.5-35B", "Qwen/Qwen3.5-122B", "Qwen/Qwen3.6-35B",
     }
+
+
+# The four condition sets launched over validation_10 / tests 1-3, and the
+# deduplicated rollout that runs the shared baseline exactly once. See
+# docs/validation10_condition_sweep_rollout.md.
+_LAUNCH_CONDITION_SETS = ["Prompt", "Observation format", "Context window", "Querying strategy"]
+_BASELINE_VARIANT = {
+    "Prompt": "standard",
+    "Observation format": "image_only",
+    "Context window": "current",
+    "Querying strategy": "step_by_step",
+}
+_DEDUP_ROLLOUT = [
+    ("Prompt", None),  # produces the shared baseline ("standard") + verbose
+    ("Observation format", "text_only"),
+    ("Observation format", "image_text"),
+    ("Context window", "last3"),
+    ("Querying strategy", "subgoal"),
+    ("Querying strategy", "full_trajectory"),
+]
+
+
+def _config_key(cfg) -> str:
+    return json.dumps(cfg.to_dict(), sort_keys=True)
+
+
+def test_launch_condition_sets_expose_expected_variants():
+    """Lock the variant inventory so a registry edit can't silently drop or
+    rename a variable we mean to cover at launch."""
+    assert {cs: condition_variant_names(cs) for cs in _LAUNCH_CONDITION_SETS} == {
+        "Prompt": ["standard", "verbose"],
+        "Observation format": ["image_only", "text_only", "image_text"],
+        "Context window": ["current", "last3"],
+        "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
+    }
+
+
+def test_baseline_variant_of_every_launch_set_is_the_default_config():
+    """Every set's baseline variant builds the identical default config, which is
+    what makes running it once (under "standard") valid for all axes."""
+    from interface.config import ExperimentConfig
+
+    base_key = _config_key(ExperimentConfig())
+    for conditions, variant in _BASELINE_VARIANT.items():
+        configs = _condition_configs(conditions, prompt_variant=variant)
+        assert len(configs) == 1
+        assert _config_key(configs[0][1]) == base_key
+
+
+def test_dedup_rollout_covers_every_unique_variant_config_once():
+    """The deduplicated rollout must cover every distinct prompt config across
+    the four launch sets, and run the shared baseline exactly once."""
+    all_unique = {
+        _config_key(cfg)
+        for cs in _LAUNCH_CONDITION_SETS
+        for _name, cfg in _condition_configs(cs)
+    }
+    rolled = [
+        _config_key(cfg)
+        for conditions, variant in _DEDUP_ROLLOUT
+        for _name, cfg in _condition_configs(conditions, prompt_variant=variant)
+    ]
+    assert set(rolled) == all_unique  # nothing dropped
+    assert len(rolled) == len(all_unique)  # baseline run once, no variant twice
+
+
+def test_distributed_prepare_honors_prompt_variant(tmp_path):
+    """coordinator-prepare can plan a single variant so the shared baseline is
+    not re-run once per condition set (the deduplicated launch rollout)."""
+    from scripts.distributed_run_pipeline import prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "stub-model", "group": "stub", "tasks": [task]}},
+    )
+
+    def _prepare(prompt_variant, sub):
+        return prepare_job(
+            run_config_path=cfg_path,
+            manifest_path=_MANIFEST,
+            seeds=[0],
+            conditions="Observation format",
+            prompt_variant=prompt_variant,
+            artifacts_root=tmp_path / sub,
+            run_set_id="dist",
+            difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        )
+
+    full = _prepare(None, "full")
+    assert {u["prompt_variant"] for u in full["units"]} == {"image_only", "text_only", "image_text"}
+
+    one = _prepare("text_only", "one")
+    assert one["prompt_variants"] == ["text_only"]
+    assert {u["prompt_variant"] for u in one["units"]} == {"text_only"}
+
+    with pytest.raises(ValueError, match="Unknown prompt variant"):
+        _prepare("bogus", "bogus")
 
 
 def test_distributed_assignment_filters_group_and_reassigns_stale(tmp_path):
