@@ -113,5 +113,6 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 - **D2** ✅ Set 5: run all 3 (`step_by_step`, `subgoal`, `full_trajectory`) → Set 5 is
   3 variants, total 15 variant-slots / 10 unique configs.
 - **D3** ✅ Blind probe maze is one of the S/M/B/D/D 5; conditional set stays 15.
-- **D4** (open) — Per-set decision rules (deltas: <5% / >5% / >15%) are analysis-time,
-  not code; confirm where they're recorded so monitoring applies them consistently.
+- **D4** ✅ The per-set decision rules (deltas: <5% / >5% / >15%) live in the **final
+  results doc**, which flags the chosen number for easy reference. This is **external
+  to the run** — not encoded in the pipeline or monitoring.
