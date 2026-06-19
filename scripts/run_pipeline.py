@@ -35,7 +35,7 @@ from scorer.io import stable_hash, task_spec_from_payload
 from pipeline import episode_metrics, reports
 
 # Bump when Stage-3 run production changes in a way that invalidates cached episodes.
-PIPELINE_VERSION = "0.1.0"
+PIPELINE_VERSION = "0.1.1"
 
 Agent = Callable[[list[dict]], str]
 # A factory used by tests to supply stub agents: (model_name, model_cfg) -> (agent, label).
@@ -176,8 +176,8 @@ def condition_variant_names(conditions: Optional[str]) -> list[str]:
             f"Unknown --conditions {conditions!r}; available: {sorted(CONDITION_SETS)}."
         )
     return [
-        name
-        for name, variant in CONDITION_SETS[conditions].variants.items()
+        variant.name
+        for variant in CONDITION_SETS[conditions].variants.values()
         if variant.implemented
     ]
 
@@ -216,12 +216,64 @@ def _expected_static_hash(spec, config: ScorerConfig) -> str:
     )
 
 
-def _expected_run_hash(spec, model_name: str, seed: int, backend: str) -> str:
+_NON_RUNTIME_MODEL_KEYS = {
+    "tasks",
+    "runs",
+    "group",
+    "worker_count",
+    "hardware_profile",
+    "worker_tags",
+    "max_in_flight",
+}
+
+
+def _jsonable(value: Any) -> Any:
+    if hasattr(value, "to_dict"):
+        return _jsonable(value.to_dict())
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, set):
+        return sorted(_jsonable(v) for v in value)
+    if isinstance(value, Path):
+        return str(value)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _runtime_model_config(model_config: Optional[dict[str, Any]]) -> dict[str, Any]:
+    if not model_config:
+        return {}
+    return {
+        str(key): _jsonable(value)
+        for key, value in sorted(model_config.items(), key=lambda item: str(item[0]))
+        if key not in _NON_RUNTIME_MODEL_KEYS
+    }
+
+
+def _experiment_config_payload(experiment_config: Any | None) -> dict[str, Any]:
+    if experiment_config is None:
+        return {}
+    payload = _jsonable(experiment_config)
+    return payload if isinstance(payload, dict) else {"value": payload}
+
+
+def _expected_run_hash(
+    spec,
+    model_name: str,
+    seed: int,
+    backend: str,
+    *,
+    condition_set: Optional[str] = None,
+    prompt_variant: str = "default",
+    experiment_config: Any | None = None,
+    model_config: Optional[dict[str, Any]] = None,
+) -> str:
     """Hash the inputs that determine a Stage-3 episode.
 
-    Excludes scorer config (that invalidates run_score, not the model call) and,
-    pre-v1, the prompt/ExperimentConfig (prompts are not yet versioned while we
-    iterate; the prompt variant still separates runs via the <condition> dir).
+    Excludes scorer config: that invalidates run_score, not the model call.
     TODO(release): fold in backend_version + adapter/model code version so code
     changes invalidate cached episodes at v1.
     """
@@ -229,8 +281,12 @@ def _expected_run_hash(spec, model_name: str, seed: int, backend: str) -> str:
         {
             "task": spec.to_dict(),
             "model_id": model_name,
+            "model_config": _runtime_model_config(model_config),
             "seed": seed,
             "backend": backend,
+            "condition_set": condition_set,
+            "prompt_variant": prompt_variant,
+            "experiment_config": _experiment_config_payload(experiment_config),
             "pipeline_version": PIPELINE_VERSION,
         }
     )
@@ -325,6 +381,7 @@ def _run_one_model(
     agent: Agent,
     model_name: str,
     *,
+    model_config: Optional[dict[str, Any]] = None,
     manifest_path: Path,
     artifacts_root: Path,
     static_by_task: dict[str, dict[str, Any]],
@@ -332,9 +389,10 @@ def _run_one_model(
     config: ScorerConfig,
     seeds: Iterable[int],
     conditions: Optional[str],
+    prompt_variant: Optional[str] = None,
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
-    condition_configs = _condition_configs(conditions)
+    condition_configs = _condition_configs(conditions, prompt_variant=prompt_variant)
     run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
 
@@ -361,6 +419,7 @@ def _run_one_model(
                     prompt_variant=variant,
                     experiment_config=cfg,
                     conditions=conditions,
+                    model_config=model_config,
                     force=force,
                 )
                 if result is None:
@@ -379,6 +438,7 @@ def _run_one_unit(
     agent: Agent,
     model_name: str,
     *,
+    model_config: Optional[dict[str, Any]] = None,
     manifest_path: Path,
     artifacts_root: Path,
     static_by_task: dict[str, dict[str, Any]],
@@ -419,7 +479,16 @@ def _run_one_unit(
     # --conditions.
     manifest_row = dict(row)
 
-    expected_hash = _expected_run_hash(spec, model_name, seed, "minigrid")
+    expected_hash = _expected_run_hash(
+        spec,
+        model_name,
+        seed,
+        "minigrid",
+        condition_set=conditions,
+        prompt_variant=prompt_variant,
+        experiment_config=experiment_config,
+        model_config=model_config,
+    )
     episode = None
     if not force and episode_path.exists() and sidecar_path.exists():
         sidecar = _load_json_object_if_valid(sidecar_path)
@@ -435,9 +504,14 @@ def _run_one_unit(
                 "producer_version": PIPELINE_VERSION,
                 "task_id": task_id,
                 "model_id": model_name,
+                "model_config": _jsonable(model_config or {}),
+                "runtime_model_config": _runtime_model_config(model_config),
                 "seed": seed,
                 "backend": "minigrid",
                 "condition": prompt_variant,
+                "condition_set": conditions,
+                "prompt_variant": prompt_variant,
+                "experiment_config": _experiment_config_payload(experiment_config),
             },
         )
 
@@ -518,6 +592,7 @@ def run_pipeline(
     agent_name: str,
     seeds: Iterable[int] = (0,),
     conditions: Optional[str] = None,
+    prompt_variant: Optional[str] = None,
     artifacts_root: str | Path = "artifacts",
     run_set_id: str = "default",
     scorer_config: Optional[ScorerConfig] = None,
@@ -550,6 +625,7 @@ def run_pipeline(
         config=config,
         seeds=seeds,
         conditions=conditions,
+        prompt_variant=prompt_variant,
         force=force,
     )
     return _write_aggregate(run_rows, composites, static_by_task, rows, artifacts_root, run_set_id)
@@ -561,6 +637,7 @@ def run_from_config(
     manifest_path: str | Path = _DEFAULT_MANIFEST,
     seeds: Iterable[int] = (0,),
     conditions: Optional[str] = None,
+    prompt_variant: Optional[str] = None,
     artifacts_root: str | Path = "artifacts",
     run_set_id: str = "default",
     scorer_config: Optional[ScorerConfig] = None,
@@ -578,7 +655,7 @@ def run_from_config(
     catalog = load_manifest(manifest_path)
 
     # Resolve each model's task rows + build its agent.
-    plans: list[tuple[str, Agent, list[dict[str, Any]]]] = []
+    plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
     union: dict[str, dict[str, Any]] = {}
     for name, model_cfg in run_config["models"].items():
         entries = model_cfg.get("tasks") or model_cfg.get("runs") or []
@@ -586,7 +663,7 @@ def run_from_config(
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
         agent, label = factory(name, model_cfg)
-        plans.append((_sanitize(label), agent, rows))
+        plans.append((_sanitize(label), agent, dict(model_cfg), rows))
         for r in rows:
             union.setdefault(r["task_id"], r)
 
@@ -602,11 +679,12 @@ def run_from_config(
 
     all_run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
-    for model_name, agent, rows in plans:
+    for model_name, agent, model_cfg, rows in plans:
         rr, comp = _run_one_model(
             rows,
             agent,
             model_name,
+            model_config=model_cfg,
             manifest_path=manifest_path,
             artifacts_root=artifacts_root,
             static_by_task=static_by_task,
@@ -614,6 +692,7 @@ def run_from_config(
             config=config,
             seeds=seeds,
             conditions=conditions,
+            prompt_variant=prompt_variant,
             force=force,
         )
         all_run_rows.extend(rr)
@@ -694,6 +773,11 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--manifest", default=str(_DEFAULT_MANIFEST), help="Task catalog (metadata).")
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
     parser.add_argument("--conditions", default=None, help="Prompt condition-set name (optional).")
+    parser.add_argument(
+        "--prompt-variant",
+        default=None,
+        help="Run only one variant from --conditions, for example text_only/image_text/image_only.",
+    )
     parser.add_argument("--artifacts-root", default=str(_REPO_ROOT / "artifacts"))
     parser.add_argument("--run-set-id", default="default")
     parser.add_argument(
@@ -751,6 +835,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             manifest_path=args.manifest,
             seeds=args.seeds,
             conditions=args.conditions,
+            prompt_variant=args.prompt_variant,
             artifacts_root=args.artifacts_root,
             run_set_id=args.run_set_id,
             difficulty_max_static_score=args.difficulty_max_static_score,
@@ -767,6 +852,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             agent_name=label,
             seeds=args.seeds,
             conditions=args.conditions,
+            prompt_variant=args.prompt_variant,
             artifacts_root=args.artifacts_root,
             run_set_id=args.run_set_id,
             difficulty_max_static_score=args.difficulty_max_static_score,

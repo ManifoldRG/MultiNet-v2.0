@@ -790,6 +790,7 @@ def run_assigned_unit(
         row,
         agent,
         unit["model_id"],
+        model_config=unit.get("model_config"),
         manifest_path=artifacts_root / DISTRIBUTED_DIR / "worker_manifest.json",
         artifacts_root=artifacts_root,
         static_by_task={unit["task_id"]: unit["task_artifacts"]["scored_static"]},

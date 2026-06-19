@@ -12,6 +12,7 @@ import io
 import json
 import shutil
 import tarfile
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -21,9 +22,27 @@ from interface.smoke_tests.plans import v01_empty_room_trajectory
 from scorer import load_scorer_config, score_task_file
 from scorer.io import load_json, task_spec_from_payload
 
-from scripts.run_pipeline import _expected_static_hash, resolve_task_rows, run_from_config, run_pipeline
+from scripts.run_pipeline import (
+    _expected_static_hash,
+    condition_variant_names,
+    load_run_config,
+    resolve_task_rows,
+    run_from_config,
+    run_pipeline,
+)
 
-_MANIFEST = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures" / "manifest.json"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_FIXTURES = _REPO_ROOT / "gridworld" / "fixtures"
+_MANIFEST = _FIXTURES / "manifest.json"
+_OGBENCH_50_MANIFEST = _FIXTURES / "manifest.ogbench_50_smbd.json"
+_COORDINATOR_SMOKE_MANIFEST = _FIXTURES / "manifest.coordinator_smoke_validation10_ogbench.json"
+_COORDINATOR_SMOKE_RUN_CONFIG = _FIXTURES / "run_config.coordinator_smoke_qwen_kimi.json"
+_PENDING_VALIDATION10_CONFIGS = {
+    "Prompt": _FIXTURES / "run_config.validation10_prompt_claude_kimi_qwen.json",
+    "Observation format": _FIXTURES / "run_config.validation10_observation_format_claude_kimi_qwen.json",
+    "Context window": _FIXTURES / "run_config.validation10_context_window_claude_kimi_qwen.json",
+    "Querying strategy": _FIXTURES / "run_config.validation10_querying_strategy_claude_kimi_qwen.json",
+}
 _STABLE_DIFFICULTY_MAX = 1000.0
 
 
@@ -216,6 +235,79 @@ def test_validate_fixtures_reports_missing_source_without_traceback(tmp_path, ca
     assert "Traceback" not in captured.err
 
 
+def test_pending_validation10_condition_run_configs_load_and_resolve_all_tasks():
+    catalog = _catalog()
+    expected_variant_counts = {
+        "Prompt": 2,
+        "Observation format": 3,
+        "Context window": 2,
+        "Querying strategy": 3,
+    }
+
+    for condition_name, config_path in _PENDING_VALIDATION10_CONFIGS.items():
+        cfg = load_run_config(config_path)
+        assert set(cfg["models"]) == {"qwen35_27b_hf", "kimi_k26", "claude_sonnet"}
+        assert {m["provider"] for m in cfg["models"].values()} == {"qwen", "kimi", "claude"}
+        assert len(condition_variant_names(condition_name)) == expected_variant_counts[condition_name]
+
+        for model_cfg in cfg["models"].values():
+            assert model_cfg["tasks"] == ["all"]
+            rows = resolve_task_rows(model_cfg["tasks"], catalog, _MANIFEST)
+            assert [r["task_id"] for r in rows] == [r["task_id"] for r in catalog]
+
+
+def test_observation_format_uses_observation_names_for_run_dirs():
+    assert condition_variant_names("Observation format") == [
+        "image_only",
+        "text_only",
+        "image_text",
+    ]
+
+
+def test_coordinator_smoke_run_config_loads_and_resolves_smoke_manifest():
+    cfg = load_run_config(_COORDINATOR_SMOKE_RUN_CONFIG)
+    catalog = json.loads(_COORDINATOR_SMOKE_MANIFEST.read_text(encoding="utf-8"))["tasks"]
+
+    assert set(cfg["models"]) == {"qwen35_27b_hf", "kimi_k26"}
+    assert {m["provider"] for m in cfg["models"].values()} == {"qwen", "kimi"}
+
+    for model_cfg in cfg["models"].values():
+        assert model_cfg["tasks"] == ["all"]
+        rows = resolve_task_rows(model_cfg["tasks"], catalog, _COORDINATOR_SMOKE_MANIFEST)
+        assert len(rows) == 14
+
+    assert len(catalog) * len(cfg["models"]) * len(condition_variant_names(None)) == 28
+
+
+def test_coordinator_smoke_manifest_selection_metadata_and_holdouts():
+    smoke = json.loads(_COORDINATOR_SMOKE_MANIFEST.read_text(encoding="utf-8"))
+    smoke_rows = smoke["tasks"]
+    base_rows = _catalog()
+    ogbench50_sources = {
+        r["source"]
+        for r in json.loads(_OGBENCH_50_MANIFEST.read_text(encoding="utf-8"))["tasks"]
+    }
+
+    validation_rows = [r for r in smoke_rows if r["task_id"].startswith("validation_10_")]
+    expected_validation_rows = [r for r in base_rows if r["experiment"] == "test1"]
+    assert [r["task_id"] for r in validation_rows] == [r["task_id"] for r in expected_validation_rows]
+
+    holdout_rows = [r for r in smoke_rows if r.get("experiment") == "coordinator_smoke_ogbench"]
+    assert [r["source"] for r in holdout_rows] == [
+        "ogbench/ogbench/procgen/maze_jsons/S5/14x14_corridor_1.json",
+        "ogbench/ogbench/procgen/maze_jsons/M1/10x10_corridor_kr_0.json",
+        "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_kr_0.json",
+        "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_kr_1.json",
+    ]
+    assert not ({r["source"] for r in holdout_rows} & ogbench50_sources)
+
+    family_counts = Counter(r["maze_family"] for r in holdout_rows)
+    assert dict(family_counts) == {"S": 1, "M": 1, "D": 2}
+    assert smoke["selection"]["counts"] == {"validation_10": 10, "S": 1, "M": 1, "B": 0, "D": 2}
+    assert "B-family" in smoke["selection"]["b_family_omission"]
+    assert "manifest.ogbench_50_smbd.json" in smoke["selection"]["b_family_omission"]
+
+
 # --------------------------------------------------------------------------- #
 # Config-driven multi-model run (stub agent factory, no API)
 # --------------------------------------------------------------------------- #
@@ -314,6 +406,69 @@ def test_unchanged_rerun_reuses_episode_and_static(tmp_path):
                  agent_name="stub", artifacts_root=artifacts, run_set_id="r",
                  difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
     assert agent.calls == calls_after_first
+
+
+def test_run_config_generation_settings_invalidate_episode_cache(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    artifacts = tmp_path / "artifacts"
+    cfg_path = tmp_path / "run_config.json"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    def write_run_config(max_tokens: int) -> None:
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "models": {
+                        "stub": {
+                            "provider": "claude",
+                            "model": "stub-model",
+                            "temperature": 0.0,
+                            "max_tokens": max_tokens,
+                            "tasks": [str(task_file)],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def factory(name, model_cfg):
+        return agent, model_cfg["model"]
+
+    write_run_config(128)
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="r",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    calls_after_first = agent.calls
+    run_dir = (
+        artifacts / "runs" / "task" / "minigrid" / "stub-model" / "seed_0" / "default"
+    )
+    first_sidecar = load_json(run_dir / "run_inputs.json")
+    assert first_sidecar["model_config"]["max_tokens"] == 128
+
+    write_run_config(4096)
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="r",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    second_sidecar = load_json(run_dir / "run_inputs.json")
+
+    assert agent.calls > calls_after_first
+    assert second_sidecar["model_config"]["max_tokens"] == 4096
+    assert second_sidecar["runtime_model_config"]["max_tokens"] == 4096
+    assert second_sidecar["inputs_hash"] != first_sidecar["inputs_hash"]
 
 
 def test_corrupted_sidecar_reruns_episode_cache(tmp_path):
@@ -430,6 +585,31 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
     summary = payloads["scoring_calibration_summary"]
     assert summary["run_count"] == 2
     assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "verbose"}
+
+
+def test_pipeline_can_run_one_condition_variant(tmp_path):
+    manifest_path = _write_manifest(tmp_path)
+    artifacts = tmp_path / "artifacts"
+
+    payloads = run_pipeline(
+        manifest_path=manifest_path,
+        experiment="test1",
+        agent=CountingReplayAgent(v01_empty_room_trajectory()),
+        agent_name="replay-stub",
+        seeds=[0],
+        conditions="Observation format",
+        prompt_variant="text_only",
+        artifacts_root=artifacts,
+        run_set_id="one-variant",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    task_id = "validation_10_v01_empty_room"
+    base = artifacts / "runs" / task_id / "minigrid" / "replay-stub" / "seed_0"
+    assert (base / "text_only" / "episode.json").exists()
+    assert not (base / "image_only").exists()
+    assert not (base / "image_text").exists()
+    assert payloads["scoring_calibration_summary"]["run_count"] == 1
 
 
 def test_pipeline_writes_per_model_report(tmp_path):
