@@ -139,9 +139,15 @@ def build_preview(
     preview_steps: int,
     rollout_seed: int,
 ) -> str:
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        maze_display = maze_path.resolve().relative_to(repo_root)
+    except ValueError:
+        maze_display = maze_path
+
     chunks = [
         "Prompt Experiment Preview",
-        f"Maze: {maze_path}",
+        f"Maze: {maze_display}",
         f"Max steps: {max_steps}",
         f"Preview prompt state: after {preview_steps} random steps (seed: {rollout_seed})",
         "",
