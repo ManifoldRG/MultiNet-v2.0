@@ -8,6 +8,7 @@ unit at a time against the same helpers used by the single-process pipeline.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import socket
 import tarfile
@@ -29,6 +30,9 @@ from scorer.config import ScorerConfig
 from scorer.io import stable_hash
 
 from scripts import run_pipeline as pipeline
+from scripts.gcs_storage import StorageConfig, gcs_destination, mirror_to_bucket
+
+logger = logging.getLogger(__name__)
 
 
 DISTRIBUTED_DIR = "distributed"
@@ -288,9 +292,15 @@ def prepare_job(
 class CoordinatorStore:
     """Durable coordinator state backed by JSON files under artifacts_root."""
 
-    def __init__(self, artifacts_root: str | Path, stale_after_seconds: float = 300.0):
+    def __init__(
+        self,
+        artifacts_root: str | Path,
+        stale_after_seconds: float = 300.0,
+        storage: Optional[StorageConfig] = None,
+    ):
         self.artifacts_root = Path(artifacts_root)
         self.stale_after_seconds = float(stale_after_seconds)
+        self.storage = storage
         self._lock = threading.RLock()
 
     def load_plan(self) -> dict[str, Any]:
@@ -481,7 +491,36 @@ class CoordinatorStore:
             worker["status"] = "idle"
             worker.pop("current_unit_id", None)
             self.save_state(state)
-            return {"ok": True, "status": "verified"}
+            run_dir = unit["run_dir"]
+            run_set_id = plan.get("run_set_id", "")
+
+        # Durable off-box copy happens outside the lock so a slow gsutil call does
+        # not block other workers' heartbeats/uploads.
+        self._mirror_unit(unit_id, run_dir, run_set_id)
+        return {"ok": True, "status": "verified"}
+
+    def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
+        """Best-effort mirror of a verified run dir to the configured bucket.
+
+        A mirror failure must never lose the (paid) run: the local copy stays and
+        the unit is flagged ``gcs_pending`` for a re-push at finalize."""
+        if not (self.storage and self.storage.active):
+            return
+        src = self.artifacts_root / run_dir
+        dest = gcs_destination(self.storage.bucket, run_set_id, run_dir)
+        try:
+            mirror_to_bucket(src, dest, gsutil=self.storage.gsutil)
+            result = {"gcs_uri": dest, "gcs_pending": False}
+        except Exception as exc:
+            logger.error("GCS mirror failed for unit %s -> %s: %s", unit_id, dest, exc)
+            result = {"gcs_pending": True, "gcs_error": str(exc)}
+        with self._lock:
+            state = self.load_state()
+            unit_state = state["units"].get(unit_id)
+            if unit_state is not None:
+                unit_state.update(result)
+                unit_state["updated_at"] = _iso()
+                self.save_state(state)
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -673,8 +712,9 @@ def make_coordinator_server(
     host: str = "0.0.0.0",
     port: int = 8765,
     stale_after_seconds: float = 300.0,
+    storage: Optional[StorageConfig] = None,
 ) -> ThreadingHTTPServer:
-    store = CoordinatorStore(artifacts_root, stale_after_seconds=stale_after_seconds)
+    store = CoordinatorStore(artifacts_root, stale_after_seconds=stale_after_seconds, storage=storage)
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -751,12 +791,14 @@ def serve_coordinator(
     host: str = "0.0.0.0",
     port: int = 8765,
     stale_after_seconds: float = 300.0,
+    storage: Optional[StorageConfig] = None,
 ) -> None:
     server = make_coordinator_server(
         artifacts_root,
         host=host,
         port=port,
         stale_after_seconds=stale_after_seconds,
+        storage=storage,
     )
     print(f"Coordinator serving {artifacts_root} on http://{host}:{port}")
     try:
@@ -1005,9 +1047,10 @@ def finalize_job(
     artifacts_root: str | Path,
     run_set_id: Optional[str] = None,
     allow_partial: bool = False,
+    storage: Optional[StorageConfig] = None,
 ) -> dict[str, Any]:
     artifacts_root = Path(artifacts_root)
-    store = CoordinatorStore(artifacts_root)
+    store = CoordinatorStore(artifacts_root, storage=storage)
     plan = store.load_plan()
     state = store.load_state()
     config = ScorerConfig.from_dict(plan["scorer_config"])
@@ -1071,21 +1114,53 @@ def finalize_job(
     if missing and not allow_partial:
         raise RuntimeError(f"Missing distributed work units: {missing}")
 
+    run_set = run_set_id or plan["run_set_id"]
     payloads = pipeline._write_aggregate(
         run_rows,
         composites,
         plan["static_by_task"],
         plan["tasks"],
         artifacts_root,
-        run_set_id or plan["run_set_id"],
+        run_set,
     )
     store.save_state(state)
+
+    if storage and storage.active:
+        # Re-push any per-unit runs whose live mirror failed, then mirror the
+        # aggregate outputs, so the bucket holds a complete, durable copy.
+        for unit in plan["units"]:
+            unit_state = state["units"].get(unit["unit_id"], {})
+            if unit_state.get("status") == "verified" and unit_state.get("gcs_pending"):
+                store._mirror_unit(unit["unit_id"], unit["run_dir"], run_set)
+        jsonl = artifacts_root / "episode_runs.jsonl"
+        if jsonl.exists():
+            mirror_to_bucket(
+                jsonl, gcs_destination(storage.bucket, run_set, "episode_runs.jsonl"),
+                gsutil=storage.gsutil,
+            )
+        report_dir = artifacts_root / "reports" / run_set
+        if report_dir.exists():
+            mirror_to_bucket(
+                report_dir, gcs_destination(storage.bucket, run_set, "reports", run_set),
+                gsutil=storage.gsutil,
+            )
+
     return {
         "job_id": plan["job_id"],
         "run_count": len(run_rows),
         "missing_units": missing,
         "payloads": payloads,
     }
+
+
+def _load_storage(args: Any) -> Optional[StorageConfig]:
+    path = getattr(args, "storage_config", None)
+    if not path:
+        return None
+    storage = StorageConfig.from_file(path)
+    if not storage.active:
+        logger.warning("Storage config %s has no bucket / is disabled; bucket mirroring is OFF.", path)
+    return storage
 
 
 def dispatch_distributed_role(args: Any) -> None:
@@ -1116,6 +1191,7 @@ def dispatch_distributed_role(args: Any) -> None:
             host=args.host,
             port=args.port,
             stale_after_seconds=args.stale_after_seconds,
+            storage=_load_storage(args),
         )
         return
     if role == "worker":
@@ -1156,6 +1232,7 @@ def dispatch_distributed_role(args: Any) -> None:
             artifacts_root=args.artifacts_root,
             run_set_id=args.run_set_id,
             allow_partial=args.allow_partial_finalize,
+            storage=_load_storage(args),
         )
         print(
             f"Finalized distributed job {result['job_id']}: {result['run_count']} runs, "

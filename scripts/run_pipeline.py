@@ -821,6 +821,10 @@ def main(argv: Optional[list[str]] = None) -> None:
         help="Run one distributed pipeline role instead of the single-process pipeline.",
     )
     parser.add_argument("--job-id", help="Optional durable distributed job id for coordinator-prepare.")
+    parser.add_argument(
+        "--storage-config",
+        help="JSON storage config (gsutil bucket) for coordinator-serve/finalize bucket mirroring.",
+    )
     parser.add_argument("--host", default="0.0.0.0", help="Coordinator bind host for coordinator-serve.")
     parser.add_argument("--port", type=int, default=8765, help="Coordinator bind port for coordinator-serve.")
     parser.add_argument("--coordinator-url", help="Coordinator base URL for worker mode.")

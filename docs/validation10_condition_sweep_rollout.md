@@ -107,6 +107,17 @@ multinet-run-pipeline --distributed-role coordinator-prepare \
 # Then per batch: coordinator-serve, worker / coordinator-run-api-client, coordinator-finalize.
 ```
 
+### Durable storage (GCS)
+
+The coordinator stores artifacts on its own (possibly ephemeral) disk. Pass
+`--storage-config gridworld/fixtures/storage_config.example.json` (with a real
+`bucket`) to **coordinator-serve** and **coordinator-finalize** so the coordinator
+mirrors each verified run dir to `<bucket>/<run_set_id>/<run_dir>` as it is
+produced (via `gsutil`), and the aggregate (`episode_runs.jsonl` + `reports/`) at
+finalize. A failed mirror never drops a paid run — the unit is flagged
+`gcs_pending` and re-pushed at finalize. Without a configured bucket, mirroring is
+a no-op (local/dev runs are unaffected).
+
 ## Simpler alternative (no dedup)
 
 If the operational overhead of six jobs is not worth it, run the four condition

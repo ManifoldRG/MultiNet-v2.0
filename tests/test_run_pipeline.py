@@ -965,6 +965,121 @@ def test_distributed_upload_validates_and_extracts_archive(tmp_path):
     assert (run_dir / "run_score.json").exists()
 
 
+def _stub_unit_store(tmp_path, *, storage=None):
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "stub-model", "group": "stub", "tasks": [task]}},
+    )
+    artifacts = tmp_path / "artifacts"
+    prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(artifacts, storage=storage)
+    wid = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(wid)["unit"]
+    return artifacts, store, wid, unit
+
+
+def test_distributed_upload_mirrors_verified_run_to_bucket(tmp_path, monkeypatch):
+    from scripts import distributed_run_pipeline as dist
+
+    artifacts, store, wid, unit = _stub_unit_store(
+        tmp_path, storage=dist.StorageConfig(bucket="gs://bkt/runs")
+    )
+    calls = []
+    monkeypatch.setattr(dist, "mirror_to_bucket", lambda src, dest, **kw: calls.append((str(src), dest)))
+
+    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+
+    assert result["status"] == "verified"
+    assert len(calls) == 1
+    src, dest = calls[0]
+    assert src == str(artifacts / unit["run_dir"])
+    assert dest == "gs://bkt/runs/dist/" + unit["run_dir"]
+    assert store.load_state()["units"][unit["unit_id"]]["gcs_uri"] == dest
+
+
+def test_distributed_upload_records_pending_when_mirror_fails(tmp_path, monkeypatch):
+    from scripts import distributed_run_pipeline as dist
+
+    _artifacts, store, wid, unit = _stub_unit_store(
+        tmp_path, storage=dist.StorageConfig(bucket="gs://bkt/runs")
+    )
+
+    def boom(src, dest, **kw):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(dist, "mirror_to_bucket", boom)
+
+    # A failed mirror must not lose the (paid) verified run: the upload still
+    # succeeds and the result is flagged for a later re-push.
+    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    assert result["status"] == "verified"
+    us = store.load_state()["units"][unit["unit_id"]]
+    assert us["status"] == "verified"
+    assert us["gcs_pending"] is True
+    assert "network down" in us["gcs_error"]
+
+
+def test_distributed_upload_without_storage_does_not_mirror(tmp_path, monkeypatch):
+    from scripts import distributed_run_pipeline as dist
+
+    _artifacts, store, wid, unit = _stub_unit_store(tmp_path)  # storage=None
+    monkeypatch.setattr(
+        dist, "mirror_to_bucket",
+        lambda *a, **k: pytest.fail("mirror_to_bucket must not run without storage"),
+    )
+
+    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    assert result["status"] == "verified"
+    us = store.load_state()["units"][unit["unit_id"]]
+    assert "gcs_uri" not in us and "gcs_pending" not in us
+
+
+def test_distributed_finalize_mirrors_aggregate_to_bucket(tmp_path, monkeypatch):
+    from scripts import distributed_run_pipeline as dist
+
+    manifest_path = _write_manifest(tmp_path)
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "replay-stub", "group": "stub",
+                  "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
+    )
+    art = tmp_path / "coordinator"
+    storage = dist.StorageConfig(bucket="gs://bkt/runs")
+    dist.prepare_job(
+        run_config_path=cfg_path, manifest_path=manifest_path, seeds=[0], conditions=None,
+        artifacts_root=art, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = dist.CoordinatorStore(art, storage=storage)
+    wid = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(wid)["unit"]
+    dist.run_assigned_unit(
+        unit, artifacts_root=tmp_path / "worker",
+        agent_factory=lambda n, mc: (ReplayAgent(v01_empty_room_trajectory()), mc["model"]),
+    )
+
+    dests = []
+    monkeypatch.setattr(dist, "mirror_to_bucket", lambda src, dest, **kw: dests.append(dest))
+    store.upload(
+        wid, unit["unit_id"],
+        dist.package_run_archive(unit, artifacts_root=tmp_path / "worker").read_bytes(),
+    )
+    dist.finalize_job(artifacts_root=art, storage=storage)
+
+    assert any(d.endswith("/dist/episode_runs.jsonl") for d in dests)
+    assert any(d.endswith("/dist/reports/dist") for d in dests)
+
+
 def test_distributed_worker_upload_finalize_local_integration(tmp_path):
     from scripts.distributed_run_pipeline import (
         CoordinatorStore,
