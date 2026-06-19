@@ -243,9 +243,9 @@ def test_validate_fixtures_reports_missing_source_without_traceback(tmp_path, ca
 def test_pending_validation10_condition_run_configs_load_and_resolve_all_tasks():
     catalog = _catalog()
     expected_variant_counts = {
-        "Prompt": 2,
+        "Prompt": 3,
         "Observation format": 3,
-        "Context window": 2,
+        "Context window": 3,
         "Querying strategy": 3,
     }
 
@@ -569,7 +569,7 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
         agent=CountingReplayAgent(v01_empty_room_trajectory()),
         agent_name="replay-stub",
         seeds=[0],
-        conditions="Prompt",  # implemented variants: standard, verbose
+        conditions="Prompt",  # implemented variants: standard, minimal, verbose
         artifacts_root=artifacts,
         run_set_id="variants",
         difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
@@ -578,18 +578,19 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
     task_id = "validation_10_v01_empty_room"
     base = artifacts / "runs" / task_id / "minigrid" / "replay-stub" / "seed_0"
     assert (base / "standard" / "episode.json").exists()
+    assert (base / "minimal" / "episode.json").exists()
     assert (base / "verbose" / "episode.json").exists()
 
     rows = [
         json.loads(line)
         for line in (artifacts / "episode_runs.jsonl").read_text().strip().splitlines()
     ]
-    assert {r["prompt_variant"] for r in rows} == {"standard", "verbose"}
+    assert {r["prompt_variant"] for r in rows} == {"standard", "minimal", "verbose"}
     # Same task-intrinsic condition, distinct prompt variants -> distinct rows.
     assert all(r["condition"] == "default" for r in rows)
     summary = payloads["scoring_calibration_summary"]
-    assert summary["run_count"] == 2
-    assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "verbose"}
+    assert summary["run_count"] == 3
+    assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "minimal", "verbose"}
 
 
 def test_pipeline_can_run_one_condition_variant(tmp_path):
@@ -839,10 +840,11 @@ _BASELINE_VARIANT = {
     "Querying strategy": "step_by_step",
 }
 _DEDUP_ROLLOUT = [
-    ("Prompt", None),  # produces the shared baseline ("standard") + verbose
+    ("Prompt", None),  # shared baseline ("standard") + minimal + verbose
     ("Observation format", "text_only"),
     ("Observation format", "image_text"),
     ("Context window", "last3"),
+    ("Context window", "text_summary"),
     ("Querying strategy", "subgoal"),
     ("Querying strategy", "full_trajectory"),
 ]
@@ -856,9 +858,9 @@ def test_launch_condition_sets_expose_expected_variants():
     """Lock the variant inventory so a registry edit can't silently drop or
     rename a variable we mean to cover at launch."""
     assert {cs: condition_variant_names(cs) for cs in _LAUNCH_CONDITION_SETS} == {
-        "Prompt": ["standard", "verbose"],
+        "Prompt": ["standard", "minimal", "verbose"],
         "Observation format": ["image_only", "text_only", "image_text"],
-        "Context window": ["current", "last3"],
+        "Context window": ["current", "last3", "text_summary"],
         "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
     }
 
