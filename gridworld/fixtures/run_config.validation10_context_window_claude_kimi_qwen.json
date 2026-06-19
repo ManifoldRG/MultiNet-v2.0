@@ -1,5 +1,7 @@
 {
   "description": "Pending validation_10/tests 1-3 run config for --conditions \"Context window\" across local Qwen, Kimi, and Claude.",
+  "manifest": "gridworld/fixtures/manifest.json",
+  "conditions": "Context window",
   "models": {
     "qwen35_27b_hf": {
       "provider": "qwen",

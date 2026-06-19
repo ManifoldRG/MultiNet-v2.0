@@ -26,6 +26,7 @@ from scripts.run_pipeline import (
     _condition_configs,
     _expected_run_hash,
     _expected_static_hash,
+    check_run_config_expectations,
     condition_variant_names,
     load_run_config,
     resolve_task_rows,
@@ -745,6 +746,36 @@ def test_distributed_prepare_supports_qwen_groups_without_hardcoding(tmp_path):
     assert {u["model_config"]["model"] for u in plan["units"]} == {
         "Qwen/Qwen3.5-35B", "Qwen/Qwen3.5-122B", "Qwen/Qwen3.6-35B",
     }
+
+
+def test_check_run_config_expectations_manifest_mismatch():
+    rc = {"models": {}, "manifest": "gridworld/fixtures/manifest.json"}
+    with pytest.raises(ValueError, match="manifest"):
+        check_run_config_expectations(rc, _OGBENCH_50_MANIFEST, None)
+
+
+def test_check_run_config_expectations_conditions_mismatch():
+    rc = {"models": {}, "conditions": "Observation format"}
+    with pytest.raises(ValueError, match="conditions"):
+        check_run_config_expectations(rc, _MANIFEST, None)
+
+
+def test_check_run_config_expectations_passes_when_matching():
+    rc = {"models": {}, "manifest": str(_MANIFEST), "conditions": "Prompt"}
+    check_run_config_expectations(rc, _MANIFEST, "Prompt")  # no raise
+
+
+def test_check_run_config_expectations_no_keys_is_noop():
+    check_run_config_expectations({"models": {}}, _MANIFEST, None)  # no raise
+
+
+def test_launch_run_configs_declare_manifest_and_conditions():
+    for cond, path in _PENDING_VALIDATION10_CONFIGS.items():
+        rc = load_run_config(path)
+        assert (_REPO_ROOT / rc["manifest"]).resolve() == _MANIFEST.resolve()
+        assert rc["conditions"] == cond
+        # The guard must accept the declared pairing without raising.
+        check_run_config_expectations(rc, _MANIFEST, cond)
 
 
 def _chain_spec():

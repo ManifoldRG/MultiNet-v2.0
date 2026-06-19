@@ -1,5 +1,7 @@
 {
   "description": "Run the ogbench 50-maze S/M/B/D selection across Claude, Kimi, and local Qwen. Use with --manifest gridworld/fixtures/manifest.ogbench_50_smbd.json.",
+  "manifest": "gridworld/fixtures/manifest.ogbench_50_smbd.json",
+  "conditions": null,
   "models": {
     "claude_sonnet": {
       "provider": "claude",

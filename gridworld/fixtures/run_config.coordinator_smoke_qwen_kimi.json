@@ -1,5 +1,7 @@
 {
   "description": "Coordinator smoke run-through over validation_10 plus four OGBench holdout rows. Exercises planning, worker execution, upload, aggregation, and report collection with Qwen and Kimi only.",
+  "manifest": "gridworld/fixtures/manifest.coordinator_smoke_validation10_ogbench.json",
+  "conditions": null,
   "models": {
     "qwen35_27b_hf": {
       "provider": "qwen",

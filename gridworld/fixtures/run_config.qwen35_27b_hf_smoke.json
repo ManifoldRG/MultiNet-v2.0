@@ -1,5 +1,6 @@
 {
   "description": "Single-task Qwen/Qwen3.5-27B HF smoke run for parser/output-contract validation.",
+  "manifest": "gridworld/fixtures/manifest.json",
   "models": {
     "qwen35_27b_hf": {
       "provider": "qwen",

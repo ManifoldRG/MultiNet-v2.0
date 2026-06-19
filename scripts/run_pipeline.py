@@ -670,6 +670,7 @@ def run_from_config(
     factory = agent_factory or _build_agent_from_spec
 
     run_config = load_run_config(run_config_path)
+    check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = load_manifest(manifest_path)
 
     # Resolve each model's task rows + build its agent.
@@ -727,6 +728,33 @@ def load_run_config(path: str | Path) -> dict[str, Any]:
     if not isinstance(data, dict) or "models" not in data or not isinstance(data["models"], dict):
         raise ValueError("Run-config must be an object with a 'models' mapping.")
     return data
+
+
+def check_run_config_expectations(
+    run_config: dict[str, Any],
+    manifest_path: str | Path,
+    conditions: Optional[str],
+) -> None:
+    """Guard against a mispaired launch: if a run-config declares ``manifest``
+    and/or ``conditions``, the CLI values must match, so you cannot silently
+    benchmark the wrong suite or the wrong prompt axis across paid models."""
+    expected_manifest = run_config.get("manifest")
+    if expected_manifest is not None:
+        # The declared path is repo-root-relative; resolve it against the repo
+        # root (not cwd) so the guard holds regardless of where it is launched.
+        expected_path = Path(expected_manifest)
+        if not expected_path.is_absolute():
+            expected_path = _REPO_ROOT / expected_path
+        if expected_path.resolve() != Path(manifest_path).resolve():
+            raise ValueError(
+                f"Run-config expects --manifest {expected_manifest!r} but got {str(manifest_path)!r}. "
+                "Pass the matching --manifest (or fix the run-config)."
+            )
+    if "conditions" in run_config and run_config["conditions"] != conditions:
+        raise ValueError(
+            f"Run-config expects --conditions {run_config['conditions']!r} but got {conditions!r}. "
+            "Pass the matching --conditions."
+        )
 
 
 def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent, str]:

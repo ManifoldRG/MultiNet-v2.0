@@ -144,6 +144,7 @@ def prepare_job(
     artifacts_root = Path(artifacts_root)
     config = scorer_config or load_scorer_config()
     run_config = pipeline.load_run_config(run_config_path)
+    pipeline.check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = pipeline.load_manifest(manifest_path)
     prompt_variants = pipeline.condition_variant_names(conditions)
     if prompt_variant is not None:
