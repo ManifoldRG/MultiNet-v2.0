@@ -216,7 +216,13 @@ def _expected_static_hash(spec, config: ScorerConfig) -> str:
     )
 
 
+# Keys that do not change what the model produces, so they must be excluded from
+# the episode cache key: editing them otherwise re-pays for every cached episode.
+# Covers orchestration/scheduling knobs and transport/model-loading knobs.
+# NOTE: keep output-affecting knobs IN the hash (temperature, max_tokens,
+# enable_thinking, torch_dtype, load_in_4bit, attn_implementation, model).
 _NON_RUNTIME_MODEL_KEYS = {
+    # orchestration / scheduling
     "tasks",
     "runs",
     "group",
@@ -224,6 +230,12 @@ _NON_RUNTIME_MODEL_KEYS = {
     "hardware_profile",
     "worker_tags",
     "max_in_flight",
+    # transport / model-loading (do not affect outputs)
+    "timeout",
+    "device_map",
+    "local_files_only",
+    "max_memory",
+    "trust_remote_code",
 }
 
 
@@ -238,6 +250,11 @@ def _jsonable(value: Any) -> Any:
         return sorted(_jsonable(v) for v in value)
     if isinstance(value, Path):
         return str(value)
+    # Canonicalize numbers so cosmetic spellings of the same value (e.g. 0 vs 0.0,
+    # 128 vs 128.0) do not produce different cache keys. bool is handled by the
+    # primitive branch below (it is not a float).
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     return str(value)

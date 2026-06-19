@@ -24,6 +24,7 @@ from scorer.io import load_json, task_spec_from_payload
 
 from scripts.run_pipeline import (
     _condition_configs,
+    _expected_run_hash,
     _expected_static_hash,
     condition_variant_names,
     load_run_config,
@@ -744,6 +745,53 @@ def test_distributed_prepare_supports_qwen_groups_without_hardcoding(tmp_path):
     assert {u["model_config"]["model"] for u in plan["units"]} == {
         "Qwen/Qwen3.5-35B", "Qwen/Qwen3.5-122B", "Qwen/Qwen3.6-35B",
     }
+
+
+def _chain_spec():
+    return task_spec_from_payload(load_json(default_maze_path("V06_chain_ks.json")))
+
+
+def test_infra_only_model_config_keys_excluded_from_run_hash():
+    """Infra/transport-only knobs must not bust the episode cache — editing them
+    re-pays for every cached episode for no change in model output."""
+    spec = _chain_spec()
+    base = {"temperature": 0.0, "max_tokens": 128}
+    base_hash = _expected_run_hash(spec, "m", 0, "minigrid", model_config=base)
+    for infra in (
+        {"timeout": 180},
+        {"device_map": {"": 0}},
+        {"local_files_only": True},
+        {"hardware_profile": "h100-8x"},
+        {"worker_count": 4},
+        {"max_in_flight": 2},
+    ):
+        cfg = {**base, **infra}
+        assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) == base_hash, infra
+
+
+def test_generation_model_config_keys_change_run_hash():
+    """Knobs that change what the model produces must still invalidate the cache."""
+    spec = _chain_spec()
+    base = {"temperature": 0.0, "max_tokens": 128}
+    base_hash = _expected_run_hash(spec, "m", 0, "minigrid", model_config=base)
+    for gen in (
+        {"temperature": 0.7},
+        {"max_tokens": 256},
+        {"enable_thinking": True},
+        {"load_in_4bit": True},
+        {"torch_dtype": "bfloat16"},
+    ):
+        cfg = {**base, **gen}
+        assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) != base_hash, gen
+
+
+def test_run_hash_canonicalizes_numeric_spelling():
+    """``0`` vs ``0.0`` (or ``128`` vs ``128.0``) is the same model call — it must
+    not produce a different cache key."""
+    spec = _chain_spec()
+    a = _expected_run_hash(spec, "m", 0, "minigrid", model_config={"temperature": 0.0, "max_tokens": 128})
+    b = _expected_run_hash(spec, "m", 0, "minigrid", model_config={"temperature": 0, "max_tokens": 128.0})
+    assert a == b
 
 
 # The four condition sets launched over validation_10 / tests 1-3, and the
