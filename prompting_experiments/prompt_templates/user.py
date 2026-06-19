@@ -22,14 +22,12 @@ STANDARD_IMAGE_ONLY_USER_PROMPT = ( # the standard prompt
 )
 
 TEXT_ONLY_USER_PROMPT = (
-    "{initial_maze_text}"
     "{current_observation_text}"
     f"{NEXT_ACTION_QUESTION}"
 )
 
 IMAGE_TEXT_USER_PROMPT = (
     f"{CURRENT_IMAGE_PLACEHOLDER}\n"
-    "{initial_maze_text}"
     "{current_observation_text}"
     f"{NEXT_ACTION_QUESTION}"
 )

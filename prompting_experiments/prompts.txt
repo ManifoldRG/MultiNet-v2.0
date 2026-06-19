@@ -98,7 +98,6 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
-[user prompt]
 Initial maze (fixed for this episode):
 The world is a 8 by 8 grid.
 Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
@@ -106,6 +105,7 @@ The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
 
+[user prompt]
 You are at (1, 1) facing NORTH.
 Your inventory: empty.
 
@@ -127,8 +127,6 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
-[user prompt]
-[image block 1]
 Initial maze (fixed for this episode):
 The world is a 8 by 8 grid.
 Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
@@ -136,6 +134,8 @@ The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
 
+[user prompt]
+[image block 1]
 You are at (1, 1) facing NORTH.
 Your inventory: empty.
 
@@ -233,7 +233,7 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 Activity summary:
-first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, finally you opened the blue door
+first you navigated to (1, 2), then you navigated to (4, 3), finally you passed (6, 3)
 
 
 [image block 1]
@@ -337,7 +337,7 @@ Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue
 
 [image block 1]
 
-Actions to solve: MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, PICKUP, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_LEFT, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
 
 
 [image block 2]

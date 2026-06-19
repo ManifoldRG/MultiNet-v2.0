@@ -32,6 +32,7 @@ from interface.prompt_strategies import (
     StandardPromptStrategy,
     VerbosePromptStrategy,
 )
+from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
 from prompting_experiments.prompt_templates import feedback as feedback_templates
@@ -45,6 +46,7 @@ _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
+    "text_initial_maze": TextInitialMazePromptStrategy,
 }
 
 
@@ -133,7 +135,21 @@ class ExperimentRunner:
         last_feedback: str,
         transcript: List[dict],
     ) -> tuple[str, dict]:
-        return self.prompt.build_system_prompt(), self._build_message(
+        system_prompt = self.prompt.build_system_prompt()
+        # If the system prompt includes the `{maze_text}` placeholder, format
+        # it with the rendered maze. Otherwise, for text observations append
+        # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
+        # context for text-only or image+text modes.
+        if "{maze_text}" in system_prompt:
+            system_prompt = system_prompt.format(maze_text=render_initial_maze_text(self.task_spec))
+        elif self.config.observation in ("text_only", "image_text"):
+            maze_text = render_initial_maze_text(self.task_spec)
+            system_prompt = (
+                system_prompt
+                + "\n\n"
+                + system_templates.INITIAL_MAZE_SECTION.format(maze_text=maze_text)
+            )
+        return system_prompt, self._build_message(
             state,
             last_feedback,
             transcript,
@@ -149,7 +165,9 @@ class ExperimentRunner:
         self.last_rgb, state, reset_info = self.backend.reset(seed=self.task_spec.seed)
         self.querying.reset()
 
-        system_prompt = self.prompt.build_system_prompt()
+        # Build the initial system prompt (may include the initial maze for
+        # text-based observations) and the initial user message block.
+        system_prompt, _ = self.build_prompt_message(state, feedback_templates.INITIAL_FEEDBACK, [])
         system_message = {"role": "system", "content": system_prompt}
         chat_history = self.config.chat_history
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
@@ -386,19 +404,11 @@ class ExperimentRunner:
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
         )
-        initial_maze_text = (
-            system_templates.INITIAL_MAZE_SECTION.format(
-                maze_text=render_initial_maze_text(self.task_spec)
-            )
-            if self.config.observation in ("text_only", "image_text")
-            else ""
-        )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
             history_text(obs, ctx, transcript, self.task_spec),
             state,
             observation=obs,
-            initial_maze_text=initial_maze_text,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:

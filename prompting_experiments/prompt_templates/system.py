@@ -28,3 +28,5 @@ ONE_SHOT_EXAMPLE = (
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
+
+# `INITIAL_MAZE_SECTION` is used when the observation includes text.

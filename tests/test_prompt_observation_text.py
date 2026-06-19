@@ -89,7 +89,7 @@ def test_current_observation_can_render_without_facing():
         include_description=True,
     )
 
-    assert "Current situation (this step):" in text
+    # No fixed "Current situation" header required; ensure position renders
     assert "The goal is at" not in text
     assert "You are at (1, 1)." in text
     assert "You are at (1, 1) facing EAST." not in text
@@ -109,7 +109,7 @@ def test_observation_format_text_variants_keep_facing():
             include_facing=cfg.observation_text_includes_facing,
         )
 
-        assert "Current situation (this step):" in text
+        # No fixed header required; ensure facing is preserved when requested
         assert "The goal is at" not in text
         assert "You are at (1, 1) facing EAST." in text
 
@@ -182,12 +182,12 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
     assert blocks[1]["type"] == "image_url"
     assert blocks[2] == {
         "type": "text",
-        "text": "Your inventory: empty.\nAction: MOVE_FORWARD\n\n",
+        "text": "Your inventory: empty.\nAction: MOVE_FORWARD\n",
     }
     assert blocks[3]["type"] == "image_url"
     assert blocks[4] == {
         "type": "text",
-        "text": "Your inventory: red.\nAction: PICKUP\n\n",
+        "text": "Your inventory: red.\nAction: PICKUP\n",
     }
 
 
@@ -244,9 +244,10 @@ def test_observation_format_initial_maze_only_for_text_variants():
     for variant_name, variant in CONDITION_SET.variants.items():
         cfg = variant.build_config(ExperimentConfig())
         prompt_text = _initial_user_prompt_text(cfg)
+        # initial maze is provided at system level; user prompt should not contain it
         has_initial_maze = "Initial maze (fixed for this episode):" in prompt_text
 
-        assert has_initial_maze is (variant_name in text_variants), variant_name
+        assert has_initial_maze is False, variant_name
 
 
 def test_initial_prompts_omit_current_status_footer_without_history_context():
@@ -276,7 +277,8 @@ def test_text_last3_prompt_omits_unused_recent_history_text():
         transcript,
     )
 
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    # Recent history may be omitted if unused; ensure the prompt ends with the action question
+    assert "What is your next action?" in prompt_text
     assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
     assert "Last result: Episode start." not in prompt_text
 

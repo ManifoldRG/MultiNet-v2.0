@@ -30,14 +30,13 @@ class MinimalPromptStrategy:
         state: GridState,
         *,
         observation: str = "image_only",
-        initial_maze_text: str = "",
     ) -> str:
         return _build_user_prompt(
             observation=observation,
             obs_text=obs_text,
             history_text=history_text,
             state=state,
-            initial_maze_text=initial_maze_text,
+        
         )
 
 
@@ -57,6 +56,21 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         del querying_suffix
         std = StandardPromptStrategy.build_system_prompt(self).rstrip()
         return "\n\n".join([std, MECHANISM_RULES])
+
+
+class TextInitialMazePromptStrategy(StandardPromptStrategy):
+    """Standard system prompt plus the initial maze section placeholder.
+
+    This strategy returns the standard system prompt and appends the
+    `INITIAL_MAZE_SECTION` template (containing the `{maze_text}` placeholder).
+    The caller (for example `ExperimentRunner.build_prompt_message`) is
+    responsible for formatting `{maze_text}` with the rendered maze text.
+    """
+
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        del querying_suffix
+        std = StandardPromptStrategy.build_system_prompt(self).rstrip()
+        return "\n\n".join([std, system_templates.INITIAL_MAZE_SECTION])
 
 
 PromptStrategy = MinimalPromptStrategy
@@ -80,13 +94,11 @@ def _build_user_prompt(
     obs_text: str,
     history_text: str,
     state: GridState,
-    initial_maze_text: str,
 ) -> str:
     inventory = ", ".join(inventory_list(state)) or "empty"
     fields = {
         "current_image": user_templates.CURRENT_IMAGE_PLACEHOLDER,
         "inventory": inventory,
-        "initial_maze_text": _text_section(initial_maze_text),
         "current_observation_text": _text_section(obs_text),
     }
     if observation == "text_only":
