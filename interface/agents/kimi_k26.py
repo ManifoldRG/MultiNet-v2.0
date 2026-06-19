@@ -12,6 +12,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from interface.agents.http_retry import call_with_retry
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def _post_chat_completions(
     messages: List[Dict[str, object]],
     timeout: Optional[float],
     enable_thinking: bool,
+    max_attempts: int = 5,
 ) -> tuple[str, Optional[Dict[str, int]]]:
     body: Dict[str, object] = {
         "model": model,
@@ -67,9 +69,13 @@ def _post_chat_completions(
     )
     effective_timeout = timeout or 180.0
     t0 = time.perf_counter()
-    try:
+
+    def _do_request():
         with urllib.request.urlopen(req, timeout=effective_timeout) as resp:
-            payload = json.loads(resp.read().decode())
+            return json.loads(resp.read().decode())
+
+    try:
+        payload = call_with_retry(_do_request, max_attempts=max_attempts)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"Moonshot API HTTP {exc.code}: {detail}") from exc
@@ -103,6 +109,7 @@ class KimiK26Config:
     max_tokens: int = 4096
     timeout: Optional[float] = 180.0
     enable_thinking: bool = False
+    max_attempts: int = 5
 
 
 @dataclass
@@ -131,5 +138,6 @@ class KimiK26Agent:
             messages=_to_openai_messages(messages),
             timeout=self.config.timeout,
             enable_thinking=self.config.enable_thinking,
+            max_attempts=self.config.max_attempts,
         )
         return text

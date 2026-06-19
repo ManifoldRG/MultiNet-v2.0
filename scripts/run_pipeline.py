@@ -232,6 +232,7 @@ _NON_RUNTIME_MODEL_KEYS = {
     "max_in_flight",
     # transport / model-loading (do not affect outputs)
     "timeout",
+    "max_attempts",
     "device_map",
     "local_files_only",
     "max_memory",
@@ -745,6 +746,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_tokens = int(max_tokens)
         if "timeout" in model_cfg:
             cfg.timeout = float(model_cfg["timeout"])
+        if "max_attempts" in model_cfg:
+            cfg.max_attempts = int(model_cfg["max_attempts"])
         return ClaudeAnthropicAgent(config=cfg), model or cfg.model
     if provider == "kimi":
         from interface.agents import KimiK26Agent, KimiK26Config
@@ -756,6 +759,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_tokens = int(max_tokens)
         if "timeout" in model_cfg:
             cfg.timeout = float(model_cfg["timeout"])
+        if "max_attempts" in model_cfg:
+            cfg.max_attempts = int(model_cfg["max_attempts"])
         return KimiK26Agent(config=cfg), model or cfg.model
     if provider == "qwen":
         from interface.agents import Qwen35VLAgent, Qwen35VLConfig

@@ -759,6 +759,7 @@ def test_infra_only_model_config_keys_excluded_from_run_hash():
     base_hash = _expected_run_hash(spec, "m", 0, "minigrid", model_config=base)
     for infra in (
         {"timeout": 180},
+        {"max_attempts": 8},
         {"device_map": {"": 0}},
         {"local_files_only": True},
         {"hardware_profile": "h100-8x"},

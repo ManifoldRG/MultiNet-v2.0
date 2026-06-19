@@ -12,6 +12,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from interface.agents.http_retry import call_with_retry
 from interface.agents.runner_messages import (
     ContentPart,
     parse_runner_content,
@@ -84,6 +85,7 @@ def _post_messages(
     system: Optional[str],
     messages: List[Dict[str, object]],
     timeout: Optional[float],
+    max_attempts: int = 5,
 ) -> Tuple[str, Optional[Dict[str, int]]]:
     body: Dict[str, object] = {
         "model": model,
@@ -110,9 +112,13 @@ def _post_messages(
     )
     effective_timeout = timeout or 180.0
     t0 = time.perf_counter()
-    try:
+
+    def _do_request():
         with urllib.request.urlopen(req, timeout=effective_timeout) as resp:
-            payload = json.loads(resp.read().decode())
+            return json.loads(resp.read().decode())
+
+    try:
+        payload = call_with_retry(_do_request, max_attempts=max_attempts)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"Anthropic API HTTP {exc.code}: {detail}") from exc
@@ -146,6 +152,7 @@ class ClaudeAnthropicConfig:
     temperature: float = 0.0
     max_tokens: int = 1024
     timeout: Optional[float] = 180.0
+    max_attempts: int = 5
 
 
 @dataclass
@@ -175,5 +182,6 @@ class ClaudeAnthropicAgent:
             system=system,
             messages=turns,
             timeout=self.config.timeout,
+            max_attempts=self.config.max_attempts,
         )
         return text
