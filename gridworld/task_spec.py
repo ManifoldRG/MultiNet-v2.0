@@ -91,13 +91,15 @@ class GateSpec:
     id: str
     position: Position
     initial_state: Literal["open", "closed"] = "closed"
+    color: str = "black"
 
     @classmethod
     def from_dict(cls, d: dict) -> "GateSpec":
         return cls(
             id=d["id"],
             position=Position.from_list(d["position"]) if isinstance(d["position"], list) else Position.from_dict(d["position"]),
-            initial_state=d.get("initial_state", "closed")
+            initial_state=d.get("initial_state", "closed"),
+            color=d.get("color", "black"),
         )
 
 
@@ -401,7 +403,7 @@ class TaskSpecification:
                 "keys": [{"id": k.id, "position": pos_to_list(k.position), "color": k.color} for k in self.mechanisms.keys],
                 "doors": [{"id": d.id, "position": pos_to_list(d.position), "requires_key": d.requires_key, "initial_state": d.initial_state} for d in self.mechanisms.doors],
                 "switches": [{"id": s.id, "position": pos_to_list(s.position), "controls": s.controls, "color": s.color, "switch_type": s.switch_type, "initial_state": s.initial_state} for s in self.mechanisms.switches],
-                "gates": [{"id": g.id, "position": pos_to_list(g.position), "initial_state": g.initial_state} for g in self.mechanisms.gates],
+                "gates": [{"id": g.id, "position": pos_to_list(g.position), "initial_state": g.initial_state, "color": g.color} for g in self.mechanisms.gates],
                 "blocks": [{"id": b.id, "position": pos_to_list(b.position), "pushable": b.pushable, "color": b.color} for b in self.mechanisms.blocks],
                 "teleporters": [{"id": t.id, "position_a": pos_to_list(t.position_a), "position_b": pos_to_list(t.position_b), "bidirectional": t.bidirectional} for t in self.mechanisms.teleporters],
                 "hazards": [{"id": h.id, "position": pos_to_list(h.position), "hazard_type": h.hazard_type} for h in self.mechanisms.hazards],

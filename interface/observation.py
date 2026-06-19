@@ -19,14 +19,14 @@ from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
 from interface.renderer import (
-    render_current_inventory_text,
     render_user_observation_text,
     rgb_to_image_block,
 )
 from prompting_experiments.prompt_templates import observation as observation_templates
+from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3"]
+ContextWindow = Literal["current", "last3", "text_summary"]
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -49,26 +49,137 @@ def history_text(
     observation: ObservationMode,
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
 ) -> str:
-    if observation not in ("text_only", "image_text"):
-        return ""
-    recs = recent_history_steps(transcript, context_window)
-    if not recs:
-        return ""
+    del observation
+    if context_window == "text_summary":
+        return text_summary_history(transcript, task_spec)
+    return ""
 
-    lines = [observation_templates.RECENT_HISTORY_HEADER]
-    for rec in recs:
-        row, col = rec["position_after"]
-        lines.append(
-            observation_templates.RECENT_HISTORY_STEP.format(
-                row=int(row),
-                col=int(col),
-                facing=rec["facing_after"],
-                action=rec["action"],
-                feedback=rec["prompt_feedback"],
+
+def text_summary_history(
+    transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+) -> str:
+    """Build a one-sentence summary of all prior mechanism events or path waypoints."""
+    steps = history_steps(transcript)
+    mechanism_events = _extract_mechanism_events(steps, task_spec)
+
+    if mechanism_events:
+        summary = _format_summary_chain(mechanism_events)
+    else:
+        move_steps = [rec for rec in steps if rec.get("event_type") == "MOVED"]
+        if move_steps:
+            waypoints = _pick_waypoints(move_steps, 3)
+            nav_parts: list[str] = []
+            for i, (row, col) in enumerate(waypoints):
+                if i == len(waypoints) - 1:
+                    nav_parts.append(
+                        observation_templates.TEXT_SUMMARY_PASSED.format(row=row, col=col)
+                    )
+                else:
+                    nav_parts.append(
+                        observation_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col)
+                    )
+            summary = _format_summary_chain(nav_parts)
+        else:
+            return observation_templates.TEXT_SUMMARY_EMPTY
+
+    return f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
+
+
+def _extract_mechanism_events(
+    steps: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+) -> list[str]:
+    events: list[str] = []
+    key_colors = {
+        key.id: key.color for key in task_spec.mechanisms.keys
+    } if task_spec else {}
+    door_colors = {
+        door.id: door.requires_key for door in task_spec.mechanisms.doors
+    } if task_spec else {}
+    gate_colors = {
+        gate.id: getattr(gate, "color", "black") for gate in task_spec.mechanisms.gates
+    } if task_spec else {}
+    for rec in steps:
+        event_type = rec.get("event_type", "")
+        sb = rec.get("state_before") or {}
+        sa = rec.get("state_after") or {}
+
+        if event_type == "PICKUP":
+            before_keys = set(sb.get("collected_keys") or [])
+            after_keys = set(sa.get("collected_keys") or [])
+            new_keys = after_keys - before_keys
+            if new_keys:
+                key_id = sorted(new_keys)[0]
+            else:
+                key_id = sa.get("agent_carrying") or sb.get("agent_carrying") or "a"
+            events.append(
+                observation_templates.TEXT_SUMMARY_PICKUP_KEY.format(
+                    key_color=key_colors.get(key_id, sa.get("agent_carrying") or key_id)
+                )
             )
-        )
-    return "\n".join(lines)
+
+        elif event_type == "OPENED":
+            before_doors = set(sb.get("open_doors") or [])
+            after_doors = set(sa.get("open_doors") or [])
+            new_doors = after_doors - before_doors
+            door_id = sorted(new_doors)[0] if new_doors else "a"
+            events.append(
+                observation_templates.TEXT_SUMMARY_OPEN_DOOR.format(
+                    door_color=door_colors.get(door_id, door_id)
+                )
+            )
+
+        elif event_type == "TOGGLED":
+            before_gates = set(sb.get("open_gates") or [])
+            after_gates = set(sa.get("open_gates") or [])
+            opened = after_gates - before_gates
+            closed = before_gates - after_gates
+            if opened:
+                events.append(
+                    observation_templates.TEXT_SUMMARY_OPEN_GATE.format(
+                        gate_color=gate_colors.get(sorted(opened)[0], sorted(opened)[0])
+                    )
+                )
+            elif closed:
+                events.append(
+                    observation_templates.TEXT_SUMMARY_CLOSE_GATE.format(
+                        gate_color=gate_colors.get(sorted(closed)[0], sorted(closed)[0])
+                    )
+                )
+
+    return events
+
+
+def _format_summary_chain(events: list[str]) -> str:
+    if not events:
+        return ""
+    if len(events) == 1:
+        return observation_templates.TEXT_SUMMARY_FIRST_EVENT.format(event=events[0])
+    parts = [observation_templates.TEXT_SUMMARY_FIRST_EVENT.format(event=events[0])]
+    parts.extend(
+        observation_templates.TEXT_SUMMARY_THEN_EVENT.format(event=e)
+        for e in events[1:-1]
+    )
+    parts.append(
+        observation_templates.TEXT_SUMMARY_FINAL_EVENT.format(event=events[-1])
+    )
+    return ", ".join(parts)
+
+
+def _pick_waypoints(steps: list[dict[str, Any]], count: int) -> list[tuple[int, int]]:
+    n = len(steps)
+    if n <= count:
+        return [tuple(rec["position_after"]) for rec in steps]  # type: ignore[return-value]
+    indices = [round(i * (n - 1) / (count - 1)) for i in range(count)]
+    seen: list[tuple[int, int]] = []
+    for i in indices:
+        pos: tuple[int, int] = tuple(steps[i]["position_after"])  # type: ignore[assignment]
+        if pos not in seen:
+            seen.append(pos)
+    return seen
 
 
 def history_content_blocks(
@@ -90,24 +201,21 @@ def history_content_blocks(
         blocks.append(rgb_to_image_block(rgb))
         inventory = _history_record_inventory(rec)
         text = (
-            observation_templates.IMAGE_HISTORY_INVENTORY_ACTION.format(
+            user_templates.LAST3_USER_PROMPT["image_only_step"].format(
                 inventory=inventory,
                 action=rec["action"],
             )
             if observation == "image_only"
-            else observation_templates.IMAGE_HISTORY_INVENTORY.format(inventory=inventory)
+            else user_templates.LAST3_USER_PROMPT["image_text_step"].format(
+                inventory=inventory
+            )
         )
         blocks.append({"type": "text", "text": text})
 
     if not blocks:
         return []
 
-    intro = (
-        observation_templates.IMAGE_ONLY_HISTORY_INTRO
-        if observation == "image_only"
-        else observation_templates.IMAGE_TEXT_HISTORY_INTRO
-    )
-    return [{"type": "text", "text": intro}] + blocks
+    return [{"type": "text", "text": user_templates.LAST3_USER_PROMPT["header"]}] + blocks
 
 
 def current_observation_text(
@@ -119,7 +227,7 @@ def current_observation_text(
     include_facing: bool = False,
 ) -> str:
     if observation == "image_only":
-        return render_current_inventory_text(state)
+        return ""
     if not include_description:
         return ""
     return render_user_observation_text(task_spec, state, include_facing=include_facing)

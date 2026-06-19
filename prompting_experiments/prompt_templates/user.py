@@ -1,31 +1,33 @@
 """User prompt templates."""
 
-OBSERVATION_SECTION = "Observation:\n{obs_text}\n\n"
+CURRENT_IMAGE_PLACEHOLDER = "{current_image}"
+NEXT_ACTION_QUESTION = "What is your next action?"
 
-STANDARD_USER_PROMPT = (
-    "{obs_block}"
-    "{status_block}"
-    "What is your next action?"
+ONE_SHOT_EXAMPLE_INTRO = (
+    "Example maze and solution "
+    "(14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+)
+ONE_SHOT_SOLUTION_LINE = "Actions to solve: {actions}"
+
+LAST3_USER_PROMPT = {
+    "header": "Recent steps (oldest first):\n",
+    "image_text_step": "Your inventory: {inventory}.\n",
+    "image_only_step": "Your inventory: {inventory}.\nAction: {action}\n",
+}
+
+STANDARD_IMAGE_ONLY_USER_PROMPT = ( # the standard prompt
+    f"{CURRENT_IMAGE_PLACEHOLDER}\n"
+    "Your inventory: {inventory}.\n"
+    f"{NEXT_ACTION_QUESTION}"
 )
 
-VERBOSE_USER_PROMPT = (
-    "{obs_block}"
-    "{mechanism_block}"
-    "{status_block}"
-    "What is your next action?"
+TEXT_ONLY_USER_PROMPT = (
+    "{current_observation_text}"
+    f"{NEXT_ACTION_QUESTION}"
 )
 
-STATUS_BLOCK = (
-    "Position: {position}  |  Facing: {facing}  |  Goal: {goal}\n"
-    "Last result: {last_feedback}\n"
-)
-
-MECHANISM_HINTS_HEADER = "Hints:\n"
-KEY_DOOR_HINT = (
-    "  - Step on a key and PICKUP. "
-    "Face a locked door with the matching key and TOGGLE to open it, then MOVE_FORWARD through."
-)
-SWITCH_GATE_HINT = (
-    "  - MOVE_FORWARD onto a switch, then TOGGLE (hold switches activate on step). "
-    "Gates cannot be toggled — activate their linked switch(es)."
+IMAGE_TEXT_USER_PROMPT = (
+    f"{CURRENT_IMAGE_PLACEHOLDER}\n"
+    "{current_observation_text}"
+    f"{NEXT_ACTION_QUESTION}"
 )

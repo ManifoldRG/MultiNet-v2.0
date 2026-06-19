@@ -96,10 +96,10 @@ def test_planner_toggle_trace_matches_current_cell_switch_precedence():
     traced = trace_planned_actions(
         spec,
         [
-            int(MiniGridActions.PICKUP),
-            int(MiniGridActions.MOVE_FORWARD),
-            int(MiniGridActions.MOVE_FORWARD),
-            int(MiniGridActions.TOGGLE),
+            int(MiniGridActions.MOVE_FORWARD),  # overlap the key cell (2, 1)
+            int(MiniGridActions.PICKUP),        # same-cell pickup of k1
+            int(MiniGridActions.MOVE_FORWARD),  # step onto the switch cell (3, 1)
+            int(MiniGridActions.TOGGLE),        # current-cell switch wins over the front door
         ],
     )
     bfs_path = plan_bfs_path(spec)
@@ -107,6 +107,39 @@ def test_planner_toggle_trace_matches_current_cell_switch_precedence():
     assert traced.action_labels[-1] == "toggle:s1"
     assert "open_door:d1" not in traced.action_labels
     assert bfs_path.success is False
+
+
+def test_planner_picks_up_key_from_same_cell_before_opening_door():
+    """The solver must overlap the key cell and PICKUP while standing on it
+    (same-cell), not collect it from the front cell. A locked door gates the
+    one-wide corridor so the key must be collected. This matches the runtime
+    (GroundKey overlap + current-cell PICKUP) and the switch mechanic, so the
+    solver-optimal plan replays as a success at runtime."""
+    spec = make_spec(
+        maze={"dimensions": [7, 3], "walls": [], "start": [1, 1], "goal": [5, 1]},
+        mechanisms={
+            "keys": [{"id": "k1", "position": [2, 1], "color": "red"}],
+            "doors": [
+                {
+                    "id": "d1",
+                    "position": [3, 1],
+                    "requires_key": "red",
+                    "initial_state": "locked",
+                }
+            ],
+        },
+        goal={"type": "reach_position", "target": [5, 1]},
+    )
+
+    report = compute_canonical_paths(spec)
+
+    assert report.success is True
+    pickup_idx = report.actions.index("pickup:k1")
+    # PICKUP happens while the agent stands on the key cell (2, 1) and it does
+    # not move during the pickup — a front-cell pickup would fire from (1, 1).
+    assert report.positions[pickup_idx] == (2, 1)
+    assert report.positions[pickup_idx + 1] == (2, 1)
+    assert "open_door:d1" in report.actions
 
 
 def test_static_score_uses_configurable_weights():

@@ -32,10 +32,13 @@ from interface.prompt_strategies import (
     StandardPromptStrategy,
     VerbosePromptStrategy,
 )
+from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+from prompting_experiments.prompt_templates import querying as querying_templates
 from prompting_experiments.prompt_templates import system as system_templates
+from prompting_experiments.prompt_templates import user as user_templates
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,7 @@ _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
+    "text_initial_maze": TextInitialMazePromptStrategy,
 }
 
 
@@ -73,7 +77,7 @@ def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
 
 
 def _replace_current_question(prompt_text: str, question: str) -> str:
-    standard_question = "What is your next action?"
+    standard_question = user_templates.NEXT_ACTION_QUESTION
     before, match, after = prompt_text.rpartition(standard_question)
     if not match:
         return prompt_text
@@ -82,14 +86,29 @@ def _replace_current_question(prompt_text: str, question: str) -> str:
 
 def _append_after_current_question(prompt_text: str, instruction: str) -> str:
     questions = (
-        "What is the full sequence of actions you will take to complete the task?",
-        "What is your next action?",
+        querying_templates.FULL_TRAJECTORY_QUESTION,
+        user_templates.NEXT_ACTION_QUESTION,
     )
     for question in questions:
         before, match, after = prompt_text.rpartition(question)
         if match:
             return f"{before}{match}\n\n{instruction}{after}"
     return f"{prompt_text}\n\n{instruction}"
+
+
+def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> list[dict]:
+    placeholder = user_templates.CURRENT_IMAGE_PLACEHOLDER
+    if placeholder not in prompt_text:
+        return [{"type": "text", "text": prompt_text}]
+
+    blocks: list[dict] = []
+    parts = prompt_text.split(placeholder)
+    for idx, part in enumerate(parts):
+        if part:
+            blocks.append({"type": "text", "text": part.lstrip("\n") if idx else part})
+        if idx < len(parts) - 1:
+            blocks.extend(images)
+    return blocks
 
 
 def build_runner(
@@ -128,7 +147,21 @@ class ExperimentRunner:
         last_feedback: str,
         transcript: List[dict],
     ) -> tuple[str, dict]:
-        return self.prompt.build_system_prompt(), self._build_message(
+        system_prompt = self.prompt.build_system_prompt()
+        # If the system prompt includes the `{maze_text}` placeholder, format
+        # it with the rendered maze. Otherwise, for text observations append
+        # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
+        # context for text-only or image+text modes.
+        if "{maze_text}" in system_prompt:
+            system_prompt = system_prompt.format(maze_text=render_initial_maze_text(self.task_spec))
+        elif self.config.observation in ("text_only", "image_text"):
+            maze_text = render_initial_maze_text(self.task_spec)
+            system_prompt = (
+                system_prompt
+                + "\n\n"
+                + system_templates.INITIAL_MAZE_SECTION.format(maze_text=maze_text)
+            )
+        return system_prompt, self._build_message(
             state,
             last_feedback,
             transcript,
@@ -144,7 +177,9 @@ class ExperimentRunner:
         self.last_rgb, state, reset_info = self.backend.reset(seed=self.task_spec.seed)
         self.querying.reset()
 
-        system_prompt = self.prompt.build_system_prompt()
+        # Build the initial system prompt (may include the initial maze for
+        # text-based observations) and the initial user message block.
+        system_prompt, _ = self.build_prompt_message(state, feedback_templates.INITIAL_FEEDBACK, [])
         system_message = {"role": "system", "content": system_prompt}
         chat_history = self.config.chat_history
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
@@ -404,11 +439,9 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript),
-            self.task_spec,
+            history_text(obs, ctx, transcript, self.task_spec),
             state,
-            last_feedback,
-            include_status_footer=False,
+            observation=obs,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
@@ -417,23 +450,20 @@ class ExperimentRunner:
             prompt_text,
             self.querying.final_output_instruction(),
         )
-        sections = []
-        if self.config.observation in ("text_only", "image_text"):
-            sections.append(
-                system_templates.INITIAL_MAZE_SECTION.format(
-                    maze_text=render_initial_maze_text(self.task_spec)
-                )
-            )
-        sections.append(prompt_text)
+        sections = [prompt_text]
         querying_suffix = self.querying.user_prompt_suffix()
         if querying_suffix:
             sections.append(querying_suffix)
         prompt_text = "\n\n".join(sections)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
-        text_block = {"type": "text", "text": prompt_text}
-        if hist_blocks or images:
-            return {"role": "user", "content": hist_blocks + images + [text_block]}
+        prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
+        one_shot_blocks: list[dict] = []
+        if self.config.in_context_learning == "one_shot":
+            from interface.one_shot import one_shot_content_blocks
+            one_shot_blocks = one_shot_content_blocks(obs)
+        if one_shot_blocks or hist_blocks or images:
+            return {"role": "user", "content": one_shot_blocks + hist_blocks + prompt_blocks}
         return {"role": "user", "content": prompt_text}
 
     def _result(

@@ -109,6 +109,13 @@ class Switch(Ball):
         return (obj_type, color_idx, state)
 
 
+class GroundKey(Key):
+    """Key that can be entered before same-cell PICKUP."""
+
+    def can_overlap(self):
+        return True
+
+
 class Gate(Door):
     """
     Gate object controlled by switches.
@@ -273,8 +280,7 @@ class CustomMiniGridEnv(MiniGridEnv):
     def place_key(self, x: int, y: int, color: str, key_id: str | None = None):
         """Place a key at the given position."""
         color = MINIGRID_COLORS.get(color, color)
-        key = Key(color)
-        key.can_overlap = True
+        key = GroundKey(color)
         if key_id is not None:
             key.key_id = key_id
             self.key_objects[key_id] = key
@@ -311,7 +317,7 @@ class CustomMiniGridEnv(MiniGridEnv):
 
     def place_gate(self, x: int, y: int, gate_id: str, is_open: bool = False, color: str = "grey"):
         """Place a gate at the given position."""
-        gate = Gate(color=color, gate_id=gate_id, is_open=is_open)
+        gate = Gate(color=MINIGRID_COLORS.get(color, "grey"), gate_id=gate_id, is_open=is_open)
         self.gates[gate_id] = gate
         self.gate_initial_state[gate_id] = is_open
         self.grid.set(x, y, gate)
@@ -494,6 +500,28 @@ class CustomMiniGridEnv(MiniGridEnv):
         fwd_cell = self.grid.get(*fwd_pos)
         current_cell = self.grid.get(*self.agent_pos)
 
+        # A key is picked up only from the agent's current cell: the agent must
+        # overlap the GroundKey first (MOVE_FORWARD onto it), then PICKUP. This
+        # matches system.py ("pick up a key while standing in the same cell"),
+        # the current-cell switch mechanic, and the same-cell baseline solver
+        # (gridworld/baselines.py).
+        if action == self.actions.pickup:
+            info: dict = {}
+            if isinstance(current_cell, Key):
+                if self.carrying is None:
+                    self.carrying = current_cell
+                    key_id = getattr(current_cell, "key_id", None)
+                    if key_id is not None:
+                        self.collected_keys.add(key_id)
+                    self.grid.set(*self.agent_pos, None)
+                else:
+                    info = {"invalid_action": True}
+            self.step_count += 1
+            truncated = self.step_count >= self.max_steps
+            obs = self.gen_obs()
+            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, info)
+            return obs, reward, terminated, truncated, info
+
         # Switches are activated from the agent's current cell, matching the validator.
         if action == self.actions.toggle and isinstance(current_cell, Switch):
             if not current_cell.activate():
@@ -505,28 +533,6 @@ class CustomMiniGridEnv(MiniGridEnv):
                 )
                 return obs, reward, terminated, truncated, info
             self._refresh_gates()
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
-
-        # Keys can be picked up from the agent's current cell, matching the validator.
-        if action == self.actions.pickup and isinstance(current_cell, Key):
-            if self.carrying is not None:
-                self.step_count += 1
-                truncated = self.step_count >= self.max_steps
-                obs = self.gen_obs()
-                reward, terminated, truncated, info = self._finalize_step_result(
-                    0, False, truncated, {"invalid_action": True}
-                )
-                return obs, reward, terminated, truncated, info
-
-            self.carrying = current_cell
-            self.grid.set(*self.agent_pos, None)
-            key_id = getattr(current_cell, "key_id", None)
-            if key_id is not None:
-                self.collected_keys.add(key_id)
             self.step_count += 1
             truncated = self.step_count >= self.max_steps
             obs = self.gen_obs()
@@ -611,10 +617,6 @@ class CustomMiniGridEnv(MiniGridEnv):
 
         # Default behavior
         obs, reward, terminated, truncated, info = super().step(action)
-        if action == self.actions.pickup and isinstance(fwd_cell, Key) and self.carrying is fwd_cell:
-            key_id = getattr(fwd_cell, "key_id", None)
-            if key_id is not None:
-                self.collected_keys.add(key_id)
         if action == self.actions.forward:
             self._update_hold_switches()
 

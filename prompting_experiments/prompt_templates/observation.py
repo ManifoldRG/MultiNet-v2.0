@@ -1,15 +1,16 @@
 """Observation and history prompt templates."""
 
-RECENT_HISTORY_HEADER = "Recent history (last 3 steps, oldest first):"
-RECENT_HISTORY_STEP = "  ({row}, {col}) facing {facing} -> {action} -> {feedback}"
-
-IMAGE_HISTORY_INVENTORY = "Your inventory: {inventory}.\n\n"
-IMAGE_HISTORY_INVENTORY_ACTION = "Your inventory: {inventory}.\nAction: {action}\n\n"
-IMAGE_ONLY_HISTORY_INTRO = (
-    "Recent steps (oldest first). Each image is the maze view from which the "
-    "following action was chosen.\n\n"
-)
-IMAGE_TEXT_HISTORY_INTRO = "Recent step views (oldest first):\n\n"
+TEXT_SUMMARY_BLOCK_HEADER = "Activity summary:"
+TEXT_SUMMARY_FIRST_EVENT = "first you {event}"
+TEXT_SUMMARY_THEN_EVENT = "then you {event}"
+TEXT_SUMMARY_FINAL_EVENT = "finally you {event}"
+TEXT_SUMMARY_PICKUP_KEY = "picked up the {key_color} key"
+TEXT_SUMMARY_OPEN_DOOR = "opened the {door_color} door"
+TEXT_SUMMARY_OPEN_GATE = "opened the {gate_color} gate"
+TEXT_SUMMARY_CLOSE_GATE = "closed the {gate_color} gate"
+TEXT_SUMMARY_NAV_TO = "navigated to ({row}, {col})"
+TEXT_SUMMARY_PASSED = "passed ({row}, {col})"
+TEXT_SUMMARY_EMPTY = "you haven't done anything yet"
 
 WORLD_SIZE_LINE = "The world is a {rows} by {cols} grid."
 COORDINATE_EXPLANATION = (
@@ -35,7 +36,6 @@ GATE_LINE = (
     " It is currently {state} (initially {initial_state})."
 )
 
-CURRENT_SITUATION_HEADER = "Current situation (this step):"
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
 CURRENT_AGENT_POSITION_LINE = "You are at {position}."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."

@@ -206,7 +206,7 @@ class MultiGridBackend(AbstractGridBackend):
             objects.append({
                 "id": gate.id,
                 "type": "gate",
-                "color": "grey",
+                "color": gate.color,
                 "position": canonical_pos(gate.position.x, gate.position.y),
                 "is_open": gate.initial_state == "open",
                 "controlled_by": controlled_by,
