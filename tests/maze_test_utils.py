@@ -39,12 +39,6 @@ def assert_navigation_contract(test_case, spec):
 		test_case.assertGreaterEqual(y, 0, label)
 		test_case.assertLess(y, height, label)
 		test_case.assertNotIn(tuple(point), walls, label)
-		x, y = point
-		test_case.assertGreaterEqual(x, 0, label)
-		test_case.assertLess(x, width, label)
-		test_case.assertGreaterEqual(y, 0, label)
-		test_case.assertLess(y, height, label)
-		test_case.assertNotIn(tuple(point), walls, label)
 
 
 def assert_goal_target_matches_maze_goal(test_case, spec):
