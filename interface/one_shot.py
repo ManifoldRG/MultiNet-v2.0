@@ -8,6 +8,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from prompting_experiments.prompt_templates import user as user_templates
+
 if TYPE_CHECKING:
     from interface.observation import ObservationMode
 
@@ -15,11 +17,6 @@ _EXAMPLE_DIR = Path(__file__).parent.parent / "mazes" / "one_shot_example"
 _SOLUTION_PATH = _EXAMPLE_DIR / "one_shot_example_solution.json"
 _PNG_PATH = _EXAMPLE_DIR / "one_shot_example_14x14_dense_kr_sg_kb_2.png"
 _JSON_PATH = _EXAMPLE_DIR / "one_shot_example_14x14_dense_kr_sg_kb_2.json"
-
-_INTRO = (
-    "Example maze and solution "
-    "(14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
-)
 
 
 @lru_cache(maxsize=1)
@@ -44,14 +41,22 @@ def _maze_text() -> str:
 
 def one_shot_content_blocks(observation: "ObservationMode") -> list[dict]:
     """Return content blocks for the one-shot example to prepend to the user message."""
-    solution_line = f"Actions to solve: {_solution_str()}"
+    solution_line = user_templates.ONE_SHOT_SOLUTION_LINE.format(
+        actions=_solution_str()
+    )
 
     if observation == "text_only":
-        text = f"{_INTRO}{_maze_text()}\n{solution_line}\n\n"
+        text = (
+            f"{user_templates.ONE_SHOT_EXAMPLE_INTRO}"
+            f"{_maze_text()}\n{solution_line}\n\n"
+        )
         return [{"type": "text", "text": text}]
 
     return [
-        {"type": "text", "text": _INTRO},
-        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{_png_b64()}"}},
+        {"type": "text", "text": user_templates.ONE_SHOT_EXAMPLE_INTRO},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{_png_b64()}"},
+        },
         {"type": "text", "text": f"\n{solution_line}\n\n"},
     ]

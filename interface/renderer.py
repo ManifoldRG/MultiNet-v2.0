@@ -130,7 +130,6 @@ def render_user_observation_text(
         else observation_templates.CURRENT_AGENT_POSITION_LINE.format(position=pos)
     )
     head = [
-        observation_templates.CURRENT_SITUATION_HEADER,
         agent_line,
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=inv),
         "",

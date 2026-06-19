@@ -35,7 +35,9 @@ from interface.prompt_strategies import (
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+from prompting_experiments.prompt_templates import querying as querying_templates
 from prompting_experiments.prompt_templates import system as system_templates
+from prompting_experiments.prompt_templates import user as user_templates
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,7 @@ def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
 
 
 def _replace_current_question(prompt_text: str, question: str) -> str:
-    standard_question = "What is your next action?"
+    standard_question = user_templates.NEXT_ACTION_QUESTION
     before, match, after = prompt_text.rpartition(standard_question)
     if not match:
         return prompt_text
@@ -70,14 +72,29 @@ def _replace_current_question(prompt_text: str, question: str) -> str:
 
 def _append_after_current_question(prompt_text: str, instruction: str) -> str:
     questions = (
-        "What is the full sequence of actions you will take to complete the task?",
-        "What is your next action?",
+        querying_templates.FULL_TRAJECTORY_QUESTION,
+        user_templates.NEXT_ACTION_QUESTION,
     )
     for question in questions:
         before, match, after = prompt_text.rpartition(question)
         if match:
             return f"{before}{match}\n\n{instruction}{after}"
     return f"{prompt_text}\n\n{instruction}"
+
+
+def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> list[dict]:
+    placeholder = user_templates.CURRENT_IMAGE_PLACEHOLDER
+    if placeholder not in prompt_text:
+        return [{"type": "text", "text": prompt_text}]
+
+    blocks: list[dict] = []
+    parts = prompt_text.split(placeholder)
+    for idx, part in enumerate(parts):
+        if part:
+            blocks.append({"type": "text", "text": part.lstrip("\n") if idx else part})
+        if idx < len(parts) - 1:
+            blocks.extend(images)
+    return blocks
 
 
 def build_runner(
@@ -369,13 +386,19 @@ class ExperimentRunner:
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
         )
+        initial_maze_text = (
+            system_templates.INITIAL_MAZE_SECTION.format(
+                maze_text=render_initial_maze_text(self.task_spec)
+            )
+            if self.config.observation in ("text_only", "image_text")
+            else ""
+        )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
             history_text(obs, ctx, transcript),
-            self.task_spec,
             state,
-            last_feedback,
-            include_status_footer=False,
+            observation=obs,
+            initial_maze_text=initial_maze_text,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
@@ -384,27 +407,20 @@ class ExperimentRunner:
             prompt_text,
             self.querying.final_output_instruction(),
         )
-        sections = []
-        if self.config.observation in ("text_only", "image_text"):
-            sections.append(
-                system_templates.INITIAL_MAZE_SECTION.format(
-                    maze_text=render_initial_maze_text(self.task_spec)
-                )
-            )
-        sections.append(prompt_text)
+        sections = [prompt_text]
         querying_suffix = self.querying.user_prompt_suffix()
         if querying_suffix:
             sections.append(querying_suffix)
         prompt_text = "\n\n".join(sections)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
-        text_block = {"type": "text", "text": prompt_text}
+        prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks: list[dict] = []
         if self.config.in_context_learning == "one_shot":
             from interface.one_shot import one_shot_content_blocks
             one_shot_blocks = one_shot_content_blocks(obs)
         if one_shot_blocks or hist_blocks or images:
-            return {"role": "user", "content": one_shot_blocks + hist_blocks + images + [text_block]}
+            return {"role": "user", "content": one_shot_blocks + hist_blocks + prompt_blocks}
         return {"role": "user", "content": prompt_text}
 
     def _result(

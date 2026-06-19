@@ -4,10 +4,7 @@ TASK_PREFIX = "Task: You are the triangular agent trying to navigate this maze. 
 
 MECHANISM_LIST = (
     "The environment may contain:\n"
-    "- Keys"
-    "- Doors"
-    "- Switches"
-    "- Gates"
+    "Keys, doors, switches, and gates."
 )
 
 MECHANISM_RULES = (

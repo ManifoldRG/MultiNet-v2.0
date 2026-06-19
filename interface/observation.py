@@ -19,7 +19,6 @@ from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
 from interface.renderer import (
-    render_current_inventory_text,
     render_user_observation_text,
     rgb_to_image_block,
 )
@@ -51,27 +50,10 @@ def history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
 ) -> str:
+    del observation
     if context_window == "text_summary":
         return text_summary_history(transcript)
-    if observation not in ("text_only", "image_text"):
-        return ""
-    recs = recent_history_steps(transcript, context_window)
-    if not recs:
-        return ""
-
-    lines = [observation_templates.RECENT_HISTORY_HEADER]
-    for rec in recs:
-        row, col = rec["position_after"]
-        lines.append(
-            observation_templates.RECENT_HISTORY_STEP.format(
-                row=int(row),
-                col=int(col),
-                facing=rec["facing_after"],
-                action=rec["action"],
-                feedback=rec["prompt_feedback"],
-            )
-        )
-    return "\n".join(lines)
+    return ""
 
 
 def text_summary_history(transcript: list[dict[str, Any]]) -> str:
@@ -88,14 +70,18 @@ def text_summary_history(transcript: list[dict[str, Any]]) -> str:
             nav_parts: list[str] = []
             for i, (row, col) in enumerate(waypoints):
                 if i == len(waypoints) - 1:
-                    nav_parts.append(user_templates.TEXT_SUMMARY_PASSED.format(row=row, col=col))
+                    nav_parts.append(
+                        observation_templates.TEXT_SUMMARY_PASSED.format(row=row, col=col)
+                    )
                 else:
-                    nav_parts.append(user_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col))
+                    nav_parts.append(
+                        observation_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col)
+                    )
             summary = _format_summary_chain(nav_parts)
         else:
-            return user_templates.TEXT_SUMMARY_EMPTY
+            return observation_templates.TEXT_SUMMARY_EMPTY
 
-    return f"{user_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
+    return f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
 
 
 def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
@@ -113,14 +99,18 @@ def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
                 key_id = sorted(new_keys)[0]
             else:
                 key_id = sa.get("agent_carrying") or sb.get("agent_carrying") or "a"
-            events.append(user_templates.TEXT_SUMMARY_PICKUP_KEY.format(key_id=key_id))
+            events.append(
+                observation_templates.TEXT_SUMMARY_PICKUP_KEY.format(key_id=key_id)
+            )
 
         elif event_type == "OPENED":
             before_doors = set(sb.get("open_doors") or [])
             after_doors = set(sa.get("open_doors") or [])
             new_doors = after_doors - before_doors
             door_id = sorted(new_doors)[0] if new_doors else "a"
-            events.append(user_templates.TEXT_SUMMARY_OPEN_DOOR.format(door_id=door_id))
+            events.append(
+                observation_templates.TEXT_SUMMARY_OPEN_DOOR.format(door_id=door_id)
+            )
 
         elif event_type == "TOGGLED":
             before_gates = set(sb.get("open_gates") or [])
@@ -128,9 +118,17 @@ def _extract_mechanism_events(steps: list[dict[str, Any]]) -> list[str]:
             opened = after_gates - before_gates
             closed = before_gates - after_gates
             if opened:
-                events.append(user_templates.TEXT_SUMMARY_OPEN_GATE.format(gate_id=sorted(opened)[0]))
+                events.append(
+                    observation_templates.TEXT_SUMMARY_OPEN_GATE.format(
+                        gate_id=sorted(opened)[0]
+                    )
+                )
             elif closed:
-                events.append(user_templates.TEXT_SUMMARY_CLOSE_GATE.format(gate_id=sorted(closed)[0]))
+                events.append(
+                    observation_templates.TEXT_SUMMARY_CLOSE_GATE.format(
+                        gate_id=sorted(closed)[0]
+                    )
+                )
 
     return events
 
@@ -139,10 +137,15 @@ def _format_summary_chain(events: list[str]) -> str:
     if not events:
         return ""
     if len(events) == 1:
-        return f"first you {events[0]}"
-    parts = [f"first you {events[0]}"]
-    parts.extend(f"then you {e}" for e in events[1:-1])
-    parts.append(f"finally you {events[-1]}")
+        return observation_templates.TEXT_SUMMARY_FIRST_EVENT.format(event=events[0])
+    parts = [observation_templates.TEXT_SUMMARY_FIRST_EVENT.format(event=events[0])]
+    parts.extend(
+        observation_templates.TEXT_SUMMARY_THEN_EVENT.format(event=e)
+        for e in events[1:-1]
+    )
+    parts.append(
+        observation_templates.TEXT_SUMMARY_FINAL_EVENT.format(event=events[-1])
+    )
     return ", ".join(parts)
 
 
@@ -178,24 +181,21 @@ def history_content_blocks(
         blocks.append(rgb_to_image_block(rgb))
         inventory = _history_record_inventory(rec)
         text = (
-            observation_templates.IMAGE_HISTORY_INVENTORY_ACTION.format(
+            user_templates.LAST3_USER_PROMPT["image_only_step"].format(
                 inventory=inventory,
                 action=rec["action"],
             )
             if observation == "image_only"
-            else observation_templates.IMAGE_HISTORY_INVENTORY.format(inventory=inventory)
+            else user_templates.LAST3_USER_PROMPT["image_text_step"].format(
+                inventory=inventory
+            )
         )
         blocks.append({"type": "text", "text": text})
 
     if not blocks:
         return []
 
-    intro = (
-        observation_templates.IMAGE_ONLY_HISTORY_INTRO
-        if observation == "image_only"
-        else observation_templates.IMAGE_TEXT_HISTORY_INTRO
-    )
-    return [{"type": "text", "text": intro}] + blocks
+    return [{"type": "text", "text": user_templates.LAST3_USER_PROMPT["header"]}] + blocks
 
 
 def current_observation_text(
@@ -207,7 +207,7 @@ def current_observation_text(
     include_facing: bool = False,
 ) -> str:
     if observation == "image_only":
-        return render_current_inventory_text(state)
+        return ""
     if not include_description:
         return ""
     return render_user_observation_text(task_spec, state, include_facing=include_facing)
