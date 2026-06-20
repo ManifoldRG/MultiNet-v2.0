@@ -829,15 +829,24 @@ def test_run_hash_canonicalizes_numeric_spelling():
     assert a == b
 
 
-# The four condition sets launched over validation_10 / tests 1-3, and the
+# The six condition sets launched over the conditional eval, and the
 # deduplicated rollout that runs the shared baseline exactly once. See
 # docs/validation10_condition_sweep_rollout.md.
-_LAUNCH_CONDITION_SETS = ["Prompt", "Observation format", "Context window", "Querying strategy"]
+_LAUNCH_CONDITION_SETS = [
+    "Prompt",
+    "Observation format",
+    "Context window",
+    "Action space",
+    "Querying strategy",
+    "In-context learning",
+]
 _BASELINE_VARIANT = {
     "Prompt": "standard",
     "Observation format": "image_only",
     "Context window": "current",
+    "Action space": "egocentric",
     "Querying strategy": "step_by_step",
+    "In-context learning": "zero_shot",
 }
 _DEDUP_ROLLOUT = [
     ("Prompt", None),  # shared baseline ("standard") + minimal + verbose
@@ -845,8 +854,10 @@ _DEDUP_ROLLOUT = [
     ("Observation format", "image_text"),
     ("Context window", "last3"),
     ("Context window", "text_summary"),
+    ("Action space", "cardinal"),
     ("Querying strategy", "subgoal"),
     ("Querying strategy", "full_trajectory"),
+    ("In-context learning", "one_shot"),
 ]
 
 
@@ -861,7 +872,9 @@ def test_launch_condition_sets_expose_expected_variants():
         "Prompt": ["standard", "minimal", "verbose"],
         "Observation format": ["image_only", "text_only", "image_text"],
         "Context window": ["current", "last3", "text_summary"],
+        "Action space": ["egocentric", "cardinal"],
         "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
+        "In-context learning": ["zero_shot", "one_shot"],
     }
 
 

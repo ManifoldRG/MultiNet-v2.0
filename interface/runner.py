@@ -13,6 +13,7 @@ import numpy as np
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
+from interface import action_space as action_space_mod
 from interface.actions_map import nlu_action_to_int
 from interface.config import ExperimentConfig
 from interface.coords import agent_facing, agent_row_col
@@ -25,7 +26,6 @@ from interface.observation import (
     history_text,
     recent_history_steps,
 )
-from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
     PromptStrategy,
@@ -116,12 +116,17 @@ def build_runner(
     backend: MiniGridBackend,
     task_spec: TaskSpecification,
 ) -> ExperimentRunner:
+    space = config.action_space
     return ExperimentRunner(
         backend=backend,
         task_spec=task_spec,
         config=config,
-        prompt=_PROMPT_STRATEGIES[config.prompting](ACTIONS_HINT),
-        querying=QueryingMode(config.querying),
+        prompt=_PROMPT_STRATEGIES[config.prompting](action_space_mod.actions_hint(space)),
+        querying=QueryingMode(
+            config.querying,
+            valid_actions=action_space_mod.valid_actions(space),
+            synonyms=action_space_mod.synonyms(space),
+        ),
     )
 
 
@@ -185,6 +190,12 @@ class ExperimentRunner:
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
 
         action_queue: List[str] = []
+        # Cardinal moves expand into several egocentric primitives; the buffer
+        # holds (primitive, source_cardinal_token) pairs so each primitive runs
+        # through the per-step machinery while keeping its provenance. Empty (and
+        # source None) in egocentric mode.
+        primitive_buffer: List[tuple[str, str | None]] = []
+        actions_hint = action_space_mod.actions_hint(self.config.action_space)
         last_feedback = feedback_templates.INITIAL_FEEDBACK
         consecutive_failures = 0
         transcript: List[dict] = []
@@ -219,7 +230,11 @@ class ExperimentRunner:
         )
 
         while state.step_count < max_steps:
-            if self.querying.should_query(action_queue, consecutive_failures):
+            # Never re-query while a cardinal move is still being drained into
+            # primitives, or the buffered primitives would be abandoned.
+            if not primitive_buffer and self.querying.should_query(
+                action_queue, consecutive_failures
+            ):
                 consecutive_failures = 0
                 query_count += 1
                 current_query_index = query_count
@@ -300,7 +315,7 @@ class ExperimentRunner:
                     )
                     last_feedback = (
                         feedback_templates.PARSE_FAILURE_FEEDBACK.format(
-                            actions_hint=ACTIONS_HINT
+                            actions_hint=actions_hint
                         )
                     )
                     if parse_failures >= self.config.max_parse_retries:
@@ -309,12 +324,23 @@ class ExperimentRunner:
                     continue
                 parse_failures = 0
 
-            # if action_queue is empty due to all actions having been executed, end the episode
-            if not action_queue:
-                end_reason = "exhausted"
-                break
+            # Refill the primitive buffer from the next queued action. In cardinal
+            # mode a move expands into turns + MOVE_FORWARD for the current facing;
+            # in egocentric mode it is the token itself with no source.
+            if not primitive_buffer:
+                if not action_queue:
+                    end_reason = "exhausted"
+                    break
+                token = action_queue.pop(0)
+                if self.config.action_space == "cardinal":
+                    primitives = action_space_mod.cardinal_to_primitives(
+                        token, agent_facing(state)
+                    )
+                    primitive_buffer = [(p, token) for p in primitives]
+                else:
+                    primitive_buffer = [(token, None)]
 
-            action = action_queue.pop(0)
+            action, cardinal_action = primitive_buffer.pop(0)
             step_index += 1
             position_before = agent_row_col(state)
             facing_before = agent_facing(state)
@@ -332,6 +358,7 @@ class ExperimentRunner:
                 last_feedback = step_detail
                 consecutive_failures += 1
                 action_queue.clear()
+                primitive_buffer.clear()
                 transcript.append(
                     {
                         "kind": "step",
@@ -340,6 +367,7 @@ class ExperimentRunner:
                         "action_queue_index": action_queue_index,
                         "env_step_count": state.step_count,
                         "action": action,
+                        "cardinal_action": cardinal_action,
                         "event_type": event_type,
                         "feedback": step_detail,
                         "prompt_feedback": last_feedback,
@@ -374,6 +402,7 @@ class ExperimentRunner:
             if event_type in {"BLOCKED", "WRONG_DONE", "INVALID"}:
                 consecutive_failures += 1
                 action_queue.clear()
+                primitive_buffer.clear()
             else:
                 consecutive_failures = 0
 
@@ -385,6 +414,7 @@ class ExperimentRunner:
                     "action_queue_index": action_queue_index,
                     "env_step_count": state.step_count,
                     "action": action,
+                    "cardinal_action": cardinal_action,
                     "event_type": event_type,
                     "feedback": step_detail,
                     "prompt_feedback": last_feedback,

@@ -244,7 +244,46 @@ Output exactly:
 FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 ========================================================================================
-condition set 4: Querying strategy
+condition set 4: Action space
+========================================================================================
+variant name: egocentric
+description: Turn-and-move interface-same as the standard prompt.
+prompts:
+preview steps: 3  rollout seed: 0
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+[user prompt]
+[image block 1]
+Your inventory: empty.
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+----------------------------------------------------------------------------------------
+variant name: cardinal
+description: Absolute moves (MOVE_NORTH/SOUTH/EAST/WEST) plus PICKUP, INTERACT, DONE; each move is expanded into egocentric primitives at runtime.
+prompts:
+preview steps: 3  rollout seed: 0
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: MOVE_NORTH, MOVE_SOUTH, MOVE_EAST, MOVE_WEST, PICKUP, INTERACT, DONE.
+
+[user prompt]
+[image block 1]
+Your inventory: empty.
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 5: Querying strategy
 ========================================================================================
 variant name: standard
 description: Ask for one action each query-same as the standard prompt.
@@ -302,7 +341,7 @@ Output exactly:
 FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
 ----------------------------------------------------------------------------------------
 ========================================================================================
-condition set 5: In-context learning
+condition set 6: In-context learning
 ========================================================================================
 variant name: standard
 description: No examples — same as the standard prompt.

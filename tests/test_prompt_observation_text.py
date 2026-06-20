@@ -347,6 +347,16 @@ def test_implemented_non_verbose_conditions_share_standard_system_prompt():
                 verbose_prompt = system_prompt
             elif variant.name == "minimal":
                 assert system_prompt == MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
+            elif variant.name == "cardinal":
+                # Cardinal shares the standard template but advertises the
+                # cardinal action vocabulary instead of the egocentric one.
+                from interface import action_space
+
+                expected = StandardPromptStrategy(
+                    action_space.actions_hint("cardinal")
+                ).build_system_prompt()
+                assert system_prompt == expected, (condition_name, variant.name)
+                assert system_prompt != standard_prompt
             else:
                 assert system_prompt == standard_prompt, (condition_name, variant.name)
 

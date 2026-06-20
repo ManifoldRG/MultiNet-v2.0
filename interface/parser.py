@@ -31,7 +31,11 @@ _FINAL_OUTPUT_RE = re.compile(r"(?i)^FINAL_OUTPUT\s*:\s*(.*)\s*$")
 
 
 def parse_final_output(
-    text: str, allow_regex_fallback: bool = True
+    text: str,
+    allow_regex_fallback: bool = True,
+    *,
+    valid_actions: set = VALID_ACTIONS,
+    synonyms: dict = _SYNONYMS,
 ) -> Optional[List[str]]:
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     trailing = lines[-5:] if len(lines) >= 5 else lines
@@ -47,7 +51,7 @@ def parse_final_output(
                 p = part.strip()
                 if not p:
                     continue
-                a = normalize_action(p)
+                a = normalize_action(p, valid_actions=valid_actions)
                 if not a:
                     return None
                 out.append(a)
@@ -58,7 +62,7 @@ def parse_final_output(
     if allow_regex_fallback:
         norm = text.lower()
         matches = []
-        for phrase, canonical in _SYNONYMS.items():
+        for phrase, canonical in synonyms.items():
             pattern = re.escape(phrase).replace(r"\ ", r"\s+")
             for m in re.finditer(pattern, norm):
                 matches.append((m.start(), canonical))
@@ -69,6 +73,6 @@ def parse_final_output(
     return None
 
 
-def normalize_action(raw: str) -> str:
+def normalize_action(raw: str, *, valid_actions: set = VALID_ACTIONS) -> str:
     verb = raw.strip().upper().replace(" ", "_")
-    return verb if verb in VALID_ACTIONS else ""
+    return verb if verb in valid_actions else ""

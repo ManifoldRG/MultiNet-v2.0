@@ -3,7 +3,12 @@ from __future__ import annotations
 import re
 from typing import List, Literal
 
-from interface.parser import normalize_action, parse_final_output
+from interface.parser import (
+    VALID_ACTIONS,
+    _SYNONYMS,
+    normalize_action,
+    parse_final_output,
+)
 from prompting_experiments.prompt_templates import querying as querying_templates
 
 QueryingKind = Literal["step_by_step", "subgoal", "full_trajectory"]
@@ -13,8 +18,16 @@ _ACTIONS_RE = re.compile(r"(?i)ACTIONS\s*:\s*(.+)")
 
 
 class QueryingMode:
-    def __init__(self, kind: QueryingKind) -> None:
+    def __init__(
+        self,
+        kind: QueryingKind,
+        *,
+        valid_actions: set = VALID_ACTIONS,
+        synonyms: dict = _SYNONYMS,
+    ) -> None:
         self.kind = kind
+        self._valid_actions = valid_actions
+        self._synonyms = synonyms
         self.current_subgoal = ""
         self._trajectory_loaded = False
 
@@ -31,7 +44,11 @@ class QueryingMode:
 
     def parse_actions(self, model_text: str) -> List[str]:
         if self.kind == "step_by_step":
-            out = parse_final_output(model_text)
+            out = parse_final_output(
+                model_text,
+                valid_actions=self._valid_actions,
+                synonyms=self._synonyms,
+            )
             return [out[0]] if out else []
 
         m = _SUBGOAL_RE.search(model_text)
@@ -39,9 +56,20 @@ class QueryingMode:
 
         m2 = _ACTIONS_RE.search(model_text)
         if m2:
-            actions = [a for a in (normalize_action(t) for t in m2.group(1).split(",")) if a]
+            actions = [
+                a
+                for a in (
+                    normalize_action(t, valid_actions=self._valid_actions)
+                    for t in m2.group(1).split(",")
+                )
+                if a
+            ]
         else:
-            out = parse_final_output(model_text)
+            out = parse_final_output(
+                model_text,
+                valid_actions=self._valid_actions,
+                synonyms=self._synonyms,
+            )
             actions = out if out else []
 
         if self.kind == "full_trajectory" and actions:
