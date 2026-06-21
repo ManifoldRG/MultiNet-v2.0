@@ -33,54 +33,61 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 
 ## 2. Dependencies to merge (into `Distributed-run-pipeline`, never main)
 
-- [ ] Merge **PR #23** (`history_summary`): minimal prompt (Set 1), history/text
+- [x] Merge **PR #23** (`history_summary`): minimal prompt (Set 1), history/text
       summary (Set 3 `text_summary`), one-shot example (Set 6 `one_shot`).
-- [ ] Confirm S/M/B/D fixture mazes exist for the conditional set (PR #19 added S
-      + M1 mazes; verify B and the 2 D are available).
+      Merged into `Distributed-run-pipeline`; resolved a same-cell-pickup
+      runtime↔solver conflict (see [[same-cell-key-pickup-invariant]]).
+- [x] Confirm S/M/B/D fixture mazes exist for the conditional set. S/M/D pulled
+      from ogbench (all sources verified on disk); the **B** maze is the
+      hand-authored held-out blind probe (see §4).
 
 ## 3. Code implementation
 
-- [ ] **Set 1**: register `minimal` variant in `condition_set_1_prompt.py` (config knob
-      `prompting="minimal"` already exists).
-- [ ] **Set 2** (D1 = run 2): no registry change; the Set-2 launch rollout runs
-      `image_only` + `image_text` only and omits `text_only` (kept implemented for
-      later). text_only stays in the coverage tests as implemented.
-- [ ] **Set 3**: implement `text_summary` variant in `condition_set_3_context_window.py`
-      (currently `implemented=False`); wire to PR #23's summary capability. Confirm
-      `ExperimentConfig.context_window` (or `chat_history`) gains the summary option.
-- [ ] **Set 4 (NEW Action space)**: add `action_space: Literal["egocentric","cardinal"]`
-      to `ExperimentConfig`; implement cardinal action set (MOVE_NORTH/SOUTH/EAST/WEST,
-      INTERACT) in the interface (`querying`/action parsing/`coords`); create
-      `condition_set_action_space.py`; register in `CONDITION_SETS`.
-- [ ] **Set 5** (D2 = run all 3): no code change — `step_by_step`, `subgoal`,
-      `full_trajectory` are all implemented; include all three in the launch rollout.
-- [ ] **Set 6**: set `condition_set_5_in_context_learning.py` `implemented=True`;
-      implement `one_shot` (PR #23); add ICL example trajectories. **Constraint: ICL
-      examples must NOT use any evaluation maze** (add a test asserting disjointness).
-- [ ] Update `CONDITION_SETS` registry + `condition_variant_names` so all 6 sets and
-      14 variants resolve; keep `variant.name` globally unique (locked by tests).
-- [ ] Update `docs/validation10_condition_sweep_rollout.md` for 6 sets / new counts
-      and the conditional_eval manifest, and refresh the dedup coverage tests
-      (`test_dedup_rollout_covers_every_unique_variant_config_once`).
+- [x] **Set 1**: `minimal` variant registered in `condition_set_1_prompt.py`
+      (delivered by PR #23).
+- [x] **Set 2** (D1 = run 2): no registry change; `text_only` stays implemented,
+      omitted from the launch rollout (handled via `--prompt-variant` in the
+      rollout doc, not the run-config).
+- [x] **Set 3**: `text_summary` implemented in `condition_set_3_context_window.py`
+      and wired to `ExperimentConfig.context_window="text_summary"` (PR #23).
+- [x] **Set 4 (NEW Action space)**: added `action_space` knob; cardinal vocabulary
+      (MOVE_NORTH/SOUTH/EAST/WEST, PICKUP, INTERACT, DONE) in
+      `interface/action_space.py` with facing-relative expansion in the runner
+      (each primitive = 1 step; `cardinal_action` provenance recorded);
+      `condition_set_4_action_space.py` registered in `CONDITION_SETS`.
+- [x] **Set 5** (D2 = run all 3): no code change; all three querying variants run.
+- [x] **Set 6**: ICL set enabled with `one_shot` (PR #23); disjointness test added
+      (`tests/test_one_shot_solution.py`) asserting the example uses no eval maze.
+- [x] Update `CONDITION_SETS` registry + `condition_variant_names` so all 6 sets /
+      15 variant-slots resolve; `variant.name` globally unique (locked by tests).
+- [x] Update `docs/validation10_condition_sweep_rollout.md` for 6 sets / new counts
+      and the conditional_eval manifest, and the dedup coverage tests.
 
 ## 4. Mazes & manifests
 
-- [ ] **Generate the blind box probe maze** (not generated yet).
-- [ ] **Render the blind maze in 2D once merged** (TODO).
-- [ ] **D3 = the blind probe maze is one of the 5 (S/M/B/D/D); conditional set stays 15.**
-- [ ] Create `manifest.conditional_eval.json` = validation_10 + S/M/B/D/D (one of the
-      5 is the blind probe maze) = 15 total.
-- [ ] Create `manifest.smoke_eval.json` = 3 mazes.
+- [x] **Generate the blind box probe maze**: hand-authored held-out 11th B
+      (blind) maze `mazes/conditional/blind_probe_B_holdout.json` — keys/doors
+      uniform grey, switches uniform white (no white key/door in the MiniGrid
+      palette), 4 doors / 2 keys / 2 switches with positional+consumption decoys.
+      Genuine wrong-keys/doors deferred (see [[blind-mazes-and-wrong-key-refactor]]).
+- [x] **Render the blind maze in 2D** → `mazes/maze_image/conditional/blind_probe_B_holdout.png`.
+- [x] **D3 = the blind probe maze is one of the 5 (S/M/B/D/D); conditional set stays 15.**
+      It is the held-out **B** maze.
+- [x] Create `manifest.conditional_eval.json` = validation_10 + S/M/B/D/D (B = the
+      blind probe) = 15 total; all 5 added mazes disjoint from the 50-maze run.
+- [x] Create `manifest.smoke_eval.json` = 3 mazes.
 - [ ] Confirm/alias `manifest.ogbench_50_smbd.json` as the "Phase 1 full run".
 
 ## 5. Run configs (3 models, with the H1/H2 manifest+conditions guard)
 
-- [ ] One run-config per condition set against `manifest.conditional_eval.json`,
-      each declaring `manifest` + `conditions` (re-point the existing
-      `run_config.validation10_*` files to conditional_eval, or add new ones).
-- [ ] Add Action space and In-context learning run-configs.
-- [ ] Update Observation/Querying configs to the trimmed variant counts.
-- [ ] Smoke run-config: qwen `worker_count: 2`, kimi `worker_count: 1`.
+- [x] One run-config per condition set against `manifest.conditional_eval.json`,
+      each declaring `manifest` + `conditions` (new
+      `run_config.conditional_*_claude_kimi_qwen.json` files; H1/H2 guard tested).
+- [x] Action space and In-context learning run-configs added.
+- [x] Variant trimming (Set 2 omits `text_only`) is handled in the rollout via
+      `--prompt-variant`, not the run-config.
+- [x] Smoke run-config `run_config.smoke_eval_qwen_kimi.json`: qwen
+      `worker_count: 2`, kimi `worker_count: 1`.
 
 ## 6. Smoke / orchestration test
 
