@@ -91,9 +91,11 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 
 ## 6. Smoke / orchestration test
 
-- [ ] 3-maze `manifest.smoke_eval.json` + run-config validating: **2 parallel Qwen
-      runners + 1 Kimi runner**, and the coordinator handing the next maze to a
-      runner as soon as one finishes (work-stealing).
+- [x] 3-maze `manifest.smoke_eval.json` + `run_config.smoke_eval_qwen_kimi.json`
+      validating **2 parallel Qwen runners + 1 Kimi runner** and the coordinator
+      handing the next maze to a runner as soon as one finishes (work-stealing).
+      Covered by `test_smoke_coordinator_work_steals_across_two_qwen_and_one_kimi`
+      (note: Qwen `max_in_flight` must be ≥2 or the two Qwen runners serialize).
 - [ ] Decide if other coordinator capabilities need exercising (e.g. stale
       reassignment, GCS mirror, finalize) and extend the smoke if so.
 
@@ -106,12 +108,17 @@ the baseline is shared across all sets, so the 14 slots are **9 unique configs**
 
 ## 8. Outstanding Medium items (from the launch review)
 
-- [ ] **M5**: Kimi `enable_thinking` is silently dropped by the agent factory
-      (`run_pipeline._build_agent_from_spec` kimi branch) — wire it or document.
-- [ ] **M6**: validate the 4096 `max_tokens` budget on a 1-task API smoke before the
-      full run (qwen notes saw truncation/parse-failure at 4096).
-- [ ] **M4**: make `_jsonable` fallback `str(value)` raise instead of stringifying,
-      so a non-primitive can't poison the cross-machine cache hash.
+- [x] **M5**: Kimi `enable_thinking` is now forwarded by the agent factory
+      (`run_pipeline._build_agent_from_spec` kimi branch); test in
+      `tests/test_kimi_k26_agent.py`.
+- [~] **M6**: the 4096 `max_tokens` budget is asserted on every conditional
+      run-config model (test), but the live truncation/parse check is an operator
+      step requiring API keys. Before the full run, run a 1-task API smoke, e.g.:
+      `multinet-run-pipeline --run-config gridworld/fixtures/run_config.conditional_prompt_claude_kimi_qwen.json --manifest gridworld/fixtures/manifest.conditional_eval.json --conditions "Prompt" --prompt-variant standard --seeds 0 --artifacts-root artifacts/m6_smoke --run-set-id m6_smoke --difficulty-max-static-score <MAX>`
+      and confirm Kimi/Claude replies parse without 4096-token truncation.
+- [x] **M4**: `_jsonable` now raises `TypeError` instead of stringifying an
+      unknown type, so a non-primitive cannot poison the cross-machine cache hash;
+      test in `tests/test_run_pipeline.py`.
 
 ## 9. Decisions (resolved)
 

@@ -800,6 +800,92 @@ def test_distributed_prepare_supports_qwen_groups_without_hardcoding(tmp_path):
     }
 
 
+def _valid_unit_archive(unit) -> bytes:
+    """Build a minimal archive that passes the coordinator's verify (the three
+    EXPECTED_RUN_FILES at root, each valid JSON)."""
+    from scripts.distributed_run_pipeline import EXPECTED_RUN_FILES
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name in EXPECTED_RUN_FILES:
+            data = json.dumps({"unit_id": unit["unit_id"], "file": name}).encode("utf-8")
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_smoke_coordinator_work_steals_across_two_qwen_and_one_kimi(tmp_path):
+    """The smoke job's coordinator must run two Qwen runners in parallel, keep
+    Kimi units off Qwen workers (and vice versa), and hand the next maze to a
+    runner as soon as it finishes (work-stealing)."""
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
+
+    artifacts = tmp_path / "artifacts"
+    plan = prepare_job(
+        run_config_path=_SMOKE_EVAL_RUN_CONFIG,
+        manifest_path=_SMOKE_EVAL_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="smoke",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    # 3 mazes x 2 models = 6 units, split by group.
+    units_by_group = Counter(u["model_group"] for u in plan["units"])
+    assert units_by_group == {"qwen35-27b": 3, "kimi-api": 3}
+
+    store = CoordinatorStore(artifacts)
+    qwen_caps = {"model_groups": ["qwen35-27b"], "hardware_profile": "local-gpu"}
+    kimi_caps = {"model_groups": ["kimi-api"]}
+    for wid, caps in [("qwenA", qwen_caps), ("qwenB", qwen_caps), ("kimi1", kimi_caps)]:
+        store.register({"worker_id": wid, "capabilities": caps})
+
+    def claim(wid, caps):
+        return store.assign(wid, caps)["unit"]
+
+    # Both Qwen workers hold distinct Qwen units at once (parallel, in-flight cap 2).
+    a1 = claim("qwenA", qwen_caps)
+    b1 = claim("qwenB", qwen_caps)
+    k1 = claim("kimi1", kimi_caps)
+    assert a1 and b1 and k1
+    assert a1["unit_id"] != b1["unit_id"]
+    assert a1["model_group"] == "qwen35-27b" and b1["model_group"] == "qwen35-27b"
+    assert k1["model_group"] == "kimi-api"
+
+    # qwenA finishes first and immediately steals the next (third) Qwen unit while
+    # qwenB is still busy on its first.
+    store.upload("qwenA", a1["unit_id"], _valid_unit_archive(a1))
+    a2 = claim("qwenA", qwen_caps)
+    assert a2 is not None
+    assert a2["model_group"] == "qwen35-27b"
+    assert a2["unit_id"] not in {a1["unit_id"], b1["unit_id"]}
+
+    # No Qwen units remain for qwenB to start a *new* one (3 total: a1 done, b1
+    # active, a2 active) -> it just keeps its current unit.
+    store.upload("qwenB", b1["unit_id"], _valid_unit_archive(b1))
+    store.upload("qwenA", a2["unit_id"], _valid_unit_archive(a2))
+
+    # Kimi worker drains all three Kimi units one-by-one (work-stealing of its own
+    # queue); a Qwen worker never receives a Kimi unit.
+    kimi_done = {k1["unit_id"]}
+    store.upload("kimi1", k1["unit_id"], _valid_unit_archive(k1))
+    while True:
+        nxt = claim("kimi1", kimi_caps)
+        if nxt is None:
+            break
+        assert nxt["model_group"] == "kimi-api"
+        kimi_done.add(nxt["unit_id"])
+        store.upload("kimi1", nxt["unit_id"], _valid_unit_archive(nxt))
+    assert len(kimi_done) == 3
+
+    # A Qwen worker is never handed a Kimi unit, and with everything verified the
+    # coordinator hands out nothing more.
+    assert claim("qwenA", qwen_caps) is None
+    state = store.load_state()
+    assert all(u["status"] == "verified" for u in state["units"].values())
+
+
 def test_check_run_config_expectations_manifest_mismatch():
     rc = {"models": {}, "manifest": "gridworld/fixtures/manifest.json"}
     with pytest.raises(ValueError, match="manifest"):
@@ -853,6 +939,9 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         for model_cfg in rc["models"].values():
             rows = resolve_task_rows(model_cfg["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
             assert len(rows) == 15
+            # M6: the 4096 max_tokens budget must be declared for every model so
+            # the live 1-task API smoke validates the same budget the run uses.
+            assert model_cfg["max_tokens"] == 4096
 
 
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
@@ -861,6 +950,9 @@ def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
     check_run_config_expectations(rc, _SMOKE_EVAL_MANIFEST, None)  # no raise
     assert set(rc["models"]) == {"qwen35_27b_hf", "kimi_k26"}
     assert rc["models"]["qwen35_27b_hf"]["worker_count"] == 2
+    # max_in_flight caps concurrent units per model group, so 2 parallel Qwen
+    # runners need a Qwen cap of >= 2 or they serialize.
+    assert rc["models"]["qwen35_27b_hf"]["max_in_flight"] == 2
     assert rc["models"]["kimi_k26"]["worker_count"] == 1
 
 
