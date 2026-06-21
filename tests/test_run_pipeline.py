@@ -50,6 +50,15 @@ _PENDING_VALIDATION10_CONFIGS = {
     "Context window": _FIXTURES / "run_config.validation10_context_window_claude_kimi_qwen.json",
     "Querying strategy": _FIXTURES / "run_config.validation10_querying_strategy_claude_kimi_qwen.json",
 }
+_CONDITIONAL_CONFIGS = {
+    "Prompt": _FIXTURES / "run_config.conditional_prompt_claude_kimi_qwen.json",
+    "Observation format": _FIXTURES / "run_config.conditional_observation_format_claude_kimi_qwen.json",
+    "Context window": _FIXTURES / "run_config.conditional_context_window_claude_kimi_qwen.json",
+    "Action space": _FIXTURES / "run_config.conditional_action_space_claude_kimi_qwen.json",
+    "Querying strategy": _FIXTURES / "run_config.conditional_querying_strategy_claude_kimi_qwen.json",
+    "In-context learning": _FIXTURES / "run_config.conditional_in_context_learning_claude_kimi_qwen.json",
+}
+_SMOKE_EVAL_RUN_CONFIG = _FIXTURES / "run_config.smoke_eval_qwen_kimi.json"
 _STABLE_DIFFICULTY_MAX = 1000.0
 
 
@@ -819,6 +828,40 @@ def test_launch_run_configs_declare_manifest_and_conditions():
         assert rc["conditions"] == cond
         # The guard must accept the declared pairing without raising.
         check_run_config_expectations(rc, _MANIFEST, cond)
+
+
+def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
+    # One run-config per condition set, each pinned to the conditional_eval
+    # manifest and its own --conditions, so the H1/H2 guard cannot benchmark the
+    # wrong suite/axis across paid models.
+    assert set(_CONDITIONAL_CONFIGS) == {
+        "Prompt",
+        "Observation format",
+        "Context window",
+        "Action space",
+        "Querying strategy",
+        "In-context learning",
+    }
+    catalog = json.loads(_CONDITIONAL_EVAL_MANIFEST.read_text(encoding="utf-8"))["tasks"]
+    for cond, path in _CONDITIONAL_CONFIGS.items():
+        rc = load_run_config(path)
+        assert (_REPO_ROOT / rc["manifest"]).resolve() == _CONDITIONAL_EVAL_MANIFEST.resolve()
+        assert rc["conditions"] == cond
+        check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, cond)  # no raise
+        assert set(rc["models"]) == {"qwen35_27b_hf", "kimi_k26", "claude_sonnet"}
+        assert {m["provider"] for m in rc["models"].values()} == {"qwen", "kimi", "claude"}
+        for model_cfg in rc["models"].values():
+            rows = resolve_task_rows(model_cfg["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
+            assert len(rows) == 15
+
+
+def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
+    rc = load_run_config(_SMOKE_EVAL_RUN_CONFIG)
+    assert (_REPO_ROOT / rc["manifest"]).resolve() == _SMOKE_EVAL_MANIFEST.resolve()
+    check_run_config_expectations(rc, _SMOKE_EVAL_MANIFEST, None)  # no raise
+    assert set(rc["models"]) == {"qwen35_27b_hf", "kimi_k26"}
+    assert rc["models"]["qwen35_27b_hf"]["worker_count"] == 2
+    assert rc["models"]["kimi_k26"]["worker_count"] == 1
 
 
 def _chain_spec():
