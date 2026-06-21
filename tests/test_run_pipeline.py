@@ -40,6 +40,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FIXTURES = _REPO_ROOT / "gridworld" / "fixtures"
 _MANIFEST = _FIXTURES / "manifest.json"
 _OGBENCH_50_MANIFEST = _FIXTURES / "manifest.ogbench_50_smbd.json"
+_CONDITIONAL_EVAL_MANIFEST = _FIXTURES / "manifest.conditional_eval.json"
+_SMOKE_EVAL_MANIFEST = _FIXTURES / "manifest.smoke_eval.json"
 _COORDINATOR_SMOKE_MANIFEST = _FIXTURES / "manifest.coordinator_smoke_validation10_ogbench.json"
 _COORDINATOR_SMOKE_RUN_CONFIG = _FIXTURES / "run_config.coordinator_smoke_qwen_kimi.json"
 _PENDING_VALIDATION10_CONFIGS = {
@@ -310,7 +312,45 @@ def test_coordinator_smoke_manifest_selection_metadata_and_holdouts():
     assert dict(family_counts) == {"S": 1, "M": 1, "D": 2}
     assert smoke["selection"]["counts"] == {"validation_10": 10, "S": 1, "M": 1, "B": 0, "D": 2}
     assert "B-family" in smoke["selection"]["b_family_omission"]
-    assert "manifest.ogbench_50_smbd.json" in smoke["selection"]["b_family_omission"]
+
+
+def test_conditional_eval_manifest_is_15_mazes_held_out_from_the_50_run():
+    manifest = json.loads(_CONDITIONAL_EVAL_MANIFEST.read_text(encoding="utf-8"))
+    rows = manifest["tasks"]
+    assert len(rows) == 15
+
+    # 10 validation_10 rows (same as the base catalog's test1 rows) ...
+    val_rows = [r for r in rows if r["task_id"].startswith("validation_10_")]
+    expected_val = [r for r in _catalog() if r["experiment"] == "test1"]
+    assert [r["task_id"] for r in val_rows] == [r["task_id"] for r in expected_val]
+
+    # ... plus 5 conditional S/M/B/D/D rows.
+    conditional = [r for r in rows if r.get("experiment") == "conditional"]
+    assert dict(Counter(r["maze_family"] for r in conditional)) == {"S": 1, "M": 1, "B": 1, "D": 2}
+
+    # Every added maze must be held out from the 50-maze run so the verification
+    # experiments cannot affect it.
+    ogbench50_sources = {
+        r["source"] for r in json.loads(_OGBENCH_50_MANIFEST.read_text(encoding="utf-8"))["tasks"]
+    }
+    assert not ({r["source"] for r in conditional} & ogbench50_sources)
+
+    # The B row is the held-out blind probe maze.
+    b_rows = [r for r in conditional if r["maze_family"] == "B"]
+    assert len(b_rows) == 1
+    assert b_rows[0]["source"] == "mazes/conditional/blind_probe_B_holdout.json"
+    assert (_REPO_ROOT / b_rows[0]["source"]).exists()
+    assert manifest["selection"]["counts"] == {"validation_10": 10, "S": 1, "M": 1, "B": 1, "D": 2}
+
+
+def test_smoke_eval_manifest_is_three_resolvable_mazes():
+    manifest = json.loads(_SMOKE_EVAL_MANIFEST.read_text(encoding="utf-8"))
+    rows = manifest["tasks"]
+    assert len(rows) == 3
+    for row in rows:
+        assert (_REPO_ROOT / row["source"]).exists()
+    resolved = resolve_task_rows(["all"], rows, _SMOKE_EVAL_MANIFEST)
+    assert [r["task_id"] for r in resolved] == [r["task_id"] for r in rows]
 
 
 # --------------------------------------------------------------------------- #

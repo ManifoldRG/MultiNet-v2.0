@@ -1,0 +1,220 @@
+{
+  "task_id": "blind_probe_B_holdout",
+  "version": "2.0",
+  "seed": 73,
+  "difficulty_tier": 4,
+  "description": "Blind held-out probe (B family): all keys and doors render uniform grey and all switches uniform white (the MiniGrid palette has no white key/door), so the agent must reason from state changes, not color. Reach the goal through gate g1 (switch s1) and door D_goal. Decoys: switch s2 only opens gate g2 onto a dead end; key k2 sits behind decoy door D2 in a dead end; doors D3/D4 seal empty pockets.",
+  "maze": {
+    "dimensions": [
+      15,
+      9
+    ],
+    "walls": [
+      [
+        5,
+        1
+      ],
+      [
+        5,
+        2
+      ],
+      [
+        5,
+        3
+      ],
+      [
+        5,
+        5
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        5,
+        7
+      ],
+      [
+        10,
+        1
+      ],
+      [
+        10,
+        2
+      ],
+      [
+        10,
+        3
+      ],
+      [
+        10,
+        5
+      ],
+      [
+        10,
+        6
+      ],
+      [
+        10,
+        7
+      ],
+      [
+        1,
+        6
+      ],
+      [
+        8,
+        7
+      ],
+      [
+        9,
+        2
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        6,
+        5
+      ]
+    ],
+    "start": [
+      1,
+      1
+    ],
+    "goal": [
+      13,
+      4
+    ]
+  },
+  "mechanisms": {
+    "keys": [
+      {
+        "id": "k1",
+        "position": [
+          6,
+          4
+        ],
+        "color": "grey"
+      },
+      {
+        "id": "k2",
+        "position": [
+          9,
+          7
+        ],
+        "color": "grey"
+      }
+    ],
+    "doors": [
+      {
+        "id": "D_goal",
+        "position": [
+          10,
+          4
+        ],
+        "requires_key": "grey",
+        "initial_state": "locked"
+      },
+      {
+        "id": "D2",
+        "position": [
+          9,
+          6
+        ],
+        "requires_key": "grey",
+        "initial_state": "locked"
+      },
+      {
+        "id": "D3",
+        "position": [
+          8,
+          1
+        ],
+        "requires_key": "grey",
+        "initial_state": "locked"
+      },
+      {
+        "id": "D4",
+        "position": [
+          6,
+          7
+        ],
+        "requires_key": "grey",
+        "initial_state": "locked"
+      }
+    ],
+    "switches": [
+      {
+        "id": "s1",
+        "position": [
+          4,
+          4
+        ],
+        "controls": [
+          "g1"
+        ],
+        "color": "white",
+        "switch_type": "toggle",
+        "initial_state": "off"
+      },
+      {
+        "id": "s2",
+        "position": [
+          3,
+          7
+        ],
+        "controls": [
+          "g2"
+        ],
+        "color": "white",
+        "switch_type": "toggle",
+        "initial_state": "off"
+      }
+    ],
+    "gates": [
+      {
+        "id": "g1",
+        "position": [
+          5,
+          4
+        ],
+        "color": "black",
+        "initial_state": "closed"
+      },
+      {
+        "id": "g2",
+        "position": [
+          2,
+          7
+        ],
+        "color": "black",
+        "initial_state": "closed"
+      }
+    ]
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [
+      13,
+      4
+    ],
+    "auxiliary_conditions": []
+  },
+  "metadata": {
+    "chain_pattern": "blind_white_kr_swg_with_decoys",
+    "tiling": "square",
+    "wall_topology": "rooms",
+    "family": "B",
+    "held_out": true
+  },
+  "max_steps": 600
+}
