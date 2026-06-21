@@ -84,3 +84,19 @@ def test_run_config_builds_kimi_agent(monkeypatch):
     assert label == "kimi-k2.6"
     assert agent.config.max_tokens == 64
     assert agent.config.timeout == 10
+
+
+def test_run_config_wires_kimi_enable_thinking(monkeypatch):
+    """enable_thinking must flow from the run-config into the Kimi agent (M5).
+    It is a generation-affecting knob in the cache hash, so dropping it would
+    make the hash and the actual model call disagree."""
+    monkeypatch.setenv("MOONSHOT_API_KEY", "secret")
+
+    on, _ = _build_agent_from_spec(
+        "kimi", {"provider": "kimi", "model": "kimi-k2.6", "enable_thinking": True}
+    )
+    off, _ = _build_agent_from_spec(
+        "kimi", {"provider": "kimi", "model": "kimi-k2.6", "enable_thinking": False}
+    )
+    assert on.config.enable_thinking is True
+    assert off.config.enable_thinking is False

@@ -903,6 +903,22 @@ def test_generation_model_config_keys_change_run_hash():
         assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) != base_hash, gen
 
 
+def test_jsonable_rejects_non_primitive_instead_of_stringifying():
+    """A type the hash recipe does not understand must raise, not be silently
+    str()'d — a stringified object can collide or vary across machines and
+    poison the cross-machine episode cache hash (M4)."""
+    from scripts.run_pipeline import _jsonable
+
+    class Opaque:
+        pass
+
+    with pytest.raises(TypeError):
+        _jsonable(Opaque())
+    # Known/handled types still pass through unchanged.
+    assert _jsonable({"a": (1, 2), "b": {3, 4}}) == {"a": [1, 2], "b": [3, 4]}
+    assert _jsonable(2.0) == 2
+
+
 def test_run_hash_canonicalizes_numeric_spelling():
     """``0`` vs ``0.0`` (or ``128`` vs ``128.0``) is the same model call — it must
     not produce a different cache key."""

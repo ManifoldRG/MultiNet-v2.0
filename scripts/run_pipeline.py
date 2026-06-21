@@ -258,7 +258,14 @@ def _jsonable(value: Any) -> Any:
         return int(value)
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    return str(value)
+    # Do NOT silently str() an unknown type into the cache key: a stringified
+    # object (e.g. a repr with a memory address) can collide or vary across
+    # machines, poisoning the cross-machine episode cache hash. Fail loudly so
+    # the recipe is extended deliberately for any new type that must be hashed.
+    raise TypeError(
+        f"_jsonable cannot canonicalize {type(value).__name__} for the cache hash; "
+        "add an explicit branch (or a to_dict) instead of stringifying it."
+    )
 
 
 def _runtime_model_config(model_config: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -789,6 +796,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.timeout = float(model_cfg["timeout"])
         if "max_attempts" in model_cfg:
             cfg.max_attempts = int(model_cfg["max_attempts"])
+        if "enable_thinking" in model_cfg:
+            cfg.enable_thinking = bool(model_cfg["enable_thinking"])
         return KimiK26Agent(config=cfg), model or cfg.model
     if provider == "qwen":
         from interface.agents import Qwen35VLAgent, Qwen35VLConfig
