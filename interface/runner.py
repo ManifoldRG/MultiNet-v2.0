@@ -484,6 +484,10 @@ class ExperimentRunner:
         querying_suffix = self.querying.user_prompt_suffix()
         if querying_suffix:
             sections.append(querying_suffix)
+        # image_text alone made Qwen ramble reasoning and never emit FINAL_OUTPUT.
+        # Append the format reminder last so it is the final thing the model reads.
+        if obs == "image_text":
+            sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)

@@ -146,6 +146,8 @@ What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 3: Context window

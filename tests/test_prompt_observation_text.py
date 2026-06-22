@@ -250,6 +250,26 @@ def test_observation_format_initial_maze_only_for_text_variants():
         assert has_initial_maze is False, variant_name
 
 
+def test_image_text_prompt_carries_action_format_reminder():
+    """image_text is the only observation mode where Qwen rambled spatial
+    reasoning and never emitted FINAL_OUTPUT (parse failures). It gets an extra
+    'don't narrate, end with FINAL_OUTPUT' reminder; image_only and text_only —
+    which had zero parse failures — must NOT get it."""
+    from prompting_experiments.prompt_templates import user as user_templates
+
+    reminder = user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER
+    assert "without narrating" in reminder
+    assert "FINAL_OUTPUT" in reminder
+
+    image_text = _initial_user_prompt_text(ExperimentConfig(observation="image_text"))
+    assert reminder in image_text
+    # The reminder is the final thing the model reads (highest attention).
+    assert image_text.rstrip().endswith(reminder)
+
+    for obs in ("image_only", "text_only"):
+        assert reminder not in _initial_user_prompt_text(ExperimentConfig(observation=obs)), obs
+
+
 def test_initial_prompts_omit_current_status_footer_without_history_context():
     for variant in CONDITION_SET.variants.values():
         cfg = variant.build_config(ExperimentConfig())
