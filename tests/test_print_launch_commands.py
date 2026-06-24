@@ -45,3 +45,10 @@ def test_group_mismatch_detected_against_plan(tmp_path):
 
 def test_group_mismatch_empty_when_no_plan(tmp_path):
     assert group_mismatches(_cluster(str(tmp_path / "missing"))) == []
+
+
+def test_build_commands_omits_optional_flags_when_absent():
+    cmds = build_commands(_cluster("artifacts/x"), run_config="rc.json", manifest="m.json")
+    assert "--conditions" not in cmds["coordinator-prepare"]
+    assert "--prompt-variant" not in cmds["coordinator-prepare"]
+    assert "--storage-config" not in cmds["coordinator-serve"]
