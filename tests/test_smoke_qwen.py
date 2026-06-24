@@ -11,7 +11,9 @@ def test_format_verdict_below_target():
 
 
 def test_format_verdict_meets_target():
-    assert "MEETS" in format_verdict(TARGET_TOK_S + 1.0)
+    msg = format_verdict(TARGET_TOK_S + 1.0)
+    assert "MEETS" in msg
+    assert "101.0" in msg
 
 
 def test_kernels_active_reports_bools_for_expected_keys():

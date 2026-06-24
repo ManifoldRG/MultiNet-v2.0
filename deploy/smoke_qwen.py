@@ -53,6 +53,8 @@ def _run_model(model: str, max_new_tokens: int) -> float:
     agent(messages)
     elapsed = time.perf_counter() - t0
     out_tokens = int((agent.last_usage or {}).get("output_tokens", 0))
+    if out_tokens == 0:
+        print("WARNING: agent reported 0 output tokens; tok/s is not meaningful.")
     return (out_tokens / elapsed) if elapsed > 0 else 0.0
 
 
