@@ -44,3 +44,24 @@ def test_bad_json_raises(tmp_path):
     p.write_text("{not json", encoding="utf-8")
     with pytest.raises(ClusterConfigError):
         load_cluster(p)
+
+
+def test_duplicate_names_raise(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(
+        json.dumps(
+            {
+                "coordinator": {"host": "h", "port": 1, "artifacts_root": "a", "run_set_id": "r"},
+                "workers": [{"name": "dup", "host": "h", "model_group": "g", "hardware_profile": "p"}],
+                "api_clients": [{"name": "dup", "model_group": "g2"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ClusterConfigError):
+        load_cluster(p)
+
+
+def test_missing_file_raises(tmp_path):
+    with pytest.raises(ClusterConfigError):
+        load_cluster(tmp_path / "nonexistent.json")
