@@ -1,0 +1,41 @@
+{
+  "description": "Qwen3.6 VM smoke (no quantization): 2 Qwen3.6-27B runners + 1 Kimi runner over the 3-maze smoke manifest, for coordinator work-stealing. Not for measurement.",
+  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "conditions": null,
+  "models": {
+    "qwen36_27b_hf": {
+      "provider": "qwen",
+      "model": "Qwen/Qwen3.6-27B",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "enable_thinking": false,
+      "device_map": {
+        "": 0
+      },
+      "local_files_only": true,
+      "torch_dtype": "bfloat16",
+      "attn_implementation": "flash_attention_2",
+      "load_in_4bit": false,
+      "group": "qwen36-27b",
+      "hardware_profile": "local-gpu",
+      "worker_count": 2,
+      "max_in_flight": 2,
+      "tasks": [
+        "all"
+      ]
+    },
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}
