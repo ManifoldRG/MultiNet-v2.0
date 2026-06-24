@@ -145,6 +145,11 @@ Header comment documents both load paths (env vars, or the existing gitignored
 `check_api_keys.py` parses `.env` itself. The pipeline's existing key mechanism
 (`interface/agents/api_keys.py`, env vars) is left untouched.
 
+> **`.gitignore` gotcha:** the repo ignores `.env.*`, which would silently
+> swallow `.env.example`. Item 2 must add a `!.env.example` negation to
+> `.gitignore` (after the `.env.*` line) so the template is committable, while
+> real `.env` files stay ignored.
+
 ### `deploy/check_api_keys.py`
 
 - Resolves each key in order: env → `.env` → `api_key.txt`.
