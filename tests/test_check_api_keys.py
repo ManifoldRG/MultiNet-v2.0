@@ -57,3 +57,26 @@ def test_hello_roundtrip_routes_to_kimi_agent(monkeypatch):
     assert seen["api_key"] == "ms-key"
     assert seen["messages"] == [{"role": "user", "content": cak.HELLO}]
     assert seen["config"].max_tokens == 32
+
+
+def test_hello_roundtrip_routes_to_claude_agent(monkeypatch):
+    seen = {}
+
+    class FakeClaude:
+        def __init__(self, config=None, api_key=None):
+            seen["config"] = config
+            seen["api_key"] = api_key
+            self.last_usage = {"output_tokens": 4}
+
+        def __call__(self, messages):
+            seen["messages"] = messages
+            return "All good, thanks!"
+
+    import interface.agents.claude as claude_mod
+    monkeypatch.setattr(claude_mod, "ClaudeAnthropicAgent", FakeClaude)
+
+    out = cak.hello_roundtrip("anthropic", "sk-ant-key")
+    assert out["ok"] is True and out["reply"] == "All good, thanks!"
+    assert seen["api_key"] == "sk-ant-key"
+    assert seen["messages"] == [{"role": "user", "content": cak.HELLO}]
+    assert seen["config"].max_tokens == 32
