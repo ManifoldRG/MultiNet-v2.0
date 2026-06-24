@@ -26,6 +26,7 @@ env/
 # Secrets / local config
 .env
 .env.*
+!.env.example
 api_key.txt
 
 # GPU driver installers (install outside the repo, e.g. ~/cuda-install/)
