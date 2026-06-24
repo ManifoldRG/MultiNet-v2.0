@@ -62,6 +62,7 @@ where = ["."]
 include = [
     "adapters*",
     "cross_domain*",
+    "deploy*",
     "gridworld*",
     "interface*",
     "mazes*",
