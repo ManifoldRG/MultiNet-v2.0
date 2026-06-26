@@ -1,7 +1,7 @@
 """Gridworld domain for MultiNet-v2.0.
 
-This module provides task schema, validation, and scoring utilities for
-gridworld puzzle specifications.
+This module provides task schema and validation utilities for gridworld
+puzzle specifications.
 """
 
 from .bootstrap import disable_gymnasium_env_plugins
@@ -32,9 +32,6 @@ from .task_validator import (
     TaskValidator,
     compute_difficulty,
 )
-from .scoring import ScoredDifficulty, compute_12d_score
-
-
 __all__ = [
     # Task specification
     "Position",
@@ -58,6 +55,4 @@ __all__ = [
     "DifficultyReport",
     "FragilityReport",
     "compute_difficulty",
-    "ScoredDifficulty",
-    "compute_12d_score",
 ]

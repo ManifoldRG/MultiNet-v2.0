@@ -493,12 +493,13 @@ class TaskValidator:
                 return False
         return True
 
-    def validate_distractor_safety(self) -> list[str]:
+    def validate_distractor_safety(self, base_beatable: bool | None = None) -> list[str]:
         """Check whether a single distractor interaction can make the task unsolvable."""
         if not self.spec.distractors:
             return []
 
-        base_beatable, _, _ = self.validate()
+        if base_beatable is None:
+            base_beatable, _, _ = self.validate()
         if not base_beatable:
             return ["Base task is not solvable"]
 
@@ -767,17 +768,23 @@ class DifficultyReport:
         }
 
 
-def compute_difficulty(spec: TaskSpecification) -> DifficultyReport:
+def compute_difficulty(
+    spec: TaskSpecification,
+    validator: TaskValidator | None = None,
+    validation_result: tuple[bool, Optional[list[tuple[int, int]]], str] | None = None,
+) -> DifficultyReport:
     """
     Compute solver-derived difficulty metrics for a task.
 
     This is a compact report centered on BFS output: beatability, shortest
     action count, states explored, coarse mechanism complexity, and a legacy
-    composite score. Use compute_12d_score when the full rubric vector is
+    composite score. Use scorer.scoring.compute_12d_score when the full rubric vector is
     needed for benchmark comparison.
     """
-    validator = TaskValidator(spec)
-    is_beatable, solution, message = validator.validate()
+    task_validator = validator or TaskValidator(spec)
+    if validation_result is None:
+        validation_result = task_validator.validate()
+    is_beatable, solution, message = validation_result
 
     optimal_steps = len(solution) - 1 if solution else 0  # -1 because path includes start
     # Extract states_explored from message
