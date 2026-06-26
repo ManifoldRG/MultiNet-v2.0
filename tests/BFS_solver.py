@@ -6,8 +6,7 @@ maze tests while delegating planning to the gridworld baseline BFS solver.
 
 from __future__ import annotations
 
-from gridworld.actions import MiniGridActions
-from gridworld.baselines import TaskPlanningContext, _shortest_plan, _successors
+from gridworld.baselines import plan_bfs_path
 from gridworld.task_spec import TaskSpecification
 
 
@@ -27,18 +26,20 @@ def _interaction_label(label: str) -> str | None:
     return None
 
 
+def _movement_path(positions: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    path = []
+    for position in positions:
+        if not path or path[-1] != position:
+            path.append(position)
+    return path
+
+
 def solve(spec):
     """Return a shortest path result for a maze JSON spec."""
     task_spec = _to_task_spec(spec)
-    ctx = TaskPlanningContext(task_spec)
-    start_state = ctx.initial_state()
-    actions, final_state = _shortest_plan(
-        ctx,
-        start_state,
-        lambda state: state.agent_pos == ctx.goal,
-    )
+    planned = plan_bfs_path(task_spec)
 
-    if final_state is None:
+    if not planned.success:
         return {
             "is_solvable": False,
             "path": [],
@@ -46,28 +47,12 @@ def solve(spec):
             "optimal_cost": None,
         }
 
-    state = start_state
-    path = [state.agent_pos]
-    interactions = []
-    include_pickup_positions = ctx.goal in ctx.doors_by_pos
-
-    for action in actions:
-        transition = next(
-            candidate
-            for candidate in _successors(ctx, state)
-            if candidate.action == action
-        )
-        label = _interaction_label(transition.label)
-        if label is not None:
-            interactions.append(label)
-            if include_pickup_positions and transition.label.startswith("pickup:"):
-                key_id = transition.label.split(":", 1)[1]
-                key_pos = ctx.keys_by_id[key_id]["position"]
-                if path[-1] != key_pos:
-                    path.append(key_pos)
-        state = transition.next_state
-        if action == int(MiniGridActions.MOVE_FORWARD):
-            path.append(state.agent_pos)
+    path = _movement_path(planned.positions)
+    interactions = [
+        interaction
+        for label in planned.action_labels
+        if (interaction := _interaction_label(label)) is not None
+    ]
 
     return {
         "is_solvable": True,
