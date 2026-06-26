@@ -7,6 +7,7 @@ if _REPO_ROOT not in sys.path:
 	sys.path.insert(0, _REPO_ROOT)
 
 from maze_test_utils import (
+	MAZE_JSON_DIR,
 	assert_goal_target_matches_maze_goal,
 	assert_navigation_contract,
 	assert_no_hidden_or_auxiliary_mechanisms,
@@ -69,6 +70,14 @@ def _keys_without_yellow(spec):
 		for key in spec['mechanisms']['keys']
 		if key['id'] != 'kY' and key['color'] != 'yellow'
 	]
+
+
+def _load_all_d_maze_specs():
+	specs = []
+	for maze_dir in sorted(MAZE_JSON_DIR.glob('D*')):
+		if maze_dir.is_dir():
+			specs.extend(load_maze_specs(maze_dir.name, include_file_name=True))
+	return specs
 
 
 class TestD1MazeTypes(unittest.TestCase):
@@ -172,3 +181,27 @@ class TestD1MazeTypes(unittest.TestCase):
 				self.assertEqual(counterpart_name, f"{spec['task_id'].replace('_wrong_ky', '')}.json")
 				self.assertTrue(spec['metadata']['chain_pattern'].startswith('wrong_key_then_'))
 				assert_no_hidden_or_auxiliary_mechanisms(self, spec)
+
+
+class TestDMazeDistractors(unittest.TestCase):
+	"""D maze filenames should match their distractor mechanisms."""
+
+	@classmethod
+	def setUpClass(cls):
+		cls.specs = _load_all_d_maze_specs()
+
+	def test_inactive_sb_files_have_inactive_switch(self):
+		"""Tests that inactive_sb maze names include an inactive switch mechanism."""
+		for file_name, spec in self.specs:
+			if 'inactive_sb' not in file_name:
+				continue
+			with self.subTest(file_name=file_name):
+				inactive_switches = [
+					switch
+					for switch in spec['mechanisms']['switches']
+					if switch['id'] == 'inactive_sb'
+				]
+				self.assertEqual(len(inactive_switches), 1)
+				self.assertEqual(inactive_switches[0]['color'], 'blue')
+				self.assertEqual(inactive_switches[0]['controls'], [])
+				self.assertEqual(inactive_switches[0]['initial_state'], 'off')
