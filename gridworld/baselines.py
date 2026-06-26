@@ -57,6 +57,7 @@ class PlannedPath:
     actions: list[int]
     action_labels: list[str]
     positions: list[tuple[int, int]]
+    states_explored: int = 0
 
 
 class TaskPlanningContext:
@@ -363,10 +364,10 @@ def _shortest_plan(
     ctx: TaskPlanningContext,
     start: PlannerState,
     is_goal: Callable[[PlannerState], bool],
-) -> tuple[list[int], PlannerState | None]:
+) -> tuple[list[int], PlannerState | None, int]:
     """Run BFS over executable actions and return the first shortest plan."""
     if is_goal(start):
-        return [], start
+        return [], start, 1
 
     queue = deque([start])
     parent: dict[PlannerState, tuple[PlannerState, int]] = {}
@@ -380,10 +381,14 @@ def _shortest_plan(
             visited.add(transition.next_state)
             parent[transition.next_state] = (state, transition.action)
             if is_goal(transition.next_state):
-                return _reconstruct_actions(parent, transition.next_state), transition.next_state
+                return (
+                    _reconstruct_actions(parent, transition.next_state),
+                    transition.next_state,
+                    len(visited),
+                )
             queue.append(transition.next_state)
 
-    return [], None
+    return [], None, len(visited)
 
 
 def _shortest_plan_to_interaction(
@@ -447,9 +452,18 @@ def _reconstruct_actions(
 
 
 def _bfs_actions(spec: TaskSpecification) -> list[int]:
+    actions, _ = _bfs_actions_with_stats(spec)
+    return actions
+
+
+def _bfs_actions_with_stats(spec: TaskSpecification) -> tuple[list[int], int]:
     ctx = TaskPlanningContext(spec)
-    actions, _ = _shortest_plan(ctx, ctx.initial_state(), lambda st: st.agent_pos == ctx.goal)
-    return actions or [int(MiniGridActions.DONE)]
+    actions, _, states_explored = _shortest_plan(
+        ctx,
+        ctx.initial_state(),
+        lambda st: st.agent_pos == ctx.goal,
+    )
+    return actions, states_explored
 
 
 def _greedy_actions(spec: TaskSpecification) -> list[int]:
@@ -462,13 +476,17 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
             break
         chunk, next_state = _shortest_plan_to_interaction(ctx, state)
         if next_state is None:
-            chunk, next_state = _shortest_plan(ctx, state, lambda st: st.agent_pos == ctx.goal)
+            chunk, next_state, _ = _shortest_plan(
+                ctx,
+                state,
+                lambda st: st.agent_pos == ctx.goal,
+            )
         if next_state is None or not chunk:
             break
         actions.extend(chunk)
         state = next_state
 
-    return actions or [int(MiniGridActions.DONE)]
+    return actions
 
 
 def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> PlannedPath:
@@ -476,12 +494,13 @@ def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> Planne
     ctx = TaskPlanningContext(spec)
     state = ctx.initial_state()
     positions = [state.agent_pos]
+    executed_actions: list[int] = []
     labels: list[str] = []
 
     for action in actions:
         if action == int(MiniGridActions.DONE):
-            labels.append("done")
             break
+        executed_actions.append(action)
         transition = next(
             (candidate for candidate in _successors(ctx, state) if candidate.action == action),
             None,
@@ -490,7 +509,7 @@ def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> Planne
             labels.append(f"invalid:{action}")
             return PlannedPath(
                 success=False,
-                actions=list(actions),
+                actions=executed_actions,
                 action_labels=labels,
                 positions=positions,
             )
@@ -500,7 +519,7 @@ def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> Planne
 
     return PlannedPath(
         success=state.agent_pos == ctx.goal,
-        actions=list(actions),
+        actions=executed_actions,
         action_labels=labels,
         positions=positions,
     )
@@ -518,7 +537,15 @@ def plan_greedy_actions(spec: TaskSpecification) -> list[int]:
 
 def plan_bfs_path(spec: TaskSpecification) -> PlannedPath:
     """Return the BFS baseline plan plus replayed positions."""
-    return trace_planned_actions(spec, plan_bfs_actions(spec))
+    actions, states_explored = _bfs_actions_with_stats(spec)
+    path = trace_planned_actions(spec, actions)
+    return PlannedPath(
+        success=path.success,
+        actions=path.actions,
+        action_labels=path.action_labels,
+        positions=path.positions,
+        states_explored=states_explored,
+    )
 
 
 def plan_greedy_path(spec: TaskSpecification) -> PlannedPath:

@@ -32,6 +32,18 @@ def dump_json(path: str | Path, payload: dict[str, Any]) -> None:
         f.write("\n")
 
 
+def json_files(paths: list[str]) -> list[Path]:
+    """Expand JSON files and directories into a stable file list."""
+    files: list[Path] = []
+    for value in paths:
+        path = Path(value)
+        if path.is_dir():
+            files.extend(sorted(path.rglob("*.json")))
+        else:
+            files.append(path)
+    return files
+
+
 def stable_hash(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=json_default)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

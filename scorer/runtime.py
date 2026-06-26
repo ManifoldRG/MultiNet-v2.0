@@ -63,22 +63,45 @@ def _extract_token_count(run: dict[str, Any]) -> int | None:
     if signal_tokens is not None:
         return int(signal_tokens)
 
+    trajectory_total = _sum_record_tokens(run.get("trajectory", []))
+    if trajectory_total is not None:
+        return trajectory_total
+    return _sum_record_tokens(run.get("transcript", []), kind="query")
+
+
+def _sum_record_tokens(records: Any, kind: str | None = None) -> int | None:
+    if not isinstance(records, list):
+        return None
     total = 0
     found = False
-    for item in run.get("trajectory", []):
+    for item in records:
         if not isinstance(item, dict):
             continue
-        for key in ("tokens", "token_count"):
-            if item.get(key) is not None:
-                total += int(item[key])
-                found = True
-        info = item.get("info")
-        if isinstance(info, dict):
-            for key in ("tokens", "token_count", "model_tokens"):
-                if info.get(key) is not None:
-                    total += int(info[key])
-                    found = True
+        if kind is not None and item.get("kind") != kind:
+            continue
+        item_tokens = _token_count_from_record(item)
+        if item_tokens is not None:
+            total += item_tokens
+            found = True
     return total if found else None
+
+
+def _token_count_from_record(record: dict[str, Any]) -> int | None:
+    for container in (record, record.get("info"), record.get("metadata")):
+        if not isinstance(container, dict):
+            continue
+        for key in ("total_tokens", "token_count", "tokens", "model_tokens"):
+            if container.get(key) is not None:
+                return int(container[key])
+        usage = container.get("usage")
+        if isinstance(usage, dict):
+            if usage.get("total_tokens") is not None:
+                return int(usage["total_tokens"])
+            prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
+            completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+            if prompt_tokens is not None or completion_tokens is not None:
+                return int(prompt_tokens or 0) + int(completion_tokens or 0)
+    return None
 
 
 def _state_position(state: Any) -> tuple[int, int] | None:
@@ -128,10 +151,15 @@ def _extract_run_positions(run: dict[str, Any]) -> list[tuple[int, int]]:
     return deduped
 
 
-def _extract_canonical_positions(canonical_paths: dict[str, Any]) -> list[tuple[int, int]]:
-    bfs = canonical_paths.get("bfs", canonical_paths)
+def _extract_canonical_positions(
+    canonical_paths: dict[str, Any],
+    agent: str = "bfs",
+) -> list[tuple[int, int]]:
+    path = canonical_paths.get(agent, canonical_paths if agent == "bfs" else {})
+    if not isinstance(path, dict):
+        return []
     positions = []
-    for pos in bfs.get("positions", []):
+    for pos in path.get("positions", []):
         if isinstance(pos, (list, tuple)) and len(pos) >= 2:
             positions.append((int(pos[0]), int(pos[1])))
     return positions
@@ -151,8 +179,11 @@ def _extract_static_score(static_score: dict[str, Any]) -> float:
 def _extract_greedy_solvability(static_score: dict[str, Any]) -> float:
     value = _lookup_path(static_score, "canonical_agent_features", "greedy_solvability")
     if value is None:
-        return 0.0
-    return float(value)
+        raise ValueError("Runtime scoring requires evaluated canonical_agent_features.greedy_solvability")
+    solvability = float(value)
+    if not 0.0 <= solvability <= 1.0:
+        raise ValueError("greedy_solvability must be between 0.0 and 1.0")
+    return solvability
 
 
 def _runtime_weighted_average(signals: dict[str, float], weights: dict[str, float]) -> float:
@@ -182,6 +213,7 @@ def compute_runtime_score(
     steps = _extract_steps(run)
     token_count = _extract_token_count(run)
     canonical_positions = _extract_canonical_positions(canonical_data)
+    greedy_positions = _extract_canonical_positions(canonical_data, agent="greedy")
     run_positions = _extract_run_positions(run)
 
     optimal_steps = int(
@@ -194,6 +226,11 @@ def compute_runtime_score(
         step_ratio = optimal_steps / max(float(steps), float(optimal_steps), 1.0)
 
     cell_overlap_bfs = _cell_overlap(run_positions, canonical_positions)
+    cell_overlap_greedy = (
+        _cell_overlap(run_positions, greedy_positions)
+        if isinstance(canonical_data.get("greedy"), dict)
+        else None
+    )
     token_efficiency = 1.0
     if token_count is not None:
         token_efficiency = min(1.0, scorer_config.baseline_tokens / max(float(token_count), 1.0))
@@ -201,10 +238,19 @@ def compute_runtime_score(
     static_composite = _extract_static_score(static_data)
     normalizer = (
         difficulty_max_static_score
-        or scorer_config.difficulty_max_static_score
-        or static_composite
+        if difficulty_max_static_score is not None
+        else scorer_config.difficulty_max_static_score
     )
-    difficulty_weight = static_composite / normalizer if normalizer and normalizer > 0 else 0.0
+    if normalizer is None:
+        raise ValueError(
+            "Runtime scoring requires difficulty_max_static_score from the task suite "
+            "or scorer config"
+        )
+    if normalizer <= 0:
+        raise ValueError("difficulty_max_static_score must be greater than zero")
+    if static_composite > normalizer:
+        raise ValueError("difficulty_max_static_score must be at least the task static score")
+    difficulty_weight = static_composite / normalizer
     success_factor = 1.0 if success else 0.0
     efficiency_signals = {
         "step_ratio": step_ratio,
@@ -234,17 +280,21 @@ def compute_runtime_score(
         "optimal_steps": optimal_steps,
         "step_ratio": step_ratio,
         "cell_overlap_bfs": cell_overlap_bfs,
-        "cell_overlap_greedy": 0.0,
+        "cell_overlap_greedy": cell_overlap_greedy,
         "token_efficiency": token_efficiency,
-        "distractor_interactions": int(run.get("distractor_interactions", 0)),
-        "irreversible_failures": int(run.get("irreversible_failures", 0)),
         "difficulty_weight": difficulty_weight,
         "efficiency_factor": efficiency_factor,
         "greedy_penalty": greedy_penalty,
-        "path_choice": run.get("path_choice"),
-        "mechanism_interaction_order": run.get("mechanism_interaction_order", []),
-        "failure_point": run.get("failure_point"),
     }
+    for key in (
+        "distractor_interactions",
+        "irreversible_failures",
+        "path_choice",
+        "mechanism_interaction_order",
+        "failure_point",
+    ):
+        if run.get(key) is not None:
+            signals[key] = run[key]
 
     inputs_hash = stable_hash(
         {

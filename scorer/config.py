@@ -9,7 +9,7 @@ from typing import Any
 from .io import load_json
 
 
-SCORER_VERSION = "0.1.0"
+SCORER_VERSION = "0.2.0"
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("scorer_config.json")
 
 DIMENSION_NAMES = [
@@ -27,8 +27,10 @@ DIMENSION_NAMES = [
     "irreversibility",
 ]
 
+GREEDY_SOLVABILITY_FEATURE = "greedy_solvability"
+
 CANONICAL_AGENT_FEATURE_NAMES = [
-    "greedy_solvability",
+    GREEDY_SOLVABILITY_FEATURE,
 ]
 
 DEFAULT_DISTRACTOR_TYPE_WEIGHTS = {
@@ -54,6 +56,8 @@ def _coerce_float_mapping(
     if values is None:
         return {name: default for name in names}
     if isinstance(values, list):
+        if len(values) != len(names):
+            raise ValueError(f"Expected {len(names)} weights, got {len(values)}")
         result = {name: default for name in names}
         for name, value in zip(names, values):
             result[name] = float(value)
