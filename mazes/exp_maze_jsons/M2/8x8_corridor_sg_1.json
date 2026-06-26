@@ -3,7 +3,7 @@
   "version": "1.0",
   "seed": 0,
   "difficulty_tier": 3,
-  "description": "8x8 corridor with turns and a key-door mechanism.",
+  "description": "8x8 corridor with turns and a switch-gate mechanism.",
   "maze": {
     "dimensions": [8, 8],
     "walls": [

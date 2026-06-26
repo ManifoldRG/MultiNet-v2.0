@@ -66,7 +66,7 @@
     "auxiliary_conditions": []
   },
   "metadata": {
-    "chain_pattern": "wrong_key_then_key_door_inactive_blue_switch",
+    "chain_pattern": "wrong_key_then_switch_gate_inactive_blue_switch",
     "tiling": "square",
     "wall_topology": "winding",
     "distractor_type": "inactive_blue_switch",

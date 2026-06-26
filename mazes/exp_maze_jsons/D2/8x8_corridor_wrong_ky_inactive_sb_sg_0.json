@@ -3,7 +3,7 @@
   "version": "1.0",
   "seed": 0,
   "difficulty_tier": 3,
-  "description": "8x8 corridor with a distractor yellow key, turns and a key-door mechanism. Includes an inactive blue switch distractor that does not control any gate.",
+  "description": "8x8 corridor with a distractor yellow key, turns and a switch-gate mechanism. Includes an inactive blue switch distractor that does not control any gate.",
   "maze": {
     "dimensions": [8, 8],
     "walls": [
@@ -63,7 +63,7 @@
     "auxiliary_conditions": []
   },
   "metadata": {
-    "chain_pattern": "wrong_key_then_key_door_inactive_blue_switch",
+    "chain_pattern": "wrong_key_then_switch_gate_inactive_blue_switch",
     "tiling": "square",
     "wall_topology": "winding",
     "distractor_type": "inactive_blue_switch",
