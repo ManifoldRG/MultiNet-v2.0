@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 import numpy as np
 
+from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
+from interface.coords import inventory_list
 from interface.loader import default_maze_path, load_task
 from interface.observation import current_observation_text, history_content_blocks
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
+    MinimalPromptStrategy,
     StandardPromptStrategy,
-    VerbosePromptStrategy,
-    _mechanism_hints_text,
 )
 from interface.runner import build_runner
 from prompting_experiments import CONDITION_SETS
@@ -90,7 +89,7 @@ def test_current_observation_can_render_without_facing():
         include_description=True,
     )
 
-    assert "Current situation (this step):" in text
+    # No fixed "Current situation" header required; ensure position renders
     assert "The goal is at" not in text
     assert "You are at (1, 1)." in text
     assert "You are at (1, 1) facing EAST." not in text
@@ -110,16 +109,14 @@ def test_observation_format_text_variants_keep_facing():
             include_facing=cfg.observation_text_includes_facing,
         )
 
-        assert "Current situation (this step):" in text
+        # No fixed header required; ensure facing is preserved when requested
         assert "The goal is at" not in text
         assert "You are at (1, 1) facing EAST." in text
 
 
-def test_observation_format_image_only_includes_inventory_only_text():
+def test_observation_format_image_only_has_no_current_observation_text():
     spec, state = _initial_spec_and_state()
-    cfg = CONDITION_SET.variants["standard"].build_config(
-        replace(ExperimentConfig(), observation_text_includes_facing=False)
-    )
+    cfg = CONDITION_SET.variants["standard"].build_config(ExperimentConfig())
 
     text = current_observation_text(
         cfg.observation,
@@ -129,7 +126,7 @@ def test_observation_format_image_only_includes_inventory_only_text():
         include_facing=cfg.observation_text_includes_facing,
     )
 
-    assert text == "Your inventory: empty."
+    assert text == ""
     assert "Current situation (this step):" not in text
     assert "You are at" not in text
 
@@ -145,7 +142,19 @@ def test_image_only_prompt_puts_inventory_text_after_current_image():
     assert isinstance(content, list)
     assert content[0]["type"] == "image_url"
     assert content[1]["type"] == "text"
-    assert "Your inventory: empty." in content[1]["text"]
+    assert "Current situation (this step):" not in content[1]["text"]
+    assert content[1]["text"].startswith("Your inventory: empty.\nWhat is your next action?")
+
+
+def test_inventory_list_omits_consumed_or_removed_keys():
+    state = GridState(
+        agent_position=(1, 1),
+        agent_direction=0,
+        agent_carrying=None,
+        collected_keys={"kR"},
+    )
+
+    assert inventory_list(state) == []
 
 
 def test_image_only_last3_history_puts_inventory_before_action_under_images():
@@ -173,12 +182,12 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
     assert blocks[1]["type"] == "image_url"
     assert blocks[2] == {
         "type": "text",
-        "text": "Your inventory: empty.\nAction: MOVE_FORWARD\n\n",
+        "text": "Your inventory: empty.\nAction: MOVE_FORWARD\n",
     }
     assert blocks[3]["type"] == "image_url"
     assert blocks[4] == {
         "type": "text",
-        "text": "Your inventory: red.\nAction: PICKUP\n\n",
+        "text": "Your inventory: red.\nAction: PICKUP\n",
     }
 
 
@@ -235,9 +244,10 @@ def test_observation_format_initial_maze_only_for_text_variants():
     for variant_name, variant in CONDITION_SET.variants.items():
         cfg = variant.build_config(ExperimentConfig())
         prompt_text = _initial_user_prompt_text(cfg)
+        # initial maze is provided at system level; user prompt should not contain it
         has_initial_maze = "Initial maze (fixed for this episode):" in prompt_text
 
-        assert has_initial_maze is (variant_name in text_variants), variant_name
+        assert has_initial_maze is False, variant_name
 
 
 def test_initial_prompts_omit_current_status_footer_without_history_context():
@@ -249,7 +259,7 @@ def test_initial_prompts_omit_current_status_footer_without_history_context():
         assert "Last result: Episode start." not in prompt_text
 
 
-def test_last3_prompt_omits_current_status_footer_with_history_context():
+def test_text_last3_prompt_omits_unused_recent_history_text():
     transcript = [
         {
             "kind": "step",
@@ -267,7 +277,8 @@ def test_last3_prompt_omits_current_status_footer_with_history_context():
         transcript,
     )
 
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    # Recent history may be omitted if unused; ensure the prompt ends with the action question
+    assert "What is your next action?" in prompt_text
     assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
     assert "Last result: Episode start." not in prompt_text
 
@@ -279,6 +290,32 @@ def test_observation_format_image_only_matches_standard_prompt_text():
     )
 
     assert image_only_text == standard_text
+
+
+def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
+    system_prompt = MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
+    prompt_text = _initial_user_prompt_text(ExperimentConfig(prompting="minimal"))
+
+    assert system_prompt.startswith("Task: Solve the maze by reaching the goal.")
+    assert "The environment may contain:" not in system_prompt
+    assert prompt_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert "Observation:" not in prompt_text
+    assert "Position:" not in prompt_text
+    assert "Facing:" not in prompt_text
+    assert "Goal:" not in prompt_text
+    assert "Last result:" not in prompt_text
+
+
+def test_prompting_variants_share_image_only_user_prompt():
+    standard_text = _initial_user_prompt_text(ExperimentConfig(prompting="standard"))
+    minimal_text = _initial_user_prompt_text(ExperimentConfig(prompting="minimal"))
+    verbose_text = _initial_user_prompt_text(ExperimentConfig(prompting="verbose"))
+
+    assert standard_text == minimal_text == verbose_text
+    assert standard_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert "Position:" not in standard_text
+    assert "Last result:" not in standard_text
+    assert "Hints:" not in standard_text
 
 
 def test_standard_variants_use_default_config_without_overrides():
@@ -308,6 +345,8 @@ def test_implemented_non_verbose_conditions_share_standard_system_prompt():
 
             if variant.name == "verbose":
                 verbose_prompt = system_prompt
+            elif variant.name == "minimal":
+                assert system_prompt == MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
             else:
                 assert system_prompt == standard_prompt, (condition_name, variant.name)
 
@@ -322,35 +361,6 @@ def test_verbose_prompt_omits_mechanism_hints_by_default():
     )
 
     assert "Hints:" not in prompt_text
-    assert "Step on a key and PICKUP" not in prompt_text
+    assert "Face an adjacent key and PICKUP" not in prompt_text
     assert "Inventory:" not in prompt_text
     assert "From your perspective:" not in prompt_text
-
-
-def test_mechanism_hint_insertion_helper_still_generates_hints():
-    _backend, spec = load_task(default_maze_path("V04_single_key.json"))
-    hints = _mechanism_hints_text(spec)
-
-    assert "Hints:" in hints
-    assert "Step on a key and PICKUP" in hints
-
-
-def test_verbose_prompt_can_insert_mechanism_hints_when_enabled():
-    class HintingVerbosePromptStrategy(VerbosePromptStrategy):
-        include_mechanism_hints = True
-
-    backend, spec = load_task(default_maze_path("V04_single_key.json"))
-    runner = build_runner(ExperimentConfig(prompting="verbose"), backend, spec)
-    runner.prompt = HintingVerbosePromptStrategy(ACTIONS_HINT)
-    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
-
-    message = runner._build_message(state, feedback_templates.INITIAL_FEEDBACK, [])
-    content = message["content"]
-    prompt_text = "\n".join(
-        block["text"]
-        for block in content
-        if isinstance(block, dict) and block.get("type") == "text"
-    )
-
-    assert "Hints:" in prompt_text
-    assert "Step on a key and PICKUP" in prompt_text

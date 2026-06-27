@@ -233,7 +233,7 @@ class TaskParser:
         # because switches store references to gate IDs and need to validate them
         for gate in spec.mechanisms.gates:
             is_open = gate.initial_state == "open"
-            env.place_gate(gate.position.x, gate.position.y, gate.id, is_open)
+            env.place_gate(gate.position.x, gate.position.y, gate.id, is_open, gate.color)
 
         # Place switches
         # Switches control gates. When toggled, they change the state of all

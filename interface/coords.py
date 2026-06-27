@@ -57,7 +57,6 @@ def inventory_list(state: GridState) -> list[str]:
     items: list[str] = []
     if state.agent_carrying:
         items.append(str(state.agent_carrying))
-    items.extend(sorted(state.collected_keys))
     return items
 
 

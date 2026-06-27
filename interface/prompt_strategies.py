@@ -3,13 +3,7 @@
 from __future__ import annotations
 
 from gridworld.backends.base import GridState
-from gridworld.task_spec import TaskSpecification
-
-from interface.coords import (
-    agent_facing,
-    agent_row_col,
-    goal_row_col,
-)
+from interface.coords import inventory_list
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
 
@@ -24,8 +18,7 @@ class MinimalPromptStrategy:
     def build_system_prompt(self, querying_suffix: str = "") -> str:
         del querying_suffix
         chunks = [
-            system_templates.TASK_PREFIX,
-            MECHANISM_LIST,
+            system_templates.MIN_TASK_PREFIX,
             system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
         ]
         return "\n".join(chunks)
@@ -34,79 +27,50 @@ class MinimalPromptStrategy:
         self,
         obs_text: str,
         history_text: str,
-        task_spec: TaskSpecification,
         state: GridState,
-        last_feedback: str,
         *,
-        include_status_footer: bool = False,
+        observation: str = "image_only",
     ) -> str:
-        obs_block = (
-            user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
-            if obs_text
-            else ""
+        return _build_user_prompt(
+            observation=observation,
+            obs_text=obs_text,
+            history_text=history_text,
+            state=state,
+        
         )
-        pos = agent_row_col(state)
-        goal = goal_row_col(task_spec)
-        status_block = _status_block(
-            include_status_footer,
-            position=pos,
-            facing=agent_facing(state),
-            goal=goal,
-            last_feedback=last_feedback,
-        )
-        prompt = user_templates.STANDARD_USER_PROMPT.format(
-            obs_block=obs_block,
-            status_block=status_block,
-        )
-        return _with_history(prompt, history_text)
 
 
 class StandardPromptStrategy(MinimalPromptStrategy):
-    pass
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        del querying_suffix
+        chunks = [
+            system_templates.TASK_PREFIX,
+            MECHANISM_LIST,
+            system_templates.VALID_ACTIONS_TEMPLATE.format(actions_hint=self._actions_hint),
+        ]
+        return "\n".join(chunks)
 
 
 class VerbosePromptStrategy(StandardPromptStrategy):
-    include_mechanism_hints = False
-
     def build_system_prompt(self, querying_suffix: str = "") -> str:
         del querying_suffix
         std = StandardPromptStrategy.build_system_prompt(self).rstrip()
         return "\n\n".join([std, MECHANISM_RULES])
 
-    def build_user_prompt(
-        self,
-        obs_text: str,
-        history_text: str,
-        task_spec: TaskSpecification,
-        state: GridState,
-        last_feedback: str,
-        *,
-        include_status_footer: bool = False,
-    ) -> str:
-        mechanism_block = (
-            _mechanism_hints_text(task_spec) if self.include_mechanism_hints else ""
-        )
-        obs_block = (
-            user_templates.OBSERVATION_SECTION.format(obs_text=obs_text)
-            if obs_text
-            else ""
-        )
-        pos = agent_row_col(state)
-        goal = goal_row_col(task_spec)
-        status_block = _status_block(
-            include_status_footer,
-            position=pos,
-            facing=agent_facing(state),
-            goal=goal,
-            last_feedback=last_feedback,
-        )
 
-        prompt = user_templates.VERBOSE_USER_PROMPT.format(
-            obs_block=obs_block,
-            mechanism_block=mechanism_block,
-            status_block=status_block,
-        )
-        return _with_history(prompt, history_text)
+class TextInitialMazePromptStrategy(StandardPromptStrategy):
+    """Standard system prompt plus the initial maze section placeholder.
+
+    This strategy returns the standard system prompt and appends the
+    `INITIAL_MAZE_SECTION` template (containing the `{maze_text}` placeholder).
+    The caller (for example `ExperimentRunner.build_prompt_message`) is
+    responsible for formatting `{maze_text}` with the rendered maze text.
+    """
+
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        del querying_suffix
+        std = StandardPromptStrategy.build_system_prompt(self).rstrip()
+        return "\n\n".join([std, system_templates.INITIAL_MAZE_SECTION])
 
 
 PromptStrategy = MinimalPromptStrategy
@@ -118,30 +82,29 @@ def _with_history(prompt: str, history_text: str) -> str:
     return f"{history_text}\n\n{prompt}"
 
 
-def _status_block(
-    include: bool,
+def _text_section(text: str) -> str:
+    if not text:
+        return ""
+    return f"{text.rstrip()}\n\n"
+
+
+def _build_user_prompt(
     *,
-    position: tuple[int, int],
-    facing: str,
-    goal: tuple[int, int],
-    last_feedback: str,
+    observation: str,
+    obs_text: str,
+    history_text: str,
+    state: GridState,
 ) -> str:
-    if not include:
-        return ""
-    return user_templates.STATUS_BLOCK.format(
-        position=position,
-        facing=facing,
-        goal=goal,
-        last_feedback=last_feedback,
-    )
-
-
-def _mechanism_hints_text(task_spec: TaskSpecification) -> str:
-    lines = []
-    if task_spec.mechanisms.keys or task_spec.mechanisms.doors:
-        lines.append(user_templates.KEY_DOOR_HINT)
-    if task_spec.mechanisms.switches or task_spec.mechanisms.gates:
-        lines.append(user_templates.SWITCH_GATE_HINT)
-    if not lines:
-        return ""
-    return user_templates.MECHANISM_HINTS_HEADER + "\n".join(lines) + "\n"
+    inventory = ", ".join(inventory_list(state)) or "empty"
+    fields = {
+        "current_image": user_templates.CURRENT_IMAGE_PLACEHOLDER,
+        "inventory": inventory,
+        "current_observation_text": _text_section(obs_text),
+    }
+    if observation == "text_only":
+        prompt = user_templates.TEXT_ONLY_USER_PROMPT.format(**fields)
+    elif observation == "image_text":
+        prompt = user_templates.IMAGE_TEXT_USER_PROMPT.format(**fields)
+    else:
+        prompt = user_templates.STANDARD_IMAGE_ONLY_USER_PROMPT.format(**fields)
+    return _with_history(prompt, history_text)
