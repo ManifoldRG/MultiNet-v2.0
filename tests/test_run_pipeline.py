@@ -407,7 +407,7 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
         agent=CountingReplayAgent(v01_empty_room_trajectory()),
         agent_name="replay-stub",
         seeds=[0],
-        conditions="Prompt",  # implemented variants: standard, verbose
+        conditions="Prompt",  # implemented variants: standard, minimal, verbose
         artifacts_root=artifacts,
         run_set_id="variants",
         difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
@@ -416,18 +416,19 @@ def test_pipeline_keeps_prompt_variants_distinct(tmp_path):
     task_id = "validation_10_v01_empty_room"
     base = artifacts / "runs" / task_id / "minigrid" / "replay-stub" / "seed_0"
     assert (base / "standard" / "episode.json").exists()
+    assert (base / "minimal" / "episode.json").exists()
     assert (base / "verbose" / "episode.json").exists()
 
     rows = [
         json.loads(line)
         for line in (artifacts / "episode_runs.jsonl").read_text().strip().splitlines()
     ]
-    assert {r["prompt_variant"] for r in rows} == {"standard", "verbose"}
+    assert {r["prompt_variant"] for r in rows} == {"standard", "minimal", "verbose"}
     # Same task-intrinsic condition, distinct prompt variants -> distinct rows.
     assert all(r["condition"] == "default" for r in rows)
     summary = payloads["scoring_calibration_summary"]
-    assert summary["run_count"] == 2
-    assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "verbose"}
+    assert summary["run_count"] == 3
+    assert set(summary["success_rate_by_prompt_variant"]) == {"standard", "minimal", "verbose"}
 
 
 def test_pipeline_writes_per_model_report(tmp_path):

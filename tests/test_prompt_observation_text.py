@@ -259,7 +259,7 @@ def test_initial_prompts_omit_current_status_footer_without_history_context():
         assert "Last result: Episode start." not in prompt_text
 
 
-def test_text_last3_prompt_omits_unused_recent_history_text():
+def test_text_last3_prompt_includes_recent_history_text():
     transcript = [
         {
             "kind": "step",
@@ -277,7 +277,8 @@ def test_text_last3_prompt_omits_unused_recent_history_text():
         transcript,
     )
 
-    # Recent history may be omitted if unused; ensure the prompt ends with the action question
+    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED" in prompt_text
     assert "What is your next action?" in prompt_text
     assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
     assert "Last result: Episode start." not in prompt_text
