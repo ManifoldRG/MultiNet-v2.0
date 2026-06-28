@@ -1,0 +1,60 @@
+{
+  "task_id": "10x10_dense_kr_1",
+  "version": "1.0",
+  "seed": 0,
+  "difficulty_tier": 4,
+  "description": "10x10 dense maze with dead ends and a single key-door mechanism.",
+  "maze": {
+    "dimensions": [10, 10],
+    "walls": [
+      [3, 1],
+      [1, 2], [3, 2], [4, 2], [5, 2], [7, 2], [8, 2],
+      [1, 3], [4, 3], [8, 3],
+      [1, 4], [2, 4], [4, 4], [6, 4], [8, 4],
+      [4, 5], [6, 5],
+      [1, 6], [3, 6], [4, 6], [6, 6], [7, 6], [8, 6],
+      [1, 7],
+      [1, 8], [2, 8], [3, 8], [4, 8], [6, 8], [7, 8]
+    ],
+    "start": [1, 1],
+    "goal": [8, 1]
+  },
+  "mechanisms": {
+    "keys": [
+      {
+        "id": "kR",
+        "position": [1, 5],
+        "color": "red"
+      }
+    ],
+    "doors": [
+      {
+        "id": "DR",
+        "position": [2, 6],
+        "color": "red",
+        "requires_key": "red",
+        "initial_state": "locked"
+      }
+    ],
+    "switches": [],
+    "gates": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [8, 1],
+    "auxiliary_conditions": []
+  },
+  "metadata": {
+    "chain_pattern": "single_key_door",
+    "tiling": "square",
+    "wall_topology": "dense_dead_ends"
+  },
+  "max_steps": 1000
+}

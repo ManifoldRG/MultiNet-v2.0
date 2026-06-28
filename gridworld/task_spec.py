@@ -91,7 +91,7 @@ class GateSpec:
     id: str
     position: Position
     initial_state: Literal["open", "closed"] = "closed"
-    color: str = "black"
+    color: str = "grey"
 
     @classmethod
     def from_dict(cls, d: dict) -> "GateSpec":
@@ -99,7 +99,7 @@ class GateSpec:
             id=d["id"],
             position=Position.from_list(d["position"]) if isinstance(d["position"], list) else Position.from_dict(d["position"]),
             initial_state=d.get("initial_state", "closed"),
-            color=d.get("color", "black"),
+            color=d.get("color", "grey"),
         )
 
 

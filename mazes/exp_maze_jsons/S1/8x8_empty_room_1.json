@@ -1,0 +1,37 @@
+{
+  "task_id": "8x8_empty_room_1",
+  "version": "1.0",
+  "seed": 0,
+  "difficulty_tier": 1,
+  "description": "8x8 empty room with implicit perimeter walls.",
+  "maze": {
+    "dimensions": [8, 8],
+    "walls": [],
+    "start": [1, 1],
+    "goal": [4, 6]
+  },
+  "mechanisms": {
+    "keys": [],
+    "doors": [],
+    "switches": [],
+    "gates": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [4, 6],
+    "auxiliary_conditions": []
+  },
+  "metadata": {
+    "chain_pattern": "none",
+    "tiling": "square",
+    "wall_topology": "open"
+  },
+  "max_steps": 1000
+}

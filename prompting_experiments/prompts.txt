@@ -1,5 +1,5 @@
 Prompt Experiment Preview
-Maze: /home/sean/AI_training/Manifold/MultiNet-v2.0/mazes/validation_10/V01_empty_room.json
+Maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/validation_10/V01_empty_room.json
 Max steps: 5
 Preview prompt state: after 3 random steps (seed: 0)
 

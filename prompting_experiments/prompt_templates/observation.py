@@ -1,5 +1,8 @@
 """Observation and history prompt templates."""
 
+RECENT_HISTORY_HEADER = "Recent history (last 3 steps, oldest first):"
+RECENT_HISTORY_STEP = "  ({row}, {col}) facing {facing} -> {action} -> {feedback}"
+
 TEXT_SUMMARY_BLOCK_HEADER = "Activity summary:"
 TEXT_SUMMARY_FIRST_EVENT = "first you {event}"
 TEXT_SUMMARY_THEN_EVENT = "then you {event}"

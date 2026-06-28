@@ -1,0 +1,64 @@
+{
+  "task_id": "14x14_corridor_kr_1",
+  "version": "1.0",
+  "seed": 0,
+  "difficulty_tier": 5,
+  "description": "14x14 corridor with turns, a vertical layout, and a single key-door mechanism.",
+  "maze": {
+    "dimensions": [14, 14],
+    "walls": [
+      [4, 1], [8, 1], [12, 1],
+      [2, 2], [4, 2], [6, 2], [8, 2], [10, 2], [12, 2],
+      [2, 3], [4, 3], [6, 3], [8, 3], [10, 3], [12, 3],
+      [2, 4], [4, 4], [6, 4], [8, 4], [10, 4], [12, 4],
+      [2, 5], [4, 5], [6, 5], [8, 5], [10, 5], [12, 5],
+      [2, 6], [4, 6], [6, 6], [8, 6], [10, 6], [12, 6],
+      [2, 7], [4, 7], [6, 7], [8, 7], [10, 7], [12, 7],
+      [2, 8], [4, 8], [6, 8], [8, 8], [10, 8], [12, 8],
+      [2, 9], [4, 9], [6, 9], [8, 9], [10, 9], [12, 9],
+      [2, 10], [4, 10], [6, 10], [8, 10], [10, 10], [12, 10],
+      [2, 11], [4, 11], [6, 11], [8, 11], [10, 11], [12, 11],
+      [2, 12], [6, 12], [10, 12]
+    ],
+    "start": [1, 12],
+    "goal": [12, 12]
+  },
+  "mechanisms": {
+    "keys": [
+      {
+        "id": "kR",
+        "position": [1, 1],
+        "color": "red"
+      }
+    ],
+    "doors": [
+      {
+        "id": "DR",
+        "position": [3, 11],
+        "color": "red",
+        "requires_key": "red",
+        "initial_state": "locked"
+      }
+    ],
+    "switches": [],
+    "gates": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [12, 12],
+    "auxiliary_conditions": []
+  },
+  "metadata": {
+    "chain_pattern": "single_key_door",
+    "tiling": "square",
+    "wall_topology": "winding"
+  },
+  "max_steps": 1000
+}

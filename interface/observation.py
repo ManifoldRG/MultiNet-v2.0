@@ -51,10 +51,27 @@ def history_text(
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
 ) -> str:
-    del observation
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
-    return ""
+    if observation not in ("text_only", "image_text"):
+        return ""
+    recs = recent_history_steps(transcript, context_window)
+    if not recs:
+        return ""
+
+    lines = [observation_templates.RECENT_HISTORY_HEADER]
+    for rec in recs:
+        row, col = rec["position_after"]
+        lines.append(
+            observation_templates.RECENT_HISTORY_STEP.format(
+                row=int(row),
+                col=int(col),
+                facing=rec["facing_after"],
+                action=rec["action"],
+                feedback=rec["prompt_feedback"],
+            )
+        )
+    return "\n".join(lines)
 
 
 def text_summary_history(

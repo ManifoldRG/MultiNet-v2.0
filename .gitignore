@@ -45,5 +45,5 @@ artifacts/
 # Qwen VM setup log (teed by setup_qwen_vm.sh, even in --dry-run)
 deploy/*.log
 
-# Dev planning docs (specs/plans) — kept out of the pushed/release branch
+# Dev planning docs (specs/plans) - kept out of the pushed/release branch
 docs/superpowers/

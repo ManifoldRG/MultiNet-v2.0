@@ -36,7 +36,6 @@ class MinimalPromptStrategy:
             obs_text=obs_text,
             history_text=history_text,
             state=state,
-        
         )
 
 
