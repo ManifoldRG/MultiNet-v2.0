@@ -7,6 +7,7 @@ unit at a time against the same helpers used by the single-process pipeline.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import shutil
@@ -16,6 +17,11 @@ import tempfile
 import threading
 import time
 import traceback
+
+try:  # POSIX-only; used for cross-process locking of the shared state file.
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None  # type: ignore[assignment]
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -285,7 +291,20 @@ def prepare_job(
         },
     }
     _write_json_atomic(plan_path(artifacts_root), plan)
-    _write_json_atomic(state_path(artifacts_root), state)
+    # Preserve progress on re-run: only (re)initialise the all-pending state when
+    # there is no (readable) state yet, or the plan changed (different job_id).
+    # Overwriting an existing same-job state would revert verified units to
+    # "pending" and re-run (re-pay for) work that already completed. A corrupt/
+    # unreadable state is treated as absent so prepare still self-heals.
+    existing_state_path = state_path(artifacts_root)
+    existing_state: Optional[dict[str, Any]] = None
+    if existing_state_path.exists():
+        try:
+            existing_state = _read_json(existing_state_path)
+        except (json.JSONDecodeError, OSError):
+            existing_state = None
+    if existing_state is None or existing_state.get("job_id") != job_id:
+        _write_json_atomic(existing_state_path, state)
     _uploads_root(artifacts_root).mkdir(parents=True, exist_ok=True)
     return plan
 
@@ -310,6 +329,31 @@ class CoordinatorStore:
         self.storage = storage
         self.max_unit_attempts = int(max_unit_attempts)
         self._lock = threading.RLock()
+        self._lock_path = state_path(self.artifacts_root).with_name(STATE_FILENAME + ".lock")
+
+    @contextlib.contextmanager
+    def _guard(self):
+        """Serialise a load-modify-save against both other threads (RLock) and
+        other processes (an exclusive ``flock`` on a sidecar lock file).
+
+        ``coordinator-serve`` and ``coordinator-run-api-client`` are separate
+        processes that both read-modify-write ``job_state.json``; the in-process
+        RLock alone cannot stop one from clobbering the other's just-written
+        assignment (a lost update that re-runs a paid unit). The methods never
+        nest ``_guard``, so a single exclusive lock is deadlock-free.
+        """
+        with self._lock:
+            if fcntl is None:
+                yield
+                return
+            self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_file = open(self._lock_path, "w")
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+                yield
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                lock_file.close()
 
     def load_plan(self) -> dict[str, Any]:
         path = plan_path(self.artifacts_root)
@@ -346,7 +390,7 @@ class CoordinatorStore:
         _write_json_atomic(state_path(self.artifacts_root), state)
 
     def register(self, payload: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             state = self.load_state()
             worker_id = payload.get("worker_id") or f"worker_{uuid.uuid4().hex[:12]}"
             worker = state["workers"].get(worker_id, {})
@@ -365,7 +409,7 @@ class CoordinatorStore:
             return {"worker_id": worker_id, "job_id": state["job_id"]}
 
     def assign(self, worker_id: str, capabilities: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             plan = self.load_plan()
             state = self.load_state()
             if worker_id not in state["workers"]:
@@ -418,7 +462,7 @@ class CoordinatorStore:
             return {"unit": None, "job_id": plan["job_id"]}
 
     def heartbeat(self, worker_id: str, unit_id: Optional[str] = None) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             state = self.load_state()
             worker = state["workers"].setdefault(worker_id, {"worker_id": worker_id})
             worker["heartbeat_at"] = _now()
@@ -434,7 +478,7 @@ class CoordinatorStore:
             return {"ok": True}
 
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             state = self.load_state()
             unit_state = state["units"].get(unit_id)
             if unit_state is None:
@@ -455,7 +499,7 @@ class CoordinatorStore:
             return {"ok": True}
 
     def upload(self, worker_id: str, unit_id: str, archive_bytes: bytes) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             plan = self.load_plan()
             state = self.load_state()
             unit = self._find_unit(plan, unit_id)
@@ -524,7 +568,7 @@ class CoordinatorStore:
         except Exception as exc:
             logger.error("GCS mirror failed for unit %s -> %s: %s", unit_id, dest, exc)
             result = {"gcs_pending": True, "gcs_error": str(exc)}
-        with self._lock:
+        with self._guard():
             state = self.load_state()
             unit_state = state["units"].get(unit_id)
             if unit_state is not None:
@@ -533,7 +577,7 @@ class CoordinatorStore:
                 self.save_state(state)
 
     def status(self) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             plan = self.load_plan()
             state = self.load_state()
             self._mark_stale(plan, state)
@@ -754,11 +798,12 @@ def make_coordinator_server(
                     params = urllib.parse.parse_qs(parsed.query)
                     worker_id = (params.get("worker_id") or [""])[0]
                     unit_id = (params.get("unit_id") or [""])[0]
+                    length = int(self.headers.get("Content-Length") or 0)
+                    body = self.rfile.read(length)  # always drain so HTTP/1.1 keep-alive stays in sync
                     if not worker_id or not unit_id:
                         self._send_json(400, {"error": "worker_id and unit_id are required"})
                         return
-                    length = int(self.headers.get("Content-Length") or 0)
-                    self._send_json(200, store.upload(worker_id, unit_id, self.rfile.read(length)))
+                    self._send_json(200, store.upload(worker_id, unit_id, body))
                     return
 
                 payload = self._read_json_body()
@@ -941,7 +986,19 @@ def run_worker_loop(
     _write_json_atomic(state_file, local_state)
 
     while True:
-        assignment = client.assign(worker_id, capabilities)
+        try:
+            assignment = client.assign(worker_id, capabilities)
+        except Exception as exc:
+            # A transient coordinator outage (VM restart, GC pause, a single dropped
+            # HTTP call) must not kill a long-running worker; retry on the next poll.
+            if once:
+                logger.warning("worker %s: assign failed in once-mode: %s", worker_id, exc)
+                return False
+            logger.warning(
+                "worker %s: assign failed, retrying in %ss: %s", worker_id, poll_interval_seconds, exc
+            )
+            time.sleep(poll_interval_seconds)
+            continue
         unit = assignment.get("unit")
         if not unit:
             if once:
@@ -954,8 +1011,10 @@ def run_worker_loop(
         _write_json_atomic(state_file, local_state)
         stop_heartbeat = threading.Event()
 
-        def heartbeat_loop() -> None:
-            while not stop_heartbeat.wait(heartbeat_interval_seconds):
+        # Bind unit_id/stop as defaults so a thread that outlives join() keeps
+        # heartbeating *its* unit, not whatever the next loop iteration assigns.
+        def heartbeat_loop(unit_id: str = unit_id, stop: threading.Event = stop_heartbeat) -> None:
+            while not stop.wait(heartbeat_interval_seconds):
                 _safe_heartbeat(client, worker_id, unit_id)
 
         thread = threading.Thread(target=heartbeat_loop, daemon=True)
@@ -971,7 +1030,12 @@ def run_worker_loop(
                 return True
         except Exception as exc:
             client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
-            raise
+            # A single failed/transiently-rejected unit must not take a long-running
+            # worker offline; the coordinator's attempt cap stops poison units. In
+            # one-shot mode surface the error instead.
+            if once:
+                raise
+            logger.warning("worker %s: unit %s failed, continuing: %s", worker_id, unit_id, exc)
         finally:
             stop_heartbeat.set()
             thread.join(timeout=1.0)
@@ -1033,12 +1097,15 @@ def run_coordinator_api_client(
 
     completed = 0
     failures: list[dict[str, Any]] = []
-    limit = max(1, int(max_units))
+    # max_units <= 0 means "drain all pending units" (the value the launch-command
+    # printer emits); a positive value caps how many this invocation runs.
+    unlimited = int(max_units) <= 0
+    limit = int(max_units)
     worker_root = Path(client_artifacts_root) if client_artifacts_root else (
         artifacts_root / DISTRIBUTED_DIR / "local_api_clients" / worker_id
     )
 
-    while completed < limit:
+    while unlimited or completed < limit:
         assignment = store.assign(worker_id, capabilities)
         unit = assignment.get("unit")
         if not unit:
@@ -1051,10 +1118,12 @@ def run_coordinator_api_client(
             store.upload(worker_id, unit_id, archive_path.read_bytes())
             completed += 1
         except Exception as exc:
+            # Record the failure and move on: one transient API error must not abort
+            # the remaining units. The coordinator's attempt cap stops poison units
+            # from being re-handed out forever.
             reason = "".join(traceback.format_exception_only(type(exc), exc)).strip()
             store.fail(worker_id, unit_id, reason)
             failures.append({"unit_id": unit_id, "reason": reason})
-            raise
 
     return {
         "completed": completed,

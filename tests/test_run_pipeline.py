@@ -1689,6 +1689,71 @@ def test_distributed_coordinator_runs_api_client_locally(tmp_path):
     assert rows[0]["agent_or_model"] == "replay-api"
 
 
+def test_distributed_prepare_preserves_progress_on_rerun(tmp_path):
+    """Re-running prepare with identical inputs must not wipe completed (paid) work."""
+    from scripts.distributed_run_pipeline import prepare_job, state_path
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path, {"a": {"provider": "qwen", "model": "m", "group": "g", "tasks": [task]}},
+    )
+    artifacts = tmp_path / "artifacts"
+    common = dict(
+        run_config_path=cfg_path, manifest_path=_MANIFEST, seeds=[0], conditions=None,
+        artifacts_root=artifacts, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    prepare_job(**common)
+
+    state = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+    unit_id = next(iter(state["units"]))
+    state["units"][unit_id]["status"] = "verified"
+    state_path(artifacts).write_text(json.dumps(state), encoding="utf-8")
+
+    prepare_job(**common)  # identical inputs -> same job_id -> state must be preserved
+
+    reread = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+    assert reread["units"][unit_id]["status"] == "verified"
+
+
+def test_distributed_api_client_continues_past_failures_and_reports_them(tmp_path):
+    """One failing API unit must not abort the rest; failures are recorded, not raised."""
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job, run_coordinator_api_client
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = _write_run_config(
+        tmp_path,
+        {
+            "good": {"provider": "claude", "model": "replay-good", "group": "good-api", "tasks": [task]},
+            "bad": {"provider": "claude", "model": "boom", "group": "bad-api", "tasks": [task]},
+        },
+    )
+    artifacts = tmp_path / "coordinator"
+    prepare_job(
+        run_config_path=cfg_path, manifest_path=_write_manifest(tmp_path), seeds=[0], conditions=None,
+        artifacts_root=artifacts, run_set_id="api", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    class _BoomAgent:
+        last_usage = None
+
+        def __call__(self, messages):
+            raise RuntimeError("boom")
+
+    def factory(name, model_cfg):
+        if model_cfg["model"] == "boom":
+            return _BoomAgent(), model_cfg["model"]
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    # max_units=0 -> drain all pending; the bad unit must not abort the good one.
+    result = run_coordinator_api_client(artifacts_root=artifacts, max_units=0, agent_factory=factory)
+
+    assert result["completed"] == 1  # the good unit still ran
+    assert result["failures"]  # the bad unit was recorded, not raised
+    assert all(f["unit_id"] for f in result["failures"])
+    status = CoordinatorStore(artifacts).status()
+    assert status["units"].get("verified") == 1
+
+
 def test_distributed_finalize_requires_complete_work_by_default(tmp_path):
     from scripts.distributed_run_pipeline import finalize_job, prepare_job
 

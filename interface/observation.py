@@ -117,7 +117,7 @@ def _extract_mechanism_events(
         door.id: door.requires_key for door in task_spec.mechanisms.doors
     } if task_spec else {}
     gate_colors = {
-        gate.id: getattr(gate, "color", "black") for gate in task_spec.mechanisms.gates
+        gate.id: getattr(gate, "color", "grey") for gate in task_spec.mechanisms.gates
     } if task_spec else {}
     for rec in steps:
         event_type = rec.get("event_type", "")

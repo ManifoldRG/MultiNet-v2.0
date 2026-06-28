@@ -44,9 +44,11 @@ def build_commands(
             f"--hardware-profile {w.hardware_profile}"
         )
     for ac in cluster.api_clients:
+        # --max-units 0 drains every pending unit for the group; without it the
+        # role defaults to a single unit and the API run is left incomplete.
         cmds[f"api-client:{ac.name}"] = (
             f"{PIPELINE} --distributed-role coordinator-run-api-client "
-            f"--artifacts-root {c.artifacts_root} --model-group {ac.model_group}"
+            f"--artifacts-root {c.artifacts_root} --model-group {ac.model_group} --max-units 0"
         )
     cmds["coordinator-finalize"] = (
         f"{PIPELINE} --distributed-role coordinator-finalize "

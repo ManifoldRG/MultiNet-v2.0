@@ -38,12 +38,16 @@ def _run_model(model: str, max_new_tokens: int) -> float:
     """Load the agent (no quantization) and time a single decode. Returns tok/s."""
     from interface.agents.qwen35_vl import Qwen35VLAgent, Qwen35VLConfig
 
+    # flash-attn is optional (the installer treats its build as warn-only); only
+    # request it when importable, else fall back to PyTorch SDPA so the smoke
+    # still loads instead of raising ImportError at model construction.
+    attn = "flash_attention_2" if kernels_active().get("flash_attn") else "sdpa"
     agent = Qwen35VLAgent(
         config=Qwen35VLConfig(
             model=model,
             load_in_4bit=False,
             torch_dtype="bfloat16",
-            attn_implementation="flash_attention_2",
+            attn_implementation=attn,
             max_new_tokens=max_new_tokens,
             local_files_only=True,
         )

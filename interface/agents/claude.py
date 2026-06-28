@@ -102,7 +102,9 @@ def _apply_prompt_cache(
     if turns:
         last = dict(turns[-1])
         blocks = _as_block_list(last["content"])
-        if blocks:
+        # Skip an empty trailing text block: Anthropic rejects a cache_control on an
+        # empty text block (and it would never be a useful cache breakpoint anyway).
+        if blocks and not (blocks[-1].get("type") == "text" and not blocks[-1].get("text")):
             blocks[-1] = {**blocks[-1], "cache_control": _CACHE_CONTROL}
             last["content"] = blocks
             turns = turns[:-1] + [last]

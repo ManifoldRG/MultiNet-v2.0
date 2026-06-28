@@ -909,7 +909,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--hardware-profile", help="Worker hardware profile capability.")
     parser.add_argument("--worker-tag", action="append", help="Worker tag capability; may be repeated.")
     parser.add_argument("--local-model-cache", action="append", help="Locally cached model id; may be repeated.")
-    parser.add_argument("--max-units", type=int, default=1, help="Maximum local API-client units to run.")
+    parser.add_argument("--max-units", type=int, default=1, help="Maximum local API-client units to run (0 or less = drain all pending).")
     parser.add_argument("--client-artifacts-root", help="Local artifact root for coordinator-run-api-client.")
     parser.add_argument("--once", action="store_true", help="Worker mode: process at most one assignment.")
     parser.add_argument(

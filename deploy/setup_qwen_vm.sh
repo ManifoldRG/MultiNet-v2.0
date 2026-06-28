@@ -62,7 +62,22 @@ ensure_build_deps() {
 }
 
 ensure_venv() {
-  if [[ ! -d "$VENV" ]]; then run python3 -m venv "$VENV"; fi
+  # GCP Deep Learning images (e.g. common-cu129) auto-activate a conda base env.
+  # A venv built/activated on top of it stacks with conda: pip and imports resolve
+  # against /opt/conda instead of the venv. Build from the system interpreter and
+  # drop conda/PYTHONPATH so the venv is the only thing on the path.
+  local py="python3"
+  if [[ -n "${CONDA_PREFIX:-}" ]]; then
+    log "conda base active ($CONDA_PREFIX); isolating venv from it"
+    if [[ -x /usr/bin/python3 ]]; then py="/usr/bin/python3"; fi
+  fi
+  unset PYTHONPATH || true
+  # Rebuild a partial/broken venv left by a prior run that died mid-setup.
+  if [[ -d "$VENV" && ! -x "$VENV/bin/python" ]]; then
+    log "incomplete venv at $VENV; recreating"
+    run rm -rf "$VENV"
+  fi
+  if [[ ! -d "$VENV" ]]; then run "$py" -m venv "$VENV"; fi
   # shellcheck disable=SC1091
   if [[ "$DRY_RUN" -eq 0 ]]; then source "$VENV/bin/activate"; fi
   run python -m pip install -U pip wheel setuptools
@@ -77,9 +92,12 @@ install_runtime() {
 }
 
 install_kernels() {
-  # Warn-only: the model still runs (slower) without these.
-  run python -m pip install -U flash-linear-attention causal-conv1d || log "WARN: fla/causal-conv1d build failed (continuing)"
-  run python -m pip install -U flash-attn --no-build-isolation || log "WARN: flash-attn build failed (continuing)"
+  # Warn-only: the model still runs (slower) without these. Install each kernel
+  # separately so one failing build does not skip the others. All three import
+  # torch at build time, so they need --no-build-isolation.
+  run python -m pip install -U --no-build-isolation flash-linear-attention || log "WARN: flash-linear-attention build failed (continuing)"
+  run python -m pip install -U --no-build-isolation causal-conv1d || log "WARN: causal-conv1d build failed (continuing)"
+  run python -m pip install -U --no-build-isolation flash-attn || log "WARN: flash-attn build failed (continuing)"
 }
 
 download_weights() {
@@ -100,10 +118,14 @@ download_weights() {
 
 verify() {
   run python -c "import torch; print('torch', torch.__version__, 'cuda_available', torch.cuda.is_available())"
+  local smoke_model="$QWEN_27B"
+  [[ "$MODEL" == "moe" ]] && smoke_model="$QWEN_MOE"
   if [[ "$DRY_RUN" -eq 0 ]]; then
-    run python deploy/smoke_qwen.py --self-test
+    # Real load + decode so a broken driver/weights/model-class fails here rather
+    # than being snapshotted. --self-test (no model load) is for CI / dry-run only.
+    run python deploy/smoke_qwen.py --model "$smoke_model"
   else
-    log "dry-run: would run 'python deploy/smoke_qwen.py --self-test'"
+    log "dry-run: would run 'python deploy/smoke_qwen.py --model $smoke_model'"
   fi
 }
 
