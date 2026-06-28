@@ -15,6 +15,16 @@ def normalize_token_usage(usage: Any) -> dict[str, int] | None:
     input_tokens = usage.get("input_tokens", usage.get("prompt_tokens"))
     output_tokens = usage.get("output_tokens", usage.get("completion_tokens"))
     total_tokens = usage.get("total_tokens")
+
+    # Anthropic prompt caching reports `input_tokens` as the *uncached remainder*
+    # and splits the rest into cache_read/cache_creation. Fold those back so
+    # `input_tokens` stays the full prompt size (matching the no-cache semantics
+    # and OpenAI's `prompt_tokens`, which already counts cached tokens).
+    cache_read = usage.get("cache_read_input_tokens")
+    cache_creation = usage.get("cache_creation_input_tokens")
+    if input_tokens is not None and (cache_read is not None or cache_creation is not None):
+        input_tokens = int(input_tokens) + int(cache_read or 0) + int(cache_creation or 0)
+
     if total_tokens is None and (input_tokens is not None or output_tokens is not None):
         total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
 
@@ -25,6 +35,10 @@ def normalize_token_usage(usage: Any) -> dict[str, int] | None:
         normalized["output_tokens"] = int(output_tokens)
     if total_tokens is not None:
         normalized["total_tokens"] = int(total_tokens)
+    if cache_read is not None:
+        normalized["cache_read_input_tokens"] = int(cache_read)
+    if cache_creation is not None:
+        normalized["cache_creation_input_tokens"] = int(cache_creation)
     return normalized or None
 
 

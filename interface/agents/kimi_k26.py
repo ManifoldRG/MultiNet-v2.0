@@ -22,6 +22,10 @@ _MOONSHOT_CHAT_URL = "https://api.moonshot.ai/v1/chat/completions"
 _AGENT_NAME = "Kimi agent"
 
 
+# Moonshot caches identical request prefixes automatically and bills the reused
+# span at the cache-hit input rate (no per-message cache_control field exists in
+# the OpenAI-compatible schema). Because the agent re-sends an append-only history
+# at temperature 0, the stable system+history prefix is cache-eligible as-is.
 def _to_openai_messages(messages: List[dict]) -> List[Dict[str, object]]:
     out: List[Dict[str, object]] = []
     for message in messages:

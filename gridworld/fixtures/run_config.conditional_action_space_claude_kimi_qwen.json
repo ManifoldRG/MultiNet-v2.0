@@ -7,8 +7,8 @@
       "provider": "qwen",
       "model": "Qwen/Qwen3.5-27B",
       "temperature": 0.0,
-      "max_tokens": 4096,
-      "enable_thinking": false,
+      "max_tokens": 8192,
+      "enable_thinking": true,
       "device_map": {
         "": 0
       },

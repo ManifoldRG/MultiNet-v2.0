@@ -21,6 +21,7 @@ callable, e.g. a stub for testing.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import re
 import tempfile
@@ -35,7 +36,8 @@ from scorer.io import stable_hash, task_spec_from_payload
 from pipeline import episode_metrics, reports
 
 # Bump when Stage-3 run production changes in a way that invalidates cached episodes.
-PIPELINE_VERSION = "0.1.1"
+PIPELINE_VERSION = "0.1.2"
+RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER = 3
 
 Agent = Callable[[list[dict]], str]
 # A factory used by tests to supply stub agents: (model_name, model_cfg) -> (agent, label).
@@ -317,6 +319,26 @@ def _expected_run_hash(
     )
 
 
+def _canonical_optimal_steps(canonical_paths: dict[str, Any]) -> Optional[int]:
+    bfs = canonical_paths.get("bfs")
+    if isinstance(bfs, dict) and bfs.get("optimal_steps") is not None:
+        return int(bfs["optimal_steps"])
+    if canonical_paths.get("optimal_steps") is not None:
+        return int(canonical_paths["optimal_steps"])
+    return None
+
+
+def _runtime_capped_spec(spec, canonical_paths: dict[str, Any]):
+    """Clamp runtime max_steps to 3x solver optimal without changing task files."""
+    optimal_steps = _canonical_optimal_steps(canonical_paths)
+    if optimal_steps is None or optimal_steps <= 0:
+        return spec
+    cap = max(1, optimal_steps * RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER)
+    if spec.max_steps <= cap:
+        return spec
+    return dataclasses.replace(spec, max_steps=cap)
+
+
 # --------------------------------------------------------------------------- #
 # Stage 2 — static solve & score
 # --------------------------------------------------------------------------- #
@@ -494,6 +516,7 @@ def _run_one_unit(
     canonical = json.loads(
         (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
     )
+    runtime_spec = _runtime_capped_spec(spec, canonical)
     run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant)
     episode_path = run_dir / "episode.json"
     sidecar_path = run_dir / "run_inputs.json"
@@ -505,7 +528,7 @@ def _run_one_unit(
     manifest_row = dict(row)
 
     expected_hash = _expected_run_hash(
-        spec,
+        runtime_spec,
         model_name,
         seed,
         "minigrid",
@@ -521,7 +544,14 @@ def _run_one_unit(
             episode = _load_json_object_if_valid(episode_path)
 
     if episode is None:
-        episode = run_episode(source, experiment_config, agent, seed, run_dir)
+        episode = run_episode(
+            source,
+            experiment_config,
+            agent,
+            seed,
+            run_dir,
+            max_steps=runtime_spec.max_steps,
+        )
         _write_json_atomic(
             sidecar_path,
             {
@@ -537,6 +567,12 @@ def _run_one_unit(
                 "condition_set": conditions,
                 "prompt_variant": prompt_variant,
                 "experiment_config": _experiment_config_payload(experiment_config),
+                "runtime_max_steps_cap": {
+                    "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
+                    "optimal_steps": _canonical_optimal_steps(canonical),
+                    "original_max_steps": spec.max_steps,
+                    "effective_max_steps": runtime_spec.max_steps,
+                },
             },
         )
 

@@ -76,13 +76,46 @@ def _to_anthropic_turns(messages: List[dict]) -> Tuple[Optional[str], List[Dict[
     return system, turns
 
 
+_CACHE_CONTROL = {"type": "ephemeral"}
+
+
+def _as_block_list(content: object) -> List[dict]:
+    if isinstance(content, list):
+        return [dict(block) for block in content]
+    return [{"type": "text", "text": "" if content is None else str(content)}]
+
+
+def _apply_prompt_cache(
+    system: Optional[str], turns: List[Dict[str, object]]
+) -> Tuple[object, List[Dict[str, object]]]:
+    """Add cache_control breakpoints so each turn reuses the prior prompt prefix.
+
+    Two breakpoints (well under the 4-breakpoint cap): the stable system prompt,
+    and the last content block of the most-recently-appended turn. Each next call
+    reads the prefix the previous call wrote. Anthropic returns the cache split in
+    `usage.cache_read_input_tokens`/`cache_creation_input_tokens`, which
+    `normalize_token_usage` folds back into the full input-token count.
+    """
+    system_out: object = system
+    if system:
+        system_out = [{"type": "text", "text": system, "cache_control": _CACHE_CONTROL}]
+    if turns:
+        last = dict(turns[-1])
+        blocks = _as_block_list(last["content"])
+        if blocks:
+            blocks[-1] = {**blocks[-1], "cache_control": _CACHE_CONTROL}
+            last["content"] = blocks
+            turns = turns[:-1] + [last]
+    return system_out, turns
+
+
 def _post_messages(
     api_key: str,
     *,
     model: str,
     max_tokens: int,
     temperature: float,
-    system: Optional[str],
+    system: object,
     messages: List[Dict[str, object]],
     timeout: Optional[float],
     max_attempts: int = 5,
@@ -153,6 +186,7 @@ class ClaudeAnthropicConfig:
     max_tokens: int = 1024
     timeout: Optional[float] = 180.0
     max_attempts: int = 5
+    enable_prompt_cache: bool = True
 
 
 @dataclass
@@ -174,6 +208,8 @@ class ClaudeAnthropicAgent:
 
     def __call__(self, messages: List[dict]) -> str:
         system, turns = _to_anthropic_turns(messages)
+        if self.config.enable_prompt_cache:
+            system, turns = _apply_prompt_cache(system, turns)
         text, self.last_usage = _post_messages(
             self.api_key,
             model=self.config.model,

@@ -26,6 +26,7 @@ from scripts.run_pipeline import (
     _condition_configs,
     _expected_run_hash,
     _expected_static_hash,
+    _runtime_capped_spec,
     _resolve_source,
     check_run_config_expectations,
     condition_variant_names,
@@ -442,6 +443,46 @@ def test_canonical_paths_carry_inputs_hash(tmp_path):
     assert canonical.get("inputs_hash")
 
 
+def test_runtime_cap_clamps_episode_max_steps_to_three_times_optimal(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    manifest = _single_task_manifest(tmp_path, task_file)
+    artifacts = tmp_path / "artifacts"
+
+    run_pipeline(
+        manifest_path=manifest,
+        experiment="test1",
+        agent=ReplayAgent(v01_empty_room_trajectory()),
+        agent_name="stub",
+        artifacts_root=artifacts,
+        run_set_id="r",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = artifacts / "runs" / "copy_v01" / "minigrid" / "stub" / "seed_0" / "default"
+    episode = load_json(run_dir / "episode.json")
+    sidecar = load_json(run_dir / "run_inputs.json")
+
+    assert episode["task_spec"]["max_steps"] == 33
+    assert episode["initial_state"]["max_steps"] == 33
+    assert sidecar["runtime_max_steps_cap"] == {
+        "multiplier": 3,
+        "optimal_steps": 11,
+        "original_max_steps": 100,
+        "effective_max_steps": 33,
+    }
+
+
+def test_runtime_cap_does_not_raise_existing_smaller_max_steps():
+    spec = task_spec_from_payload(load_json(default_maze_path("V01_empty_room.json")))
+    canonical = {"bfs": {"optimal_steps": 11}}
+    lowered = spec.__class__.from_dict({**spec.to_dict(), "max_steps": 20})
+
+    capped = _runtime_capped_spec(lowered, canonical)
+
+    assert capped.max_steps == 20
+
+
 def test_unchanged_rerun_reuses_episode_and_static(tmp_path):
     task_file = tmp_path / "task.json"
     shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
@@ -547,7 +588,7 @@ def test_corrupted_sidecar_reruns_episode_cache(tmp_path):
     assert load_json(sidecar)["inputs_hash"]
 
 
-def test_task_edit_invalidates_static_and_episode(tmp_path):
+def test_max_steps_edit_above_runtime_cap_rescores_without_rerunning_episode(tmp_path):
     task_file = tmp_path / "task.json"
     shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
     manifest = _single_task_manifest(tmp_path, task_file)
@@ -560,7 +601,9 @@ def test_task_edit_invalidates_static_and_episode(tmp_path):
     first_calls = agent.calls
     first_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
 
-    # Mutate the task spec -> both static and run hashes must change.
+    # Mutate only the authored max_steps above the runtime cap. Static scoring
+    # sees the original task and must refresh, but Stage 3 hashes/runs the
+    # effective capped spec, which is unchanged at 3 * optimal.
     data = json.loads(task_file.read_text())
     data["max_steps"] = data["max_steps"] + 5
     task_file.write_text(json.dumps(data), encoding="utf-8")
@@ -570,7 +613,33 @@ def test_task_edit_invalidates_static_and_episode(tmp_path):
                  difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
     new_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
     assert new_static_hash != first_static_hash  # Stage 2 recomputed
-    assert agent.calls > first_calls             # Stage 3 episode re-run
+    assert agent.calls == first_calls            # Stage 3 episode reused
+
+
+def test_task_geometry_edit_invalidates_static_and_episode(tmp_path):
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    manifest = _single_task_manifest(tmp_path, task_file)
+    artifacts = tmp_path / "artifacts"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
+    first_calls = agent.calls
+    first_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
+
+    data = json.loads(task_file.read_text())
+    data["maze"]["goal"] = [6, 5]
+    data["goal"]["target"] = [6, 5]
+    task_file.write_text(json.dumps(data), encoding="utf-8")
+
+    run_pipeline(manifest_path=manifest, experiment="test1", agent=agent,
+                 agent_name="stub", artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
+    new_static_hash = load_json(artifacts / "tasks" / "copy_v01" / "scored_static.json")["inputs_hash"]
+    assert new_static_hash != first_static_hash
+    assert agent.calls > first_calls
 
 
 def test_scorer_config_change_rescore_without_rerunning_model(tmp_path):
@@ -939,9 +1008,15 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         for model_cfg in rc["models"].values():
             rows = resolve_task_rows(model_cfg["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
             assert len(rows) == 15
-            # M6: the 4096 max_tokens budget must be declared for every model so
-            # the live 1-task API smoke validates the same budget the run uses.
-            assert model_cfg["max_tokens"] == 4096
+            # M6: the live 1-task API smoke validates the API models' budget, so
+            # the paid models (kimi, claude) must declare max_tokens=4096. Local
+            # Qwen runs with thinking enabled and needs a larger budget for the
+            # chain-of-thought plus the trailing FINAL_OUTPUT line.
+            if model_cfg["provider"] == "qwen":
+                assert model_cfg["max_tokens"] == 8192
+                assert model_cfg["enable_thinking"] is True
+            else:
+                assert model_cfg["max_tokens"] == 4096
 
 
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
@@ -1539,6 +1614,10 @@ def test_distributed_worker_upload_finalize_local_integration(tmp_path):
 
     worker_artifacts = tmp_path / "worker"
     run_assigned_unit(unit, artifacts_root=worker_artifacts, agent_factory=factory)
+    worker_episode = load_json(worker_artifacts / unit["run_dir"] / "episode.json")
+    worker_sidecar = load_json(worker_artifacts / unit["run_dir"] / "run_inputs.json")
+    assert worker_episode["task_spec"]["max_steps"] == 33
+    assert worker_sidecar["runtime_max_steps_cap"]["effective_max_steps"] == 33
     archive = package_run_archive(unit, artifacts_root=worker_artifacts)
     store.upload(worker_id, unit["unit_id"], archive.read_bytes())
 
