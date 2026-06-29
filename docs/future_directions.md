@@ -26,6 +26,51 @@ prediction (~3-5x decode), but it adds process supervision and health checks.
 KTransformers remains a fallback to evaluate if vLLM/SGLang cannot hit the
 required throughput or memory envelope on the A100 40GB worker shape.
 
+## Qwen INT8 and A100 80GB rental checkpoint
+
+As of 2026-06-29, the `a100-qwen-vllm` boot disk is 150 GB (`/dev/root`: 145G
+size, 70G used, 75G available). The existing Hugging Face cache is 29G, pip
+cache is 6.4G, and the checked-out repo plus `.venv-qwen-vllm` is about 8.5G.
+The candidate `Avesed/Qwen3.6-27B-INT8-W8A8` checkpoint is about 31.2 GB of
+safetensors, close to the current `Qwen/Qwen3.6-27B-FP8` footprint of about
+30.9 GB. It should fit on the image alongside the FP8 checkpoint without
+deleting the existing model cache, leaving roughly 40 GB free after download.
+If a future download needs extra temporary headroom, the pip cache is a safe
+first cleanup target; deleting the FP8 checkpoint should not be necessary.
+
+Current recommendation: test INT8 W8A8 on the existing A100 40GB worker before
+renting an 80GB A100. A100 has native INT8 Tensor Cores, while the current FP8
+checkpoint runs through non-native FP8 weight-only kernels on A100, so INT8 may
+be competitive without changing GPU shape.
+
+If we later need to test full BF16/FP16, or want more KV-cache margin, use
+`a2-ultragpu-1g`: 1 NVIDIA A100 80GB, 12 vCPU, 170 GB RAM, and 1 bundled local
+SSD. GCP zones found for this shape: `us-central1-a`, `us-central1-c`,
+`us-east4-c`, `us-east5-a`, `us-east5-b`, `europe-west4-a`, and
+`asia-southeast1-c`.
+
+Pricing basis: Cloud Billing Catalog API for Compute Engine SKUs queried on
+2026-06-29. Source docs: [Cloud Billing `services.skus.list`][billing-skus] and
+[Compute Engine accelerator-optimized machines][a2-machines]. Hourly total below
+is GPU + 12 A2 core-hours + 170 GiB A2 RAM-hours. This excludes boot persistent
+disk, snapshots/images, network egress, taxes, and any committed-use/reservation
+effects.
+
+| Region | Example zone(s) | On-demand USD/h | Spot/preemptible USD/h |
+| --- | --- | ---: | ---: |
+| `us-central1` | `us-central1-a`, `us-central1-c` | 5.028 | 2.738 |
+| `us-east5` | `us-east5-a`, `us-east5-b` | 5.524 | 1.656 |
+| `europe-west4` | `europe-west4-a` | 5.536 | 2.601 |
+| `us-east4` | `us-east4-c` | 5.663 | 2.272 |
+| `asia-southeast1` | `asia-southeast1-c` | 6.202 | 3.130 |
+
+For comparison, the current Tokyo `a2-highgpu-1g` A100 40GB shape is about
+4.050 USD/h on-demand and 2.228 USD/h spot/preemptible using the same SKU
+calculation.
+
+[billing-skus]: https://docs.cloud.google.com/billing/docs/reference/rest/v1/services.skus/list
+[a2-machines]: https://docs.cloud.google.com/compute/docs/accelerator-optimized-machines
+
 ## Other deferred items
 
 - **SSH auto-launcher** for the cluster (read `deploy/cluster.example.json` and
