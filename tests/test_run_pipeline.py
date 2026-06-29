@@ -1049,6 +1049,11 @@ def test_infra_only_model_config_keys_excluded_from_run_hash():
         {"hardware_profile": "h100-8x"},
         {"worker_count": 4},
         {"max_in_flight": 2},
+        {"max_model_len": 8192},
+        {"gpu_memory_utilization": 0.88},
+        {"tensor_parallel_size": 1},
+        {"enable_prefix_caching": True},
+        {"enforce_eager": True},
     ):
         cfg = {**base, **infra}
         assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) == base_hash, infra
@@ -1065,6 +1070,9 @@ def test_generation_model_config_keys_change_run_hash():
         {"enable_thinking": True},
         {"load_in_4bit": True},
         {"torch_dtype": "bfloat16"},
+        {"dtype": "float16"},
+        {"quantization": "fp8"},
+        {"sampling_kwargs": {"top_p": 0.9}},
     ):
         cfg = {**base, **gen}
         assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) != base_hash, gen

@@ -10,6 +10,7 @@ CUDA_VERSION="12.8"
 SKIP_DRIVER=0
 DRY_RUN=0
 LOG="deploy/setup_qwen_vm.log"
+HF_INCLUDE_PATTERNS=("*.safetensors" "*.index.json" "*.json" "*.jinja" "*.txt")
 
 QWEN_27B="Qwen/Qwen3.6-27B"
 QWEN_MOE="Qwen/Qwen3.6-35B-A3B"
@@ -111,8 +112,7 @@ download_weights() {
   export HF_HUB_ENABLE_HF_TRANSFER=0
   for repo in "${repos[@]}"; do
     log "downloading $repo"
-    run hf download "$repo" --include "*.safetensors" --include "*.index.json" \
-      --include "*.json" --include "*.jinja" --include "*.txt" --max-workers 16
+    run hf download "$repo" --include "${HF_INCLUDE_PATTERNS[@]}" --max-workers 16
   done
 }
 
@@ -143,4 +143,4 @@ main() {
   log "DONE. If nvidia-smi/CUDA are healthy and the smoke prints tok/s, snapshot this image for the other Qwen runners."
 }
 
-main 2>&1 | tee -a "$LOG"
+main "$@" > >(tee -a "$LOG") 2>&1

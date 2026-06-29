@@ -222,7 +222,8 @@ def _expected_static_hash(spec, config: ScorerConfig) -> str:
 # the episode cache key: editing them otherwise re-pays for every cached episode.
 # Covers orchestration/scheduling knobs and transport/model-loading knobs.
 # NOTE: keep output-affecting knobs IN the hash (temperature, max_tokens,
-# enable_thinking, torch_dtype, load_in_4bit, attn_implementation, model).
+# enable_thinking, torch_dtype, load_in_4bit, attn_implementation, model, dtype,
+# quantization).
 _NON_RUNTIME_MODEL_KEYS = {
     # orchestration / scheduling
     "tasks",
@@ -239,6 +240,15 @@ _NON_RUNTIME_MODEL_KEYS = {
     "local_files_only",
     "max_memory",
     "trust_remote_code",
+    "max_model_len",
+    "gpu_memory_utilization",
+    "tensor_parallel_size",
+    "enforce_eager",
+    "max_num_seqs",
+    "enable_prefix_caching",
+    "download_dir",
+    "use_tqdm",
+    "engine_kwargs",
 }
 
 
@@ -856,9 +866,38 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])
         return Qwen35VLAgent(config=cfg), model or cfg.model
+    if provider in {"qwen_vllm", "vllm"}:
+        from interface.agents import QwenVLLMAgent, QwenVLLMConfig
+
+        cfg = QwenVLLMConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        for key in (
+            "max_model_len",
+            "gpu_memory_utilization",
+            "tensor_parallel_size",
+            "dtype",
+            "quantization",
+            "trust_remote_code",
+            "enforce_eager",
+            "max_num_seqs",
+            "enable_prefix_caching",
+            "enable_thinking",
+            "seed",
+            "download_dir",
+            "local_files_only",
+            "use_tqdm",
+            "engine_kwargs",
+            "sampling_kwargs",
+        ):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
+        return QwenVLLMAgent(config=cfg), model or cfg.model
     raise ValueError(
         f"Model {name!r}: unknown provider {provider!r} "
-        "(expected 'claude', 'kimi', or 'qwen')."
+        "(expected 'claude', 'kimi', 'qwen', or 'qwen_vllm')."
     )
 
 

@@ -14,10 +14,14 @@ def test_qwen36_class_is_preferred_over_qwen35():
     assert names.index("Qwen3_5ForConditionalGeneration") < names.index("AutoModelForCausalLM")
 
 
-def test_smoke_qwen36_run_config_is_no_quant_and_correct_model():
+def test_smoke_qwen36_run_config_uses_vllm_fp8_model():
     cfg = load_run_config(REPO_ROOT / "gridworld" / "fixtures" / "run_config.smoke_qwen36_kimi.json")
-    qwen = cfg["models"]["qwen36_27b_hf"]
-    assert qwen["model"] == "Qwen/Qwen3.6-27B"
+    qwen = cfg["models"]["qwen36_27b_vllm"]
+    assert qwen["provider"] == "qwen_vllm"
+    assert qwen["model"] == "Qwen/Qwen3.6-27B-FP8"
     assert qwen["group"] == "qwen36-27b"
-    assert qwen["load_in_4bit"] is False
+    assert qwen["max_model_len"] == 8192
+    assert qwen["gpu_memory_utilization"] == 0.88
+    assert qwen["enforce_eager"] is True
+    assert qwen["local_files_only"] is True
     assert cfg["models"]["kimi_k26"]["group"] == "kimi-api"
