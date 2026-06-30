@@ -41,6 +41,8 @@ mazes/results/*_results.json
 mazes/results/*.progress.json
 # Bare-bones run pipeline artifact tree (regenerated locally)
 artifacts/
+# Artifacts pulled off coordinators by the cost-safety monitor (run output)
+artifacts-pulled/
 
 # Qwen VM setup log (teed by setup_qwen_vm.sh, even in --dry-run)
 deploy/*.log
