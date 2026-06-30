@@ -905,17 +905,50 @@ def materialize_worker_inputs(unit: dict[str, Any], artifacts_root: str | Path) 
     return row
 
 
+class ProgressCounter:
+    """Mutable, shared between the worker's main thread (writer, via _CountingAgent)
+    and its heartbeat thread (reader). A single int; a missed/stale read only delays
+    a stall-clock reset by one heartbeat and cannot cause a false stall."""
+
+    __slots__ = ("count",)
+
+    def __init__(self) -> None:
+        self.count = 0
+
+
+class _CountingAgent:
+    """Wraps a live agent to count completed generation calls (one per maze turn)
+    for progress heartbeats. Increments AFTER the call returns so a hung generation
+    does not advance progress. Delegates all other attribute access to the inner
+    agent so the runner sees the original API."""
+
+    def __init__(self, inner: Any, counter: ProgressCounter) -> None:
+        self._inner = inner
+        self._counter = counter
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        result = self._inner(*args, **kwargs)
+        self._counter.count += 1
+        return result
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
 def run_assigned_unit(
     unit: dict[str, Any],
     *,
     artifacts_root: str | Path,
     agent_factory: Optional[AgentFactory] = None,
     force: bool = False,
+    progress: Optional[ProgressCounter] = None,
 ) -> tuple[dict[str, Any], Optional[float]]:
     artifacts_root = Path(artifacts_root)
     row = materialize_worker_inputs(unit, artifacts_root)
     factory = agent_factory or pipeline._build_agent_from_spec
     agent, _ = factory(unit["model_key"], unit["model_config"])
+    if progress is not None:
+        agent = _CountingAgent(agent, progress)
     result = pipeline._run_one_unit(
         row,
         agent,
@@ -964,12 +997,12 @@ def _load_worker_state(path: Path) -> dict[str, Any]:
     return {}
 
 
-def _safe_heartbeat(client: Any, worker_id: str, unit_id: str) -> bool:
+def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optional[int] = None) -> bool:
     """Send a heartbeat, swallowing transient errors so a brief coordinator
     outage cannot kill the heartbeat thread (which would let the unit go stale
     and be double-assigned while this worker is still running it)."""
     try:
-        client.heartbeat(worker_id, unit_id)
+        client.heartbeat(worker_id, unit_id, progress)
         return True
     except Exception as exc:
         logger.warning("Heartbeat failed for unit %s (will retry next interval): %s", unit_id, exc)
@@ -1026,18 +1059,25 @@ def run_worker_loop(
         local_state["current_unit_id"] = unit_id
         _write_json_atomic(state_file, local_state)
         stop_heartbeat = threading.Event()
+        progress = ProgressCounter()
 
-        # Bind unit_id/stop as defaults so a thread that outlives join() keeps
-        # heartbeating *its* unit, not whatever the next loop iteration assigns.
-        def heartbeat_loop(unit_id: str = unit_id, stop: threading.Event = stop_heartbeat) -> None:
+        # Bind unit_id/stop/progress as defaults so a thread that outlives join()
+        # keeps heartbeating *its* unit, not whatever the next loop iteration assigns.
+        def heartbeat_loop(
+            unit_id: str = unit_id,
+            stop: threading.Event = stop_heartbeat,
+            progress: ProgressCounter = progress,
+        ) -> None:
             while not stop.wait(heartbeat_interval_seconds):
-                _safe_heartbeat(client, worker_id, unit_id)
+                _safe_heartbeat(client, worker_id, unit_id, progress.count)
 
         thread = threading.Thread(target=heartbeat_loop, daemon=True)
         try:
             client.heartbeat(worker_id, unit_id)
             thread.start()
-            run_assigned_unit(unit, artifacts_root=artifacts_root, agent_factory=agent_factory)
+            run_assigned_unit(
+                unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
+            )
             archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
             client.upload(worker_id, unit_id, archive_path)
             local_state.pop("current_unit_id", None)

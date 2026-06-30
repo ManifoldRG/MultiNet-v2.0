@@ -91,3 +91,54 @@ def test_heartbeat_without_progress_keeps_total_zero(tmp_path, monkeypatch):
     store.assign("A", _caps())
     store.heartbeat("A", "u0")                        # no progress kwarg
     assert store.status()["progress_total"] == 0
+
+
+def test_counting_agent_increments_and_delegates():
+    from scripts.distributed_run_pipeline import ProgressCounter, _CountingAgent
+
+    class Inner:
+        some_attr = 42
+        def __call__(self, messages):
+            return "ok"
+
+    pc = ProgressCounter()
+    agent = _CountingAgent(Inner(), pc)
+    assert agent([{"role": "user"}]) == "ok"
+    assert pc.count == 1
+    assert agent.some_attr == 42          # non-call attrs delegate to inner
+    agent([{"role": "user"}])
+    assert pc.count == 2
+
+
+def test_run_assigned_unit_wraps_agent_for_progress(tmp_path, monkeypatch):
+    import scripts.distributed_run_pipeline as drp
+    from scripts.distributed_run_pipeline import ProgressCounter, _CountingAgent
+
+    seen = {}
+
+    def fake_run_one_unit(row, agent, model_id, **kw):
+        seen["agent"] = agent
+        agent([{"role": "user"}])          # simulate one maze turn
+        return ({"ok": True}, 1.0)
+
+    monkeypatch.setattr(drp.pipeline, "_run_one_unit", fake_run_one_unit)
+    monkeypatch.setattr(drp, "materialize_worker_inputs", lambda unit, root: {})
+    monkeypatch.setattr(drp.ScorerConfig, "from_dict", staticmethod(lambda d: object()))
+
+    class FakeAgent:
+        def __call__(self, messages):
+            return "x"
+
+    pc = ProgressCounter()
+    unit = {
+        "unit_id": "u0", "model_key": "m", "model_config": {}, "model_id": "mid",
+        "task_id": "t", "seed": 0, "prompt_variant": "default", "scorer_config": {},
+        "difficulty_max_static_score": 1000.0,
+        "task_artifacts": {"scored_static": {}},
+    }
+    drp.run_assigned_unit(
+        unit, artifacts_root=tmp_path,
+        agent_factory=lambda k, c: (FakeAgent(), "label"), progress=pc,
+    )
+    assert isinstance(seen["agent"], _CountingAgent)
+    assert pc.count == 1
