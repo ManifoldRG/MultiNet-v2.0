@@ -26,6 +26,42 @@ prediction (~3-5x decode), but it adds process supervision and health checks.
 KTransformers remains a fallback to evaluate if vLLM/SGLang cannot hit the
 required throughput or memory envelope on the A100 40GB worker shape.
 
+## Inference performance (2026-06-30 smokes): FP8 on A100-40GB is not enough — plan for FP16 on A100-80GB
+
+The 2026-06-30 distributed smokes ran `Qwen/Qwen3.6-27B-FP8` through the offline
+vLLM agent on `a2-highgpu-1g` (A100 40GB) and showed that **vLLM alone does not
+make FP8-on-A100-40GB fast enough — we will need FP16/BF16, which needs the 80GB
+shape** (see the rental checkpoint below). Both failure modes trace back to the
+A100 lacking native FP8 compute:
+
+- **`enforce_eager: true` (no CUDA graphs):** loads (~14 min: 66 shards + engine
+  init) and runs, but decode is slow. In smoke `qwen-smoke-eager-20260630-172236`
+  the navigation maze (`v01_empty_room`) verified in ~18 min (~32 agent steps),
+  but the harder mazes (`v04` key-door, `v05` switch-gate) ground at **~4-5
+  min/step** — only ~25-27 steps in ~2 h, i.e. ~6-7 h for a single unit. FP8
+  weights run through non-native Marlin weight-only kernels on A100 ("Your GPU
+  does not have native support for FP8 computation ... may degrade performance"),
+  which is the throughput ceiling.
+- **`enforce_eager: false` (CUDA graphs — the speed lever):** OOMs at startup in
+  vLLM's cudagraph memory profiling (`profile_cudagraph_memory ->
+  _init_minimal_kv_cache_for_profiling -> torch.zeros`, +1.53 GiB) because at
+  `gpu_memory_utilization=0.88` only ~498 MiB is free on the 40GB card. CUDA-graph
+  capture needs headroom the 40GB shape does not have for a 27B model.
+
+So FP8 buys memory but not speed on A100-40GB, and the CUDA-graph speed path
+does not fit. The throughput path is **FP16/BF16 on A100-80GB (`a2-ultragpu-1g`)**:
+native A100 compute plus headroom for CUDA graphs and a large KV cache. This
+promotes the rental checkpoint below from *optional* to *required for practical
+throughput*. (INT8 W8A8 on A100-40GB — A100 has native INT8 — is still worth a
+cheap test first, per that section.)
+
+This is purely a model-throughput finding. The distributed pipeline itself —
+coordinator work-stealing / queue hand-off to the next maze, and the
+progress-aware stall detector — was validated end-to-end in the same smoke and is
+not blocked by this (the smoke's actual goal: the freed worker correctly stole
+the 3rd unit, and the monitor never false-stalled while `progress_total` climbed
+for ~2 h with the verified count frozen at 1).
+
 ## Qwen INT8 and A100 80GB rental checkpoint
 
 As of 2026-06-29, the `a100-qwen-vllm` boot disk is 150 GB (`/dev/root`: 145G
