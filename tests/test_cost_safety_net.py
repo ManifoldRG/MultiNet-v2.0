@@ -22,6 +22,7 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 LAUNCH = REPO / "launch_smoke_4vm.sh"
 MONITOR = REPO / "monitor_run.sh"
+QWEN_LAUNCH = REPO / "launch_qwen_smoke.sh"
 
 
 def bash(snippet: str, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -287,3 +288,37 @@ def test_monitor_absent_progress_total_still_stalls(tmp_path):
     r2 = bash(f"./monitor_run.sh --once --state-file {state} --coord c --zone z --stall-minutes 1",
               env={"MONITOR_TEST_STATUS": s, "MONITOR_NOW_EPOCH": "1120"})
     assert r2.returncode == 20, r2.stderr
+
+
+# --------------------------------------------------------------------------- #
+# launch_qwen_smoke.sh  (3-VM Qwen-only launcher)
+# --------------------------------------------------------------------------- #
+
+def test_qwen_launch_syntax_ok():
+    r = bash("bash -n ./launch_qwen_smoke.sh")
+    assert r.returncode == 0, r.stderr
+
+
+def test_qwen_launch_without_max_run_duration_aborts(tmp_path):
+    _fake_gcloud(tmp_path)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    r = bash("bash ./launch_qwen_smoke.sh", env=env)
+    assert r.returncode != 0
+    assert "MAX_RUN_DURATION" in r.stderr
+
+
+def test_qwen_stop_subcommand_three_vms_no_kimi(tmp_path):
+    _fake_gcloud(tmp_path)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    r = bash("bash ./launch_qwen_smoke.sh stop", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "instances stop" in r.stdout
+    assert "mn-qwen-coord" in r.stdout
+    assert "mn-qwen-1" in r.stdout and "mn-qwen-2" in r.stdout
+    assert "kimi" not in r.stdout.lower()
+
+
+def test_qwen_watchdog_minutes_helper():
+    r = bash("source ./launch_qwen_smoke.sh; watchdog_minutes 6h")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "420"
