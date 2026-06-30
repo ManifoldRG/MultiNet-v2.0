@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from scripts.distributed_run_pipeline import CoordinatorStore, plan_path
 
 
@@ -108,6 +106,29 @@ def test_counting_agent_increments_and_delegates():
     assert agent.some_attr == 42          # non-call attrs delegate to inner
     agent([{"role": "user"}])
     assert pc.count == 2
+
+
+def test_counting_agent_setattr_reaches_inner():
+    """The runner resets ``last_usage`` on the agent before each call and reads it
+    back after. The wrapper must forward both the write and the read to the inner
+    agent, or usage telemetry is silently dropped for agents (Kimi/Claude) that
+    have no ``reset_usage()`` method and rely on the ``setattr`` fallback."""
+    from scripts.distributed_run_pipeline import ProgressCounter, _CountingAgent
+
+    class Inner:
+        last_usage = None
+
+        def __call__(self, messages):
+            self.last_usage = {"tokens": 7}   # inner records usage during the call
+            return "ok"
+
+    inner = Inner()
+    agent = _CountingAgent(inner, ProgressCounter())
+    setattr(agent, "last_usage", None)        # runner's pre-call reset
+    agent([{"role": "user"}])
+    # Read-back must see the inner's real usage, not a None shadow on the wrapper.
+    assert getattr(agent, "last_usage") == {"tokens": 7}
+    assert inner.last_usage == {"tokens": 7}
 
 
 def test_run_assigned_unit_wraps_agent_for_progress(tmp_path, monkeypatch):

@@ -917,14 +917,22 @@ class ProgressCounter:
 
 
 class _CountingAgent:
-    """Wraps a live agent to count completed generation calls (one per maze turn)
-    for progress heartbeats. Increments AFTER the call returns so a hung generation
-    does not advance progress. Delegates all other attribute access to the inner
-    agent so the runner sees the original API."""
+    """Wraps a live agent to count completed generation calls (one per model
+    generation, including parse-retries) for progress heartbeats. Increments
+    AFTER the call returns so a hung generation does not advance progress.
+
+    Delegates attribute reads *and writes* to the inner agent so the runner sees
+    the original API. The write delegation matters: the runner resets
+    ``last_usage`` on the agent before each call and reads it back after, so a
+    write that stayed on the wrapper would shadow the inner's real value and
+    silently drop usage telemetry for agents without a ``reset_usage()`` method
+    (e.g. the Kimi/Claude agents)."""
 
     def __init__(self, inner: Any, counter: ProgressCounter) -> None:
-        self._inner = inner
-        self._counter = counter
+        # Bypass our own __setattr__ for the two private fields; everything else
+        # must reach the inner agent.
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_counter", counter)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         result = self._inner(*args, **kwargs)
@@ -932,7 +940,17 @@ class _CountingAgent:
         return result
 
     def __getattr__(self, name: str) -> Any:
+        # Only fires for names not found normally; guard the private fields so a
+        # lookup before __init__ finishes cannot recurse forever.
+        if name in ("_inner", "_counter"):
+            raise AttributeError(name)
         return getattr(self._inner, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ("_inner", "_counter"):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._inner, name, value)
 
 
 def run_assigned_unit(
