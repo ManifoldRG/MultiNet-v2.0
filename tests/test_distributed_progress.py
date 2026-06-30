@@ -64,3 +64,30 @@ def test_work_stealing_two_workers_three_units(tmp_path, monkeypatch):
 
     # all units now assigned/verified -> empty queue -> clean None
     assert store.assign("C", _caps())["unit"] is None
+
+
+def test_heartbeat_records_progress_monotonic(tmp_path, monkeypatch):
+    store = _store(tmp_path, monkeypatch, n_units=1)
+    store.assign("A", _caps())                       # u0 -> A (assigned)
+    store.heartbeat("A", "u0", progress=5)
+    assert store.load_state()["units"]["u0"]["progress"] == 5
+    store.heartbeat("A", "u0", progress=3)            # lower -> ignored
+    assert store.load_state()["units"]["u0"]["progress"] == 5
+    store.heartbeat("A", "u0", progress=9)
+    assert store.load_state()["units"]["u0"]["progress"] == 9
+
+
+def test_status_progress_total_sums(tmp_path, monkeypatch):
+    store = _store(tmp_path, monkeypatch, n_units=2)
+    store.assign("A", _caps())
+    store.assign("B", _caps())
+    store.heartbeat("A", "u0", progress=4)
+    store.heartbeat("B", "u1", progress=6)
+    assert store.status()["progress_total"] == 10
+
+
+def test_heartbeat_without_progress_keeps_total_zero(tmp_path, monkeypatch):
+    store = _store(tmp_path, monkeypatch, n_units=1)
+    store.assign("A", _caps())
+    store.heartbeat("A", "u0")                        # no progress kwarg
+    assert store.status()["progress_total"] == 0

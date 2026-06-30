@@ -461,7 +461,9 @@ class CoordinatorStore:
             self.save_state(state)
             return {"unit": None, "job_id": plan["job_id"]}
 
-    def heartbeat(self, worker_id: str, unit_id: Optional[str] = None) -> dict[str, Any]:
+    def heartbeat(
+        self, worker_id: str, unit_id: Optional[str] = None, progress: Optional[int] = None
+    ) -> dict[str, Any]:
         with self._guard():
             state = self.load_state()
             worker = state["workers"].setdefault(worker_id, {"worker_id": worker_id})
@@ -473,6 +475,9 @@ class CoordinatorStore:
                     unit_state["status"] = "running"
                     unit_state["heartbeat_at"] = _now()
                     unit_state["updated_at"] = _iso()
+                    if progress is not None:
+                        # Monotonic: a re-attempt that resets to 0 must not move it backwards.
+                        unit_state["progress"] = max(int(unit_state.get("progress", 0)), int(progress))
                     worker["current_unit_id"] = unit_id
             self.save_state(state)
             return {"ok": True}
@@ -582,15 +587,18 @@ class CoordinatorStore:
             state = self.load_state()
             self._mark_stale(plan, state)
             counts: dict[str, int] = {}
+            progress_total = 0
             for unit_state in state["units"].values():
                 status = str(unit_state.get("status"))
                 counts[status] = counts.get(status, 0) + 1
+                progress_total += int(unit_state.get("progress", 0))
             self.save_state(state)
             return {
                 "job_id": plan["job_id"],
                 "unit_count": len(plan["units"]),
                 "units": counts,
                 "worker_count": len(state["workers"]),
+                "progress_total": progress_total,
             }
 
     def _mark_stale(self, plan: dict[str, Any], state: dict[str, Any]) -> None:
@@ -734,8 +742,12 @@ class CoordinatorClient:
     def assign(self, worker_id: str, capabilities: dict[str, Any]) -> dict[str, Any]:
         return self._json("POST", "/assign", {"worker_id": worker_id, "capabilities": capabilities})
 
-    def heartbeat(self, worker_id: str, unit_id: Optional[str] = None) -> dict[str, Any]:
-        return self._json("POST", "/heartbeat", {"worker_id": worker_id, "unit_id": unit_id})
+    def heartbeat(
+        self, worker_id: str, unit_id: Optional[str] = None, progress: Optional[int] = None
+    ) -> dict[str, Any]:
+        return self._json(
+            "POST", "/heartbeat", {"worker_id": worker_id, "unit_id": unit_id, "progress": progress}
+        )
 
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         return self._json("POST", "/fail", {"worker_id": worker_id, "unit_id": unit_id, "reason": reason})
@@ -817,7 +829,11 @@ def make_coordinator_server(
                 elif parsed.path == "/heartbeat":
                     self._send_json(
                         200,
-                        store.heartbeat(str(payload["worker_id"]), payload.get("unit_id")),
+                        store.heartbeat(
+                            str(payload["worker_id"]),
+                            payload.get("unit_id"),
+                            payload.get("progress"),
+                        ),
                     )
                 elif parsed.path == "/fail":
                     self._send_json(
