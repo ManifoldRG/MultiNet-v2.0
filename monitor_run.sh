@@ -82,7 +82,8 @@ units = d.get("units", {}) or {}
 total = int(d.get("unit_count", 0))
 verified = int(units.get("verified", 0))
 failed = int(units.get("failed", 0))
-sig = "|".join(f"{k}:{units[k]}" for k in sorted(units)) + f"|total:{total}"
+progress = int(d.get("progress_total", 0))
+sig = "|".join(f"{k}:{units[k]}" for k in sorted(units)) + f"|total:{total}|progress:{progress}"
 print(f"{total}\t{verified}\t{failed}\t{sig}")
 '
 }
