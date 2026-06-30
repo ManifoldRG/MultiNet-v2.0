@@ -155,6 +155,14 @@ main_once() {
   IFS=$'\t' read -r total verified failed sig <<<"$fields"
   echo "[monitor] verified=${verified}/${total} failed=${failed}"
 
+  # Stall detection compares the signature against the previous tick, which only
+  # works if the previous tick was persisted. Without --state-file every tick
+  # starts blank, the signature always looks "changed", and a hang is never
+  # caught — warn loudly rather than silently disabling a safety check.
+  if [[ -n "$STALL_MINUTES" && -z "$STATE_FILE" ]]; then
+    echo "[monitor] WARNING: --stall-minutes set without --state-file; stall detection needs state persisted across ticks and is DISABLED this way." >&2
+  fi
+
   if [[ "$total" -gt 0 && "$verified" -eq "$total" ]]; then
     echo "[monitor] run complete"
     if [[ "$COMPLETE_ACTIONS" -eq 1 ]]; then

@@ -404,7 +404,7 @@ Kimi log:
 Hands-off monitor (Layer 2) — finalize + pull data + STOP on completion (run under Claude /loop):
   /loop 12m ./monitor_run.sh --once --coord $COORD --qwen1 $QWEN1 --qwen2 $QWEN2 --kimi $KIMI \\
       --zone $ZONE --run-id $RUN_ID --dest ./artifacts-pulled/$RUN_ID \\
-      --stall-minutes 30 --complete-actions
+      --stall-minutes 30 --state-file ./.monitor_state.$RUN_ID.json --complete-actions
 
 Manual finalize (if not using the monitor) after /status shows every unit verified
 (the unit count is printed by coordinator-prepare above; this smoke should report 6 = 3 mazes x 2 models):

@@ -22,7 +22,6 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 LAUNCH = REPO / "launch_smoke_4vm.sh"
 MONITOR = REPO / "monitor_run.sh"
-QWEN_LAUNCH = REPO / "launch_qwen_smoke.sh"
 
 
 def bash(snippet: str, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -198,8 +197,9 @@ def test_monitor_stalled_exit_20(tmp_path):
 def test_monitor_complete_takes_precedence_over_stall(tmp_path):
     state = f"{tmp_path}/s.json"
     env1 = {"MONITOR_TEST_STATUS": _status(6, 6), "MONITOR_NOW_EPOCH": "1000"}
-    bash(f"./monitor_run.sh --once --state-file {state} "
-         f"--coord c --zone z --stall-minutes 1", env=env1)
+    r1 = bash(f"./monitor_run.sh --once --state-file {state} "
+              f"--coord c --zone z --stall-minutes 1", env=env1)
+    assert r1.returncode == 10, r1.stderr
     env2 = {"MONITOR_TEST_STATUS": _status(6, 6), "MONITOR_NOW_EPOCH": "9999"}
     r2 = bash(f"./monitor_run.sh --once --state-file {state} "
               f"--coord c --zone z --stall-minutes 1", env=env2)
@@ -269,8 +269,9 @@ def test_monitor_no_progress_stalls(tmp_path):
     state = f"{tmp_path}/s.json"
     env1 = {"MONITOR_TEST_STATUS": _status(0, 6, progress_total=10, running=2, pending=4),
             "MONITOR_NOW_EPOCH": "1000"}
-    bash(f"./monitor_run.sh --once --state-file {state} "
-         f"--coord c --zone z --stall-minutes 1", env=env1)
+    r1 = bash(f"./monitor_run.sh --once --state-file {state} "
+              f"--coord c --zone z --stall-minutes 1", env=env1)
+    assert r1.returncode == 0, r1.stderr
     env2 = {"MONITOR_TEST_STATUS": _status(0, 6, progress_total=10, running=2, pending=4),
             "MONITOR_NOW_EPOCH": "1120"}
     r2 = bash(f"./monitor_run.sh --once --state-file {state} "
@@ -283,8 +284,9 @@ def test_monitor_absent_progress_total_still_stalls(tmp_path):
     state = f"{tmp_path}/s.json"
     s = json.dumps({"job_id": "j", "unit_count": 6,
                     "units": {"verified": 0, "running": 2, "pending": 4}, "worker_count": 3})
-    bash(f"./monitor_run.sh --once --state-file {state} --coord c --zone z --stall-minutes 1",
-         env={"MONITOR_TEST_STATUS": s, "MONITOR_NOW_EPOCH": "1000"})
+    r1 = bash(f"./monitor_run.sh --once --state-file {state} --coord c --zone z --stall-minutes 1",
+              env={"MONITOR_TEST_STATUS": s, "MONITOR_NOW_EPOCH": "1000"})
+    assert r1.returncode == 0, r1.stderr
     r2 = bash(f"./monitor_run.sh --once --state-file {state} --coord c --zone z --stall-minutes 1",
               env={"MONITOR_TEST_STATUS": s, "MONITOR_NOW_EPOCH": "1120"})
     assert r2.returncode == 20, r2.stderr
