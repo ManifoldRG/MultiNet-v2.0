@@ -57,3 +57,34 @@ def derive_topology(run_config: dict[str, Any], run_id: str) -> dict[str, Any]:
         "has_gpu": has_gpu,
         "required_credentials": sorted(creds),
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import json
+    import os
+    import sys
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="Derive distributed-run VM topology.")
+    parser.add_argument("run_config", help="Path to a run_config JSON.")
+    parser.add_argument("run_id", help="Run id (used for VM names).")
+    parser.add_argument("--check-credentials", action="store_true",
+                        help="Exit 3 if a required API credential env var is unset.")
+    args = parser.parse_args(argv)
+
+    cfg = json.loads(Path(args.run_config).read_text())
+    topology = derive_topology(cfg, args.run_id)
+
+    if args.check_credentials:
+        missing = [c for c in topology["required_credentials"] if not os.environ.get(c)]
+        if missing:
+            print(f"Missing required credential env var(s): {', '.join(missing)}", file=sys.stderr)
+            return 3
+
+    print(json.dumps(topology, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

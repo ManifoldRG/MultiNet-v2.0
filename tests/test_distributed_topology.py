@@ -62,3 +62,54 @@ def test_worker_count_defaults_to_one():
     cfg = _cfg({"q": {"provider": "qwen_vllm", "hardware_profile": "local-gpu", "group": "g"}})
     t = derive_topology(cfg, "r")
     assert len(t["workers"]) == 1
+
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+
+
+def _run_cli(args, env=None, cfg=None, tmp_path=None):
+    if cfg is not None:
+        p = tmp_path / "rc.json"
+        p.write_text(json.dumps(cfg))
+        args = [str(p)] + args
+    e = os.environ.copy()
+    e.pop("MOONSHOT_API_KEY", None)
+    e.pop("ANTHROPIC_API_KEY", None)
+    if env:
+        e.update(env)
+    return subprocess.run(
+        [sys.executable, "-m", "scripts.distributed_topology", *args],
+        capture_output=True, text=True, cwd=REPO, env=e,
+    )
+
+
+def test_cli_prints_topology_json(tmp_path):
+    cfg = {"models": {"q": {"provider": "qwen_vllm", "hardware_profile": "local-gpu",
+                            "group": "qwen36-27b", "worker_count": 2}}}
+    r = _run_cli(["run9"], cfg=cfg, tmp_path=tmp_path)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["coordinator"]["name"] == "run9-coord"
+    assert len(out["workers"]) == 2
+
+
+def test_cli_check_credentials_missing_fails(tmp_path):
+    cfg = {"models": {"k": {"provider": "kimi", "hardware_profile": "api-client",
+                            "group": "kimi-api", "worker_count": 1}}}
+    r = _run_cli(["run10", "--check-credentials"], cfg=cfg, tmp_path=tmp_path)
+    assert r.returncode == 3
+    assert "MOONSHOT_API_KEY" in r.stderr
+
+
+def test_cli_check_credentials_present_passes(tmp_path):
+    cfg = {"models": {"k": {"provider": "kimi", "hardware_profile": "api-client",
+                            "group": "kimi-api", "worker_count": 1}}}
+    r = _run_cli(["run11", "--check-credentials"], env={"MOONSHOT_API_KEY": "x"},
+                 cfg=cfg, tmp_path=tmp_path)
+    assert r.returncode == 0, r.stderr
