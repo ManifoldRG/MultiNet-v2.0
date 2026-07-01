@@ -43,6 +43,8 @@ mazes/results/*.progress.json
 artifacts/
 # Artifacts pulled off coordinators by the cost-safety monitor (run output)
 artifacts-pulled/
+# Provisioner run-manifests (.runs/<run_id>/manifest.json)
+.runs/
 
 # Qwen VM setup log (teed by setup_qwen_vm.sh, even in --dry-run)
 deploy/*.log

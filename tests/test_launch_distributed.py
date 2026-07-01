@@ -197,3 +197,77 @@ def test_require_clean_tree_blocks_staged_dirty(tmp_path):
     env = {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
     r = bash("source ./launch_distributed.sh; require_clean_tree", env=env)
     assert r.returncode != 0
+
+
+def _gpu_only_config(tmp_path: Path) -> str:
+    """A self-contained GPU-only run_config: a local-gpu model (→ hunt path) and
+    no API model (→ no credential gate). Returns the path."""
+    import json
+    p = tmp_path / "rc_gpu.json"
+    p.write_text(json.dumps({"models": {
+        "q": {"provider": "qwen_vllm", "hardware_profile": "local-gpu",
+              "group": "qwen36-27b", "worker_count": 2}}}))
+    return str(p)
+
+
+def test_post_start_failure_stops_not_deletes(tmp_path):
+    _fake_gcloud(tmp_path)   # all gcloud calls succeed (echo only)
+    # git stub: clean tree + archive/show succeed.
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$1" in diff) exit 0;; rev-parse) echo SHA;; archive) printf "";; '
+        'show) printf "B";; *) exit 0;; esac\n'
+    )
+    gitstub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "MAX_RUN_DURATION": "6h",
+           "RUN_ID": "rx", "RUNS_DIR": str(tmp_path / ".runs"),
+           "RUN_CONFIG": _gpu_only_config(tmp_path), "MANIFEST": "dummy-manifest",
+           "ZONES": "zoneA", "GCLOUD_LOG": str(tmp_path / "g.log")}
+    # Override the heavy/cloud bits; force start_coordinator to FAIL after create.
+    snippet = (
+        "source ./launch_distributed.sh; "
+        "hunt_zones() { echo zoneA; }; "
+        "wait_for_ssh() { return 0; }; "
+        "sync_and_verify() { return 0; }; "
+        "arm_watchdog() { return 0; }; "
+        "assert_no_resource_policy() { return 0; }; "
+        "internal_ip() { echo 10.0.0.2; }; "
+        "derive_names; "
+        "start_coordinator() { echo 'BOOM' >&2; return 1; }; "
+        "main"
+    )
+    r = bash(snippet, env=env)
+    assert r.returncode != 0
+    assert "instances stop" in r.stdout            # STOP on the failure path
+    assert "instances delete" not in r.stdout      # never DELETE a possibly-data VM
+
+
+def test_successful_provision_writes_manifest(tmp_path):
+    _fake_gcloud(tmp_path)
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$1" in diff) exit 0;; rev-parse) echo SHA123;; *) exit 0;; esac\n'
+    )
+    gitstub.chmod(0o755)
+    runs = tmp_path / ".runs"
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "MAX_RUN_DURATION": "6h",
+           "RUN_ID": "rok", "RUNS_DIR": str(runs),
+           "RUN_CONFIG": _gpu_only_config(tmp_path), "MANIFEST": "dummy-manifest",
+           "ZONES": "zoneA"}
+    snippet = (
+        "source ./launch_distributed.sh; "
+        "hunt_zones() { echo zoneA; }; wait_for_ssh() { return 0; }; "
+        "sync_and_verify() { return 0; }; arm_watchdog() { return 0; }; "
+        "assert_no_resource_policy() { return 0; }; internal_ip() { echo 10.0.0.2; }; "
+        "derive_names; start_coordinator() { return 0; }; start_worker() { return 0; }; main"
+    )
+    r = bash(snippet, env=env)
+    assert r.returncode == 0, r.stderr
+    import json
+    mf = json.loads((runs / "rok" / "manifest.json").read_text())
+    assert mf["run_id"] == "rok" and mf["zone"] == "zoneA"
+    assert mf["code_sha"] == "SHA123"
+    assert mf["coordinator"]["name"] == "rok-coord"
+    assert {w["kind"] for w in mf["workers"]} <= {"gpu", "api"}

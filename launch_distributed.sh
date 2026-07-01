@@ -151,6 +151,43 @@ sync_and_verify() {  # $1 sha  $2 zone  $3.. vms
   return 0
 }
 
+# Populate COORD, GPU_VMS[], API_VMS[], ALL_WORKERS[] from the topology helper.
+derive_names() {
+  local topo; topo="$(python3 -m scripts.distributed_topology "$RUN_CONFIG" "$RUN_ID")"
+  COORD="$(printf '%s' "$topo" | python3 -c 'import json,sys; print(json.load(sys.stdin)["coordinator"]["name"])')"
+  mapfile -t GPU_VMS < <(printf '%s' "$topo" | python3 -c 'import json,sys; [print(w["name"]) for w in json.load(sys.stdin)["workers"] if w["kind"]=="gpu"]')
+  mapfile -t API_VMS < <(printf '%s' "$topo" | python3 -c 'import json,sys; [print(w["name"]) for w in json.load(sys.stdin)["workers"] if w["kind"]=="api"]')
+  TOPO_JSON="$topo"
+}
+
+# Default start hooks (overridable in tests / future tasks). Real recipes wire the
+# coordinator-prepare/serve and worker commands; here they are minimal seams.
+start_coordinator() { gcloud compute ssh "$COORD" --zone "$ZONE" --command "true"; }
+start_worker() { gcloud compute ssh "$1" --zone "$ZONE" --command "true"; }
+
+write_manifest() {  # $1 zone  $2 coord_ip
+  local zone="$1" ip="$2" mf; mf="$(manifest_path)"
+  mkdir -p "$(dirname "$mf")"
+  RUN_ID="$RUN_ID" ZONE="$zone" COORD_IP="$ip" CODE_SHA="$CODE_SHA" \
+  MAX_RUN_DURATION="$MAX_RUN_DURATION" TOPO_JSON="$TOPO_JSON" \
+  python3 - "$mf" <<'PY'
+import json, os, sys, datetime
+topo = json.loads(os.environ["TOPO_JSON"])
+out = {
+    "run_id": os.environ["RUN_ID"],
+    "zone": os.environ["ZONE"],
+    "max_run_duration": os.environ["MAX_RUN_DURATION"],
+    "code_sha": os.environ["CODE_SHA"],
+    "coordinator": {"name": topo["coordinator"]["name"], "internal_ip": os.environ["COORD_IP"]},
+    "workers": [{"name": w["name"], "kind": w["kind"], "model_group": w["model_group"]}
+                for w in topo["workers"]],
+    "artifacts_root_remote": f"artifacts/{os.environ['RUN_ID']}",
+    "created_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+}
+open(sys.argv[1], "w").write(json.dumps(out, indent=2) + "\n")
+PY
+}
+
 main() {
   case "${1:-}" in
     stop) cmd_stop; exit 0 ;;
@@ -165,8 +202,45 @@ main() {
   python3 -m scripts.distributed_topology "$RUN_CONFIG" "$RUN_ID" --check-credentials >/dev/null
 
   log "run id: $RUN_ID  floor: $MAX_RUN_DURATION  watchdog +$(watchdog_minutes "$MAX_RUN_DURATION")m"
-  # Provisioning sequence (hunt → code-sync → start → manifest) is added in Tasks 6–8.
-  echo "[launch_distributed] skeleton: provisioning not yet implemented" >&2
+
+  require_clean_tree
+  CODE_SHA="$(git rev-parse HEAD)"
+  [[ -n "${COORD:-}" ]] || derive_names
+
+  # --- create phase: DELETE-safe (empty, pre-data VMs) -------------------------
+  if [[ "${#GPU_VMS[@]}" -gt 0 ]]; then
+    ZONE="$(hunt_zones "$COORD" "${GPU_VMS[@]}")" || exit 2
+  else
+    cs_create_instance "$COORD" "$COORD_IMAGE" "$ZONE" || exit 2
+  fi
+  local vm
+  for vm in "${API_VMS[@]:-}"; do
+    [[ -n "$vm" ]] || continue
+    if ! cs_create_instance "$vm" "$API_IMAGE" "$ZONE"; then
+      echo "API VM create failed: $vm; rolling back (pre-data)" >&2
+      cs_delete_vms "$ZONE" "$COORD" "${GPU_VMS[@]:-}" "${API_VMS[@]:-}"
+      exit 2
+    fi
+  done
+
+  # --- from here on, VMs may hold data: failures STOP, never DELETE ------------
+  local ALL_VMS=("$COORD" "${GPU_VMS[@]:-}" "${API_VMS[@]:-}")
+  abort_stop() { echo "[launch_distributed] $1; STOPping all (data preserved)" >&2; cs_stop_vms "$ZONE" "${ALL_VMS[@]}"; exit 1; }
+
+  for vm in "${ALL_VMS[@]}"; do wait_for_ssh "$vm" "$ZONE" || abort_stop "ssh wait failed on $vm"; done
+  sync_and_verify "$CODE_SHA" "$ZONE" "${ALL_VMS[@]}" || abort_stop "code-sync verification failed"
+  for vm in "${ALL_VMS[@]}"; do arm_watchdog "$vm" "$ZONE" 1 || abort_stop "watchdog arm failed on $vm"; done
+  for vm in "${ALL_VMS[@]}"; do assert_no_resource_policy "$vm" "$ZONE" || abort_stop "resource policy found on $vm"; done
+
+  local COORD_IP; COORD_IP="$(internal_ip "$COORD" "$ZONE")"
+  start_coordinator || abort_stop "coordinator start failed"
+  for vm in "${GPU_VMS[@]:-}" "${API_VMS[@]:-}"; do
+    [[ -n "$vm" ]] || continue
+    start_worker "$vm" "$COORD_IP" || abort_stop "worker start failed on $vm"
+  done
+
+  write_manifest "$ZONE" "$COORD_IP"
+  log "LAUNCH COMPLETE: run_id=$RUN_ID zone=$ZONE manifest=$(manifest_path)"
   return 0
 }
 
