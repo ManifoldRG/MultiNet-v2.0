@@ -135,3 +135,17 @@ def test_claude_smoke_fixture_topology():
     w = topo["workers"][0]
     assert w["kind"] == "api" and w["model_group"] == "claude-api" and w["provider"] == "claude"
     assert w["name"] == "claude-smoke-claude-api-0"
+
+
+def test_worker_carries_model_field():
+    from scripts.distributed_topology import derive_topology
+    cfg = {"models": {
+        "m_gpu": {"provider": "qwen", "model": "Qwen/Qwen3.6-27B-FP8",
+                  "group": "qwen36-27b", "hardware_profile": "local-gpu", "worker_count": 1},
+        "m_api": {"provider": "claude", "model": "claude-sonnet-4-6",
+                  "group": "claude-api", "worker_count": 1},
+    }}
+    topo = derive_topology(cfg, "r")
+    by_group = {w["model_group"]: w for w in topo["workers"]}
+    assert by_group["qwen36-27b"]["model"] == "Qwen/Qwen3.6-27B-FP8"
+    assert by_group["claude-api"]["model"] == "claude-sonnet-4-6"

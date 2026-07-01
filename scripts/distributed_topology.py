@@ -52,6 +52,7 @@ def derive_topology(run_config: dict[str, Any], run_id: str) -> dict[str, Any]:
                 "kind": kind,
                 "model_group": group,
                 "provider": provider,
+                "model": str(model.get("model", "")),
             })
     return {
         "coordinator": {"name": sanitize_vm_name(f"{run_id}-coord")},
