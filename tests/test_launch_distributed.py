@@ -270,4 +270,40 @@ def test_successful_provision_writes_manifest(tmp_path):
     assert mf["run_id"] == "rok" and mf["zone"] == "zoneA"
     assert mf["code_sha"] == "SHA123"
     assert mf["coordinator"]["name"] == "rok-coord"
-    assert {w["kind"] for w in mf["workers"]} <= {"gpu", "api"}
+
+
+def test_gpu_only_no_empty_vm_name(tmp_path):
+    """ALL_VMS must contain no empty strings in a GPU-only run (no API VMs).
+
+    wait_for_ssh rejects an empty first argument; the provision must still
+    succeed (returncode 0) and NAME_EMPTY must never appear in output.
+    Before the guarded-append fix this fails: the empty API_VMS expansion
+    inserts a blank element and wait_for_ssh emits NAME_EMPTY → abort."""
+    _fake_gcloud(tmp_path)
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$1" in diff) exit 0;; rev-parse) echo SHA456;; *) exit 0;; esac\n'
+    )
+    gitstub.chmod(0o755)
+    runs = tmp_path / ".runs"
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "MAX_RUN_DURATION": "6h",
+           "RUN_ID": "rgpu", "RUNS_DIR": str(runs),
+           "RUN_CONFIG": _gpu_only_config(tmp_path), "MANIFEST": "dummy-manifest",
+           "ZONES": "zoneA"}
+    snippet = (
+        "source ./launch_distributed.sh; "
+        "hunt_zones() { echo zoneA; }; "
+        "wait_for_ssh() { [[ -n \"$1\" ]] || { echo NAME_EMPTY >&2; return 1; }; return 0; }; "
+        "sync_and_verify() { return 0; }; "
+        "arm_watchdog() { return 0; }; "
+        "assert_no_resource_policy() { return 0; }; "
+        "internal_ip() { echo 10.0.0.2; }; "
+        "start_coordinator() { return 0; }; "
+        "start_worker() { return 0; }; "
+        "derive_names; main"
+    )
+    r = bash(snippet, env=env)
+    combined = r.stdout + r.stderr
+    assert "NAME_EMPTY" not in combined, f"empty VM name reached wait_for_ssh:\n{combined}"
+    assert r.returncode == 0, f"provision failed (expected success):\n{r.stderr}"

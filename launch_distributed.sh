@@ -224,7 +224,9 @@ main() {
   done
 
   # --- from here on, VMs may hold data: failures STOP, never DELETE ------------
-  local ALL_VMS=("$COORD" "${GPU_VMS[@]:-}" "${API_VMS[@]:-}")
+  local ALL_VMS=("$COORD")
+  [[ "${#GPU_VMS[@]}" -gt 0 ]] && ALL_VMS+=("${GPU_VMS[@]}")
+  [[ "${#API_VMS[@]}" -gt 0 ]] && ALL_VMS+=("${API_VMS[@]}")
   abort_stop() { echo "[launch_distributed] $1; STOPping all (data preserved)" >&2; cs_stop_vms "$ZONE" "${ALL_VMS[@]}"; exit 1; }
 
   for vm in "${ALL_VMS[@]}"; do wait_for_ssh "$vm" "$ZONE" || abort_stop "ssh wait failed on $vm"; done
