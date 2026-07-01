@@ -117,13 +117,15 @@ sync_code_to_vm() {  # $1 sha  $2 zone  $3 vm
   local sha="$1" zone="$2" vm="$3"
   git archive --format=tar "$sha" \
     | gcloud compute ssh "$vm" --zone "$zone" --command \
-        "tar -x -C ~/MultiNet-v2.0 && echo $sha > ~/MultiNet-v2.0/.deployed_sha"
+        "tar -x -C ~/MultiNet-v2.0 && echo \"$sha\" > ~/MultiNet-v2.0/.deployed_sha"
 }
 
 # Verify the on-VM code matches $sha: sentinel + content spot-check. Returns 1 on mismatch.
 verify_code_on_vm() {  # $1 sha  $2 zone  $3 vm
   local sha="$1" zone="$2" vm="$3" got expected_hash got_hash
-  got="$(gcloud compute ssh "$vm" --zone "$zone" --command "cat ~/MultiNet-v2.0/.deployed_sha" 2>/dev/null || true)"
+  if ! got="$(gcloud compute ssh "$vm" --zone "$zone" --command "cat ~/MultiNet-v2.0/.deployed_sha" 2>/dev/null)"; then
+    echo "code-sync: could not read .deployed_sha from $vm (ssh/connection or missing file)" >&2; return 1
+  fi
   if [[ "$got" != "$sha" ]]; then
     echo "code-sync mismatch on $vm: deployed_sha='$got' expected='$sha'" >&2; return 1
   fi

@@ -151,3 +151,49 @@ def test_verify_aborts_on_sha_mismatch(tmp_path):
     r = bash("source ./launch_distributed.sh; sync_and_verify TARGETSHA zoneA vm0", env=env)
     assert r.returncode != 0
     assert "mismatch" in (r.stderr + r.stdout).lower()
+
+
+def test_verify_aborts_on_content_hash_mismatch(tmp_path):
+    # git: archive prints nothing; show prints fixed content so local sha256 is deterministic.
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$1" in\n'
+        '  archive) printf "";;\n'
+        '  show) printf "REALCONTENT";;\n'
+        '  *) exit 0;;\n'
+        'esac\n'
+    )
+    gitstub.chmod(0o755)
+    # gcloud ssh: deployed_sha returns the CORRECT sha (first check passes);
+    # sha256sum returns a hash that will NOT equal sha256("REALCONTENT").
+    gcloudstub = tmp_path / "gcloud"
+    gcloudstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'for a in "$@"; do last="$a"; done\n'
+        'case "$last" in\n'
+        '  *deployed_sha*) echo "TARGETSHA";;\n'
+        '  *sha256sum*) echo "deadbeef  scripts/distributed_run_pipeline.py";;\n'
+        '  *) :;;\n'
+        'esac\n'
+        'exit 0\n'
+    )
+    gcloudstub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    r = bash("source ./launch_distributed.sh; sync_and_verify TARGETSHA zoneA vm0", env=env)
+    assert r.returncode != 0
+    assert "content mismatch" in (r.stderr + r.stdout).lower()
+
+
+def test_require_clean_tree_blocks_staged_dirty(tmp_path):
+    # Stub git: unstaged diff (no --cached) → exit 0 (clean); staged diff (--cached) → exit 1 (dirty).
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'if [[ "$1" == "diff" ]]; then for a in "$@"; do [[ "$a" == "--cached" ]] && exit 1; done; exit 0; fi\n'
+        'exit 0\n'
+    )
+    gitstub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    r = bash("source ./launch_distributed.sh; require_clean_tree", env=env)
+    assert r.returncode != 0
