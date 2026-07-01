@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Generic run_config-driven distributed provisioner. Derives VM topology from a
+# run_config, finds A100 capacity across zones, verifies on-VM code matches the
+# local committed sha, applies the cost-safety net, starts the fleet, and writes
+# .runs/<run_id>/manifest.json. See
+# docs/superpowers/specs/2026-06-30-distributed-provisioner-design.md
+#
+# Required: RUN_CONFIG, MANIFEST, MAX_RUN_DURATION.
+# Subcommands (no creds / no MAX_RUN_DURATION): stop | delete (operate on the manifest).
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"
+
+RUN_ID="${RUN_ID:-dist-$(date +%Y%m%d-%H%M%S)}"
+ZONE="${ZONE:-us-central1-c}"          # default/coordinator zone; the hunt may override
+RUNS_DIR="${RUNS_DIR:-.runs}"
+COORD_IMAGE="${COORD_IMAGE:-multinet-coordinator-n2-20260629}"
+QWEN_IMAGE="${QWEN_IMAGE:-qwen-fp16-80}"          # FP16 on A100-80GB (a2-ultragpu-1g)
+API_IMAGE="${API_IMAGE:-multinet-api-runner-e2-20260629}"
+# a2-ultragpu-1g (A100-80GB) zones, us-central1 first per the FP16 migration.
+ZONES="${ZONES:-us-central1-a us-central1-b us-central1-c us-central1-f us-east1-b us-east4-c europe-west4-a europe-west4-b asia-southeast1-b asia-southeast1-c asia-northeast1-a asia-northeast1-c me-west1-b me-west1-c}"
+
+manifest_path() { echo "${RUNS_DIR}/${RUN_ID}/manifest.json"; }
+
+# Read VM names (coordinator + workers) from an existing manifest, space-separated.
+manifest_vm_names() {
+  python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(d["coordinator"]["name"], *[w["name"] for w in d["workers"]])
+' "$(manifest_path)"
+}
+
+manifest_zone() {
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["zone"])' "$(manifest_path)"
+}
+
+cmd_stop() {
+  require_gcloud
+  local mf; mf="$(manifest_path)"
+  [[ -f "$mf" ]] || { echo "no manifest at $mf" >&2; return 1; }
+  local zone; zone="$(manifest_zone)"
+  log "STOP (preserve disks/data) in $zone: $(manifest_vm_names)"
+  # shellcheck disable=SC2046
+  cs_stop_vms "$zone" $(manifest_vm_names)
+}
+
+cmd_delete() {
+  require_gcloud
+  local mf; mf="$(manifest_path)"
+  [[ -f "$mf" ]] || { echo "no manifest at $mf" >&2; return 1; }
+  local zone; zone="$(manifest_zone)"
+  log "DELETE (incl. disks/data) in $zone: $(manifest_vm_names)"
+  # shellcheck disable=SC2046
+  cs_delete_vms "$zone" $(manifest_vm_names)
+}
+
+main() {
+  case "${1:-}" in
+    stop) cmd_stop; exit 0 ;;
+    delete) cmd_delete; exit 0 ;;
+  esac
+
+  : "${RUN_CONFIG:?RUN_CONFIG is required (path to a run_config JSON)}"
+  : "${MANIFEST:?MANIFEST is required (path to a task manifest JSON)}"
+  require_max_run_duration
+  validate_run_id
+  require_gcloud
+  python3 -m scripts.distributed_topology "$RUN_CONFIG" "$RUN_ID" --check-credentials >/dev/null
+
+  log "run id: $RUN_ID  floor: $MAX_RUN_DURATION  watchdog +$(watchdog_minutes "$MAX_RUN_DURATION")m"
+  # Provisioning sequence (hunt → code-sync → start → manifest) is added in Tasks 6–8.
+  echo "[launch_distributed] skeleton: provisioning not yet implemented" >&2
+  return 0
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
