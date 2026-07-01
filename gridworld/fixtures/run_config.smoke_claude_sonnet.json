@@ -1,0 +1,18 @@
+{
+  "description": "Claude Sonnet API smoke: 1 Claude runner over the 3-maze smoke manifest. Not for measurement.",
+  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "conditions": null,
+  "models": {
+    "claude_sonnet": {
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "claude-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": ["all"]
+    }
+  }
+}

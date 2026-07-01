@@ -121,3 +121,17 @@ def test_cli_check_credentials_present_passes(tmp_path):
     r = _run_cli(["run11", "--check-credentials"], env={"MOONSHOT_API_KEY": "x"},
                  cfg=cfg, tmp_path=tmp_path)
     assert r.returncode == 0, r.stderr
+
+
+def test_claude_smoke_fixture_topology():
+    import json
+    from pathlib import Path
+    from scripts.distributed_topology import derive_topology
+    cfg = json.loads(Path("gridworld/fixtures/run_config.smoke_claude_sonnet.json").read_text())
+    topo = derive_topology(cfg, "claude-smoke")
+    assert topo["has_gpu"] is False
+    assert topo["required_credentials"] == ["ANTHROPIC_API_KEY"]
+    assert len(topo["workers"]) == 1
+    w = topo["workers"][0]
+    assert w["kind"] == "api" and w["model_group"] == "claude-api" and w["provider"] == "claude"
+    assert w["name"] == "claude-smoke-claude-api-0"
