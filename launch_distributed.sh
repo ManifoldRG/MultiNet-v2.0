@@ -40,20 +40,22 @@ cmd_stop() {
   require_gcloud
   local mf; mf="$(manifest_path)"
   [[ -f "$mf" ]] || { echo "no manifest at $mf" >&2; return 1; }
-  local zone; zone="$(manifest_zone)"
-  log "STOP (preserve disks/data) in $zone: $(manifest_vm_names)"
-  # shellcheck disable=SC2046
-  cs_stop_vms "$zone" $(manifest_vm_names)
+  local zone names
+  zone="$(manifest_zone)"; names="$(manifest_vm_names)"
+  log "STOP (preserve disks/data) in $zone: $names"
+  # shellcheck disable=SC2086
+  cs_stop_vms "$zone" $names
 }
 
 cmd_delete() {
   require_gcloud
   local mf; mf="$(manifest_path)"
   [[ -f "$mf" ]] || { echo "no manifest at $mf" >&2; return 1; }
-  local zone; zone="$(manifest_zone)"
-  log "DELETE (incl. disks/data) in $zone: $(manifest_vm_names)"
-  # shellcheck disable=SC2046
-  cs_delete_vms "$zone" $(manifest_vm_names)
+  local zone names
+  zone="$(manifest_zone)"; names="$(manifest_vm_names)"
+  log "DELETE (incl. disks/data) in $zone: $names"
+  # shellcheck disable=SC2086
+  cs_delete_vms "$zone" $names
 }
 
 # Create one GPU/coordinator VM with the cost-safety floor. $1 name $2 image $3 zone.
@@ -89,7 +91,7 @@ hunt_zones() {  # $1 coord  $2.. gpu_vms
   local gpu_vms=("$@") z
   for z in $ZONES; do
     log "=== attempting zone $z ==="
-    if try_zone "$z" "$coord" "${gpu_vms[@]}"; then
+    if try_zone "$z" "$coord" "${gpu_vms[@]}" >&2; then
       log "landed GPU fleet in $z"
       echo "$z"
       return 0
@@ -182,7 +184,7 @@ out = {
     "workers": [{"name": w["name"], "kind": w["kind"], "model_group": w["model_group"]}
                 for w in topo["workers"]],
     "artifacts_root_remote": f"artifacts/{os.environ['RUN_ID']}",
-    "created_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "created_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
 }
 open(sys.argv[1], "w").write(json.dumps(out, indent=2) + "\n")
 PY

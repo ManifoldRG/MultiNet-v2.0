@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
 from scripts.distributed_topology import sanitize_vm_name, derive_topology
 
 
@@ -64,11 +72,11 @@ def test_worker_count_defaults_to_one():
     assert len(t["workers"]) == 1
 
 
-import json
-import os
-import subprocess
-import sys
-from pathlib import Path
+def test_derive_topology_raises_on_missing_group():
+    cfg = _cfg({"q": {"provider": "qwen_vllm", "hardware_profile": "local-gpu", "worker_count": 1}})
+    with pytest.raises(ValueError, match="missing required 'group'"):
+        derive_topology(cfg, "r")
+
 
 REPO = Path(__file__).resolve().parent.parent
 

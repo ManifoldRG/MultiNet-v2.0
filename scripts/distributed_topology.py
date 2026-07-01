@@ -25,7 +25,7 @@ def _classify(model: dict[str, Any]) -> str:
         return "gpu"
     if str(model.get("provider")) in {"kimi", "claude"}:
         return "api"
-    # Default unknown profiles to gpu only if they declared local-gpu; otherwise api.
+    # Fall through: any other hardware_profile is treated as an API worker.
     return "api"
 
 
@@ -34,7 +34,9 @@ def derive_topology(run_config: dict[str, Any], run_id: str) -> dict[str, Any]:
     workers: list[dict[str, Any]] = []
     creds: set[str] = set()
     has_gpu = False
-    for model in models.values():
+    for key, model in models.items():
+        if not model.get("group"):
+            raise ValueError(f"model {key!r} is missing required 'group' (needed for VM names)")
         kind = _classify(model)
         group = str(model.get("group"))
         provider = str(model.get("provider"))

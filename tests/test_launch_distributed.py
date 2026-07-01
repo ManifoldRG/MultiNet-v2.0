@@ -274,6 +274,18 @@ def test_successful_provision_writes_manifest(tmp_path):
     assert "internal_ip" in mf["coordinator"]
 
 
+def test_hunt_zone_capture_is_clean_zone_only(tmp_path):
+    """ZONE capture must contain only the winning zone name — no gcloud stdout noise."""
+    fake = tmp_path / "gcloud"
+    fake.write_text('#!/usr/bin/env bash\n[[ "$3" == "create" ]] && echo "Created [https://example/vm]."\nexit 0\n')
+    fake.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "MAX_RUN_DURATION": "6h"}
+    r = bash('source ./launch_distributed.sh; ZONES=zoneA; '
+             'z="$(hunt_zones coord g0)"; printf "CAPTURED=[%s]\\n" "$z"', env=env)
+    assert r.returncode == 0, r.stderr
+    assert "CAPTURED=[zoneA]" in r.stdout   # exactly the zone — no gcloud/log noise captured
+
+
 def test_gpu_only_no_empty_vm_name(tmp_path):
     """ALL_VMS must contain no empty strings in a GPU-only run (no API VMs).
 

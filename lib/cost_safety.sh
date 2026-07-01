@@ -5,7 +5,7 @@
 # Every cloud function takes zone explicitly (no global $ZONE dependency) and
 # returns non-zero on failure (never exits) so callers can STOP-then-abort.
 
-log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
+log() { printf '[%s] %s\n' "$(date -Is)" "$*" >&2; }
 
 is_valid_duration() {
   local s="${1:-}"

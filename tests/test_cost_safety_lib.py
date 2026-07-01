@@ -68,7 +68,7 @@ def test_arm_watchdog_fresh_vm_ssh_fail_warns_and_returns_0():
     r = bash("source ./lib/cost_safety.sh; gcloud() { return 1; }; export -f gcloud; "
              "MAX_RUN_DURATION=6h arm_watchdog myvm us-central1-a 1")
     assert r.returncode == 0, r.stderr
-    assert "WARNING" in r.stdout
+    assert "WARNING" in r.stderr
 
 
 def test_arm_watchdog_reused_vm_ssh_fail_is_fatal():
