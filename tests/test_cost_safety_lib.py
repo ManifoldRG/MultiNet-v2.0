@@ -62,3 +62,21 @@ def test_require_max_run_duration_valid_passes():
 def test_validate_run_id_rejects_bad_chars():
     r = bash("source ./lib/cost_safety.sh; validate_run_id", env={"RUN_ID": "bad id/slash"})
     assert r.returncode != 0
+
+
+def test_arm_watchdog_fresh_vm_ssh_fail_warns_and_returns_0():
+    r = bash("source ./lib/cost_safety.sh; gcloud() { return 1; }; export -f gcloud; "
+             "MAX_RUN_DURATION=6h arm_watchdog myvm us-central1-a 1")
+    assert r.returncode == 0, r.stderr
+    assert "WARNING" in r.stdout
+
+
+def test_arm_watchdog_reused_vm_ssh_fail_is_fatal():
+    r = bash("source ./lib/cost_safety.sh; gcloud() { return 1; }; export -f gcloud; "
+             "MAX_RUN_DURATION=6h arm_watchdog myvm us-central1-a 0")
+    assert r.returncode != 0
+
+
+def test_require_max_run_duration_malformed_fails():
+    r = bash("source ./lib/cost_safety.sh; require_max_run_duration", env={"MAX_RUN_DURATION": "6"})
+    assert r.returncode != 0

@@ -56,6 +56,7 @@ validate_run_id() {
     echo "RUN_ID must contain only letters, numbers, dot, underscore, and dash: ${RUN_ID:-}" >&2
     return 1
   fi
+  return 0
 }
 
 require_gcloud() {
