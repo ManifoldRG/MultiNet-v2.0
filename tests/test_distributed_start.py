@@ -53,3 +53,75 @@ def test_coordinator_prepares_serves_healthchecks(tmp_path):
     assert "--run-set-id" in log and "artifacts/$RUN_ID" in log
     assert "coordinator-serve" in log and "--host 0.0.0.0 --port 8765" in log
     assert "127.0.0.1:8765/status" in log
+
+
+_CLAUDE_TOPO = ('{"workers":[{"name":"r1-claude-api-0","kind":"api",'
+                '"model_group":"claude-api","provider":"claude","model":"claude-sonnet-4-6"}]}')
+_KIMI_TOPO = ('{"workers":[{"name":"r1-kimi-api-0","kind":"api",'
+              '"model_group":"kimi-api","provider":"kimi","model":"kimi-k2.6"}]}')
+_QWEN_TOPO = ('{"workers":[{"name":"r1-qwen36-27b-0","kind":"gpu",'
+              '"model_group":"qwen36-27b","provider":"qwen","model":"Qwen/Qwen3.6-27B-FP8"}]}')
+
+
+def test_worker_field_reads_topo(tmp_path):
+    snippet = (f"source ./lib/distributed_start.sh; TOPO_JSON='{_CLAUDE_TOPO}'; "
+               'echo "K=$(worker_field r1-claude-api-0 kind) '
+               'G=$(worker_field r1-claude-api-0 model_group) '
+               'P=$(worker_field r1-claude-api-0 provider)"')
+    r = bash(snippet)
+    assert "K=api" in r.stdout and "G=claude-api" in r.stdout and "P=claude" in r.stdout
+
+
+def test_api_worker_claude_exports_anthropic_key(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (f"source ./lib/distributed_start.sh; ZONE=z1; RUN_ID=r1; TOPO_JSON='{_CLAUDE_TOPO}'; "
+               "start_worker r1-claude-api-0 10.0.0.2")
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}",
+                           "GCLOUD_LOG": str(glog), "ANTHROPIC_API_KEY": "sk-ant-DUMMY"})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "export ANTHROPIC_API_KEY=sk-ant-DUMMY" in log
+    assert "--hardware-profile api-client" in log
+    assert "--model-group" in log and "claude-api" in log
+    # the unquoted heredoc keeps \$COORD_IP literal; the IP arrives via the injected env
+    assert "COORD_IP='10.0.0.2'" in log and "coordinator-url" in log
+    assert ".venv-multinet" in log
+    # the key must NOT leak to the launcher's own stdout (only into the remote heredoc)
+    assert "sk-ant-DUMMY" not in r.stdout
+
+
+def test_api_worker_kimi_exports_moonshot_key(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (f"source ./lib/distributed_start.sh; ZONE=z1; RUN_ID=r1; TOPO_JSON='{_KIMI_TOPO}'; "
+               "start_worker r1-kimi-api-0 10.0.0.2")
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}",
+                           "GCLOUD_LOG": str(glog), "MOONSHOT_API_KEY": "sk-moon-DUMMY"})
+    assert r.returncode == 0, r.stderr
+    assert "export MOONSHOT_API_KEY=sk-moon-DUMMY" in glog.read_text()
+
+
+def test_gpu_worker_uses_vllm_venv_and_offline(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (f"source ./lib/distributed_start.sh; ZONE=z1; RUN_ID=r1; TOPO_JSON='{_QWEN_TOPO}'; "
+               "start_worker r1-qwen36-27b-0 10.0.0.2")
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert ".venv-qwen-vllm" in log
+    assert "HF_HUB_OFFLINE=1" in log
+    assert "--hardware-profile local-gpu" in log
+    assert "--local-model-cache" in log and "Qwen/Qwen3.6-27B-FP8" in log
+
+
+def test_api_worker_unknown_provider_fails(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    bad = ('{"workers":[{"name":"r1-x-0","kind":"api","model_group":"x-api",'
+           '"provider":"mystery","model":"m"}]}')
+    snippet = (f"source ./lib/distributed_start.sh; ZONE=z1; RUN_ID=r1; TOPO_JSON='{bad}'; "
+               "start_worker r1-x-0 10.0.0.2")
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(tmp_path / 'g.log')})
+    assert r.returncode != 0
+    assert "no credential mapping" in r.stderr
