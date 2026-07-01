@@ -100,6 +100,55 @@ hunt_zones() {  # $1 coord  $2.. gpu_vms
   return 1
 }
 
+require_clean_tree() {
+  if [[ "${ALLOW_DIRTY:-0}" == "1" ]]; then
+    log "ALLOW_DIRTY=1: skipping clean-tree gate (dev only)"; return 0
+  fi
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "Working tree is dirty. A paid run must be on a committed sha." >&2
+    echo "Commit/stash, or set ALLOW_DIRTY=1 for a dev run." >&2
+    return 1
+  fi
+  return 0
+}
+
+# Push the exact tracked tree at $sha onto one VM and write a sha sentinel.
+sync_code_to_vm() {  # $1 sha  $2 zone  $3 vm
+  local sha="$1" zone="$2" vm="$3"
+  git archive --format=tar "$sha" \
+    | gcloud compute ssh "$vm" --zone "$zone" --command \
+        "tar -x -C ~/MultiNet-v2.0 && echo $sha > ~/MultiNet-v2.0/.deployed_sha"
+}
+
+# Verify the on-VM code matches $sha: sentinel + content spot-check. Returns 1 on mismatch.
+verify_code_on_vm() {  # $1 sha  $2 zone  $3 vm
+  local sha="$1" zone="$2" vm="$3" got expected_hash got_hash
+  got="$(gcloud compute ssh "$vm" --zone "$zone" --command "cat ~/MultiNet-v2.0/.deployed_sha" 2>/dev/null || true)"
+  if [[ "$got" != "$sha" ]]; then
+    echo "code-sync mismatch on $vm: deployed_sha='$got' expected='$sha'" >&2; return 1
+  fi
+  expected_hash="$(git show "$sha:scripts/distributed_run_pipeline.py" | sha256sum | awk '{print $1}')"
+  got_hash="$(gcloud compute ssh "$vm" --zone "$zone" --command \
+    "sha256sum ~/MultiNet-v2.0/scripts/distributed_run_pipeline.py" 2>/dev/null | awk '{print $1}')"
+  if [[ "$expected_hash" != "$got_hash" ]]; then
+    echo "code-sync content mismatch on $vm: distributed_run_pipeline.py hash differs" >&2; return 1
+  fi
+  log "code verified on $vm @ $sha"
+  return 0
+}
+
+sync_and_verify() {  # $1 sha  $2 zone  $3.. vms
+  local sha="$1" zone="$2"; shift 2
+  local vm
+  for vm in "$@"; do
+    if ! sync_code_to_vm "$sha" "$zone" "$vm"; then
+      echo "code-sync push failed on $vm" >&2; return 1
+    fi
+    verify_code_on_vm "$sha" "$zone" "$vm" || return 1
+  done
+  return 0
+}
+
 main() {
   case "${1:-}" in
     stop) cmd_stop; exit 0 ;;
