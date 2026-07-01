@@ -146,6 +146,7 @@ def test_resolve_hardcap_override(tmp_path):
         'load_manifest; resolve_hardcap; echo "DEADLINE=$HARDCAP_DEADLINE SRC=$HARDCAP_SRC"'
     )
     r = bash(snippet)
+    assert r.returncode == 0, r.stderr
     created = iso_epoch("2026-07-01T00:00:00Z")
     assert f"DEADLINE={created + 3600}" in r.stdout
     assert "SRC=override" in r.stdout
@@ -161,6 +162,54 @@ def test_parse_args_requires_dest():
     r = bash("source ./supervise_run.sh; parse_args --manifest m.json")
     assert r.returncode != 0
     assert "--dest is required" in r.stderr
+
+
+def test_parse_args_requires_manifest():
+    r = bash("source ./supervise_run.sh; parse_args --dest /tmp/out")
+    assert r.returncode != 0
+    assert "--manifest is required" in r.stderr
+
+
+def test_parse_args_rejects_nonnumeric_interval():
+    r = bash("source ./supervise_run.sh; parse_args --manifest m.json --dest d --interval abc")
+    assert r.returncode == 2
+    assert "--interval must be a non-negative integer" in r.stderr
+
+
+def test_parse_args_rejects_nonnumeric_stall_minutes():
+    r = bash("source ./supervise_run.sh; parse_args --manifest m.json --dest d --stall-minutes 5m")
+    assert r.returncode == 2
+    assert "--stall-minutes must be a non-negative integer" in r.stderr
+
+
+def test_load_manifest_names_missing_key(tmp_path):
+    # A manifest missing a required key must fail AND name the offending key.
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"run_id":"r1","max_run_duration":"12h","coordinator":{"name":"c"},'
+                   '"workers":[],"artifacts_root_remote":"artifacts/r1"}')  # no "zone"
+    r = bash(f'source ./supervise_run.sh; MANIFEST="{bad}"; load_manifest')
+    assert r.returncode != 0
+    assert "missing required key" in r.stderr and "zone" in r.stderr
+
+
+def test_iso_to_epoch_rejects_tz_naive():
+    r = bash("source ./supervise_run.sh; iso_to_epoch '2026-07-01T00:00:00'; echo RC=$?")
+    assert "RC=1" in r.stdout
+    assert "timezone-naive" in r.stderr
+
+
+def test_main_load_failure_exits_2(tmp_path):
+    # A nonexistent manifest is a startup error -> documented exit code 2 (not 1).
+    r = bash(f'bash ./supervise_run.sh --manifest "{tmp_path}/nope.json" --dest "{tmp_path}/out"')
+    assert r.returncode == 2, r.stderr
+
+
+def test_state_read_sig_null_returns_empty(tmp_path):
+    # A state file with a literal null sig must read back as "" (not "None").
+    sf = tmp_path / "s.json"
+    sf.write_text('{"sig": null, "ts": 0}')
+    r = bash(f'source ./supervise_run.sh; STATE_FILE="{sf}"; echo "SIG=[$(state_read_sig)]"')
+    assert "SIG=[]" in r.stdout
 
 
 def test_resolved_config_logged(tmp_path):
@@ -259,6 +308,7 @@ def test_finalize_issues_coordinator_finalize(tmp_path):
     assert r.returncode == 0, r.stderr
     log = glog.read_text()
     assert "coordinator-finalize" in log and "--run-set-id r1" in log
+    assert "--artifacts-root artifacts/r1" in log
 
 
 def test_verdict_write_read_code(tmp_path):
@@ -290,6 +340,20 @@ def test_snapshot_logs_best_effort_never_fails(tmp_path):
     r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}"})
     assert "RC=0" in r.stdout, r.stderr
     assert (tmp_path / "logs").is_dir()
+
+
+def test_snapshot_logs_coord_uses_log_tail_lines(tmp_path):
+    # The coordinator tail must honor $LOG_TAIL_LINES (not a hardcoded 60).
+    _fake_gcloud(tmp_path)
+    glog = tmp_path / "g.log"
+    snippet = (f'source ./supervise_run.sh; ZONE=z; COORD=c; RUN_ID=r1; '
+               f'ARTIFACTS_ROOT_REMOTE="artifacts/r1"; WORKERS=(); LOGDIR="{tmp_path}/logs"; '
+               'LOG_TAIL_LINES=99; snapshot_logs')
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "tail -n 99" in log and "coordinator-serve.log" in log
+    assert "tail -n 60" not in log
 
 
 def test_pull_returns_1_when_mv_fails(tmp_path):
@@ -351,6 +415,20 @@ def test_abnormal_pull_fail_still_stops_and_writes_verdict(tmp_path):
     assert vf.exists() and "hardcap code=30" in vf.read_text()
 
 
+def test_graceful_finalize_nonzero_still_pulls_and_stops(tmp_path):
+    # finalize is best-effort: a nonzero run_finalize must NOT abort the pull+STOP.
+    vf = tmp_path / "verdict"
+    snippet = (
+        f'source ./supervise_run.sh; VERDICT_FILE="{vf}"; LAST_V=6; LAST_F=0; LAST_T=6; '
+        'run_finalize(){ return 1; }; pull(){ echo PULLED; return 0; }; stop_vms(){ echo STOPPED; }; '
+        'graceful_terminate complete 10; echo RC=$?'
+    )
+    r = bash(snippet)
+    assert "PULLED" in r.stdout and "STOPPED" in r.stdout   # best-effort finalize didn't block egress/STOP
+    assert "RC=10" in r.stdout
+    assert vf.exists() and "complete code=10" in vf.read_text()
+
+
 _ONCE_STUBS = (
     'snapshot_logs(){ :; }; pull(){ return 0; }; stop_vms(){ echo STOP; }; run_finalize(){ return 0; }; '
 )
@@ -369,6 +447,7 @@ def test_once_complete_returns_10(tmp_path):
     r = bash(snippet, env={"SUPERVISOR_TEST_STATUS": _status(6, verified=6), "SUPERVISOR_NOW_EPOCH": "1000"})
     assert "RC=10" in r.stdout, r.stderr
     assert "STOP" in r.stdout
+    assert (tmp_path / "verdict").exists()   # graceful complete wrote the verdict
 
 
 def test_once_partial_returns_21(tmp_path):
@@ -377,6 +456,8 @@ def test_once_partial_returns_21(tmp_path):
     r = bash(snippet, env={"SUPERVISOR_TEST_STATUS": _status(6, verified=4, failed=2, running=0, pending=0),
                            "SUPERVISOR_NOW_EPOCH": "1000"})
     assert "RC=21" in r.stdout, r.stderr
+    assert "STOP" in r.stdout                 # partial is graceful -> reaches stop_vms
+    assert (tmp_path / "verdict").exists()   # and wrote the verdict
 
 
 def test_once_running_returns_0(tmp_path):
@@ -462,6 +543,7 @@ def test_loop_consecutive_probe_errors_terminate_2(tmp_path):
                     'if [[ "$*" == *"curl -fsS"* ]]; then exit 1; fi\nexit 0\n')
     fake.chmod(0o755)
     glog = tmp_path / "g.log"
+    glog.write_text("")   # pre-create so the assertion reads cleanly even if flow changes
     now = iso_epoch("2026-07-01T00:00:00Z") + 3600
     env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog),
            "INTERVAL": "0", "SUPERVISOR_NOW_EPOCH": str(now), "SUPERVISOR_MAX_TICKS": "20"}
@@ -473,12 +555,14 @@ def test_loop_consecutive_probe_errors_terminate_2(tmp_path):
 def test_loop_max_ticks_exits_nonterminal(tmp_path):
     mf = _write_manifest(tmp_path, created_at="2026-07-01T00:00:00Z", max_run_duration="12h")
     _fake_gcloud_integration(tmp_path, statuses=[_status(6, verified=3, running=3)])  # never completes
+    glog = tmp_path / 'g.log'
     now = iso_epoch("2026-07-01T00:00:00Z") + 3600
-    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(tmp_path / 'g.log'),
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog),
            "INTERVAL": "0", "SUPERVISOR_NOW_EPOCH": str(now),
            "STALL_MINUTES": "60", "SUPERVISOR_MAX_TICKS": "3"}
     r = bash(f'bash ./supervise_run.sh --manifest "{mf}" --dest "{tmp_path}/out"', env=env)
     assert r.returncode == 0, r.stderr           # bounded loop, non-terminal
+    assert glog.read_text().count("curl -fsS") == 3   # exactly MAX_TICKS probe ticks ran
 
 
 def test_once_flag_single_tick(tmp_path):

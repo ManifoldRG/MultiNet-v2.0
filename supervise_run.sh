@@ -55,6 +55,8 @@ parse_args() {
   done
   [[ -n "$MANIFEST" ]] || { echo "--manifest is required" >&2; usage; return 2; }
   [[ -n "$DEST" ]] || { echo "--dest is required" >&2; usage; return 2; }
+  [[ "$INTERVAL" =~ ^[0-9]+$ ]] || { echo "--interval must be a non-negative integer (seconds): $INTERVAL" >&2; return 2; }
+  [[ "$STALL_MINUTES" =~ ^[0-9]+$ ]] || { echo "--stall-minutes must be a non-negative integer: $STALL_MINUTES" >&2; return 2; }
   return 0
 }
 
@@ -63,15 +65,20 @@ load_manifest() {
   local kv
   kv="$(python3 - "$MANIFEST" <<'PY'
 import json, sys, shlex
-d = json.load(open(sys.argv[1]))
 def out(k, v): print(f"{k}={shlex.quote(str(v))}")
-out("RUN_ID", d["run_id"])
-out("ZONE", d["zone"])
-out("MAX_RUN_DURATION_MF", d["max_run_duration"])
-out("CREATED_AT", d.get("created_at", ""))
-out("COORD", d["coordinator"]["name"])
-out("ARTIFACTS_ROOT_REMOTE", d["artifacts_root_remote"])
-print("WORKERS=(" + " ".join(shlex.quote(w["name"]) for w in d["workers"]) + ")")
+try:
+    d = json.load(open(sys.argv[1]))
+    out("RUN_ID", d["run_id"])
+    out("ZONE", d["zone"])
+    out("MAX_RUN_DURATION_MF", d["max_run_duration"])
+    out("CREATED_AT", d.get("created_at", ""))
+    out("COORD", d["coordinator"]["name"])
+    out("ARTIFACTS_ROOT_REMOTE", d["artifacts_root_remote"])
+    print("WORKERS=(" + " ".join(shlex.quote(w["name"]) for w in d["workers"]) + ")")
+except KeyError as e:
+    sys.stderr.write(f"manifest missing required key: {e}\n"); sys.exit(1)
+except (ValueError, TypeError) as e:
+    sys.stderr.write(f"manifest malformed: {e}\n"); sys.exit(1)
 PY
 )" || { echo "failed to parse manifest $MANIFEST" >&2; return 1; }
   eval "$kv"
@@ -84,9 +91,15 @@ s = sys.argv[1]
 if not s:
     sys.exit(1)
 try:
-    print(int(datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()))
+    dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
 except ValueError:
     sys.exit(1)
+if dt.tzinfo is None:
+    # Reject tz-naive input: a missing offset would silently anchor the hardcap to
+    # local time and skew the deadline. The frozen manifest always emits a 'Z'.
+    sys.stderr.write(f"created_at is timezone-naive (needs an offset like 'Z'): {s}\n")
+    sys.exit(1)
+print(int(dt.timestamp()))
 PY
 }
 
@@ -128,7 +141,7 @@ make_sig() {  # $1..$6 = T V F R P PROG
 
 state_read_sig() {
   [[ -f "$STATE_FILE" ]] || { echo ""; return 0; }
-  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("sig",""))' "$STATE_FILE" 2>/dev/null || echo ""
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("sig") or "")' "$STATE_FILE" 2>/dev/null || echo ""
 }
 
 state_read_ts() {
@@ -144,7 +157,7 @@ PY
 }
 
 snapshot_logs() {
-  mkdir -p "$LOGDIR"
+  mkdir -p "$LOGDIR" || true
   local w
   for w in "${WORKERS[@]}"; do
     [[ -n "$w" ]] || continue
@@ -153,7 +166,7 @@ snapshot_logs() {
       >"$LOGDIR/$w.worker.log" 2>/dev/null || true
   done
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "tail -n 60 ~/MultiNet-v2.0/${ARTIFACTS_ROOT_REMOTE}/coordinator-serve.log 2>/dev/null" \
+    --command "tail -n ${LOG_TAIL_LINES} ~/MultiNet-v2.0/${ARTIFACTS_ROOT_REMOTE}/coordinator-serve.log 2>/dev/null" \
     >"$LOGDIR/coord-serve.log" 2>/dev/null || true
   return 0
 }
@@ -283,12 +296,12 @@ supervise_loop() {
 
 supervise_main() {
   parse_args "$@" || return $?
-  load_manifest || return 1
+  load_manifest || return 2
   local statedir; statedir="$(dirname "$MANIFEST")"
   STATE_FILE="$statedir/supervisor.state"
   VERDICT_FILE="$statedir/verdict"
   LOGDIR="$statedir/logs"
-  resolve_hardcap || return 1
+  resolve_hardcap || return 2
 
   # Resume short-circuit: a verdict means already-terminal. Do this BEFORE any
   # cloud call so a resolved run is free to re-check.
