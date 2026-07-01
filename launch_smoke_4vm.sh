@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Shared cost-safety net (single source of truth).
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"
+
 # Launch the initial 4-VM distributed smoke:
 #   1 coordinator, 2 Qwen A100 vLLM workers, 1 Kimi API worker.
 #
@@ -45,83 +48,10 @@ KIMI_IMAGE="${KIMI_IMAGE:-multinet-api-runner-e2-20260629}"
 # is not.
 declare -A VM_CREATED
 
-log() {
-  printf '[%s] %s\n' "$(date -Is)" "$*"
-}
-
-# --------------------------------------------------------------------------- #
-# Duration helpers (pure; unit-tested)
-# --------------------------------------------------------------------------- #
-
-is_valid_duration() {
-  local s="${1:-}"
-  [[ -n "$s" ]] || return 1
-  [[ "$s" =~ ^([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?$ ]] || return 1
-  return 0
-}
-
-parse_duration_seconds() {
-  local s="${1:-}"
-  is_valid_duration "$s" || { echo "invalid duration: '${s}'" >&2; return 1; }
-  local total=0 num unit rest="$s"
-  while [[ "$rest" =~ ^([0-9]+)([dhms]) ]]; do
-    num="${BASH_REMATCH[1]}"
-    unit="${BASH_REMATCH[2]}"
-    case "$unit" in
-      d) total=$(( total + num * 86400 )) ;;
-      h) total=$(( total + num * 3600 )) ;;
-      m) total=$(( total + num * 60 )) ;;
-      s) total=$(( total + num )) ;;
-    esac
-    rest="${rest#"${BASH_REMATCH[0]}"}"
-  done
-  echo "$total"
-}
-
-# On-VM watchdog horizon: the GCP floor + 1h, in minutes, so it only fires as a
-# backstop (e.g. on a reused VM with no GCP floor).
-watchdog_minutes() {
-  local secs
-  secs="$(parse_duration_seconds "${1:-}")" || return 1
-  echo "$(( secs / 60 + 60 ))"
-}
-
-# --------------------------------------------------------------------------- #
-# Required-input gates
-# --------------------------------------------------------------------------- #
-
-require_max_run_duration() {
-  if [[ -z "${MAX_RUN_DURATION:-}" ]]; then
-    echo "MAX_RUN_DURATION is required (no default — a wrong default either kills a" >&2
-    echo "legit run or fails to protect). Set it to expected runtime + margin." >&2
-    echo "  e.g. export MAX_RUN_DURATION=12h   (smoke ~3h; conditional sweep can be 1/2-2 days)" >&2
-    return 1
-  fi
-  if ! is_valid_duration "${MAX_RUN_DURATION}"; then
-    echo "MAX_RUN_DURATION malformed: '${MAX_RUN_DURATION}' (use forms like 6h, 90m, 1d12h)." >&2
-    return 1
-  fi
-  return 0
-}
-
 require_moonshot() {
   if [[ -z "${MOONSHOT_API_KEY:-}" ]]; then
     echo "MOONSHOT_API_KEY is required for the Kimi worker." >&2
     echo "Run: export MOONSHOT_API_KEY=..." >&2
-    return 1
-  fi
-}
-
-validate_run_id() {
-  if [[ ! "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    echo "RUN_ID must contain only letters, numbers, dot, underscore, and dash: $RUN_ID" >&2
-    return 1
-  fi
-}
-
-require_gcloud() {
-  if ! command -v gcloud >/dev/null 2>&1; then
-    echo "gcloud is not on PATH." >&2
     return 1
   fi
 }
@@ -133,110 +63,29 @@ require_gcloud() {
 cmd_stop() {
   require_gcloud
   log "spinning down (STOP — disks & run data preserved) in $ZONE: $COORD $QWEN1 $QWEN2 $KIMI"
-  local vm
-  for vm in "$COORD" "$QWEN1" "$QWEN2" "$KIMI"; do
-    gcloud compute instances stop "$vm" --zone "$ZONE" --quiet || true
-  done
+  cs_stop_vms "$ZONE" "$COORD" "$QWEN1" "$QWEN2" "$KIMI"
 }
 
 cmd_delete() {
   require_gcloud
   log "DELETING (incl. boot disks / run data) in $ZONE: $COORD $QWEN1 $QWEN2 $KIMI"
-  local vm
-  for vm in "$COORD" "$QWEN1" "$QWEN2" "$KIMI"; do
-    gcloud compute instances delete "$vm" --zone "$ZONE" --quiet || true
-  done
+  cs_delete_vms "$ZONE" "$COORD" "$QWEN1" "$QWEN2" "$KIMI"
 }
 
 # --------------------------------------------------------------------------- #
 # Instance lifecycle
 # --------------------------------------------------------------------------- #
 
-instance_exists() {
-  gcloud compute instances describe "$1" --zone "$ZONE" >/dev/null 2>&1
-}
-
 ensure_instance() {
-  local name="$1"
-  local image="$2"
-  if instance_exists "$name"; then
+  local name="$1" image="$2"
+  if instance_exists "$name" "$ZONE"; then
     log "instance exists (reused): $name — GCP max-run-duration floor NOT applied; relying on on-VM watchdog"
     VM_CREATED["$name"]=0
     return
   fi
   log "creating $name from $image (max-run-duration=$MAX_RUN_DURATION, termination=STOP)"
-  gcloud compute instances create "$name" \
-    --zone "$ZONE" \
-    --source-machine-image="$image" \
-    --max-run-duration="$MAX_RUN_DURATION" \
-    --instance-termination-action=STOP
+  cs_create_instance "$name" "$image" "$ZONE"
   VM_CREATED["$name"]=1
-}
-
-wait_for_ssh() {
-  local name="$1"
-  log "waiting for SSH: $name"
-  for _ in $(seq 1 60); do
-    if gcloud compute ssh "$name" --zone "$ZONE" --command "true" >/dev/null 2>&1; then
-      log "SSH ready: $name"
-      return
-    fi
-    sleep 5
-  done
-  echo "Timed out waiting for SSH on $name" >&2
-  exit 1
-}
-
-# Layer 1: schedule a guest shutdown (data-preserving) at the GCP floor + 1h.
-# Needs no cloud perms (the VM service account can't self-stop) — just sudo.
-arm_watchdog() {
-  local name="$1"
-  local mins
-  mins="$(watchdog_minutes "$MAX_RUN_DURATION")"
-  log "arming on-VM shutdown watchdog on $name (+${mins}m)"
-  if gcloud compute ssh "$name" --zone "$ZONE" \
-       --command "sudo shutdown -c 2>/dev/null || true; sudo shutdown -h +${mins}" >/dev/null 2>&1; then
-    log "watchdog armed: $name (+${mins}m)"
-    return 0
-  fi
-  if [[ "${VM_CREATED[$name]:-0}" == "1" ]]; then
-    log "WARNING: could not arm watchdog on $name; GCP max-run-duration floor still protects this fresh VM"
-    return 0
-  fi
-  echo "FATAL: could not arm watchdog on reused VM $name, which has NO GCP floor." >&2
-  echo "Refusing to leave A100s unprotected. Inspect/stop $name manually." >&2
-  exit 1
-}
-
-internal_ip() {
-  gcloud compute instances describe "$1" \
-    --zone "$ZONE" \
-    --format='value(networkInterfaces[0].networkIP)'
-}
-
-assert_no_resource_policy() {
-  local name="$1"
-  local disk_uris
-  local disk_uri
-  local disk_name
-  local policies
-  # Check every attached disk, not just the boot disk: a secondary data disk
-  # carrying a snapshot schedule would otherwise slip through and incur cost.
-  disk_uris="$(gcloud compute instances describe "$name" --zone "$ZONE" --format='value(disks[].source)')"
-  disk_uris="${disk_uris//;/ }"
-  if [[ -z "$disk_uris" ]]; then
-    echo "Could not enumerate disks for $name" >&2
-    exit 1
-  fi
-  for disk_uri in $disk_uris; do
-    disk_name="${disk_uri##*/}"
-    policies="$(gcloud compute disks describe "$disk_name" --zone "$ZONE" --format='value(resourcePolicies)' || true)"
-    if [[ -n "$policies" ]]; then
-      echo "Disk $disk_name for $name has resourcePolicies: $policies" >&2
-      exit 1
-    fi
-    log "no disk resource policy: $name / $disk_name"
-  done
 }
 
 start_coordinator() {
@@ -439,23 +288,23 @@ main() {
   ensure_instance "$QWEN2" "$QWEN_IMAGE"
   ensure_instance "$KIMI" "$KIMI_IMAGE"
 
-  wait_for_ssh "$COORD"
-  wait_for_ssh "$QWEN1"
-  wait_for_ssh "$QWEN2"
-  wait_for_ssh "$KIMI"
+  wait_for_ssh "$COORD" "$ZONE" || exit 1
+  wait_for_ssh "$QWEN1" "$ZONE" || exit 1
+  wait_for_ssh "$QWEN2" "$ZONE" || exit 1
+  wait_for_ssh "$KIMI" "$ZONE" || exit 1
 
-  arm_watchdog "$COORD"
-  arm_watchdog "$QWEN1"
-  arm_watchdog "$QWEN2"
-  arm_watchdog "$KIMI"
+  arm_watchdog "$COORD" "$ZONE" "${VM_CREATED[$COORD]:-0}" || exit 1
+  arm_watchdog "$QWEN1" "$ZONE" "${VM_CREATED[$QWEN1]:-0}" || exit 1
+  arm_watchdog "$QWEN2" "$ZONE" "${VM_CREATED[$QWEN2]:-0}" || exit 1
+  arm_watchdog "$KIMI" "$ZONE" "${VM_CREATED[$KIMI]:-0}" || exit 1
 
-  assert_no_resource_policy "$COORD"
-  assert_no_resource_policy "$QWEN1"
-  assert_no_resource_policy "$QWEN2"
-  assert_no_resource_policy "$KIMI"
+  assert_no_resource_policy "$COORD" "$ZONE" || exit 1
+  assert_no_resource_policy "$QWEN1" "$ZONE" || exit 1
+  assert_no_resource_policy "$QWEN2" "$ZONE" || exit 1
+  assert_no_resource_policy "$KIMI" "$ZONE" || exit 1
 
   local COORD_IP
-  COORD_IP="$(internal_ip "$COORD")"
+  COORD_IP="$(internal_ip "$COORD" "$ZONE")"
   log "coordinator internal IP: $COORD_IP"
 
   start_coordinator

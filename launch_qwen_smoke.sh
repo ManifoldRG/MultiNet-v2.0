@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Shared cost-safety net (single source of truth).
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"
+
 # Qwen-only distributed smoke: 1 coordinator + 2 Qwen A100 vLLM workers (no Kimi).
 # Validates coordinator work-stealing across 2 machines (3 mazes -> 3 units) and
 # the progress-aware stall path, with enforce_eager off to restore CUDA graphs.
@@ -8,14 +11,16 @@ set -euo pipefail
 # Required:
 #   export MAX_RUN_DURATION=...   # GCP-native cost floor; no default
 # Optional:
-#   ZONE=asia-northeast1-c  RUN_ID=...  FRESH=1
-#   COORD=mn-qwen-coord  QWEN1=mn-qwen-1  QWEN2=mn-qwen-2  ENFORCE_EAGER=false
+#   ZONE=us-central1-a  RUN_ID=...  FRESH=1
+#   COORD=mn-qwen-coord  QWEN1=mn-qwen-1  QWEN2=mn-qwen-2
+#   QWEN_IMAGE=qwen-fp16-80  QWEN_MODEL=Qwen/Qwen3.6-27B
+#   QWEN_DTYPE=bfloat16  ENFORCE_EAGER=false
 #
 # Subcommands (no MAX_RUN_DURATION needed):
 #   ./launch_qwen_smoke.sh stop      # STOP all 3 VMs, keep disks + data
 #   ./launch_qwen_smoke.sh delete    # delete all 3 VMs incl. disks (post-export)
 
-ZONE="${ZONE:-asia-northeast1-c}"
+ZONE="${ZONE:-us-central1-a}"
 RUN_ID="${RUN_ID:-qwen-smoke-$(date +%Y%m%d-%H%M%S)}"
 
 COORD="${COORD:-mn-qwen-coord}"
@@ -23,144 +28,52 @@ QWEN1="${QWEN1:-mn-qwen-1}"
 QWEN2="${QWEN2:-mn-qwen-2}"
 
 COORD_IMAGE="${COORD_IMAGE:-multinet-coordinator-n2-20260629}"
-QWEN_IMAGE="${QWEN_IMAGE:-multinet-qwen36-fp8-vllm-a100-20260629}"
+QWEN_IMAGE="${QWEN_IMAGE:-qwen-fp16-80}"
+QWEN_MODEL="${QWEN_MODEL:-Qwen/Qwen3.6-27B}"
+QWEN_DTYPE="${QWEN_DTYPE:-bfloat16}"
+QWEN_MAX_MODEL_LEN="${QWEN_MAX_MODEL_LEN:-8192}"
+QWEN_GPU_MEMORY_UTILIZATION="${QWEN_GPU_MEMORY_UTILIZATION:-0.95}"
 ENFORCE_EAGER="${ENFORCE_EAGER:-false}"
 STALL_MINUTES="${STALL_MINUTES:-45}"
 
 declare -A VM_CREATED
 
-log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
-
-is_valid_duration() {
-  local s="${1:-}"
-  [[ -n "$s" ]] || return 1
-  [[ "$s" =~ ^([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?$ ]] || return 1
-  return 0
-}
-
-parse_duration_seconds() {
-  local s="${1:-}"
-  is_valid_duration "$s" || { echo "invalid duration: '${s}'" >&2; return 1; }
-  local total=0 num unit rest="$s"
-  while [[ "$rest" =~ ^([0-9]+)([dhms]) ]]; do
-    num="${BASH_REMATCH[1]}"; unit="${BASH_REMATCH[2]}"
-    case "$unit" in
-      d) total=$(( total + num * 86400 )) ;;
-      h) total=$(( total + num * 3600 )) ;;
-      m) total=$(( total + num * 60 )) ;;
-      s) total=$(( total + num )) ;;
-    esac
-    rest="${rest#"${BASH_REMATCH[0]}"}"
-  done
-  echo "$total"
-}
-
-watchdog_minutes() {
-  local secs
-  secs="$(parse_duration_seconds "${1:-}")" || return 1
-  echo "$(( secs / 60 + 60 ))"
-}
-
-require_max_run_duration() {
-  if [[ -z "${MAX_RUN_DURATION:-}" ]]; then
-    echo "MAX_RUN_DURATION is required (no default). e.g. export MAX_RUN_DURATION=6h" >&2
-    return 1
-  fi
-  if ! is_valid_duration "${MAX_RUN_DURATION}"; then
-    echo "MAX_RUN_DURATION malformed: '${MAX_RUN_DURATION}'." >&2
-    return 1
-  fi
-}
-
-validate_run_id() {
-  [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Bad RUN_ID: $RUN_ID" >&2; return 1; }
-}
-
-require_gcloud() { command -v gcloud >/dev/null 2>&1 || { echo "gcloud not on PATH." >&2; return 1; }; }
+# --------------------------------------------------------------------------- #
+# Cleanup subcommands (no creds needed)
+# --------------------------------------------------------------------------- #
 
 cmd_stop() {
   require_gcloud
   log "spinning down (STOP — disks & data preserved) in $ZONE: $COORD $QWEN1 $QWEN2"
-  local vm
-  for vm in "$COORD" "$QWEN1" "$QWEN2"; do
-    gcloud compute instances stop "$vm" --zone "$ZONE" --quiet || true
-  done
+  cs_stop_vms "$ZONE" "$COORD" "$QWEN1" "$QWEN2"
 }
 
 cmd_delete() {
   require_gcloud
   log "DELETING (incl. disks/data) in $ZONE: $COORD $QWEN1 $QWEN2"
-  local vm
-  for vm in "$COORD" "$QWEN1" "$QWEN2"; do
-    gcloud compute instances delete "$vm" --zone "$ZONE" --quiet || true
-  done
+  cs_delete_vms "$ZONE" "$COORD" "$QWEN1" "$QWEN2"
 }
 
-instance_exists() { gcloud compute instances describe "$1" --zone "$ZONE" >/dev/null 2>&1; }
+# --------------------------------------------------------------------------- #
+# Instance lifecycle
+# --------------------------------------------------------------------------- #
 
 ensure_instance() {
   local name="$1" image="$2"
-  if instance_exists "$name"; then
+  if instance_exists "$name" "$ZONE"; then
     log "instance exists (reused): $name — GCP floor NOT applied; relying on on-VM watchdog"
     VM_CREATED["$name"]=0
     return
   fi
   log "creating $name from $image (max-run-duration=$MAX_RUN_DURATION, termination=STOP)"
-  gcloud compute instances create "$name" \
-    --zone "$ZONE" \
-    --source-machine-image="$image" \
-    --max-run-duration="$MAX_RUN_DURATION" \
-    --instance-termination-action=STOP
+  cs_create_instance "$name" "$image" "$ZONE"
   VM_CREATED["$name"]=1
-}
-
-wait_for_ssh() {
-  local name="$1"
-  log "waiting for SSH: $name"
-  for _ in $(seq 1 60); do
-    if gcloud compute ssh "$name" --zone "$ZONE" --command "true" >/dev/null 2>&1; then
-      log "SSH ready: $name"; return
-    fi
-    sleep 5
-  done
-  echo "Timed out waiting for SSH on $name" >&2; exit 1
-}
-
-arm_watchdog() {
-  local name="$1" mins
-  mins="$(watchdog_minutes "$MAX_RUN_DURATION")"
-  log "arming on-VM shutdown watchdog on $name (+${mins}m)"
-  if gcloud compute ssh "$name" --zone "$ZONE" \
-       --command "sudo shutdown -c 2>/dev/null || true; sudo shutdown -h +${mins}" >/dev/null 2>&1; then
-    log "watchdog armed: $name (+${mins}m)"; return 0
-  fi
-  if [[ "${VM_CREATED[$name]:-0}" == "1" ]]; then
-    log "WARNING: could not arm watchdog on $name; GCP floor still protects this fresh VM"; return 0
-  fi
-  echo "FATAL: could not arm watchdog on reused VM $name (no GCP floor)." >&2; exit 1
-}
-
-assert_no_resource_policy() {
-  local name="$1" disk_uris disk_uri disk_name policies
-  disk_uris="$(gcloud compute instances describe "$name" --zone "$ZONE" --format='value(disks[].source)')"
-  disk_uris="${disk_uris//;/ }"
-  [[ -n "$disk_uris" ]] || { echo "Could not enumerate disks for $name" >&2; exit 1; }
-  for disk_uri in $disk_uris; do
-    disk_name="${disk_uri##*/}"
-    policies="$(gcloud compute disks describe "$disk_name" --zone "$ZONE" --format='value(resourcePolicies)' || true)"
-    [[ -z "$policies" ]] || { echo "Disk $disk_name for $name has resourcePolicies: $policies" >&2; exit 1; }
-    log "no disk resource policy: $name / $disk_name"
-  done
-}
-
-internal_ip() {
-  gcloud compute instances describe "$1" --zone "$ZONE" --format='value(networkInterfaces[0].networkIP)'
 }
 
 start_coordinator() {
   log "preparing and serving coordinator (Qwen-only)"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' FRESH='${FRESH:-0}' ENFORCE_EAGER='$ENFORCE_EAGER' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' FRESH='${FRESH:-0}' ENFORCE_EAGER='$ENFORCE_EAGER' QWEN_MODEL='$QWEN_MODEL' QWEN_DTYPE='$QWEN_DTYPE' QWEN_MAX_MODEL_LEN='$QWEN_MAX_MODEL_LEN' QWEN_GPU_MEMORY_UTILIZATION='$QWEN_GPU_MEMORY_UTILIZATION' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -169,15 +82,17 @@ python - <<PY
 import json, os
 from pathlib import Path
 cfg = json.loads(Path("gridworld/fixtures/run_config.smoke_eval_qwen_kimi.json").read_text())
-cfg["description"] = "Qwen-only smoke (3 mazes): 2 Qwen3.6 FP8 vLLM workers, no Kimi."
+qwen_model = os.environ["QWEN_MODEL"]
+cfg["description"] = f"Qwen-only smoke (3 mazes): 2 {qwen_model} vLLM workers, no Kimi."
 cfg["models"] = {}
-cfg["models"]["qwen36_27b_fp8_vllm"] = {
+cfg["models"]["qwen36_27b_vllm"] = {
     "provider": "qwen_vllm",
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": qwen_model,
     "temperature": 0.0,
     "max_tokens": 4096,
-    "max_model_len": 8192,
-    "gpu_memory_utilization": 0.88,
+    "max_model_len": int(os.environ["QWEN_MAX_MODEL_LEN"]),
+    "gpu_memory_utilization": float(os.environ["QWEN_GPU_MEMORY_UTILIZATION"]),
+    "dtype": os.environ["QWEN_DTYPE"],
     "enforce_eager": os.environ.get("ENFORCE_EAGER", "false").lower() == "true",
     "local_files_only": True,
     "enable_thinking": False,
@@ -188,7 +103,9 @@ cfg["models"]["qwen36_27b_fp8_vllm"] = {
     "tasks": ["all"],
 }
 Path("/tmp/run_config.qwen_only.json").write_text(json.dumps(cfg, indent=2) + "\n")
-print("enforce_eager:", cfg["models"]["qwen36_27b_fp8_vllm"]["enforce_eager"])
+print("model:", qwen_model)
+print("dtype:", cfg["models"]["qwen36_27b_vllm"]["dtype"])
+print("enforce_eager:", cfg["models"]["qwen36_27b_vllm"]["enforce_eager"])
 PY
 
 if python - <<'PY'
@@ -234,7 +151,7 @@ REMOTE
 start_qwen_worker() {
   local vm="$1" coord_ip="$2"
   log "starting Qwen worker: $vm"
-  gcloud compute ssh "$vm" --zone "$ZONE" --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' bash -s" <<'REMOTE'
+  gcloud compute ssh "$vm" --zone "$ZONE" --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' QWEN_MODEL='$QWEN_MODEL' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-qwen-vllm/bin/activate
@@ -247,7 +164,7 @@ nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline
   --worker-state "$HOME/multinet-worker-artifacts/$RUN_ID/worker_state.json" \
   --model-group qwen36-27b \
   --hardware-profile local-gpu \
-  --local-model-cache Qwen/Qwen3.6-27B-FP8 \
+  --local-model-cache "$QWEN_MODEL" \
   > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.log" 2>&1 &
 echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid"
 echo "Qwen worker started: $(cat "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid")"
@@ -262,6 +179,9 @@ print_summary() {
 Launched $RUN_ID (Qwen-only: $COORD + $QWEN1 + $QWEN2).
   GCP floor (Layer 0): STOP after $MAX_RUN_DURATION (data preserved).
   On-VM watchdog (Layer 1): guest shutdown at +${mins}m.
+  qwen_image=$QWEN_IMAGE.
+  qwen_model=$QWEN_MODEL.
+  qwen_dtype=$QWEN_DTYPE.
   enforce_eager=$ENFORCE_EAGER.
 
 Hands-off monitor (Layer 2) — run under Claude /loop (45-min progress-aware stall):
@@ -292,20 +212,20 @@ main() {
   ensure_instance "$QWEN1" "$QWEN_IMAGE"
   ensure_instance "$QWEN2" "$QWEN_IMAGE"
 
-  wait_for_ssh "$COORD"
-  wait_for_ssh "$QWEN1"
-  wait_for_ssh "$QWEN2"
+  wait_for_ssh "$COORD" "$ZONE" || exit 1
+  wait_for_ssh "$QWEN1" "$ZONE" || exit 1
+  wait_for_ssh "$QWEN2" "$ZONE" || exit 1
 
-  arm_watchdog "$COORD"
-  arm_watchdog "$QWEN1"
-  arm_watchdog "$QWEN2"
+  arm_watchdog "$COORD" "$ZONE" "${VM_CREATED[$COORD]:-0}" || exit 1
+  arm_watchdog "$QWEN1" "$ZONE" "${VM_CREATED[$QWEN1]:-0}" || exit 1
+  arm_watchdog "$QWEN2" "$ZONE" "${VM_CREATED[$QWEN2]:-0}" || exit 1
 
-  assert_no_resource_policy "$COORD"
-  assert_no_resource_policy "$QWEN1"
-  assert_no_resource_policy "$QWEN2"
+  assert_no_resource_policy "$COORD" "$ZONE" || exit 1
+  assert_no_resource_policy "$QWEN1" "$ZONE" || exit 1
+  assert_no_resource_policy "$QWEN2" "$ZONE" || exit 1
 
   local COORD_IP
-  COORD_IP="$(internal_ip "$COORD")"
+  COORD_IP="$(internal_ip "$COORD" "$ZONE")"
   log "coordinator internal IP: $COORD_IP"
 
   start_coordinator
