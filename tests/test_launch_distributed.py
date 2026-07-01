@@ -321,3 +321,16 @@ def test_gpu_only_no_empty_vm_name(tmp_path):
     combined = r.stdout + r.stderr
     assert "NAME_EMPTY" not in combined, f"empty VM name reached wait_for_ssh:\n{combined}"
     assert r.returncode == 0, f"provision failed (expected success):\n{r.stderr}"
+
+
+def test_launch_sources_real_start_hooks():
+    # After sourcing launch_distributed.sh, start_coordinator must be the REAL recipe
+    # (coordinator-serve), not the old `ssh ... true` stub.
+    r = bash("source ./launch_distributed.sh 2>/dev/null; type start_coordinator")
+    assert r.returncode == 0, r.stderr
+    assert "coordinator-serve" in r.stdout
+    assert "start_worker" in bash(
+        "source ./launch_distributed.sh 2>/dev/null; type start_worker").stdout
+    # the stub returned true with no real command; the real one dispatches on kind
+    assert "hardware-profile" in bash(
+        "source ./launch_distributed.sh 2>/dev/null; type start_worker").stdout

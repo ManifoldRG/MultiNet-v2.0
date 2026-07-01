@@ -11,6 +11,7 @@ set -euo pipefail
 # Subcommands (no creds / no MAX_RUN_DURATION): stop | delete (operate on the manifest).
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/distributed_start.sh"
 
 RUN_ID="${RUN_ID:-dist-$(date +%Y%m%d-%H%M%S)}"
 ZONE="${ZONE:-us-central1-c}"          # default/coordinator zone; the hunt may override
@@ -161,11 +162,6 @@ derive_names() {
   mapfile -t API_VMS < <(printf '%s' "$topo" | python3 -c 'import json,sys; [print(w["name"]) for w in json.load(sys.stdin)["workers"] if w["kind"]=="api"]')
   TOPO_JSON="$topo"
 }
-
-# Default start hooks (overridable in tests / future tasks). Real recipes wire the
-# coordinator-prepare/serve and worker commands; here they are minimal seams.
-start_coordinator() { gcloud compute ssh "$COORD" --zone "$ZONE" --command "true"; }
-start_worker() { gcloud compute ssh "$1" --zone "$ZONE" --command "true"; }
 
 write_manifest() {  # $1 zone  $2 coord_ip
   local zone="$1" ip="$2" mf; mf="$(manifest_path)"
