@@ -56,6 +56,50 @@ cmd_delete() {
   cs_delete_vms "$zone" $(manifest_vm_names)
 }
 
+# Create one GPU/coordinator VM with the cost-safety floor. $1 name $2 image $3 zone.
+_create_in_zone() { cs_create_instance "$1" "$2" "$3"; }
+
+# Delete any of the given VMs in a zone — safe ONLY pre-data (empty fresh VMs).
+rollback_zone() {  # $1 zone  $2.. vms
+  local zone="$1"; shift
+  log "rolling back partial creation in $zone"
+  cs_delete_vms "$zone" "$@"
+}
+
+# Try to create all GPU VMs (scarce, first) then the coordinator in one zone.
+# $1 coord  $2.. gpu_vms. Returns 0 on full success, 1 (after rollback) otherwise.
+try_zone() {  # $1 zone  $2 coord  $3.. gpu_vms
+  local zone="$1" coord="$2"; shift 2
+  local gpu_vms=("$@") vm
+  for vm in "${gpu_vms[@]}"; do
+    if ! _create_in_zone "$vm" "$QWEN_IMAGE" "$zone"; then
+      rollback_zone "$zone" "${gpu_vms[@]}" "$coord"; return 1
+    fi
+  done
+  if ! _create_in_zone "$coord" "$COORD_IMAGE" "$zone"; then
+    rollback_zone "$zone" "${gpu_vms[@]}" "$coord"; return 1
+  fi
+  return 0
+}
+
+# Iterate $ZONES; first zone fitting all GPU VMs + coordinator wins. Echoes the
+# winning zone on stdout (last line) and returns 0; returns 1 if all exhausted.
+hunt_zones() {  # $1 coord  $2.. gpu_vms
+  local coord="$1"; shift
+  local gpu_vms=("$@") z
+  for z in $ZONES; do
+    log "=== attempting zone $z ==="
+    if try_zone "$z" "$coord" "${gpu_vms[@]}"; then
+      log "landed GPU fleet in $z"
+      echo "$z"
+      return 0
+    fi
+    log "zone $z unavailable (A100 stockout/quota); next"
+  done
+  echo "ALL ZONES STOCKED OUT — no A100 capacity. Nothing left running." >&2
+  return 1
+}
+
 main() {
   case "${1:-}" in
     stop) cmd_stop; exit 0 ;;
