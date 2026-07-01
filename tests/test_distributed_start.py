@@ -49,9 +49,12 @@ def test_coordinator_prepares_serves_healthchecks(tmp_path):
     assert "coordinator-prepare" in log
     assert "--run-config" in log and "run_config.smoke_claude_sonnet.json" in log
     assert "--manifest" in log and "manifest.smoke_eval.json" in log
+    assert "--seeds" in log and "--difficulty-max-static-score" in log
     # the quoted heredoc keeps $RUN_ID literal (expanded remotely from the injected env)
     assert "--run-set-id" in log and "artifacts/$RUN_ID" in log
     assert "coordinator-serve" in log and "--host 0.0.0.0 --port 8765" in log
+    # coordinator-serve.log path is load-bearing (Spec-2 supervisor snapshot_logs expects it)
+    assert "coordinator-serve.log" in log
     assert "127.0.0.1:8765/status" in log
 
 
@@ -81,14 +84,18 @@ def test_api_worker_claude_exports_anthropic_key(tmp_path):
                            "GCLOUD_LOG": str(glog), "ANTHROPIC_API_KEY": "sk-ant-DUMMY"})
     assert r.returncode == 0, r.stderr
     log = glog.read_text()
-    assert "export ANTHROPIC_API_KEY=sk-ant-DUMMY" in log
     assert "--hardware-profile api-client" in log
     assert "--model-group" in log and "claude-api" in log
     # the unquoted heredoc keeps \$COORD_IP literal; the IP arrives via the injected env
     assert "COORD_IP='10.0.0.2'" in log and "coordinator-url" in log
     assert ".venv-multinet" in log
-    # the key must NOT leak to the launcher's own stdout (only into the remote heredoc)
-    assert "sk-ant-DUMMY" not in r.stdout
+    # SECURITY (load-bearing): the key is delivered ONLY via the remote heredoc stdin —
+    # never on the --command argv (which leaks to `ps`/gcloud logs) or the launcher stdout.
+    args_line = next(line for line in log.splitlines() if line.startswith("ARGS:"))
+    assert "sk-ant-DUMMY" not in args_line               # not in --command argv
+    stdin = log.split("STDIN_BEGIN", 1)[1].split("STDIN_END", 1)[0]
+    assert "export ANTHROPIC_API_KEY=sk-ant-DUMMY" in stdin   # delivered via remote stdin
+    assert "sk-ant-DUMMY" not in r.stdout                # launcher never echoes it
 
 
 def test_api_worker_kimi_exports_moonshot_key(tmp_path):
