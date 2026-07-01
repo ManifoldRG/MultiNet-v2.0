@@ -234,14 +234,15 @@ main() {
   for vm in "${ALL_VMS[@]}"; do arm_watchdog "$vm" "$ZONE" 1 || abort_stop "watchdog arm failed on $vm"; done
   for vm in "${ALL_VMS[@]}"; do assert_no_resource_policy "$vm" "$ZONE" || abort_stop "resource policy found on $vm"; done
 
-  local COORD_IP; COORD_IP="$(internal_ip "$COORD" "$ZONE")"
+  local COORD_IP
+  COORD_IP="$(internal_ip "$COORD" "$ZONE")" || abort_stop "internal_ip failed"
   start_coordinator || abort_stop "coordinator start failed"
   for vm in "${GPU_VMS[@]:-}" "${API_VMS[@]:-}"; do
     [[ -n "$vm" ]] || continue
     start_worker "$vm" "$COORD_IP" || abort_stop "worker start failed on $vm"
   done
 
-  write_manifest "$ZONE" "$COORD_IP"
+  write_manifest "$ZONE" "$COORD_IP" || abort_stop "write_manifest failed"
   log "LAUNCH COMPLETE: run_id=$RUN_ID zone=$ZONE manifest=$(manifest_path)"
   return 0
 }

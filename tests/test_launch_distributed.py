@@ -270,6 +270,8 @@ def test_successful_provision_writes_manifest(tmp_path):
     assert mf["run_id"] == "rok" and mf["zone"] == "zoneA"
     assert mf["code_sha"] == "SHA123"
     assert mf["coordinator"]["name"] == "rok-coord"
+    assert {w["kind"] for w in mf["workers"]} <= {"gpu", "api"}
+    assert "internal_ip" in mf["coordinator"]
 
 
 def test_gpu_only_no_empty_vm_name(tmp_path):
