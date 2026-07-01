@@ -84,7 +84,7 @@ def test_hunt_rolls_back_first_zone_and_lands_in_second(tmp_path):
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip().splitlines()[-1] == "zoneB"   # winning zone echoed last
     log = glog.read_text()
-    assert "instances delete g0 --zone zoneA" in log or "instances delete" in log and "zoneA" in log
+    assert ("instances delete g0 --zone zoneA" in log) or ("instances delete" in log and "zoneA" in log)
     assert "instances create coord --zone zoneB" in log
 
 

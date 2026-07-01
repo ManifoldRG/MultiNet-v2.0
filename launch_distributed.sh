@@ -67,7 +67,7 @@ rollback_zone() {  # $1 zone  $2.. vms
 }
 
 # Try to create all GPU VMs (scarce, first) then the coordinator in one zone.
-# $1 coord  $2.. gpu_vms. Returns 0 on full success, 1 (after rollback) otherwise.
+# $1 zone  $2 coord  $3.. gpu_vms. Returns 0 on full success, 1 (after rollback) otherwise.
 try_zone() {  # $1 zone  $2 coord  $3.. gpu_vms
   local zone="$1" coord="$2"; shift 2
   local gpu_vms=("$@") vm
