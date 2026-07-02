@@ -12,10 +12,11 @@ hybrid (Gated DeltaNet + gated attention) will likely land **below** the
 `causal-conv1d` and bf16. `deploy/smoke_qwen.py` measures and reports the actual
 rate so this is visible rather than assumed.
 
-The first migration step is the in-process offline vLLM agent
-(`interface/agents/qwen_vllm.py`) with `Qwen/Qwen3.6-27B-FP8`. This keeps the
-pipeline contract simple for the current target of **one Qwen worker per VM**:
-the worker process owns one vLLM engine and no localhost server is required.
+The in-process offline vLLM agent (`interface/agents/qwen_vllm.py`) now runs
+**`Qwen/Qwen3.6-27B` (FP16) on A100-80GB** — we moved off the FP8 checkpoint (see
+the decision record below). This keeps the pipeline contract simple for the
+current target of **one Qwen worker per VM**: the worker process owns one vLLM
+engine and no localhost server is required.
 
 If we later need multiple local worker processes per GPU, or want external
 clients to share one hot model, switch the same provider to **vLLM/SGLang
@@ -26,13 +27,13 @@ prediction (~3-5x decode), but it adds process supervision and health checks.
 KTransformers remains a fallback to evaluate if vLLM/SGLang cannot hit the
 required throughput or memory envelope on the A100 40GB worker shape.
 
-## Inference performance (2026-06-30 smokes): FP8 on A100-40GB is not enough — plan for FP16 on A100-80GB
+## Decision (2026-07): moved off Qwen3.6-27B-FP8 → FP16 on A100-80GB
 
-The 2026-06-30 distributed smokes ran `Qwen/Qwen3.6-27B-FP8` through the offline
-vLLM agent on `a2-highgpu-1g` (A100 40GB) and showed that **vLLM alone does not
-make FP8-on-A100-40GB fast enough — we will need FP16/BF16, which needs the 80GB
-shape** (see the rental checkpoint below). Both failure modes trace back to the
-A100 lacking native FP8 compute:
+**We moved the Qwen runner off the `Qwen/Qwen3.6-27B-FP8` checkpoint to FP16/BF16
+on the A100-80GB (`a2-ultragpu-1g`, the `qwen-fp16-80` image).** The 2026-06-30
+distributed smokes ran FP8 through the offline vLLM agent on `a2-highgpu-1g`
+(A100 40GB) and showed that **vLLM alone does not make FP8-on-A100-40GB fast
+enough**. Both failure modes trace back to the A100 lacking native FP8 compute:
 
 - **`enforce_eager: true` (no CUDA graphs):** loads (~14 min: 66 shards + engine
   init) and runs, but decode is slow. In smoke `qwen-smoke-eager-20260630-172236`
@@ -48,12 +49,12 @@ A100 lacking native FP8 compute:
   `gpu_memory_utilization=0.88` only ~498 MiB is free on the 40GB card. CUDA-graph
   capture needs headroom the 40GB shape does not have for a 27B model.
 
-So FP8 buys memory but not speed on A100-40GB, and the CUDA-graph speed path
-does not fit. The throughput path is **FP16/BF16 on A100-80GB (`a2-ultragpu-1g`)**:
-native A100 compute plus headroom for CUDA graphs and a large KV cache. This
-promotes the rental checkpoint below from *optional* to *required for practical
-throughput*. (INT8 W8A8 on A100-40GB — A100 has native INT8 — is still worth a
-cheap test first, per that section.)
+So FP8 bought memory but not speed on A100-40GB, and the CUDA-graph speed path
+did not fit. The throughput path we adopted is **FP16/BF16 on A100-80GB
+(`a2-ultragpu-1g`)**: native A100 compute plus headroom for CUDA graphs and a
+large KV cache — shipped as the `qwen-fp16-80` image running `Qwen/Qwen3.6-27B`
+with `enforce_eager: false`. (INT8 W8A8 on A100-40GB — A100 has native INT8 —
+remains a cheaper alternative worth a test, per the section below.)
 
 This is purely a model-throughput finding. The distributed pipeline itself —
 coordinator work-stealing / queue hand-off to the next maze, and the
