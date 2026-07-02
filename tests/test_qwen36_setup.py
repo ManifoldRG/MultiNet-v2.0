@@ -14,11 +14,11 @@ def test_qwen36_class_is_preferred_over_qwen35():
     assert names.index("Qwen3_5ForConditionalGeneration") < names.index("AutoModelForCausalLM")
 
 
-def test_smoke_qwen36_run_config_uses_vllm_fp8_model():
+def test_smoke_qwen36_run_config_uses_vllm_fp16_model():
     cfg = load_run_config(REPO_ROOT / "gridworld" / "fixtures" / "run_config.smoke_qwen36_kimi.json")
     qwen = cfg["models"]["qwen36_27b_vllm"]
     assert qwen["provider"] == "qwen_vllm"
-    assert qwen["model"] == "Qwen/Qwen3.6-27B-FP8"
+    assert qwen["model"] == "Qwen/Qwen3.6-27B"
     assert qwen["group"] == "qwen36-27b"
     assert qwen["max_model_len"] == 8192
     assert qwen["gpu_memory_utilization"] == 0.88

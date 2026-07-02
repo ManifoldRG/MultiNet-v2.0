@@ -1,9 +1,53 @@
 # Conditional condition-sweep rollout
 
-How to launch the full **6-set** condition sweep across **Qwen3.5-27B (local),
-Kimi, and Claude** over the 15-maze conditional evaluation, covering every prompt
-variable **once** without re-paying for the shared baseline in every condition
-set.
+How to launch the full **6-set** condition sweep across **Qwen3.6-27B (local,
+FP16/vLLM), Kimi, and Claude** over the 15-maze conditional evaluation, covering
+every prompt variable **once** without re-paying for the shared baseline in every
+condition set.
+
+**Models & thinking (as configured in the run-configs):**
+
+- **Claude = Opus 4.8** (`claude-opus-4-8`, key `claude_opus`). The agent omits
+  `temperature` for the Opus-4.7+ family (it 400s otherwise). The 10 experimental
+  configs run **adaptive thinking at `effort: low`** so the prompt/observation
+  manipulations remain the dominant signal; paid `max_tokens` stays 4096.
+- **Kimi = `enable_thinking: true`, `temperature: 0.6`** on every config (Moonshot
+  rejects temperatures below 0.6 with a 400; the agent also floors it as a net).
+- **Qwen = Qwen3.6-27B, FP16 via vLLM** on the `qwen-fp16-80` A100-80GB image
+  (FP8/3.5-HF retired), `enable_thinking: true` (local; no token cost). The vLLM
+  memory knobs (`max_model_len: 16384`, `gpu_memory_utilization: 0.9`,
+  `enforce_eager: false`) are best-effort for FP16-27B + thinking and must be
+  confirmed on the image via the smoke (OOM / context-overflow risk).
+- **Config #11 — baseline with full thinking**
+  (`run_config.conditional_baseline_thinking_claude_kimi_qwen.json`): the shared
+  baseline (`--conditions "Prompt" --prompt-variant standard`) re-run with Opus at
+  **`effort: xhigh`** and all three models thinking-on, paid `max_tokens` raised to
+  8192. This isolates the value of reasoning depth versus the `effort: low` sweep.
+
+**Launching a batch via `launch_distributed.sh`:** the launcher runs
+`coordinator-prepare`, which enforces the H1/H2 guard — so you **must** pass the
+condition axis. Set it via the `CONDITIONS` env var (and `PROMPT_VARIANT` for the
+dedup batches); the launcher threads them into `--conditions`/`--prompt-variant`:
+
+```bash
+# Batch 5 — Action space, non-baseline only
+RUN_CONFIG=gridworld/fixtures/run_config.conditional_action_space_claude_kimi_qwen.json \
+MANIFEST=gridworld/fixtures/manifest.conditional_eval.json \
+CONDITIONS="Action space" PROMPT_VARIANT=cardinal \
+MAX_RUN_DURATION=12h DIFFICULTY_MAX=1000 RUN_ID=cond_act_cardinal \
+  ./launch_distributed.sh
+
+# Batch 11 — baseline with full thinking (its own artifacts-root/run-id)
+RUN_CONFIG=gridworld/fixtures/run_config.conditional_baseline_thinking_claude_kimi_qwen.json \
+MANIFEST=gridworld/fixtures/manifest.conditional_eval.json \
+CONDITIONS="Prompt" PROMPT_VARIANT=standard \
+MAX_RUN_DURATION=12h DIFFICULTY_MAX=1000 RUN_ID=cond_baseline_thinking \
+  ./launch_distributed.sh
+```
+
+Use `DIFFICULTY_MAX=1000` across all batches (this is also the launcher default) —
+these runs exist to *find* the real difficulty ceiling, so a fixed high value keeps
+runtime normalization consistent across every batch.
 
 - Manifest: `gridworld/fixtures/manifest.conditional_eval.json` (10 validation_10
   mazes + 5 held-out S/M/B/D/D mazes, incl. the blind probe B maze; 15 total).
@@ -80,11 +124,17 @@ job, so give each its own `--artifacts-root`.
 | 6 | `Querying strategy` | `subgoal` | `subgoal` | `artifacts/cond/qry_subgoal` |
 | 7 | `Querying strategy` | `full_trajectory` | `full_trajectory` | `artifacts/cond/qry_full_trajectory` |
 | 8 | `In-context learning` | `one_shot` | `one_shot` | `artifacts/cond/icl_one_shot` |
+| 9 | `Prompt` | `standard` (thinking config #11) | `standard` @ full thinking | `artifacts/cond/baseline_thinking` |
 
-Total paid (Kimi + Claude) episodes = 10 unique configs × 15 mazes × 1 seed × 2
-API models = **300**, vs 15 launch-slots × 15 × 2 = 450 for the naive per-set
-rollout (~150 redundant baseline episodes avoided). Including local Qwen:
-10 × 15 × 3 = **450** episode-cells.
+Batch 9 uses `run_config.conditional_baseline_thinking_claude_kimi_qwen.json`
+(not a six-set file): the baseline re-run with Opus `effort: xhigh` and all models
+thinking-on, to measure reasoning-depth value against the `effort: low` sweep.
+
+Total paid (Kimi + Claude) episodes = 11 unique configs × 15 mazes × 1 seed × 2
+API models = **330** (300 for the 10 `effort: low` configs + 30 for config #11).
+Including local Qwen: 11 × 15 × 3 = **495** episode-cells. Config #11's paid
+`max_tokens` is 8192 (vs 4096 for the 10), and Opus xhigh + Kimi/Qwen thinking
+make it the most expensive single batch — budget for it separately.
 
 > `text_only` is intentionally not in the rollout (D1). If you later want it, add
 > one batch `Observation format --prompt-variant text_only`.
@@ -103,7 +153,7 @@ as the baseline cell — there is no `image_only/`, `current/`, `egocentric/`,
 For each batch, run the standard distributed roles against that batch's
 `--artifacts-root` (prepare → serve → workers/api-client → finalize). Prepare
 overwrites `plan.json` per artifacts-root, which is why each batch needs its own.
-Pass `--difficulty-max-static-score <MAX>` where `<MAX>` is the stable maximum for
+Pass `--difficulty-max-static-score 1000` where `1000` is the stable maximum for
 the conditional set (derive once from the conditional_eval static scores and reuse
 it across all batches so runtime normalization is comparable).
 
@@ -115,7 +165,7 @@ multinet-run-pipeline --distributed-role coordinator-prepare \
   --conditions "Prompt" \
   --seeds 0 \
   --artifacts-root artifacts/cond/prompt --run-set-id cond_prompt \
-  --difficulty-max-static-score <MAX>
+  --difficulty-max-static-score 1000
 
 # Batch 5 — Action space, non-baseline only
 multinet-run-pipeline --distributed-role coordinator-prepare \
@@ -124,7 +174,7 @@ multinet-run-pipeline --distributed-role coordinator-prepare \
   --conditions "Action space" --prompt-variant cardinal \
   --seeds 0 \
   --artifacts-root artifacts/cond/act_cardinal --run-set-id cond_act_cardinal \
-  --difficulty-max-static-score <MAX>
+  --difficulty-max-static-score 1000
 
 # ...batches 2-4, 6-8 follow the same pattern with the rows in the table above.
 # Then per batch: coordinator-serve, worker / coordinator-run-api-client, coordinator-finalize.

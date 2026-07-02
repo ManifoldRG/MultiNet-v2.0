@@ -1,4 +1,4 @@
-"""Claude Sonnet agent via the Anthropic Messages API."""
+"""Claude agent (Sonnet/Opus/Fable) via the Anthropic Messages API."""
 
 from __future__ import annotations
 
@@ -24,6 +24,56 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 _AGENT_NAME = "Claude agent"
+
+# Model families that REJECT sampling params (temperature/top_p/top_k) with an
+# HTTP 400: Opus 4.7+, Fable, Mythos. Sonnet 4.6 and Opus <=4.6 still accept
+# `temperature`, so we only drop it for these. Depth on the thinking families is
+# controlled by adaptive thinking + `output_config.effort`, never `temperature`.
+_SAMPLING_UNSUPPORTED_PREFIXES = (
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-fable",
+    "claude-mythos",
+)
+
+
+def _omits_sampling_params(model: str) -> bool:
+    m = (model or "").lower()
+    return any(m.startswith(prefix) for prefix in _SAMPLING_UNSUPPORTED_PREFIXES)
+
+
+def _build_request_body(
+    *,
+    model: str,
+    max_tokens: int,
+    temperature: float,
+    system: object,
+    messages: List[Dict[str, object]],
+    enable_thinking: bool = False,
+    effort: Optional[str] = None,
+) -> Dict[str, object]:
+    """Assemble the Anthropic Messages request body.
+
+    `temperature` is omitted for model families that reject it (see
+    `_omits_sampling_params`); sending it there would 400. Thinking is opt-in:
+    when enabled we send adaptive thinking, and `effort` (low..max) tunes depth.
+    """
+    body: Dict[str, object] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": messages,
+    }
+    if not _omits_sampling_params(model):
+        body["temperature"] = temperature
+    if enable_thinking:
+        body["thinking"] = {"type": "adaptive"}
+    if effort:
+        output_config = body.setdefault("output_config", {})
+        assert isinstance(output_config, dict)
+        output_config["effort"] = effort
+    if system:
+        body["system"] = system
+    return body
 
 
 def _parts_to_anthropic(parts: List[ContentPart]) -> List[dict]:
@@ -121,15 +171,18 @@ def _post_messages(
     messages: List[Dict[str, object]],
     timeout: Optional[float],
     max_attempts: int = 5,
+    enable_thinking: bool = False,
+    effort: Optional[str] = None,
 ) -> Tuple[str, Optional[Dict[str, int]]]:
-    body: Dict[str, object] = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": messages,
-        "temperature": temperature,
-    }
-    if system:
-        body["system"] = system
+    body = _build_request_body(
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        system=system,
+        messages=messages,
+        enable_thinking=enable_thinking,
+        effort=effort,
+    )
 
     raw = json.dumps(body).encode("utf-8")
     if logger.isEnabledFor(logging.DEBUG):
@@ -189,6 +242,8 @@ class ClaudeAnthropicConfig:
     timeout: Optional[float] = 180.0
     max_attempts: int = 5
     enable_prompt_cache: bool = True
+    enable_thinking: bool = False
+    effort: Optional[str] = None
 
 
 @dataclass
@@ -221,5 +276,7 @@ class ClaudeAnthropicAgent:
             messages=turns,
             timeout=self.config.timeout,
             max_attempts=self.config.max_attempts,
+            enable_thinking=self.config.enable_thinking,
+            effort=self.config.effort,
         )
         return text

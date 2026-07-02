@@ -123,6 +123,52 @@ def test_gpu_worker_uses_vllm_venv_and_offline(tmp_path):
     assert "--local-model-cache" in log and "Qwen/Qwen3.6-27B-FP8" in log
 
 
+def test_coordinator_passes_conditions_and_prompt_variant(tmp_path):
+    """The conditional sweep needs --conditions (and, for dedup batches,
+    --prompt-variant) or run_pipeline's H1/H2 guard rejects the prepare. The
+    values are injected on the --command env and consumed by guarded appends in
+    the remote heredoc."""
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.conditional_prompt_claude_kimi_qwen.json; '
+        'MANIFEST=gridworld/fixtures/manifest.conditional_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog),
+                           "CONDITIONS": "Prompt", "PROMPT_VARIANT": "minimal"})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    # values plumbed through the --command env (load-bearing)
+    assert "CONDITIONS='Prompt'" in log
+    assert "PROMPT_VARIANT='minimal'" in log
+    # guarded appends present in the remote recipe
+    assert "--conditions" in log and "--prompt-variant" in log
+    assert "coordinator-prepare" in log
+
+
+def test_coordinator_injects_empty_conditions_when_unset(tmp_path):
+    """A non-conditional run (no CONDITIONS/PROMPT_VARIANT) must inject empty
+    values so the guarded appends skip both flags — preserving the plain
+    coordinator-prepare invocation."""
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "CONDITIONS=''" in log
+    assert "PROMPT_VARIANT=''" in log
+
+
 def test_api_worker_unknown_provider_fails(tmp_path):
     _fake_gcloud_capture(tmp_path)
     bad = ('{"workers":[{"name":"r1-x-0","kind":"api","model_group":"x-api",'

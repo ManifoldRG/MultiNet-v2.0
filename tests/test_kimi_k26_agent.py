@@ -72,6 +72,31 @@ def test_kimi_agent_posts_moonshot_chat_completion(monkeypatch):
     assert seen["body"]["thinking"] == {"type": "disabled"}
 
 
+def test_kimi_temperature_pinned_by_thinking_mode(monkeypatch):
+    """Moonshot 400s unless temperature is exactly the value it allows for the
+    mode: 1.0 with thinking on, 0.6 with thinking off. The agent pins it per mode
+    regardless of the configured value (confirmed live via the M6 smoke)."""
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _FakeResponse({"choices": [{"message": {"content": "ok"}}], "usage": {}})
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    # thinking off -> 0.6, even if the config asked for something else
+    KimiK26Agent(KimiK26Config(temperature=0.0, enable_thinking=False), api_key="secret")(
+        [{"role": "user", "content": "hi"}]
+    )
+    assert seen["body"]["temperature"] == 0.6
+
+    # thinking on -> 1.0, even if the config asked for 0.6
+    KimiK26Agent(KimiK26Config(temperature=0.6, enable_thinking=True), api_key="secret")(
+        [{"role": "user", "content": "hi"}]
+    )
+    assert seen["body"]["temperature"] == 1.0
+
+
 def test_run_config_builds_kimi_agent(monkeypatch):
     monkeypatch.setenv("MOONSHOT_API_KEY", "secret")
 

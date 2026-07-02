@@ -15,10 +15,14 @@ for w in json.load(sys.stdin).get("workers", []):
 ' "$1" "$2"
 }
 
-start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX]
+start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT]
   local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}"
+  # Conditional sweeps: --conditions is required (run_pipeline's H1/H2 guard
+  # rejects a mispaired prepare) and --prompt-variant selects one dedup variant.
+  # Empty when unset -> the remote guarded appends skip both flags.
+  local conditions="${CONDITIONS:-}" prompt_variant="${PROMPT_VARIANT:-}"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -34,6 +38,9 @@ finally:
 PY
 then :; else echo "Port 8765 already in use on the coordinator." >&2; exit 1; fi
 mkdir -p "artifacts/$RUN_ID"
+prepare_args=()
+[[ -n "${CONDITIONS:-}" ]] && prepare_args+=(--conditions "$CONDITIONS")
+[[ -n "${PROMPT_VARIANT:-}" ]] && prepare_args+=(--prompt-variant "$PROMPT_VARIANT")
 python -m scripts.run_pipeline \
   --distributed-role coordinator-prepare \
   --run-config "$RUN_CONFIG" \
@@ -41,7 +48,8 @@ python -m scripts.run_pipeline \
   --seeds "$SEEDS" \
   --artifacts-root "artifacts/$RUN_ID" \
   --run-set-id "$RUN_ID" \
-  --difficulty-max-static-score "$DIFFICULTY_MAX"
+  --difficulty-max-static-score "$DIFFICULTY_MAX" \
+  ${prepare_args[@]+"${prepare_args[@]}"}
 nohup python -m scripts.run_pipeline \
   --distributed-role coordinator-serve \
   --artifacts-root "artifacts/$RUN_ID" \

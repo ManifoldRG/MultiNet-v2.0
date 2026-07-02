@@ -829,6 +829,10 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.timeout = float(model_cfg["timeout"])
         if "max_attempts" in model_cfg:
             cfg.max_attempts = int(model_cfg["max_attempts"])
+        if "enable_thinking" in model_cfg:
+            cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "effort" in model_cfg:
+            cfg.effort = str(model_cfg["effort"])
         return ClaudeAnthropicAgent(config=cfg), model or cfg.model
     if provider == "kimi":
         from interface.agents import KimiK26Agent, KimiK26Config

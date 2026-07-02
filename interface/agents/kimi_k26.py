@@ -20,12 +20,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_KIMI_K26_MODEL = "kimi-k2.6"
 _MOONSHOT_CHAT_URL = "https://api.moonshot.ai/v1/chat/completions"
 _AGENT_NAME = "Kimi agent"
+# Moonshot kimi-k2.6 dictates the sampling temperature BY MODE and returns HTTP 400
+# on any other value ("only X is allowed for this model"): thinking-on requires 1.0,
+# thinking-off requires 0.6. Confirmed live via the M6 smoke (2026-07-02).
+_KIMI_TEMPERATURE_THINKING = 1.0
+_KIMI_TEMPERATURE_NO_THINKING = 0.6
 
 
 # Moonshot caches identical request prefixes automatically and bills the reused
 # span at the cache-hit input rate (no per-message cache_control field exists in
 # the OpenAI-compatible schema). Because the agent re-sends an append-only history
-# at temperature 0, the stable system+history prefix is cache-eligible as-is.
+# at a fixed temperature, the stable system+history prefix is cache-eligible as-is.
 def _to_openai_messages(messages: List[dict]) -> List[Dict[str, object]]:
     out: List[Dict[str, object]] = []
     for message in messages:
@@ -54,7 +59,13 @@ def _post_chat_completions(
         "model": model,
         "max_tokens": max_tokens,
         "messages": messages,
-        "temperature": temperature,
+        # Moonshot pins the temperature per mode (see constants) — send the only
+        # value it accepts for this thinking mode, ignoring the configured value,
+        # or the request 400s. `temperature` is kept in the signature/hash for
+        # provenance but is not sent verbatim.
+        "temperature": (
+            _KIMI_TEMPERATURE_THINKING if enable_thinking else _KIMI_TEMPERATURE_NO_THINKING
+        ),
         "thinking": {"type": "enabled" if enable_thinking else "disabled"},
     }
 

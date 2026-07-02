@@ -14,6 +14,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-tokens", type=int, default=128)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.88)
+    parser.add_argument("--dtype", default="auto")
     parser.add_argument("--enforce-eager", dest="enforce_eager", action="store_true", default=True)
     parser.add_argument("--no-enforce-eager", dest="enforce_eager", action="store_false")
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -34,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
             max_tokens=args.max_tokens,
             max_model_len=args.max_model_len,
             gpu_memory_utilization=args.gpu_memory_utilization,
+            dtype=args.dtype,
             enforce_eager=args.enforce_eager,
             local_files_only=args.local_files_only,
             enable_thinking=False,

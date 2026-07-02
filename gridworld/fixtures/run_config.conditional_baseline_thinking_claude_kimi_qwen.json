@@ -1,7 +1,7 @@
 {
-  "description": "Conditional-eval run config for --conditions \"Action space\" across local Qwen, Kimi, and Claude over the 15-maze conditional set.",
+  "description": "Config #11: the shared baseline (--conditions \"Prompt\" --prompt-variant standard) re-run over the 15-maze conditional set with FULL thinking on all three models, to isolate the value of reasoning depth vs the thinking-low/off experimental sweep. Opus runs adaptive+effort:xhigh; paid max_tokens raised to 8192 (M6 exception).",
   "manifest": "gridworld/fixtures/manifest.conditional_eval.json",
-  "conditions": "Action space",
+  "conditions": "Prompt",
   "models": {
     "qwen36_27b_vllm": {
       "provider": "qwen_vllm",
@@ -28,29 +28,29 @@
     "kimi_k26": {
       "provider": "kimi",
       "model": "kimi-k2.6",
-      "temperature": 0.6,
-      "max_tokens": 4096,
+      "temperature": 1.0,
+      "max_tokens": 16384,
       "timeout": 180,
       "group": "kimi-api",
       "worker_count": 1,
       "max_in_flight": 1,
+      "enable_thinking": true,
       "tasks": [
         "all"
-      ],
-      "enable_thinking": false
+      ]
     },
     "claude_opus": {
       "provider": "claude",
       "model": "claude-opus-4-8",
-      "max_tokens": 4096,
+      "max_tokens": 8192,
       "timeout": 180,
       "group": "claude-api",
       "max_in_flight": 1,
+      "enable_thinking": true,
+      "effort": "xhigh",
       "tasks": [
         "all"
-      ],
-      "enable_thinking": true,
-      "effort": "low"
+      ]
     }
   }
 }

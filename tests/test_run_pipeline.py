@@ -1003,8 +1003,22 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         assert (_REPO_ROOT / rc["manifest"]).resolve() == _CONDITIONAL_EVAL_MANIFEST.resolve()
         assert rc["conditions"] == cond
         check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, cond)  # no raise
-        assert set(rc["models"]) == {"qwen35_27b_hf", "kimi_k26", "claude_sonnet"}
-        assert {m["provider"] for m in rc["models"].values()} == {"qwen", "kimi", "claude"}
+        assert set(rc["models"]) == {"qwen36_27b_vllm", "kimi_k26", "claude_opus"}
+        assert {m["provider"] for m in rc["models"].values()} == {"qwen_vllm", "kimi", "claude"}
+        # Opus 4.8 is the Claude model. The experimental sweep runs adaptive
+        # thinking at effort:low, and MUST NOT send temperature (Opus 4.7+ reject
+        # sampling params with a 400 — see interface/agents/claude.py).
+        opus = rc["models"]["claude_opus"]
+        assert opus["model"] == "claude-opus-4-8"
+        assert "temperature" not in opus
+        assert opus["enable_thinking"] is True
+        assert opus["effort"] == "low"
+        # Kimi runs thinking OFF on the 10 experimental configs (thinking-on
+        # truncates before FINAL_OUTPUT at 4096 — see M6 smoke); Moonshot requires
+        # temperature 0.6 in thinking-off mode.
+        kimi = rc["models"]["kimi_k26"]
+        assert kimi["temperature"] == 0.6
+        assert kimi["enable_thinking"] is False
         for model_cfg in rc["models"].values():
             rows = resolve_task_rows(model_cfg["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
             assert len(rows) == 15
@@ -1012,11 +1026,45 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
             # the paid models (kimi, claude) must declare max_tokens=4096. Local
             # Qwen runs with thinking enabled and needs a larger budget for the
             # chain-of-thought plus the trailing FINAL_OUTPUT line.
-            if model_cfg["provider"] == "qwen":
+            if model_cfg["provider"] == "qwen_vllm":
                 assert model_cfg["max_tokens"] == 8192
                 assert model_cfg["enable_thinking"] is True
             else:
                 assert model_cfg["max_tokens"] == 4096
+
+
+def test_baseline_thinking_config_11_runs_full_thinking():
+    """Config #11 = the shared baseline (Prompt/standard) re-run with FULL thinking
+    on all three models, to isolate reasoning-depth value vs the effort:low sweep.
+    Opus runs adaptive+effort:xhigh; paid max_tokens is raised to 8192 (M6
+    exception) to leave room for chain-of-thought plus the FINAL_OUTPUT line."""
+    path = _FIXTURES / "run_config.conditional_baseline_thinking_claude_kimi_qwen.json"
+    rc = load_run_config(path)
+    assert (_REPO_ROOT / rc["manifest"]).resolve() == _CONDITIONAL_EVAL_MANIFEST.resolve()
+    assert rc["conditions"] == "Prompt"
+    check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, "Prompt")  # no raise
+    assert set(rc["models"]) == {"qwen36_27b_vllm", "kimi_k26", "claude_opus"}
+
+    opus = rc["models"]["claude_opus"]
+    assert opus["model"] == "claude-opus-4-8"
+    assert "temperature" not in opus
+    assert opus["enable_thinking"] is True
+    assert opus["effort"] == "xhigh"
+    assert opus["max_tokens"] == 8192
+
+    # Config #11 keeps Kimi thinking ON with a large budget: Moonshot requires
+    # temperature 1.0 in thinking mode, and 16384 tokens so reasoning + the
+    # trailing FINAL_OUTPUT fit (4096/8192 truncated on easy mazes in the smoke).
+    kimi = rc["models"]["kimi_k26"]
+    assert kimi["temperature"] == 1.0
+    assert kimi["enable_thinking"] is True
+    assert kimi["max_tokens"] == 16384
+
+    qwen = rc["models"]["qwen36_27b_vllm"]
+    assert qwen["provider"] == "qwen_vllm"
+    assert qwen["model"] == "Qwen/Qwen3.6-27B"
+    assert qwen["enable_thinking"] is True
+    assert qwen["max_tokens"] == 8192
 
 
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
