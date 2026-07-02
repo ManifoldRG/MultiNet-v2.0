@@ -117,8 +117,9 @@ class Gate(Door):
     """
 
     def __init__(self, color: str = "grey", gate_id: str = "", is_open: bool = False):
+        self.visual_color = color
         # Initialize as unlocked door
-        super().__init__(color, is_locked=False)
+        super().__init__(MINIGRID_COLORS.get(color, "grey"), is_locked=False)
         self.gate_id = gate_id
         self.is_open = is_open
 

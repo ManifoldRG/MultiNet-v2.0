@@ -43,6 +43,7 @@ class CanonicalPathReport:
     states_explored: int
     message: str
     greedy: dict[str, Any] | None = None
+    inputs_hash: str = ""
     producer_version: str = SCORER_VERSION
 
     @property
@@ -60,6 +61,7 @@ class CanonicalPathReport:
         payload = {
             "task_id": self.task_id,
             "bfs": self.bfs,
+            "inputs_hash": self.inputs_hash,
             "producer_version": self.producer_version,
         }
         if self.greedy is not None:
@@ -82,6 +84,7 @@ class CanonicalPathReport:
             states_explored=int(bfs.get("states_explored", 0)),
             message=str(bfs.get("message", "")),
             greedy=copy.deepcopy(data.get("greedy")),
+            inputs_hash=str(data.get("inputs_hash", "")),
             producer_version=str(data.get("producer_version", SCORER_VERSION)),
         )
 

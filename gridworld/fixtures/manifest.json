@@ -1,0 +1,365 @@
+{
+  "description": "Fixture manifest for the bare-bones run pipeline (tests 1-3). route_short_cells/route_long_cells on test2 rows are populated by scripts/validate_fixtures.py.",
+  "tasks": [
+    {
+      "task_id": "validation_10_v01_empty_room",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "empty_room",
+      "source": "mazes/validation_10/V01_empty_room.json",
+      "expected_mechanisms": [],
+      "notes": "Baseline empty room."
+    },
+    {
+      "task_id": "validation_10_v02_winding_corridor",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "winding_corridor",
+      "source": "mazes/validation_10/V02_winding_corridor.json",
+      "expected_mechanisms": [],
+      "notes": "Navigation only."
+    },
+    {
+      "task_id": "validation_10_v03_multi_path",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "multi_path",
+      "source": "mazes/validation_10/V03_multi_path.json",
+      "expected_mechanisms": [],
+      "notes": "Also used for test2."
+    },
+    {
+      "task_id": "validation_10_v04_single_key",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "single_key",
+      "source": "mazes/validation_10/V04_single_key.json",
+      "expected_mechanisms": [
+        "kR"
+      ],
+      "notes": "Single key-door."
+    },
+    {
+      "task_id": "validation_10_v05_single_switch",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "single_switch",
+      "source": "mazes/validation_10/V05_single_switch.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "notes": "Single switch-gate."
+    },
+    {
+      "task_id": "validation_10_v06_chain_ks",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "chain_ks",
+      "source": "mazes/validation_10/V06_chain_ks.json",
+      "expected_mechanisms": [
+        "kR",
+        "s1"
+      ],
+      "notes": "Also used for test3 (key-first)."
+    },
+    {
+      "task_id": "validation_10_v07_chain_sk",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "chain_sk",
+      "source": "mazes/validation_10/V07_chain_sk.json",
+      "expected_mechanisms": [
+        "s1",
+        "kR"
+      ],
+      "notes": "Also used for test3 (switch-first)."
+    },
+    {
+      "task_id": "validation_10_v08_chain_kk",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "chain_kk",
+      "source": "mazes/validation_10/V08_chain_kk.json",
+      "expected_mechanisms": [],
+      "notes": "Two-key chain."
+    },
+    {
+      "task_id": "validation_10_v09_distractor_simple",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "distractor_simple",
+      "source": "mazes/validation_10/V09_distractor_simple.json",
+      "expected_mechanisms": [],
+      "notes": "Distractor present."
+    },
+    {
+      "task_id": "validation_10_v10_distractor_chain",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "distractor_chain",
+      "source": "mazes/validation_10/V10_distractor_chain.json",
+      "expected_mechanisms": [],
+      "notes": "Distractor chain."
+    },
+    {
+      "task_id": "validation_10_v03_multi_path__t2",
+      "experiment": "test2",
+      "condition": "multi_path",
+      "variant": "open_routes",
+      "source": "mazes/validation_10/V03_multi_path.json",
+      "expected_mechanisms": [],
+      "route_block": [
+        5,
+        6
+      ],
+      "notes": "Three open routes; route_block forces a longer route to discriminate path_choice.",
+      "route_short_cells": [
+        [
+          2,
+          6
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          7,
+          5
+        ],
+        [
+          8,
+          5
+        ],
+        [
+          9,
+          5
+        ],
+        [
+          10,
+          5
+        ]
+      ],
+      "route_long_cells": [
+        [
+          1,
+          7
+        ],
+        [
+          1,
+          8
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          3,
+          8
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          4,
+          9
+        ],
+        [
+          4,
+          10
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          6,
+          10
+        ],
+        [
+          7,
+          10
+        ],
+        [
+          8,
+          6
+        ],
+        [
+          8,
+          7
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          8,
+          10
+        ],
+        [
+          9,
+          6
+        ]
+      ]
+    },
+    {
+      "task_id": "T2_corridor_shortcut",
+      "experiment": "test2",
+      "condition": "shortcut",
+      "variant": "door_shortcut",
+      "source": "gridworld/fixtures/test2/T2_corridor_shortcut.json",
+      "expected_mechanisms": [
+        "kB"
+      ],
+      "route_block": [
+        4,
+        1
+      ],
+      "notes": "Short mechanistic (door) route vs long open detour; route_block is the door cell.",
+      "route_short_cells": [
+        [
+          1,
+          2
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          6,
+          1
+        ]
+      ],
+      "route_long_cells": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          7,
+          3
+        ],
+        [
+          7,
+          4
+        ],
+        [
+          7,
+          5
+        ]
+      ]
+    },
+    {
+      "task_id": "T3_corr_key_first",
+      "experiment": "test3",
+      "condition": "key_first",
+      "variant": "ks",
+      "pair_id": "corridor",
+      "source": "gridworld/fixtures/test3/T3_corr_key_first.json",
+      "expected_mechanisms": [
+        "kB",
+        "s1"
+      ],
+      "notes": "Single-row corridor, key-first; matched with switch-first."
+    },
+    {
+      "task_id": "T3_corr_switch_first",
+      "experiment": "test3",
+      "condition": "switch_first",
+      "variant": "sk",
+      "pair_id": "corridor",
+      "source": "gridworld/fixtures/test3/T3_corr_switch_first.json",
+      "expected_mechanisms": [
+        "s1",
+        "kB"
+      ],
+      "notes": "Single-row corridor, switch-first; matched with key-first."
+    },
+    {
+      "task_id": "T3_corr2_key_first",
+      "experiment": "test3",
+      "condition": "key_first",
+      "variant": "ks",
+      "pair_id": "corridor2",
+      "source": "gridworld/fixtures/test3/T3_corr2_key_first.json",
+      "expected_mechanisms": [
+        "kB",
+        "s1"
+      ],
+      "notes": "Longer single-row corridor, key-first; matched with switch-first."
+    },
+    {
+      "task_id": "T3_corr2_switch_first",
+      "experiment": "test3",
+      "condition": "switch_first",
+      "variant": "sk",
+      "pair_id": "corridor2",
+      "source": "gridworld/fixtures/test3/T3_corr2_switch_first.json",
+      "expected_mechanisms": [
+        "s1",
+        "kB"
+      ],
+      "notes": "Longer single-row corridor, switch-first; matched with key-first."
+    }
+  ]
+}

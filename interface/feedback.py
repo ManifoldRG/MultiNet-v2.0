@@ -15,6 +15,7 @@ from interface.coords import (
     switch_at_cell,
     switches_controlling_gate,
 )
+from prompting_experiments.prompt_templates import feedback as feedback_templates
 
 
 def infer_step_outcome(
@@ -35,13 +36,17 @@ def infer_step_outcome(
         door = next((d for d in task_spec.mechanisms.doors if d.id == door_id), None)
         color = door.requires_key if door else "matching"
         if action == "MOVE_FORWARD" and prev_pos != curr_pos:
-            return "OPENED", f"Opened {color} door {door_id} and moved to {curr_pos}."
-        return "OPENED", f"Opened {color} door {door_id}."
+            return "OPENED", feedback_templates.OPENED_AND_MOVED.format(
+                color=color,
+                door_id=door_id,
+                position=curr_pos,
+            )
+        return "OPENED", feedback_templates.OPENED_DOOR.format(color=color, door_id=door_id)
 
     if action in ("TURN_LEFT", "TURN_RIGHT"):
         if prev.agent_direction != curr.agent_direction:
-            return "TURNED", f"Now facing {agent_facing(curr)}."
-        return "NOTHING", f"{action} had no effect."
+            return "TURNED", feedback_templates.NOW_FACING.format(facing=agent_facing(curr))
+        return "NOTHING", feedback_templates.ACTION_NO_EFFECT.format(action=action)
 
     if action == "MOVE_FORWARD":
         if prev_pos == curr_pos:
@@ -50,9 +55,10 @@ def infer_step_outcome(
             if key_color:
                 return (
                     "BLOCKED",
-                    f"MOVE_FORWARD blocked by a {key_color} key at {fwd}. "
-                    "Keys occupy their cell; you cannot walk onto them. "
-                    "Face the key and use PICKUP from your current cell.",
+                    feedback_templates.MOVE_BLOCKED_BY_KEY.format(
+                        key_color=key_color,
+                        position=fwd,
+                    ),
                 )
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
             if gate and not gate["open"]:
@@ -61,17 +67,23 @@ def infer_step_outcome(
                     switch_list = ", ".join(controllers)
                     return (
                         "BLOCKED",
-                        f"MOVE_FORWARD blocked by closed gate {gate['id']} at {fwd}. "
-                        f"Activate switch(es) {switch_list} to open it.",
+                        feedback_templates.MOVE_BLOCKED_BY_GATE_WITH_SWITCHES.format(
+                            gate_id=gate["id"],
+                            position=fwd,
+                            switches=switch_list,
+                        ),
                     )
                 return (
                     "BLOCKED",
-                    f"MOVE_FORWARD blocked by closed gate {gate['id']} at {fwd}.",
+                    feedback_templates.MOVE_BLOCKED_BY_GATE.format(
+                        gate_id=gate["id"],
+                        position=fwd,
+                    ),
                 )
-            return "BLOCKED", "MOVE_FORWARD blocked by wall or closed door/gate."
+            return "BLOCKED", feedback_templates.MOVE_BLOCKED_GENERIC
         if terminated and reward > 0 and curr_pos == goal:
-            return "DONE", f"Reached goal at {goal}."
-        return "MOVED", f"Moved to {curr_pos}."
+            return "DONE", feedback_templates.REACHED_GOAL.format(goal=goal)
+        return "MOVED", feedback_templates.MOVED_TO.format(position=curr_pos)
 
     if action == "PICKUP":
         if (
@@ -79,15 +91,15 @@ def infer_step_outcome(
             or len(curr.collected_keys) > len(prev.collected_keys)
         ):
             carried = curr.agent_carrying or "a"
-            return "PICKUP", f"Picked up {carried} key."
-        return "NOTHING", "Nothing to pick up here."
+            return "PICKUP", feedback_templates.PICKED_UP_KEY.format(key_color=carried)
+        return "NOTHING", feedback_templates.NOTHING_TO_PICK_UP
 
     if action == "TOGGLE":
         if (
             prev.active_switches != curr.active_switches
             or prev.open_gates != curr.open_gates
         ):
-            return "TOGGLED", "Toggled switch or gate state changed."
+            return "TOGGLED", feedback_templates.TOGGLED_STATE_CHANGED
         fwd = forward_cell(prev)
         switch_ahead = switch_at_cell(task_spec, fwd[0], fwd[1])
         switch_here = switch_at_cell(task_spec, prev_pos[0], prev_pos[1])
@@ -96,12 +108,11 @@ def infer_step_outcome(
             if switch_ahead["switch_type"] == "hold":
                 return (
                     "NOTHING",
-                    f"TOGGLE had no effect. MOVE_FORWARD onto the switch at {fwd} "
-                    "(hold switches activate while you stand on them).",
+                    feedback_templates.TOGGLE_HOLD_SWITCH_HINT.format(position=fwd),
                 )
             return (
                 "NOTHING",
-                f"TOGGLE had no effect. MOVE_FORWARD onto the switch at {fwd}, then TOGGLE.",
+                feedback_templates.TOGGLE_SWITCH_HINT.format(position=fwd),
             )
         if gate_ahead and not gate_ahead["open"]:
             controllers = switches_controlling_gate(task_spec, str(gate_ahead["id"]))
@@ -109,21 +120,22 @@ def infer_step_outcome(
                 switch_list = ", ".join(controllers)
                 return (
                     "NOTHING",
-                    "Gates cannot be toggled directly. "
-                    f"Activate switch(es) {switch_list} instead.",
+                    feedback_templates.GATE_TOGGLE_WITH_SWITCHES.format(
+                        switches=switch_list,
+                    ),
                 )
-            return "NOTHING", "Gates cannot be toggled directly. Activate a linked switch instead."
+            return "NOTHING", feedback_templates.GATE_TOGGLE_GENERIC
         return (
             "NOTHING",
-            "TOGGLE had no effect. Stand on a switch and TOGGLE, or use PICKUP/keys for doors.",
+            feedback_templates.TOGGLE_NO_EFFECT,
         )
 
     if action == "DONE":
         if terminated and reward > 0 and curr_pos == goal:
-            return "DONE", f"Task complete at {goal}."
-        return "WRONG_DONE", f"DONE called but not at goal {goal}."
+            return "DONE", feedback_templates.TASK_COMPLETE.format(goal=goal)
+        return "WRONG_DONE", feedback_templates.WRONG_DONE.format(goal=goal)
 
-    return "INVALID", f"Unknown or unsupported action {action}."
+    return "INVALID", feedback_templates.UNKNOWN_ACTION.format(action=action)
 
 
 def format_step_feedback(
@@ -139,23 +151,27 @@ def format_step_feedback(
     )
     prev_pos = agent_row_col(prev)
     if event_type == "BLOCKED":
-        return f"BLOCKED — {action}: {event_message} You remain at {prev_pos}.", event_type
+        return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
     if event_type == "TURNED":
-        return f"TURNED — {action}: {event_message}", event_type
+        return feedback_templates.TURNED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "MOVED":
-        return f"MOVED — {action}: {event_message}", event_type
+        return feedback_templates.MOVED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "DONE":
-        return f"SUCCESS — {action}: {event_message}", event_type
+        return feedback_templates.SUCCESS_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "PICKUP":
-        return f"PICKUP — {action}: {event_message}", event_type
+        return feedback_templates.PICKUP_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "NOTHING":
-        return f"NOTHING — {action}: {event_message} You remain at {prev_pos}.", event_type
+        return feedback_templates.NOTHING_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
     if event_type == "OPENED":
-        return f"OPENED — {action}: {event_message}", event_type
+        return feedback_templates.OPENED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "TOGGLED":
-        return f"TOGGLED — {action}: {event_message}", event_type
+        return feedback_templates.TOGGLED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "WRONG_DONE":
-        return f"WRONG DONE — {action}: {event_message} You remain at {prev_pos}.", event_type
+        return feedback_templates.WRONG_DONE_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
     if event_type == "INVALID":
-        return f"INVALID — {action}: {event_message} You remain at {prev_pos}.", event_type
-    return f"{event_type} — {action}: {event_message}", event_type
+        return feedback_templates.INVALID_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
+    return feedback_templates.DEFAULT_FEEDBACK.format(
+        event_type=event_type,
+        action=action,
+        message=event_message,
+    ), event_type

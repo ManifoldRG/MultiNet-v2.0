@@ -23,6 +23,7 @@ from interface.observation import (
     current_observation_text,
     history_content_blocks,
     history_text,
+    recent_history_steps,
 )
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
@@ -31,8 +32,13 @@ from interface.prompt_strategies import (
     StandardPromptStrategy,
     VerbosePromptStrategy,
 )
+from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
+from prompting_experiments.prompt_templates import feedback as feedback_templates
+from prompting_experiments.prompt_templates import querying as querying_templates
+from prompting_experiments.prompt_templates import system as system_templates
+from prompting_experiments.prompt_templates import user as user_templates
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,7 @@ _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
+    "text_initial_maze": TextInitialMazePromptStrategy,
 }
 
 
@@ -67,6 +74,41 @@ def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
         setattr(agent, "last_usage", None)
     except (AttributeError, TypeError):
         pass
+
+
+def _replace_current_question(prompt_text: str, question: str) -> str:
+    standard_question = user_templates.NEXT_ACTION_QUESTION
+    before, match, after = prompt_text.rpartition(standard_question)
+    if not match:
+        return prompt_text
+    return f"{before}{question}{after}"
+
+
+def _append_after_current_question(prompt_text: str, instruction: str) -> str:
+    questions = (
+        querying_templates.FULL_TRAJECTORY_QUESTION,
+        user_templates.NEXT_ACTION_QUESTION,
+    )
+    for question in questions:
+        before, match, after = prompt_text.rpartition(question)
+        if match:
+            return f"{before}{match}\n\n{instruction}{after}"
+    return f"{prompt_text}\n\n{instruction}"
+
+
+def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> list[dict]:
+    placeholder = user_templates.CURRENT_IMAGE_PLACEHOLDER
+    if placeholder not in prompt_text:
+        return [{"type": "text", "text": prompt_text}]
+
+    blocks: list[dict] = []
+    parts = prompt_text.split(placeholder)
+    for idx, part in enumerate(parts):
+        if part:
+            blocks.append({"type": "text", "text": part.lstrip("\n") if idx else part})
+        if idx < len(parts) - 1:
+            blocks.extend(images)
+    return blocks
 
 
 def build_runner(
@@ -99,6 +141,32 @@ class ExperimentRunner:
         self.querying = querying
         self.last_rgb: np.ndarray | None = None
 
+    def build_prompt_message(
+        self,
+        state,
+        last_feedback: str,
+        transcript: List[dict],
+    ) -> tuple[str, dict]:
+        system_prompt = self.prompt.build_system_prompt()
+        # If the system prompt includes the `{maze_text}` placeholder, format
+        # it with the rendered maze. Otherwise, for text observations append
+        # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
+        # context for text-only or image+text modes.
+        if "{maze_text}" in system_prompt:
+            system_prompt = system_prompt.format(maze_text=render_initial_maze_text(self.task_spec))
+        elif self.config.observation in ("text_only", "image_text"):
+            maze_text = render_initial_maze_text(self.task_spec)
+            system_prompt = (
+                system_prompt
+                + "\n\n"
+                + system_templates.INITIAL_MAZE_SECTION.format(maze_text=maze_text)
+            )
+        return system_prompt, self._build_message(
+            state,
+            last_feedback,
+            transcript,
+        )
+
     def run(
         self,
         agent: Callable[[List[dict]], str],
@@ -109,18 +177,15 @@ class ExperimentRunner:
         self.last_rgb, state, reset_info = self.backend.reset(seed=self.task_spec.seed)
         self.querying.reset()
 
-        system_prompt = self.prompt.build_system_prompt(self.querying.system_prompt_suffix())
-        if self.config.observation in ("text_only", "image_text"):
-            system_prompt = (
-                f"{system_prompt}\n\nInitial maze (fixed for this episode):\n"
-                f"{render_initial_maze_text(self.task_spec)}"
-            )
+        # Build the initial system prompt (may include the initial maze for
+        # text-based observations) and the initial user message block.
+        system_prompt, _ = self.build_prompt_message(state, feedback_templates.INITIAL_FEEDBACK, [])
         system_message = {"role": "system", "content": system_prompt}
         chat_history = self.config.chat_history
         messages: List[dict] = [system_message] if chat_history in ("rolling", "full") else []
 
         action_queue: List[str] = []
-        last_feedback = "Episode start."
+        last_feedback = feedback_templates.INITIAL_FEEDBACK
         consecutive_failures = 0
         transcript: List[dict] = []
         max_steps = self.task_spec.max_steps
@@ -134,7 +199,9 @@ class ExperimentRunner:
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(
-                "Episode start: max_steps=%s querying=%s observation=%s context_window=%s chat_history=%s",
+                "Episode start: task_id=%s seed=%s max_steps=%s querying=%s observation=%s context_window=%s chat_history=%s",
+                self.task_spec.task_id,
+                self.task_spec.seed,
                 max_steps,
                 self.config.querying,
                 self.config.observation,
@@ -166,8 +233,10 @@ class ExperimentRunner:
                     agent_messages = messages
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
-                        "LLM query #%d: messages_in_context=%d current_turn_has_image=%s",
+                        "LLM query #%d: task_id=%s observation=%s messages_in_context=%d current_turn_has_image=%s",
                         query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
                         len(agent_messages),
                         has_image,
                     )
@@ -182,14 +251,22 @@ class ExperimentRunner:
                 action_queue = self.querying.parse_actions(model_text)
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
-                        "LLM query #%d finished in %.2fs: reply_chars=%d actions_parsed=%d",
+                        "LLM query #%d finished: task_id=%s observation=%s elapsed=%.2fs reply_chars=%d actions_parsed=%d",
                         query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
                         llm_s,
                         len(model_text),
                         len(action_queue),
                     )
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("LLM query #%d reply:\n%s", query_count, model_text)
+                    logger.debug(
+                        "LLM query #%d reply: task_id=%s observation=%s\n%s",
+                        query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
+                        model_text,
+                    )
                 query_record = {
                     "kind": "query",
                     "query_index": query_count,
@@ -214,14 +291,17 @@ class ExperimentRunner:
                 if not action_queue:
                     parse_failures += 1
                     logger.warning(
-                        "LLM query #%d: no valid actions parsed; parse failure %d/%d",
+                        "LLM query #%d: task_id=%s observation=%s no valid actions parsed; parse failure %d/%d",
                         query_count,
+                        self.task_spec.task_id,
+                        self.config.observation,
                         parse_failures,
                         self.config.max_parse_retries,
                     )
                     last_feedback = (
-                        f"Could not parse FINAL_OUTPUT (one or more valid actions). "
-                        f"Use only: {ACTIONS_HINT}."
+                        feedback_templates.PARSE_FAILURE_FEEDBACK.format(
+                            actions_hint=ACTIONS_HINT
+                        )
                     )
                     if parse_failures >= self.config.max_parse_retries:
                         end_reason = "parse_failed"
@@ -350,19 +430,40 @@ class ExperimentRunner:
     def _build_message(self, state, last_feedback: str, transcript: List[dict]) -> dict:
         obs = self.config.observation
         ctx = self.config.context_window
-        obs_text = current_observation_text(obs, self.task_spec, state)
-        prompt_text = self.prompt.build_user_prompt(
-            obs_text,
-            history_text(obs, ctx, transcript),
+        obs_text = current_observation_text(
+            obs,
             self.task_spec,
             state,
-            last_feedback,
+            include_description=self.config.include_current_observation_description,
+            include_facing=self.config.observation_text_includes_facing,
         )
+        prompt_text = self.prompt.build_user_prompt(
+            obs_text,
+            history_text(obs, ctx, transcript, self.task_spec),
+            state,
+            observation=obs,
+        )
+        prompt_question = self.querying.user_prompt_question()
+        if prompt_question:
+            prompt_text = _replace_current_question(prompt_text, prompt_question)
+        prompt_text = _append_after_current_question(
+            prompt_text,
+            self.querying.final_output_instruction(),
+        )
+        sections = [prompt_text]
+        querying_suffix = self.querying.user_prompt_suffix()
+        if querying_suffix:
+            sections.append(querying_suffix)
+        prompt_text = "\n\n".join(sections)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
-        text_block = {"type": "text", "text": prompt_text}
-        if hist_blocks or images:
-            return {"role": "user", "content": hist_blocks + images + [text_block]}
+        prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
+        one_shot_blocks: list[dict] = []
+        if self.config.in_context_learning == "one_shot":
+            from interface.one_shot import one_shot_content_blocks
+            one_shot_blocks = one_shot_content_blocks(obs)
+        if one_shot_blocks or hist_blocks or images:
+            return {"role": "user", "content": one_shot_blocks + hist_blocks + prompt_blocks}
         return {"role": "user", "content": prompt_text}
 
     def _result(
