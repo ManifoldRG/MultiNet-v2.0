@@ -136,6 +136,34 @@ Including local Qwen: 11 × 15 × 3 = **495** episode-cells. Config #11's paid
 `max_tokens` is 8192 (vs 4096 for the 10), and Opus xhigh + Kimi/Qwen thinking
 make it the most expensive single batch — budget for it separately.
 
+## The 11 configs at a glance
+
+Every unique config that runs, numbered. Configs 1–10 are the deduplicated
+`effort: low` sweep; config 11 is the thinking probe. Thinking columns are
+**Opus effort / Kimi / Qwen** (`max_tokens`: paid = 4096 for 1–10, 8192/16384 for
+11; Qwen = 8192 throughout).
+
+| # | Config (run-dir) | Axis it varies | Batch | Opus | Kimi | Qwen |
+|---|---|---|---|---|---|---|
+| 1 | `standard` | baseline (default `ExperimentConfig`) | 1 | low | off | on |
+| 2 | `minimal` | Prompt | 1 | low | off | on |
+| 3 | `verbose` | Prompt | 1 | low | off | on |
+| 4 | `image_text` | Observation format | 2 | low | off | on |
+| 5 | `last3` | Context window | 3 | low | off | on |
+| 6 | `text_summary` | Context window | 4 | low | off | on |
+| 7 | `cardinal` | Action space | 5 | low | off | on |
+| 8 | `subgoal` | Querying strategy | 6 | low | off | on |
+| 9 | `full_trajectory` | Querying strategy | 7 | low | off | on |
+| 10 | `one_shot` | In-context learning | 8 | low | off | on |
+| 11 | `standard` **+ thinking** | baseline re-run — reasoning-depth probe | 9 | **xhigh** | **on** | on |
+
+Configs 1 and 11 share the run-dir name `standard` but live in different
+artifacts roots (`artifacts/cond/prompt/…standard/` vs
+`artifacts/cond/baseline_thinking/…standard/`), so they never collide. Config 11
+is the only row where the paid models think — everything else isolates the prompt
+manipulation at `effort: low` / Kimi thinking-off (thinking-on truncates; see the
+**Models & thinking** note above).
+
 > `text_only` is intentionally not in the rollout (D1). If you later want it, add
 > one batch `Observation format --prompt-variant text_only`.
 
