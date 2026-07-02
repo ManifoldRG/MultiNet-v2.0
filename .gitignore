@@ -12,6 +12,12 @@ build/
 venv/
 env/
 
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
 # Test / tooling caches
 .pytest_cache/
 .mypy_cache/
