@@ -45,7 +45,7 @@ def test_qwen_vllm_agent_calls_offline_chat_and_records_usage(monkeypatch):
 
     agent = QwenVLLMAgent(
         config=QwenVLLMConfig(
-            model="Qwen/Qwen3.6-27B-FP8",
+            model="Qwen/Qwen3.6-27B",
             max_tokens=64,
             max_model_len=4096,
             gpu_memory_utilization=0.85,
@@ -58,7 +58,7 @@ def test_qwen_vllm_agent_calls_offline_chat_and_records_usage(monkeypatch):
     assert out == "OK"
     assert agent.last_usage == {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
     llm = FakeLLM.instances[-1]
-    assert llm.kwargs["model"] == "Qwen/Qwen3.6-27B-FP8"
+    assert llm.kwargs["model"] == "Qwen/Qwen3.6-27B"
     assert llm.kwargs["max_model_len"] == 4096
     assert llm.kwargs["gpu_memory_utilization"] == 0.85
     assert llm.kwargs["max_num_batched_tokens"] == 8192
@@ -99,7 +99,7 @@ def test_run_pipeline_builds_qwen_vllm_agent(monkeypatch):
         "qwen36_vllm",
         {
             "provider": "qwen_vllm",
-            "model": "Qwen/Qwen3.6-27B-FP8",
+            "model": "Qwen/Qwen3.6-27B",
             "max_tokens": 32,
             "max_model_len": 2048,
             "gpu_memory_utilization": 0.8,
@@ -108,7 +108,7 @@ def test_run_pipeline_builds_qwen_vllm_agent(monkeypatch):
         },
     )
 
-    assert label == "Qwen/Qwen3.6-27B-FP8"
+    assert label == "Qwen/Qwen3.6-27B"
     assert isinstance(agent, QwenVLLMAgent)
-    assert FakeLLM.instances[-1].kwargs["model"] == "Qwen/Qwen3.6-27B-FP8"
+    assert FakeLLM.instances[-1].kwargs["model"] == "Qwen/Qwen3.6-27B"
     assert FakeLLM.instances[-1].kwargs["max_model_len"] == 2048

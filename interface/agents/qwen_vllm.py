@@ -8,7 +8,7 @@ from typing import Any, List
 
 from interface.agents.runner_messages import ContentPart, parse_runner_content
 
-DEFAULT_QWEN_VLLM_MODEL = "Qwen/Qwen3.6-27B-FP8"
+DEFAULT_QWEN_VLLM_MODEL = "Qwen/Qwen3.6-27B"
 _AGENT_NAME = "Qwen vLLM agent"
 
 

@@ -63,7 +63,7 @@ _CLAUDE_TOPO = ('{"workers":[{"name":"r1-claude-api-0","kind":"api",'
 _KIMI_TOPO = ('{"workers":[{"name":"r1-kimi-api-0","kind":"api",'
               '"model_group":"kimi-api","provider":"kimi","model":"kimi-k2.6"}]}')
 _QWEN_TOPO = ('{"workers":[{"name":"r1-qwen36-27b-0","kind":"gpu",'
-              '"model_group":"qwen36-27b","provider":"qwen","model":"Qwen/Qwen3.6-27B-FP8"}]}')
+              '"model_group":"qwen36-27b","provider":"qwen","model":"Qwen/Qwen3.6-27B"}]}')
 
 
 def test_worker_field_reads_topo(tmp_path):
@@ -120,7 +120,7 @@ def test_gpu_worker_uses_vllm_venv_and_offline(tmp_path):
     assert ".venv-qwen-vllm" in log
     assert "HF_HUB_OFFLINE=1" in log
     assert "--hardware-profile local-gpu" in log
-    assert "--local-model-cache" in log and "Qwen/Qwen3.6-27B-FP8" in log
+    assert "--local-model-cache" in log and "Qwen/Qwen3.6-27B" in log
 
 
 def test_coordinator_passes_conditions_and_prompt_variant(tmp_path):

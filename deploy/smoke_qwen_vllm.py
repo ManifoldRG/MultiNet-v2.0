@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import time
 
-DEFAULT_MODEL = "Qwen/Qwen3.6-27B-FP8"
+DEFAULT_MODEL = "Qwen/Qwen3.6-27B"
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -11,7 +11,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task", default="validation_10_v01_empty_room")
     parser.add_argument("--artifacts-root", default="artifacts/qwen36_27b_fp8_vllm_live_smoke")
     parser.add_argument("--run-set-id", default="qwen36_27b_fp8_vllm_live_smoke")
-    parser.add_argument("--model", default="Qwen/Qwen3.6-27B-FP8")
+    parser.add_argument("--model", default="Qwen/Qwen3.6-27B")
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-tokens", type=int, default=64)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.88)

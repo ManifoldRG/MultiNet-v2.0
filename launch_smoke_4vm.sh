@@ -100,11 +100,11 @@ import json
 from pathlib import Path
 
 cfg = json.loads(Path("gridworld/fixtures/run_config.smoke_eval_qwen_kimi.json").read_text())
-cfg["description"] = "4 VM smoke: 2 Qwen3.6 FP8 vLLM workers + 1 Kimi API worker."
+cfg["description"] = "4 VM smoke: 2 Qwen3.6 FP16 vLLM workers + 1 Kimi API worker."
 cfg["models"].pop("qwen35_27b_hf", None)
 cfg["models"]["qwen36_27b_fp8_vllm"] = {
     "provider": "qwen_vllm",
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": "Qwen/Qwen3.6-27B",
     "temperature": 0.0,
     "max_tokens": 4096,
     "max_model_len": 8192,
@@ -196,7 +196,7 @@ nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline
   --worker-state "$HOME/multinet-worker-artifacts/$RUN_ID/worker_state.json" \
   --model-group qwen36-27b \
   --hardware-profile local-gpu \
-  --local-model-cache Qwen/Qwen3.6-27B-FP8 \
+  --local-model-cache Qwen/Qwen3.6-27B \
   > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.log" 2>&1 &
 echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid"
 echo "Qwen worker started: $(cat "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid")"
