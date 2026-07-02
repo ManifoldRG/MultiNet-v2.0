@@ -57,21 +57,6 @@ class VerbosePromptStrategy(StandardPromptStrategy):
         return "\n\n".join([std, MECHANISM_RULES])
 
 
-class TextInitialMazePromptStrategy(StandardPromptStrategy):
-    """Standard system prompt plus the initial maze section placeholder.
-
-    This strategy returns the standard system prompt and appends the
-    `INITIAL_MAZE_SECTION` template (containing the `{maze_text}` placeholder).
-    The caller (for example `ExperimentRunner.build_prompt_message`) is
-    responsible for formatting `{maze_text}` with the rendered maze text.
-    """
-
-    def build_system_prompt(self, querying_suffix: str = "") -> str:
-        del querying_suffix
-        std = StandardPromptStrategy.build_system_prompt(self).rstrip()
-        return "\n\n".join([std, system_templates.INITIAL_MAZE_SECTION])
-
-
 PromptStrategy = MinimalPromptStrategy
 
 

@@ -39,6 +39,18 @@ def _initial_user_prompt_text(cfg: ExperimentConfig) -> str:
     return content
 
 
+def _initial_system_prompt_text(cfg: ExperimentConfig) -> str:
+    backend, spec = load_task(default_maze_path())
+    runner = build_runner(cfg, backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+    system_prompt, _message = runner.build_prompt_message(
+        state,
+        feedback_templates.INITIAL_FEEDBACK,
+        [],
+    )
+    return system_prompt
+
+
 def _user_prompt_text_with_transcript(
     cfg: ExperimentConfig, transcript: list[dict]
 ) -> str:
@@ -243,11 +255,12 @@ def test_observation_format_initial_maze_only_for_text_variants():
     text_variants = {"text_only", "image_text"}
     for variant_name, variant in CONDITION_SET.variants.items():
         cfg = variant.build_config(ExperimentConfig())
-        prompt_text = _initial_user_prompt_text(cfg)
-        # initial maze is provided at system level; user prompt should not contain it
-        has_initial_maze = "Initial maze (fixed for this episode):" in prompt_text
+        system_prompt = _initial_system_prompt_text(cfg)
+        user_prompt = _initial_user_prompt_text(cfg)
+        has_initial_maze = "Initial maze (fixed for this episode):" in system_prompt
 
-        assert has_initial_maze is False, variant_name
+        assert has_initial_maze is (variant_name in text_variants), variant_name
+        assert "Initial maze (fixed for this episode):" not in user_prompt
 
 
 def test_initial_prompts_omit_current_status_footer_without_history_context():
