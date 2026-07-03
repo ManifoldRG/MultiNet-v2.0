@@ -29,7 +29,8 @@ def _classify(model: dict[str, Any]) -> str:
     return "api"
 
 
-def derive_topology(run_config: dict[str, Any], run_id: str) -> dict[str, Any]:
+def derive_topology(run_config: dict[str, Any], run_id: str,
+                    gpu_worker_count: int | None = None) -> dict[str, Any]:
     models = run_config.get("models", {}) or {}
     workers: list[dict[str, Any]] = []
     creds: set[str] = set()
@@ -41,6 +42,8 @@ def derive_topology(run_config: dict[str, Any], run_id: str) -> dict[str, Any]:
         group = str(model.get("group"))
         provider = str(model.get("provider"))
         count = int(model.get("worker_count", 1))
+        if kind == "gpu" and gpu_worker_count is not None:
+            count = int(gpu_worker_count)
         if kind == "gpu":
             has_gpu = True
         cred = _CREDENTIAL_BY_PROVIDER.get(provider)
@@ -77,7 +80,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = json.loads(Path(args.run_config).read_text())
-    topology = derive_topology(cfg, args.run_id)
+    gpu_wc_env = os.environ.get("QWEN_WORKER_COUNT")
+    gpu_wc = int(gpu_wc_env) if gpu_wc_env else None
+    topology = derive_topology(cfg, args.run_id, gpu_worker_count=gpu_wc)
 
     if args.check_credentials:
         missing = [c for c in topology["required_credentials"] if not os.environ.get(c)]

@@ -1,0 +1,104 @@
+"""Tracking + ETA state for the sequential supervised sweep. Pure logic; the
+`/loop` and `sweep_run.sh` read/write the JSON this module manages."""
+from __future__ import annotations
+
+import datetime
+import json
+from pathlib import Path
+from typing import Any
+
+_CFG = "gridworld/fixtures/run_config.{}_claude_kimi_qwen.json"
+_MANIFEST = "gridworld/fixtures/manifest.conditional_eval.json"
+
+# n, name, run_config, manifest, conditions, prompt_variant, artifacts_root, run_id, weight
+BATCHES: list[dict[str, Any]] = [
+    {"n": 0, "name": "smoke",
+     "run_config": "gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json",
+     "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+     "conditions": None, "prompt_variant": None,
+     "artifacts_root": "artifacts/smoke", "run_id": "smoke", "weight": 0.1},
+    {"n": 1, "name": "prompt", "run_config": _CFG.format("conditional_prompt"),
+     "manifest": _MANIFEST, "conditions": "Prompt", "prompt_variant": None,
+     "artifacts_root": "artifacts/cond/prompt", "run_id": "cond_prompt", "weight": 3.0},
+    {"n": 2, "name": "obs_image_text", "run_config": _CFG.format("conditional_observation_format"),
+     "manifest": _MANIFEST, "conditions": "Observation format", "prompt_variant": "image_text",
+     "artifacts_root": "artifacts/cond/obs_image_text", "run_id": "cond_obs_image_text", "weight": 1.2},
+    {"n": 3, "name": "ctx_last3", "run_config": _CFG.format("conditional_context_window"),
+     "manifest": _MANIFEST, "conditions": "Context window", "prompt_variant": "last3",
+     "artifacts_root": "artifacts/cond/ctx_last3", "run_id": "cond_ctx_last3", "weight": 1.0},
+    {"n": 4, "name": "ctx_text_summary", "run_config": _CFG.format("conditional_context_window"),
+     "manifest": _MANIFEST, "conditions": "Context window", "prompt_variant": "text_summary",
+     "artifacts_root": "artifacts/cond/ctx_text_summary", "run_id": "cond_ctx_text_summary", "weight": 1.0},
+    {"n": 5, "name": "act_cardinal", "run_config": _CFG.format("conditional_action_space"),
+     "manifest": _MANIFEST, "conditions": "Action space", "prompt_variant": "cardinal",
+     "artifacts_root": "artifacts/cond/act_cardinal", "run_id": "cond_act_cardinal", "weight": 1.0},
+    {"n": 6, "name": "qry_subgoal", "run_config": _CFG.format("conditional_querying_strategy"),
+     "manifest": _MANIFEST, "conditions": "Querying strategy", "prompt_variant": "subgoal",
+     "artifacts_root": "artifacts/cond/qry_subgoal", "run_id": "cond_qry_subgoal", "weight": 0.3},
+    {"n": 7, "name": "qry_full_trajectory", "run_config": _CFG.format("conditional_querying_strategy"),
+     "manifest": _MANIFEST, "conditions": "Querying strategy", "prompt_variant": "full_trajectory",
+     "artifacts_root": "artifacts/cond/qry_full_trajectory", "run_id": "cond_qry_full_trajectory", "weight": 0.1},
+    {"n": 8, "name": "icl_one_shot", "run_config": _CFG.format("conditional_in_context_learning"),
+     "manifest": _MANIFEST, "conditions": "In-context learning", "prompt_variant": "one_shot",
+     "artifacts_root": "artifacts/cond/icl_one_shot", "run_id": "cond_icl_one_shot", "weight": 1.3},
+    {"n": 9, "name": "baseline_thinking", "run_config": _CFG.format("conditional_baseline_thinking"),
+     "manifest": _MANIFEST, "conditions": "Prompt", "prompt_variant": "standard",
+     "artifacts_root": "artifacts/cond/baseline_thinking", "run_id": "cond_baseline_thinking", "weight": 3.0},
+]
+
+_DEFAULT_ANCHOR_HOURS = 3.0  # coarse; calibrated live after batch 1
+
+
+def _hours(start: str, end: str) -> float:
+    fmt = lambda s: datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return (fmt(end) - fmt(start)).total_seconds() / 3600.0
+
+
+def init_state(sweep_id: str, created_at: str) -> dict[str, Any]:
+    batches = []
+    for b in BATCHES:
+        batches.append({**b, "status": "pending", "started_at": None, "ended_at": None,
+                        "eta_hours": round(b["weight"] * _DEFAULT_ANCHOR_HOURS, 2),
+                        "egress": None, "summaries": {}})
+    return {"sweep_id": sweep_id, "created_at": created_at,
+            "current_batch": 0, "phase": "provisioning", "batches": batches}
+
+
+def _batch(state: dict, n: int) -> dict:
+    return next(b for b in state["batches"] if b["n"] == n)
+
+
+def update_batch(state: dict, n: int, **fields: Any) -> dict:
+    _batch(state, n).update(fields)
+    return state
+
+
+def recompute_etas(state: dict, anchor_hours_per_weight: float | None = None) -> dict:
+    done = [b for b in state["batches"]
+            if b["status"] == "complete" and b["started_at"] and b["ended_at"] and b["weight"] > 0]
+    if done:
+        anchor = sum(_hours(b["started_at"], b["ended_at"]) / b["weight"] for b in done) / len(done)
+    else:
+        anchor = anchor_hours_per_weight if anchor_hours_per_weight is not None else _DEFAULT_ANCHOR_HOURS
+    for b in state["batches"]:
+        if b["status"] not in ("complete",):
+            b["eta_hours"] = round(b["weight"] * anchor, 2)
+    return state
+
+
+def load_state(path: str | Path) -> dict:
+    return json.loads(Path(path).read_text())
+
+
+def save_state(path: str | Path, state: dict) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(state, indent=2) + "\n")
+
+
+def render_table(state: dict) -> str:
+    rows = ["| # | run_id | status | eta_h | egress | summaries |",
+            "|---|---|---|---:|---|---|"]
+    for b in state["batches"]:
+        rows.append(f"| {b['n']} | {b['run_id']} | {b['status']} | {b['eta_hours']} | "
+                    f"{b['egress'] or '-'} | {len(b['summaries'])}/3 |")
+    return "\n".join(rows)

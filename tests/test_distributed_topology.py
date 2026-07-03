@@ -149,3 +149,26 @@ def test_worker_carries_model_field():
     by_group = {w["model_group"]: w for w in topo["workers"]}
     assert by_group["qwen36-27b"]["model"] == "Qwen/Qwen3.6-27B"
     assert by_group["claude-api"]["model"] == "claude-sonnet-4-6"
+
+
+def test_gpu_worker_count_override_multiplies_only_gpu_workers():
+    cfg = {"models": {
+        "qwen": {"group": "qwen36-27b", "provider": "qwen_vllm",
+                 "hardware_profile": "local-gpu", "worker_count": 1},
+        "kimi": {"group": "kimi-api", "provider": "kimi", "worker_count": 1},
+        "claude": {"group": "opus", "provider": "claude", "worker_count": 1},
+    }}
+    from scripts.distributed_topology import derive_topology
+    topo = derive_topology(cfg, "r1", gpu_worker_count=3)
+    gpu = [w for w in topo["workers"] if w["kind"] == "gpu"]
+    api = [w for w in topo["workers"] if w["kind"] == "api"]
+    assert len(gpu) == 3           # override applied
+    assert len(api) == 2           # kimi + claude untouched
+    assert {w["name"] for w in gpu} == {"r1-qwen36-27b-0", "r1-qwen36-27b-1", "r1-qwen36-27b-2"}
+
+
+def test_gpu_worker_count_none_preserves_config_counts():
+    cfg = {"models": {"qwen": {"group": "q", "provider": "qwen_vllm",
+                               "hardware_profile": "local-gpu", "worker_count": 1}}}
+    from scripts.distributed_topology import derive_topology
+    assert len([w for w in derive_topology(cfg, "r1")["workers"] if w["kind"] == "gpu"]) == 1
