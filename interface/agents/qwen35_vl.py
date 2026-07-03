@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_QWEN35_VL_MODEL = "Qwen/Qwen3.5-4B"
 _AGENT_NAME = "Qwen agent"
 
+# Model classes to try, in preference order. Qwen3.6 first, then Qwen3.5, then
+# the generic Auto* fallbacks. Kept as a constant so the ordering is testable
+# without importing transformers / loading weights.
+QWEN_MODEL_CLASS_NAMES = (
+    "Qwen3_6ForConditionalGeneration",
+    "Qwen3_5ForConditionalGeneration",
+    "AutoModelForImageTextToText",
+    "AutoModelForVision2Seq",
+    "AutoModelForCausalLM",
+)
+
 
 def _parts_to_qwen_blocks(parts: List[ContentPart]) -> Union[str, List[dict]]:
     blocks: List[dict] = []
@@ -109,16 +120,11 @@ class Qwen35VLAgent:
     def _model_class(self):
         import transformers
 
-        for name in (
-            "Qwen3_5ForConditionalGeneration",
-            "AutoModelForImageTextToText",
-            "AutoModelForVision2Seq",
-            "AutoModelForCausalLM",
-        ):
+        for name in QWEN_MODEL_CLASS_NAMES:
             model_cls = getattr(transformers, name, None)
             if model_cls is not None:
                 return model_cls
-        raise ImportError("Transformers does not provide a usable Qwen 3.5 model class.")
+        raise ImportError("Transformers does not provide a usable Qwen 3.5/3.6 model class.")
 
     def _torch_dtype(self):
         dtype = self.config.torch_dtype

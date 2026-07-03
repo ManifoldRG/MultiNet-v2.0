@@ -233,7 +233,10 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
     )
 
     front = _front_pos(state)
-    key = ctx.keys_by_pos.get(front)
+    # A key is collected from the agent's current cell (the agent overlaps the
+    # GroundKey first), matching the runtime PICKUP and the current-cell switch
+    # mechanic. Doors below stay front-cell.
+    key = ctx.keys_by_pos.get(state.agent_pos)
     if key and key["id"] not in state.collected_keys and state.carrying_key is None:
         yield Transition(
             action=int(MiniGridActions.PICKUP),
@@ -294,11 +297,13 @@ def _forward_successor(
         front in ctx.walls
         or front in ctx.hazards
         or front in ctx.blocks
-        or _has_uncollected_key(ctx, state, front)
         or _has_closed_door(ctx, state, front)
         or _has_closed_gate(ctx, state, front)
     ):
         return
+    # An uncollected key no longer blocks movement: GroundKey is overlappable at
+    # runtime, so the agent walks onto the key cell, then PICKUP collects it
+    # (same-cell). Keys are therefore passable here, like switches.
 
     next_pos = ctx.teleporters.get(front, front)
     active_switches = _active_switches_after_move(ctx, state, next_pos)
@@ -333,15 +338,6 @@ def _active_switches_after_move(
         else:
             active.discard(switch["id"])
     return frozenset(active)
-
-
-def _has_uncollected_key(
-    ctx: TaskPlanningContext,
-    state: PlannerState,
-    pos: tuple[int, int],
-) -> bool:
-    key = ctx.keys_by_pos.get(pos)
-    return key is not None and key["id"] not in state.collected_keys
 
 
 def _has_closed_door(

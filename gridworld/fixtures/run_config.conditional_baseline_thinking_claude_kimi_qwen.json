@@ -1,0 +1,56 @@
+{
+  "description": "Config #11: the shared baseline (--conditions \"Prompt\" --prompt-variant standard) re-run over the 15-maze conditional set with FULL thinking on all three models, to isolate the value of reasoning depth vs the thinking-low/off experimental sweep. Opus runs adaptive+effort:xhigh; paid max_tokens raised to 8192 (M6 exception).",
+  "manifest": "gridworld/fixtures/manifest.conditional_eval.json",
+  "conditions": "Prompt",
+  "models": {
+    "qwen36_27b_vllm": {
+      "provider": "qwen_vllm",
+      "model": "Qwen/Qwen3.6-27B",
+      "temperature": 0.0,
+      "max_tokens": 8192,
+      "enable_thinking": true,
+      "max_model_len": 16384,
+      "gpu_memory_utilization": 0.9,
+      "tensor_parallel_size": 1,
+      "dtype": "auto",
+      "quantization": null,
+      "enforce_eager": false,
+      "enable_prefix_caching": true,
+      "local_files_only": true,
+      "group": "qwen36-27b",
+      "hardware_profile": "local-gpu",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    },
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 1.0,
+      "max_tokens": 16384,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "enable_thinking": true,
+      "tasks": [
+        "all"
+      ]
+    },
+    "claude_opus": {
+      "provider": "claude",
+      "model": "claude-opus-4-8",
+      "max_tokens": 8192,
+      "timeout": 180,
+      "group": "claude-api",
+      "max_in_flight": 1,
+      "enable_thinking": true,
+      "effort": "xhigh",
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

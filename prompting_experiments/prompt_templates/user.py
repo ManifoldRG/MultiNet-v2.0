@@ -31,3 +31,13 @@ IMAGE_TEXT_USER_PROMPT = (
     "{current_observation_text}"
     f"{NEXT_ACTION_QUESTION}"
 )
+
+# image_text is the only observation mode that triggered Qwen to ramble spatial
+# reasoning and never emit FINAL_OUTPUT (parse failures). This reminder is
+# appended last, after the standard FINAL_OUTPUT instruction, so it is the final
+# thing the model reads.
+IMAGE_TEXT_ACTION_FORMAT_REMINDER = (
+    "Reminder: decide your single next action without narrating your reasoning. "
+    "Your response must end with the line `FINAL_OUTPUT: <action>` and nothing "
+    "after it."
+)

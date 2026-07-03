@@ -1,0 +1,176 @@
+{
+  "description": "Coordinator smoke manifest: the 10 validation_10 test1 rows plus four OGBench holdout rows. Intended for coordinator plumbing, not benchmark scoring.",
+  "selection": {
+    "source_manifests": [
+      "gridworld/fixtures/manifest.json",
+      "gridworld/fixtures/manifest.ogbench_50_smbd.json"
+    ],
+    "counts": {
+      "validation_10": 10,
+      "S": 1,
+      "M": 1,
+      "B": 0,
+      "D": 2
+    },
+    "policy": "Use the canonical validation_10 test1 suite and four OGBench holdout rows not present in manifest.ogbench_50_smbd.json.",
+    "b_family_omission": "All available B-family files are already consumed by gridworld/fixtures/manifest.ogbench_50_smbd.json; this smoke manifest uses S/M/D/D instead."
+  },
+  "tasks": [
+    {
+      "task_id": "validation_10_v01_empty_room",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "empty_room",
+      "source": "mazes/validation_10/V01_empty_room.json",
+      "expected_mechanisms": [],
+      "notes": "Baseline empty room."
+    },
+    {
+      "task_id": "validation_10_v02_winding_corridor",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "winding_corridor",
+      "source": "mazes/validation_10/V02_winding_corridor.json",
+      "expected_mechanisms": [],
+      "notes": "Navigation only."
+    },
+    {
+      "task_id": "validation_10_v03_multi_path",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "multi_path",
+      "source": "mazes/validation_10/V03_multi_path.json",
+      "expected_mechanisms": [],
+      "notes": "Also used for test2."
+    },
+    {
+      "task_id": "validation_10_v04_single_key",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "single_key",
+      "source": "mazes/validation_10/V04_single_key.json",
+      "expected_mechanisms": [
+        "kR"
+      ],
+      "notes": "Single key-door."
+    },
+    {
+      "task_id": "validation_10_v05_single_switch",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "single_switch",
+      "source": "mazes/validation_10/V05_single_switch.json",
+      "expected_mechanisms": [
+        "s1"
+      ],
+      "notes": "Single switch-gate."
+    },
+    {
+      "task_id": "validation_10_v06_chain_ks",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "chain_ks",
+      "source": "mazes/validation_10/V06_chain_ks.json",
+      "expected_mechanisms": [
+        "kR",
+        "s1"
+      ],
+      "notes": "Also used for test3 (key-first)."
+    },
+    {
+      "task_id": "validation_10_v07_chain_sk",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "chain_sk",
+      "source": "mazes/validation_10/V07_chain_sk.json",
+      "expected_mechanisms": [
+        "s1",
+        "kR"
+      ],
+      "notes": "Also used for test3 (switch-first)."
+    },
+    {
+      "task_id": "validation_10_v08_chain_kk",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "chain_kk",
+      "source": "mazes/validation_10/V08_chain_kk.json",
+      "expected_mechanisms": [],
+      "notes": "Two-key chain."
+    },
+    {
+      "task_id": "validation_10_v09_distractor_simple",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "distractor_simple",
+      "source": "mazes/validation_10/V09_distractor_simple.json",
+      "expected_mechanisms": [],
+      "notes": "Distractor present."
+    },
+    {
+      "task_id": "validation_10_v10_distractor_chain",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "distractor_chain",
+      "source": "mazes/validation_10/V10_distractor_chain.json",
+      "expected_mechanisms": [],
+      "notes": "Distractor chain."
+    },
+    {
+      "task_id": "coordinator_smoke_ogbench_s_s5_14x14_corridor_1",
+      "experiment": "coordinator_smoke_ogbench",
+      "condition": "S",
+      "variant": "14x14_corridor_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S5/14x14_corridor_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S5",
+      "notes": "OGBench holdout row not present in manifest.ogbench_50_smbd.json."
+    },
+    {
+      "task_id": "coordinator_smoke_ogbench_m_m1_10x10_corridor_kr_0",
+      "experiment": "coordinator_smoke_ogbench",
+      "condition": "M",
+      "variant": "10x10_corridor_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M1/10x10_corridor_kr_0.json",
+      "expected_mechanisms": [
+        "kR"
+      ],
+      "maze_family": "M",
+      "maze_category": "M1",
+      "notes": "OGBench holdout row not present in manifest.ogbench_50_smbd.json."
+    },
+    {
+      "task_id": "coordinator_smoke_ogbench_d_d1_10x10_corridor_wrong_ky_kr_0",
+      "experiment": "coordinator_smoke_ogbench",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_kr_0.json",
+      "expected_mechanisms": [
+        "kY",
+        "kR"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1",
+      "distractor_type": "wrong_yellow_key",
+      "source_category": "M1",
+      "notes": "OGBench holdout row not present in manifest.ogbench_50_smbd.json."
+    },
+    {
+      "task_id": "coordinator_smoke_ogbench_d_d1_10x10_corridor_wrong_ky_kr_1",
+      "experiment": "coordinator_smoke_ogbench",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_kr_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_kr_1.json",
+      "expected_mechanisms": [
+        "kY",
+        "kR"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1",
+      "distractor_type": "wrong_yellow_key",
+      "source_category": "M1",
+      "notes": "OGBench holdout row not present in manifest.ogbench_50_smbd.json."
+    }
+  ]
+}

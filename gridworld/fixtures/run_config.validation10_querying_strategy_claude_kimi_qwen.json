@@ -1,0 +1,51 @@
+{
+  "description": "Pending validation_10/tests 1-3 run config for --conditions \"Querying strategy\" across local Qwen, Kimi, and Claude.",
+  "manifest": "gridworld/fixtures/manifest.json",
+  "conditions": "Querying strategy",
+  "models": {
+    "qwen35_27b_hf": {
+      "provider": "qwen",
+      "model": "Qwen/Qwen3.5-27B",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "enable_thinking": false,
+      "device_map": {
+        "": 0
+      },
+      "local_files_only": true,
+      "torch_dtype": "auto",
+      "load_in_4bit": true,
+      "group": "qwen35-27b",
+      "hardware_profile": "local-gpu",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    },
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    },
+    "claude_sonnet": {
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "claude-api",
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "description": "Smoke-eval manifest (3 mazes) for distributed-orchestration validation only: 2 Qwen runners + 1 Kimi runner with coordinator work-stealing. Not for measurement. See docs/conditional_experiments_launch_checklist.md §6.",
+  "selection": {
+    "policy": "Three small validation_10 mazes spanning navigation, key-door, and switch-gate so the smoke exercises the scorer path without a heavy solver/runtime cost.",
+    "counts": {"navigation": 1, "key_door": 1, "switch_gate": 1}
+  },
+  "tasks": [
+    {
+      "task_id": "validation_10_v01_empty_room",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "empty_room",
+      "source": "mazes/validation_10/V01_empty_room.json",
+      "expected_mechanisms": [],
+      "notes": "Navigation only."
+    },
+    {
+      "task_id": "validation_10_v04_single_key",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "single_key",
+      "source": "mazes/validation_10/V04_single_key.json",
+      "expected_mechanisms": ["kR"],
+      "notes": "Single key-door."
+    },
+    {
+      "task_id": "validation_10_v05_single_switch",
+      "experiment": "test1",
+      "condition": "default",
+      "variant": "single_switch",
+      "source": "mazes/validation_10/V05_single_switch.json",
+      "expected_mechanisms": ["s1"],
+      "notes": "Single switch-gate."
+    }
+  ]
+}

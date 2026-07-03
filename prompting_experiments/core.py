@@ -46,8 +46,8 @@ def iter_condition_configs(
     condition: ConditionSet,
     base: ExperimentConfig | None = None,
 ) -> Iterator[tuple[str, ExperimentConfig]]:
-    """Yield ``(variant_name, config)`` pairs for implemented variants."""
+    """Yield ``(variant.name, config)`` pairs for implemented variants."""
 
-    for variant_name, variant in condition.variants.items():
+    for variant in condition.variants.values():
         if variant.implemented:
-            yield variant_name, variant.build_config(base)
+            yield variant.name, variant.build_config(base)

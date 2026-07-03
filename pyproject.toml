@@ -30,6 +30,9 @@ hf = [
     "accelerate",
     "safetensors",
 ]
+vllm = [
+    "vllm==0.19.0",
+]
 
 [project.scripts]
 multinet-run-eval = "run_eval:main"
@@ -42,6 +45,14 @@ multinet-vlm-sanity = "scripts.vlm_sanity_check:main"
 multinet-preview-prompts = "prompting_experiments.preview_prompts:main"
 multinet-score-json = "scripts.score_json:main"
 multinet-run-pipeline = "scripts.run_pipeline:main"
+
+[tool.pytest.ini_options]
+# The vendored `ogbench` submodule ships its own tests whose basenames collide
+# with ours (BFS_solver.py, maze_test_utils.py, test_S_maze_types.py). Under the
+# default prepend import-mode that shadows our modules and breaks whole-suite
+# collection (`ImportError: cannot import name 'solve' from BFS_solver`), so a
+# bare `pytest` run aborts having run zero tests. Keep ogbench out of collection.
+addopts = "--ignore=ogbench"
 
 [tool.setuptools]
 include-package-data = true
@@ -62,6 +73,7 @@ where = ["."]
 include = [
     "adapters*",
     "cross_domain*",
+    "deploy*",
     "gridworld*",
     "interface*",
     "mazes*",

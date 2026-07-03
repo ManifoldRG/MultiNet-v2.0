@@ -1,0 +1,16 @@
+{
+  "coordinator": {
+    "host": "10.0.0.1",
+    "port": 8765,
+    "artifacts_root": "artifacts/cond/prompt",
+    "run_set_id": "cond_prompt"
+  },
+  "storage_config": "gridworld/fixtures/storage_config.example.json",
+  "workers": [
+    {"name": "qwen-1", "host": "10.0.0.2", "model_group": "qwen36-27b", "hardware_profile": "local-gpu", "venv": "/opt/qwen/.venv-qwen"},
+    {"name": "qwen-2", "host": "10.0.0.3", "model_group": "qwen36-27b", "hardware_profile": "local-gpu"}
+  ],
+  "api_clients": [
+    {"name": "kimi", "model_group": "kimi-api", "runs_on": "coordinator"}
+  ]
+}

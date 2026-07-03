@@ -38,6 +38,8 @@ def run_episode(
     agent: Agent,
     seed: int,
     out_dir: str | Path,
+    *,
+    max_steps: int | None = None,
 ) -> dict[str, Any]:
     """Run one episode and flush ``episode.json`` into ``out_dir``.
 
@@ -46,6 +48,8 @@ def run_episode(
     """
     backend, spec = load_task(task_source)
     spec = _spec_with_seed(spec, seed)
+    if max_steps is not None and spec.max_steps != max_steps:
+        spec = dataclasses.replace(spec, max_steps=int(max_steps))
     backend.configure(spec)
 
     runner = build_runner(config, backend, spec)

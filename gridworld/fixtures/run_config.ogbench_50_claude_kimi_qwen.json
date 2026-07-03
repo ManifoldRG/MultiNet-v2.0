@@ -1,0 +1,51 @@
+{
+  "description": "Run the ogbench 50-maze S/M/B/D selection across Claude, Kimi, and local Qwen. Use with --manifest gridworld/fixtures/manifest.ogbench_50_smbd.json.",
+  "manifest": "gridworld/fixtures/manifest.ogbench_50_smbd.json",
+  "conditions": null,
+  "models": {
+    "claude_sonnet": {
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "claude-api",
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    },
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    },
+    "qwen35_27b_hf": {
+      "provider": "qwen",
+      "model": "Qwen/Qwen3.5-27B",
+      "temperature": 0.0,
+      "max_tokens": 8192,
+      "enable_thinking": true,
+      "device_map": {
+        "": 0
+      },
+      "local_files_only": true,
+      "torch_dtype": "auto",
+      "load_in_4bit": true,
+      "group": "qwen35-27b",
+      "hardware_profile": "local-gpu",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

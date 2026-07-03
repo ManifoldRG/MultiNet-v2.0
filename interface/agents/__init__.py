@@ -23,15 +23,23 @@ from interface.agents.qwen35_vl import (
     Qwen35VLAgent,
     Qwen35VLConfig,
 )
+from interface.agents.qwen_vllm import (
+    DEFAULT_QWEN_VLLM_MODEL,
+    QwenVLLMAgent,
+    QwenVLLMConfig,
+)
 
 __all__ = [
     "DEFAULT_CLAUDE_MODEL",
     "DEFAULT_KIMI_K26_MODEL",
     "DEFAULT_QWEN35_VL_MODEL",
+    "DEFAULT_QWEN_VLLM_MODEL",
     "ClaudeAnthropicAgent",
     "ClaudeAnthropicConfig",
     "KimiK26Agent",
     "KimiK26Config",
     "Qwen35VLAgent",
     "Qwen35VLConfig",
+    "QwenVLLMAgent",
+    "QwenVLLMConfig",
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -131,8 +132,12 @@ def flush_episode_log(result: dict[str, Any], out_dir: Path) -> Path:
             "transcript": transcript_out,
         }
     )
+    # Atomic write: a crash mid-write must not leave a truncated episode.json
+    # that a matching sidecar would treat as a valid cached episode.
     path = out_dir / "episode.json"
-    path.write_text(json.dumps(episode, indent=2, default=str), encoding="utf-8")
+    tmp = out_dir / "episode.json.tmp"
+    tmp.write_text(json.dumps(episode, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, path)
 
     kinds: dict[str, int] = {}
     for rec in transcript_out:

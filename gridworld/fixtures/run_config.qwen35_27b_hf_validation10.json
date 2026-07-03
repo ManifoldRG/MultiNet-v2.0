@@ -1,0 +1,22 @@
+{
+  "description": "Local HF Transformers run for Qwen/Qwen3.5-27B over tests 1-3 and validation_10 manifest rows.",
+  "manifest": "gridworld/fixtures/manifest.json",
+  "models": {
+    "qwen35_27b_hf": {
+      "provider": "qwen",
+      "model": "Qwen/Qwen3.5-27B",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "enable_thinking": false,
+      "device_map": {
+        "": 0
+      },
+      "local_files_only": true,
+      "torch_dtype": "auto",
+      "load_in_4bit": true,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

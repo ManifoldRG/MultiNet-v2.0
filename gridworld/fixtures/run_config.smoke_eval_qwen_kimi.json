@@ -1,0 +1,40 @@
+{
+  "description": "Smoke-eval orchestration run config (3 mazes): 2 Qwen runners + 1 Kimi runner to validate coordinator work-stealing. Not for measurement.",
+  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "conditions": null,
+  "models": {
+    "qwen35_27b_hf": {
+      "provider": "qwen",
+      "model": "Qwen/Qwen3.5-27B",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "enable_thinking": false,
+      "device_map": {
+        "": 0
+      },
+      "local_files_only": true,
+      "torch_dtype": "auto",
+      "load_in_4bit": true,
+      "group": "qwen35-27b",
+      "hardware_profile": "local-gpu",
+      "worker_count": 2,
+      "max_in_flight": 2,
+      "tasks": [
+        "all"
+      ]
+    },
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.0,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

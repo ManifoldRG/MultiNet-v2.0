@@ -1,0 +1,6 @@
+{
+  "description": "Storage config for distributed coordinator bucket mirroring. Pass with --storage-config. The coordinator mirrors each verified run dir to <bucket>/<run_set_id>/<run_dir> via gsutil, and the aggregate (episode_runs.jsonl + reports) at finalize. Set enabled=false (or omit bucket) to disable.",
+  "bucket": "gs://REPLACE_ME_BUCKET/multinet-runs",
+  "enabled": true,
+  "gsutil": "gsutil"
+}

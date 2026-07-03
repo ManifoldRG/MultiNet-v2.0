@@ -12,13 +12,25 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from interface.agents.http_retry import call_with_retry
+from interface.telemetry import normalize_token_usage
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_KIMI_K26_MODEL = "kimi-k2.6"
 _MOONSHOT_CHAT_URL = "https://api.moonshot.ai/v1/chat/completions"
 _AGENT_NAME = "Kimi agent"
+# Moonshot kimi-k2.6 dictates the sampling temperature BY MODE and returns HTTP 400
+# on any other value ("only X is allowed for this model"): thinking-on requires 1.0,
+# thinking-off requires 0.6. Confirmed live via the M6 smoke (2026-07-02).
+_KIMI_TEMPERATURE_THINKING = 1.0
+_KIMI_TEMPERATURE_NO_THINKING = 0.6
 
 
+# Moonshot caches identical request prefixes automatically and bills the reused
+# span at the cache-hit input rate (no per-message cache_control field exists in
+# the OpenAI-compatible schema). Because the agent re-sends an append-only history
+# at a fixed temperature, the stable system+history prefix is cache-eligible as-is.
 def _to_openai_messages(messages: List[dict]) -> List[Dict[str, object]]:
     out: List[Dict[str, object]] = []
     for message in messages:
@@ -41,12 +53,19 @@ def _post_chat_completions(
     messages: List[Dict[str, object]],
     timeout: Optional[float],
     enable_thinking: bool,
-) -> tuple[str, Dict[str, int]]:
+    max_attempts: int = 5,
+) -> tuple[str, Optional[Dict[str, int]]]:
     body: Dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": messages,
-        "temperature": temperature,
+        # Moonshot pins the temperature per mode (see constants) — send the only
+        # value it accepts for this thinking mode, ignoring the configured value,
+        # or the request 400s. `temperature` is kept in the signature/hash for
+        # provenance but is not sent verbatim.
+        "temperature": (
+            _KIMI_TEMPERATURE_THINKING if enable_thinking else _KIMI_TEMPERATURE_NO_THINKING
+        ),
         "thinking": {"type": "enabled" if enable_thinking else "disabled"},
     }
 
@@ -65,9 +84,13 @@ def _post_chat_completions(
     )
     effective_timeout = timeout or 180.0
     t0 = time.perf_counter()
-    try:
+
+    def _do_request():
         with urllib.request.urlopen(req, timeout=effective_timeout) as resp:
-            payload = json.loads(resp.read().decode())
+            return json.loads(resp.read().decode())
+
+    try:
+        payload = call_with_retry(_do_request, max_attempts=max_attempts)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"Moonshot API HTTP {exc.code}: {detail}") from exc
@@ -91,7 +114,7 @@ def _post_chat_completions(
     choice = (payload.get("choices") or [{}])[0]
     message = choice.get("message") or {}
     text = str(message.get("content") or "").strip()
-    return text, payload["usage"]
+    return text, normalize_token_usage(payload.get("usage"))
 
 
 @dataclass
@@ -101,6 +124,7 @@ class KimiK26Config:
     max_tokens: int = 4096
     timeout: Optional[float] = 180.0
     enable_thinking: bool = False
+    max_attempts: int = 5
 
 
 @dataclass
@@ -109,7 +133,7 @@ class KimiK26Agent:
 
     config: KimiK26Config = field(default_factory=KimiK26Config)
     api_key: Optional[str] = None
-    last_usage: Dict[str, int] = field(default_factory=dict, init=False)
+    last_usage: Optional[Dict[str, int]] = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         key = (self.api_key or os.environ.get("MOONSHOT_API_KEY") or "").strip()
@@ -121,7 +145,7 @@ class KimiK26Agent:
         self.api_key = key
 
     def __call__(self, messages: List[dict]) -> str:
-        text, usage = _post_chat_completions(
+        text, self.last_usage = _post_chat_completions(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -129,6 +153,6 @@ class KimiK26Agent:
             messages=_to_openai_messages(messages),
             timeout=self.config.timeout,
             enable_thinking=self.config.enable_thinking,
+            max_attempts=self.config.max_attempts,
         )
-        self.last_usage = usage
         return text
