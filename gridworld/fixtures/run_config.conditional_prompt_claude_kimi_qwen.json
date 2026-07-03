@@ -20,7 +20,7 @@
       "group": "qwen36-27b",
       "hardware_profile": "local-gpu",
       "worker_count": 1,
-      "max_in_flight": 1,
+      "max_in_flight": 3,
       "tasks": [
         "all"
       ]
