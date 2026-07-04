@@ -18,7 +18,8 @@ CONDITION_SET = ConditionSet(
     variants={
         "egocentric": Variant(
             name="egocentric",
-            description="Turn-and-move interface-same as the standard prompt.",
+            description="Turn-and-move interface (the ablation of the cardinal default).",
+            config_overrides={"action_space": "egocentric"},
         ),
         "cardinal": Variant(
             name="cardinal",

@@ -17,6 +17,7 @@ from .condition_set_3_context_window import CONDITION_SET as CONDITION_SET_3
 from .condition_set_4_action_space import CONDITION_SET as CONDITION_SET_4
 from .condition_set_4_querying_strategy import CONDITION_SET as CONDITION_SET_5
 from .condition_set_5_in_context_learning import CONDITION_SET as CONDITION_SET_6
+from .condition_set_6_history_mechanism import CONDITION_SET as CONDITION_SET_7
 from .core import ConditionSet, Variant, iter_condition_configs as _iter_condition_configs
 
 
@@ -27,6 +28,7 @@ CONDITION_SETS: Mapping[str, ConditionSet] = {
     CONDITION_SET_4.name: CONDITION_SET_4,
     CONDITION_SET_5.name: CONDITION_SET_5,
     CONDITION_SET_6.name: CONDITION_SET_6,
+    CONDITION_SET_7.name: CONDITION_SET_7,
 }
 
 
