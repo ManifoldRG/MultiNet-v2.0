@@ -29,8 +29,9 @@ source .venv-multinet/bin/activate
 if python - <<'PY'
 import socket, time
 # Wait for a just-killed prior coordinator-serve to release :8765 rather than
-# failing on the transient race (the pkill'd process takes a moment to exit).
-deadline = time.time() + 30
+# failing on the transient race. The killed serve's worker connections linger in
+# TIME_WAIT (~60s) and block a fresh bind without SO_REUSEADDR, so allow 90s.
+deadline = time.time() + 90
 ok = False
 while time.time() < deadline:
     s = socket.socket()
@@ -46,7 +47,7 @@ while time.time() < deadline:
     time.sleep(1)
 raise SystemExit(0 if ok else 1)
 PY
-then :; else echo "Port 8765 still in use on the coordinator after 30s." >&2; exit 1; fi
+then :; else echo "Port 8765 still in use on the coordinator after 90s." >&2; exit 1; fi
 mkdir -p "artifacts/$RUN_ID"
 prepare_args=()
 [[ -n "${CONDITIONS:-}" ]] && prepare_args+=(--conditions "$CONDITIONS")
