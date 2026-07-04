@@ -13,11 +13,11 @@ def test_batches_cover_eleven_plus_smoke():
 def test_reshaped_batches_ablate_from_fair_default():
     names = [b["name"] for b in ss.BATCHES]
     for expected in ["obs_image_only", "obs_text_only", "ctx_current",
-                     "act_egocentric", "icl_zero_shot", "hist_multiturn"]:
+                     "act_cardinal", "icl_zero_shot", "hist_multiturn"]:
         assert expected in names
     # nothing tests a value that is now the fair default
     assert "obs_image_text" not in names
-    assert "act_cardinal" not in names
+    assert "act_egocentric" not in names
     assert "ctx_last3" not in names
     hm = next(b for b in ss.BATCHES if b["name"] == "hist_multiturn")
     assert hm["conditions"] == "History mechanism" and hm["prompt_variant"] == "multiturn"

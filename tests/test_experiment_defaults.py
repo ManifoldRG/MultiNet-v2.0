@@ -21,7 +21,7 @@ def test_fair_default_baseline() -> None:
     assert c.observation_text_includes_facing is True
     assert c.context_window == "last3"
     assert c.chat_history == "stateless"  # single-message history is the default mechanism
-    assert c.action_space == "cardinal"
+    assert c.action_space == "egocentric"  # egocentric is the standard interface; cardinal is the arm
     assert c.in_context_learning == "one_shot"
     assert c.querying == "step_by_step"
     assert c.chat_turns_max == 3
@@ -36,7 +36,7 @@ def test_ablation_arms_flip_from_fair_default() -> None:
     assert ctx["current"].context_window == "current" and ctx["current"].chat_history == "stateless"
     assert ctx["text_summary"].context_window == "text_summary" and ctx["text_summary"].chat_history == "stateless"
     act = _by_variant("Action space")
-    assert act["egocentric"].action_space == "egocentric"
+    assert act["cardinal"].action_space == "cardinal"  # cardinal is the arm; egocentric is the default
     icl = _by_variant("In-context learning")
     assert icl["zero_shot"].in_context_learning == "zero_shot"
 
