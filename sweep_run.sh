@@ -213,8 +213,15 @@ cmd_finalize_batch() {
     || echo "[sweep_run] coordinator-finalize returned nonzero on batch $n ($name); continuing to egress" >&2
 
   mkdir -p "$dest"
-  gcloud compute scp --recurse --zone "$zone" \
-    "$coord:~/MultiNet-v2.0/artifacts/$art_id/." "$dest" >/dev/null 2>&1 || true
+  # Egress via ONE tarball: gcloud scp --recurse is unusably slow per-file for a
+  # batch's thousands of decision-frame PNGs (8k+ files/batch). Exclude *.png
+  # (analysis needs only episode_runs.jsonl/run jsons; publish strips PNGs anyway)
+  # and ship a single compressed archive.
+  local tgz="/tmp/egress_${art_id//\//_}.tgz"
+  gcloud compute ssh "$coord" --zone "$zone" --command \
+    "tar czf '$tgz' -C ~/MultiNet-v2.0/artifacts/$art_id --exclude='*.png' ." >/dev/null 2>&1 || true
+  gcloud compute scp --zone "$zone" "$coord:$tgz" "$dest/egress.tgz" >/dev/null 2>&1 || true
+  [[ -f "$dest/egress.tgz" ]] && { tar xzf "$dest/egress.tgz" -C "$dest" 2>/dev/null && rm -f "$dest/egress.tgz"; }
   if [[ -z "$(ls -A "$dest" 2>/dev/null)" ]]; then
     echo "[sweep_run] egress landed nothing at $dest — FAIL-CLOSED (fleet left up, not advancing)" >&2
     return 40

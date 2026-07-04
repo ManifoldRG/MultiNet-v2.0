@@ -33,12 +33,14 @@ def _fake_gcloud_logging(tmp_path: Path) -> None:
 
 
 def _fake_gcloud_scp_lands(tmp_path: Path) -> None:
-    # Logs every call; on `compute scp` it populates the destination (last arg) so
-    # the egress gate sees a non-empty dest (a successful pull).
+    # Logs every call; on `compute scp` it writes a REAL tarball at the destination
+    # (last arg = $dest/egress.tgz) containing landed.txt, so finalize's local
+    # `tar xzf` extracts it and the egress gate sees a non-empty dest.
     _fake_bin(tmp_path, "gcloud",
               'echo "GCLOUD $*" >> "$GCLOUD_LOG"\n'
               'if [[ "$1 $2" == "compute scp" ]]; then for a in "$@"; do d="$a"; done; '
-              'mkdir -p "$d"; echo x > "$d/landed.txt"; fi\n'
+              'td=$(mktemp -d); echo x > "$td/landed.txt"; mkdir -p "$(dirname "$d")"; '
+              'tar czf "$d" -C "$td" . 2>/dev/null; rm -rf "$td"; fi\n'
               'exit 0\n')
 
 
@@ -159,7 +161,7 @@ def test_finalize_batch0_reads_sweep_id_artifacts_and_egresses(tmp_path):
              env={"MAX_RUN_DURATION": "120h"})
     assert r.returncode == 0, r.stderr                   # successful smoke egresses (no false 40)
     calls = log.read_text()
-    assert "artifacts/swp/." in calls                    # reads the $SWEEP_ID namespace
+    assert "artifacts/swp" in calls                      # reads the $SWEEP_ID namespace (tar -C)
     assert "artifacts/smoke" not in calls                # never the literal run_id path
     assert (dest / "smoke" / "landed.txt").exists()      # dest folder = readable run_id
 
