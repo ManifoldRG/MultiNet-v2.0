@@ -3,22 +3,24 @@ from pathlib import Path
 from scripts import sweep_state as ss
 
 
-def test_batches_cover_eleven_plus_smoke():
+def test_batches_cover_ten_plus_smoke():
     ns = [b["n"] for b in ss.BATCHES]
-    assert ns == list(range(0, 12))                      # 0 (smoke) .. 11
+    assert ns == list(range(0, 11))                      # 0 (smoke) .. 10
     assert ss.BATCHES[0]["name"] == "smoke"
-    assert ss.BATCHES[11]["run_id"] == "cond_baseline_thinking"
+    assert ss.BATCHES[10]["run_id"] == "cond_baseline_thinking"
 
 
 def test_reshaped_batches_ablate_from_fair_default():
     names = [b["name"] for b in ss.BATCHES]
-    for expected in ["obs_image_only", "obs_text_only", "ctx_current",
+    for expected in ["obs_image_only", "ctx_current",
                      "act_cardinal", "icl_zero_shot", "hist_multiturn"]:
         assert expected in names
     # nothing tests a value that is now the fair default
     assert "obs_image_text" not in names
     assert "act_egocentric" not in names
     assert "ctx_last3" not in names
+    # text_only is deferred to a future point (variant stays implemented, not run)
+    assert "obs_text_only" not in names
     hm = next(b for b in ss.BATCHES if b["name"] == "hist_multiturn")
     assert hm["conditions"] == "History mechanism" and hm["prompt_variant"] == "multiturn"
 

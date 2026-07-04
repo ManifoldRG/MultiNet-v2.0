@@ -1,6 +1,6 @@
 # Sequential Supervised Sweep — Operator Runbook
 
-Runs the **10-batch** conditional sweep (smoke + 9 conditional configs) as one
+Runs the **11-batch** conditional sweep (smoke + 10 conditional configs) as one
 supervised sequence on a **single reused fleet** — 3 Qwen (A100-80GB) + 1 Kimi +
 1 Claude + 1 coordinator (n2). The fleet is provisioned once; each batch is
 (re)started on the same VMs. VMs are **STOPped, never deleted**; artifacts live on
@@ -22,34 +22,39 @@ the tested `lib/cost_safety.sh`, `lib/distributed_start.sh`, and `launch_distrib
 watchdog with `MAX_RUN_DURATION="$BATCH_CAP"` scoped to that call only. Never set
 the GCP ceiling to `BATCH_CAP`.
 
-## The 10 batches
+## The 11 batches
 
-`n=0` smoke → then 9 conditional batches. Order and weights (relative runtime, used
-for the live-calibrated ETA) are defined in `scripts/sweep_state.py::BATCHES`:
+`n=0` smoke → then 10 conditional batches. Each ablates one variable DOWN from the
+fair default baseline (image_text · last3 single-message · egocentric · one_shot;
+see `docs/validation10_condition_sweep_rollout.md`). Order and weights (relative
+runtime, for the live-calibrated ETA) are in `scripts/sweep_state.py::BATCHES`:
 
 | n | run_id | conditions / variant | weight |
 |---|---|---|---:|
 | 0 | smoke | 3-model fleet smoke (non-conditional) | 0.1 |
-| 1 | cond_prompt | Prompt | 3.0 |
-| 2 | cond_obs_image_text | Observation format / image_text | 1.2 |
-| 3 | cond_ctx_last3 | Context window / last3 | 1.0 |
+| 1 | cond_prompt | Prompt (standard baseline + minimal + verbose) | 3.0 |
+| 2 | cond_obs_image_only | Observation format / image_only | 1.0 |
+| 3 | cond_ctx_current | Context window / current (0-history) | 1.0 |
 | 4 | cond_ctx_text_summary | Context window / text_summary | 1.0 |
 | 5 | cond_act_cardinal | Action space / cardinal | 1.0 |
-| 6 | cond_qry_subgoal | Querying strategy / subgoal | 0.3 |
-| 7 | cond_qry_full_trajectory | Querying strategy / full_trajectory | 0.1 |
-| 8 | cond_icl_one_shot | In-context learning / one_shot | 1.3 |
-| 9 | cond_baseline_thinking | Prompt / standard (thinking ON) | 3.0 |
+| 6 | cond_qry_subgoal | Querying strategy / subgoal | 1.0 |
+| 7 | cond_qry_full_trajectory | Querying strategy / full_trajectory | 1.0 |
+| 8 | cond_icl_zero_shot | In-context learning / zero_shot | 1.0 |
+| 9 | cond_hist_multiturn | History mechanism / multiturn | 1.3 |
+| 10 | cond_baseline_thinking | Prompt / standard (thinking ON) | 3.0 |
+
+(`text_only` is deferred to a future point — variant stays implemented, not run.)
 
 **Batch 0 (smoke) is started by `provision` itself** (the launcher always starts a
-run; we make that run the cheap 3-model smoke). Batches 1–9 are each started by
+run; we make that run the cheap 3-model smoke). Batches 1–10 are each started by
 `next-batch N`. Batch 0 validates all three workers on the real fleet before any
 paid conditional batch.
 
-**Batch 9 (`cond_baseline_thinking`) runs Kimi in thinking-ON mode** → the Kimi
+**Batch 10 (`cond_baseline_thinking`) runs Kimi in thinking-ON mode** → the Kimi
 agent pins its temperature to **1.0** (thinking-off batches use 0.6); this is forced
 in `interface/agents/kimi_k26.py`, not the config. Thinking-ON Kimi can spend its
 whole token budget on reasoning and truncate on hard mazes even at `max_tokens
-16384` — expect some Kimi `parse_failed` on batch 9 and do not mistake it for a
+16384` — expect some Kimi `parse_failed` on batch 10 and do not mistake it for a
 fleet fault.
 
 ---
@@ -123,7 +128,7 @@ Check state any time: `./sweep_run.sh status`.
 >    for the next batch, re-arms the watchdog @ `BATCH_CAP`).
 > 7. Update your running notes; `./sweep_run.sh status` shows the progress table + ETAs.
 >
-> Failure policy: see §6. **Confirm-gate:** before starting batch 9
+> Failure policy: see §6. **Confirm-gate:** before starting batch 10
 > (`cond_baseline_thinking`), STOP and get explicit human go (§7).
 
 ## 4. Summary-subagent prompt template (one per model)
@@ -151,7 +156,7 @@ Classify from the terminal counts (`verified V / total T / failed F`):
 
 - **Light-partial** (`V ≥ ~0.8·T`, a few `failed`/truncated): accept the batch —
   `finalize-batch` (egress the partial), publish, note the failures, advance. Model
-  truncation (esp. Kimi thinking-ON on batch 9) is expected, not a fleet fault.
+  truncation (esp. Kimi thinking-ON on batch 10) is expected, not a fleet fault.
 - **Heavy-fail** (`V < ~0.5·T`, or `finalize-batch` exits 40, or a stall STOPped the
   fleet): do **not** advance. Retry the batch **once** — if the fleet is up, re-run
   `next-batch N`; if a watchdog/hardcap STOPped it, `./sweep_run.sh provision` reuses
@@ -165,12 +170,12 @@ Classify from the terminal counts (`verified V / total T / failed F`):
 `teardown` never deletes; `provision` after a teardown reattaches the same disks, so
 no data is lost across a stop/restart.
 
-## 7. Confirm-gate before batch 9
+## 7. Confirm-gate before batch 10
 
-Batch 9 (`cond_baseline_thinking`, weight 3.0, Kimi thinking-ON) is the most
-expensive batch. Before `next-batch 9`, STOP the loop and get an explicit human
-go-ahead, presenting: batches 0–8 all egressed + published, cumulative token/cost so
-far, and the calibrated ETA for batch 9 from `./sweep_run.sh status`.
+Batch 10 (`cond_baseline_thinking`, weight 3.0, Kimi thinking-ON) is the most
+expensive batch. Before `next-batch 10`, STOP the loop and get an explicit human
+go-ahead, presenting: batches 0–9 all egressed + published, cumulative token/cost so
+far, and the calibrated ETA for batch 10 from `./sweep_run.sh status`.
 
 ---
 
