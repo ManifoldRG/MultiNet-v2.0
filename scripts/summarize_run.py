@@ -9,7 +9,10 @@ from typing import Any
 
 
 def summarize(rows: list[dict], model_substr: str, batch_name: str) -> dict[str, Any]:
-    sel = [r for r in rows if model_substr in str(r.get("agent_or_model", ""))]
+    # Case-insensitive so --model Kimi matches agent_or_model "kimi-k2.6" (etc.);
+    # a case-sensitive miss silently summarizes 0 episodes.
+    _needle = model_substr.lower()
+    sel = [r for r in rows if _needle in str(r.get("agent_or_model", "")).lower()]
     n = len(sel)
     succ = [r for r in sel if r.get("success")]
     ors = [float(r.get("optimality_ratio") or 0.0) for r in sel]
