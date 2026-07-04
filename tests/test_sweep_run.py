@@ -119,7 +119,7 @@ def test_provision_exports_qwen_count_and_inits_state(tmp_path):
     # smoke fixture is the fleet-topology config for provision
     assert "smoke_qwen36_kimi_claude" in llog.read_text()
     st = json.loads((runs / "swpP" / "sweep_state.json").read_text())
-    assert len(st["batches"]) == 10                      # smoke + 9 conditional
+    assert len(st["batches"]) == 11                      # smoke + 10 conditional
     assert st["batches"][0]["status"] == "running"       # batch 0 (smoke) started by provision
 
 
