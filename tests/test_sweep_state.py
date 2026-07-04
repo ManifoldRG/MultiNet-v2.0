@@ -51,3 +51,23 @@ def test_render_table_has_a_row_per_batch():
     table = ss.render_table(st)
     for b in ss.BATCHES:
         assert b["run_id"] in table
+
+
+def test_sweep_topo_api_selects_api_only_configs(monkeypatch):
+    import importlib
+    monkeypatch.setenv("SWEEP_TOPO", "api")
+    importlib.reload(ss)
+    try:
+        prompt = next(b for b in ss.BATCHES if b["name"] == "prompt")
+        assert prompt["run_config"].endswith("_claude_kimi.json")
+        assert "qwen" not in prompt["run_config"]
+        assert ss.BATCHES[0]["run_config"].endswith("smoke_kimi_claude.json")
+    finally:
+        monkeypatch.delenv("SWEEP_TOPO", raising=False)
+        importlib.reload(ss)  # restore the default (Qwen+Kimi+Claude) configs for other tests
+
+
+def test_default_topo_uses_qwen_configs():
+    # No SWEEP_TOPO -> full fleet configs (guards the reload-restore above too).
+    assert ss._CFG.endswith("_claude_kimi_qwen.json")
+    assert ss.BATCHES[0]["run_config"].endswith("smoke_qwen36_kimi_claude.json")

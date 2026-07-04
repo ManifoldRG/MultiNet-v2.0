@@ -172,3 +172,14 @@ def test_gpu_worker_count_none_preserves_config_counts():
                                "hardware_profile": "local-gpu", "worker_count": 1}}}
     from scripts.distributed_topology import derive_topology
     assert len([w for w in derive_topology(cfg, "r1")["workers"] if w["kind"] == "gpu"]) == 1
+
+
+def test_api_only_split_config_has_no_gpu_workers():
+    # The SWEEP_TOPO=api split: Kimi+Claude only -> 0 GPU workers, so the launcher
+    # skips the A100 hunt and brings up coordinator + 2 e2 API VMs.
+    cfg = json.loads(Path("gridworld/fixtures/run_config.conditional_prompt_claude_kimi.json").read_text())
+    topo = derive_topology(cfg, "sid")
+    assert topo["has_gpu"] is False
+    assert all(w["kind"] == "api" for w in topo["workers"])
+    assert len(topo["workers"]) == 2
+    assert set(topo["required_credentials"]) == {"ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"}

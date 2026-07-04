@@ -4,16 +4,24 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 from pathlib import Path
 from typing import Any
 
-_CFG = "gridworld/fixtures/run_config.{}_claude_kimi_qwen.json"
+# SWEEP_TOPO=api selects the API-only (Kimi+Claude, no Qwen) run configs so the
+# fleet needs no A100s (the topology derives 0 GPU workers -> no A100 hunt);
+# anything else uses the full Qwen+Kimi+Claude configs.
+_API_ONLY = os.environ.get("SWEEP_TOPO", "").lower() == "api"
+_CFG = ("gridworld/fixtures/run_config.{}_claude_kimi.json" if _API_ONLY
+        else "gridworld/fixtures/run_config.{}_claude_kimi_qwen.json")
+_SMOKE_CFG = ("gridworld/fixtures/run_config.smoke_kimi_claude.json" if _API_ONLY
+              else "gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json")
 _MANIFEST = "gridworld/fixtures/manifest.conditional_eval.json"
 
 # n, name, run_config, manifest, conditions, prompt_variant, artifacts_root, run_id, weight
 BATCHES: list[dict[str, Any]] = [
     {"n": 0, "name": "smoke",
-     "run_config": "gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json",
+     "run_config": _SMOKE_CFG,
      "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
      "conditions": None, "prompt_variant": None,
      "artifacts_root": "artifacts/smoke", "run_id": "smoke", "weight": 0.1},
