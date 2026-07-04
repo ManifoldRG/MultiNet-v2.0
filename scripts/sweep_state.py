@@ -8,14 +8,22 @@ import os
 from pathlib import Path
 from typing import Any
 
-# SWEEP_TOPO=api selects the API-only (Kimi+Claude, no Qwen) run configs so the
-# fleet needs no A100s (the topology derives 0 GPU workers -> no A100 hunt);
-# anything else uses the full Qwen+Kimi+Claude configs.
-_API_ONLY = os.environ.get("SWEEP_TOPO", "").lower() == "api"
-_CFG = ("gridworld/fixtures/run_config.{}_claude_kimi.json" if _API_ONLY
-        else "gridworld/fixtures/run_config.{}_claude_kimi_qwen.json")
-_SMOKE_CFG = ("gridworld/fixtures/run_config.smoke_kimi_claude.json" if _API_ONLY
-              else "gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json")
+# SWEEP_TOPO selects the run-config family:
+#   api  -> Kimi+Claude only (0 GPU workers, no A100 hunt)
+#   qwen -> Qwen-only (3 A100 workers, no API cost) for the Qwen throughput pass
+#   else -> full Qwen+Kimi+Claude
+_TOPO = os.environ.get("SWEEP_TOPO", "").lower()
+_API_ONLY = _TOPO == "api"
+_QWEN_ONLY = _TOPO == "qwen"
+if _API_ONLY:
+    _CFG = "gridworld/fixtures/run_config.{}_claude_kimi.json"
+    _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_kimi_claude.json"
+elif _QWEN_ONLY:
+    _CFG = "gridworld/fixtures/run_config.{}_qwen.json"
+    _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_qwen36.json"
+else:
+    _CFG = "gridworld/fixtures/run_config.{}_claude_kimi_qwen.json"
+    _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json"
 _MANIFEST = "gridworld/fixtures/manifest.conditional_eval.json"
 
 # n, name, run_config, manifest, conditions, prompt_variant, artifacts_root, run_id, weight
