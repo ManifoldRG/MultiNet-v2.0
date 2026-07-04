@@ -14,7 +14,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"
 #   ZONE=us-central1-a  RUN_ID=...  FRESH=1
 #   COORD=mn-qwen-coord  QWEN1=mn-qwen-1  QWEN2=mn-qwen-2
 #   QWEN_IMAGE=qwen-fp16-80  QWEN_MODEL=Qwen/Qwen3.6-27B
-#   QWEN_DTYPE=bfloat16  ENFORCE_EAGER=false
+#   QWEN_DTYPE=bfloat16  ENFORCE_EAGER=true  QWEN_WORKERS_PER_VM=32
 #
 # Subcommands (no MAX_RUN_DURATION needed):
 #   ./launch_qwen_smoke.sh stop      # STOP all 3 VMs, keep disks + data
@@ -33,7 +33,11 @@ QWEN_MODEL="${QWEN_MODEL:-Qwen/Qwen3.6-27B}"
 QWEN_DTYPE="${QWEN_DTYPE:-bfloat16}"
 QWEN_MAX_MODEL_LEN="${QWEN_MAX_MODEL_LEN:-8192}"
 QWEN_GPU_MEMORY_UTILIZATION="${QWEN_GPU_MEMORY_UTILIZATION:-0.95}"
-ENFORCE_EAGER="${ENFORCE_EAGER:-false}"
+QWEN_PORT="${QWEN_PORT:-8000}"
+QWEN_WORKERS_PER_VM="${QWEN_WORKERS_PER_VM:-32}"
+QWEN_MAX_NUM_SEQS="${QWEN_MAX_NUM_SEQS:-64}"
+QWEN_MAX_NUM_BATCHED_TOKENS="${QWEN_MAX_NUM_BATCHED_TOKENS:-8192}"
+ENFORCE_EAGER="${ENFORCE_EAGER:-true}"
 STALL_MINUTES="${STALL_MINUTES:-45}"
 
 declare -A VM_CREATED
@@ -71,9 +75,10 @@ ensure_instance() {
 }
 
 start_coordinator() {
+  local qwen_max_in_flight=$(( QWEN_WORKERS_PER_VM * 2 ))
   log "preparing and serving coordinator (Qwen-only)"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' FRESH='${FRESH:-0}' ENFORCE_EAGER='$ENFORCE_EAGER' QWEN_MODEL='$QWEN_MODEL' QWEN_DTYPE='$QWEN_DTYPE' QWEN_MAX_MODEL_LEN='$QWEN_MAX_MODEL_LEN' QWEN_GPU_MEMORY_UTILIZATION='$QWEN_GPU_MEMORY_UTILIZATION' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' FRESH='${FRESH:-0}' ENFORCE_EAGER='$ENFORCE_EAGER' QWEN_MODEL='$QWEN_MODEL' QWEN_DTYPE='$QWEN_DTYPE' QWEN_MAX_MODEL_LEN='$QWEN_MAX_MODEL_LEN' QWEN_GPU_MEMORY_UTILIZATION='$QWEN_GPU_MEMORY_UTILIZATION' QWEN_PORT='$QWEN_PORT' QWEN_WORKERS_PER_VM='$QWEN_WORKERS_PER_VM' QWEN_MAX_IN_FLIGHT='$qwen_max_in_flight' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -86,10 +91,13 @@ qwen_model = os.environ["QWEN_MODEL"]
 cfg["description"] = f"Qwen-only smoke (3 mazes): 2 {qwen_model} vLLM workers, no Kimi."
 cfg["models"] = {}
 cfg["models"]["qwen36_27b_vllm"] = {
-    "provider": "qwen_vllm",
+    "provider": "qwen_vllm_api",
     "model": qwen_model,
+    "base_url": f"http://127.0.0.1:{os.environ['QWEN_PORT']}/v1",
+    "api_key": "EMPTY",
     "temperature": 0.0,
     "max_tokens": 4096,
+    "timeout": 240,
     "max_model_len": int(os.environ["QWEN_MAX_MODEL_LEN"]),
     "gpu_memory_utilization": float(os.environ["QWEN_GPU_MEMORY_UTILIZATION"]),
     "dtype": os.environ["QWEN_DTYPE"],
@@ -98,8 +106,8 @@ cfg["models"]["qwen36_27b_vllm"] = {
     "enable_thinking": False,
     "group": "qwen36-27b",
     "hardware_profile": "local-gpu",
-    "worker_count": 2,
-    "max_in_flight": 2,
+    "worker_count": int(os.environ["QWEN_WORKERS_PER_VM"]) * 2,
+    "max_in_flight": int(os.environ["QWEN_MAX_IN_FLIGHT"]),
     "tasks": ["all"],
 }
 Path("/tmp/run_config.qwen_only.json").write_text(json.dumps(cfg, indent=2) + "\n")
@@ -150,24 +158,52 @@ REMOTE
 
 start_qwen_worker() {
   local vm="$1" coord_ip="$2"
-  log "starting Qwen worker: $vm"
-  gcloud compute ssh "$vm" --zone "$ZONE" --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' QWEN_MODEL='$QWEN_MODEL' bash -s" <<'REMOTE'
+  log "starting Qwen vLLM server + worker clients: $vm"
+  gcloud compute ssh "$vm" --zone "$ZONE" --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' QWEN_MODEL='$QWEN_MODEL' QWEN_DTYPE='$QWEN_DTYPE' QWEN_MAX_MODEL_LEN='$QWEN_MAX_MODEL_LEN' QWEN_GPU_MEMORY_UTILIZATION='$QWEN_GPU_MEMORY_UTILIZATION' QWEN_PORT='$QWEN_PORT' QWEN_WORKERS_PER_VM='$QWEN_WORKERS_PER_VM' QWEN_MAX_NUM_SEQS='$QWEN_MAX_NUM_SEQS' QWEN_MAX_NUM_BATCHED_TOKENS='$QWEN_MAX_NUM_BATCHED_TOKENS' ENFORCE_EAGER='$ENFORCE_EAGER' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-qwen-vllm/bin/activate
 mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
 
-nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline \
-  --distributed-role worker \
-  --coordinator-url "http://$COORD_IP:8765" \
-  --artifacts-root "$HOME/multinet-worker-artifacts/$RUN_ID" \
-  --worker-state "$HOME/multinet-worker-artifacts/$RUN_ID/worker_state.json" \
-  --model-group qwen36-27b \
-  --hardware-profile local-gpu \
-  --local-model-cache "$QWEN_MODEL" \
-  > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.log" 2>&1 &
-echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid"
-echo "Qwen worker started: $(cat "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid")"
+if ! curl -fsS "http://127.0.0.1:$QWEN_PORT/v1/models" >/dev/null 2>&1; then
+  eager_arg=()
+  if [[ "${ENFORCE_EAGER,,}" == "true" ]]; then eager_arg=(--enforce-eager); fi
+  setsid env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 vllm serve "$QWEN_MODEL" \
+    --host 127.0.0.1 \
+    --port "$QWEN_PORT" \
+    --served-model-name "$QWEN_MODEL" \
+    --dtype "$QWEN_DTYPE" \
+    --max-model-len "$QWEN_MAX_MODEL_LEN" \
+    --gpu-memory-utilization "$QWEN_GPU_MEMORY_UTILIZATION" \
+    --max-num-seqs "$QWEN_MAX_NUM_SEQS" \
+    --max-num-batched-tokens "$QWEN_MAX_NUM_BATCHED_TOKENS" \
+    --enable-prefix-caching \
+    --generation-config vllm \
+    "${eager_arg[@]}" \
+    > "$HOME/multinet-worker-artifacts/$RUN_ID/vllm-server.log" 2>&1 < /dev/null &
+  echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/vllm-server.pid"
+fi
+
+server_up=0
+for _ in $(seq 1 120); do
+  if curl -fsS "http://127.0.0.1:$QWEN_PORT/v1/models" >/dev/null 2>&1; then server_up=1; break; fi
+  sleep 5
+done
+[[ "$server_up" -eq 1 ]] || { echo "vLLM server not healthy on :$QWEN_PORT." >&2; exit 1; }
+
+for idx in $(seq 1 "$QWEN_WORKERS_PER_VM"); do
+  setsid env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline \
+    --distributed-role worker \
+    --coordinator-url "http://$COORD_IP:8765" \
+    --artifacts-root "$HOME/multinet-worker-artifacts/$RUN_ID/worker_$idx" \
+    --worker-state "$HOME/multinet-worker-artifacts/$RUN_ID/worker_state_$idx.json" \
+    --model-group qwen36-27b \
+    --hardware-profile local-gpu \
+    --local-model-cache "$QWEN_MODEL" \
+    > "$HOME/multinet-worker-artifacts/$RUN_ID/worker_$idx.log" 2>&1 < /dev/null &
+  echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/worker_$idx.pid"
+done
+echo "Qwen worker clients started: $QWEN_WORKERS_PER_VM"
 REMOTE
 }
 
@@ -182,6 +218,8 @@ Launched $RUN_ID (Qwen-only: $COORD + $QWEN1 + $QWEN2).
   qwen_image=$QWEN_IMAGE.
   qwen_model=$QWEN_MODEL.
   qwen_dtype=$QWEN_DTYPE.
+  qwen_workers_per_vm=$QWEN_WORKERS_PER_VM.
+  qwen_server_port=$QWEN_PORT.
   enforce_eager=$ENFORCE_EAGER.
 
 Hands-off monitor (Layer 2) — run under Claude /loop (45-min progress-aware stall):

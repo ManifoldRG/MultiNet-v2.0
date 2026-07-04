@@ -899,6 +899,25 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])
         return QwenVLLMAgent(config=cfg), model or cfg.model
+    if provider in {"qwen_vllm_api", "qwen_openai", "openai_compatible"}:
+        from interface.agents import QwenVLLMAPIAgent, QwenVLLMAPIConfig
+
+        cfg = QwenVLLMAPIConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        for key in (
+            "base_url",
+            "api_key",
+            "timeout",
+            "enable_thinking",
+            "extra_body",
+            "max_attempts",
+        ):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
+        return QwenVLLMAPIAgent(config=cfg), model or cfg.model
     raise ValueError(
         f"Model {name!r}: unknown provider {provider!r} "
         "(expected 'claude', 'kimi', 'qwen', or 'qwen_vllm')."
