@@ -24,7 +24,13 @@ BATCH_CAP="${BATCH_CAP:-6h}"                      # per-batch on-VM watchdog (fa
 SWEEP_LAUNCHER="${SWEEP_LAUNCHER:-$HERE/launch_distributed.sh}"
 # Fleet-topology + first (smoke) run. The fleet shape derives from this config;
 # worker-name parity across smoke and all conditional configs is verified in tests.
-PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json}"
+# SWEEP_TOPO=api provisions an API-only fleet (Kimi+Claude, no A100), so its smoke
+# must also drop the qwen model or provision would prepare orphaned qwen units.
+if [[ "${SWEEP_TOPO:-}" == "api" ]]; then
+  PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_kimi_claude.json}"
+else
+  PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json}"
+fi
 PROVISION_MANIFEST="${PROVISION_MANIFEST:-gridworld/fixtures/manifest.smoke_eval.json}"
 
 manifest_path() { echo "$RUNS_DIR/$SWEEP_ID/manifest.json"; }
