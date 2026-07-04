@@ -27,16 +27,26 @@ set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
 if python - <<'PY'
-import socket
-s = socket.socket()
-try:
-    s.bind(("0.0.0.0", 8765))
-except OSError:
-    raise SystemExit(1)
-finally:
-    s.close()
+import socket, time
+# Wait for a just-killed prior coordinator-serve to release :8765 rather than
+# failing on the transient race (the pkill'd process takes a moment to exit).
+deadline = time.time() + 30
+ok = False
+while time.time() < deadline:
+    s = socket.socket()
+    try:
+        s.bind(("0.0.0.0", 8765))
+        ok = True
+    except OSError:
+        ok = False
+    finally:
+        s.close()
+    if ok:
+        break
+    time.sleep(1)
+raise SystemExit(0 if ok else 1)
 PY
-then :; else echo "Port 8765 already in use on the coordinator." >&2; exit 1; fi
+then :; else echo "Port 8765 still in use on the coordinator after 30s." >&2; exit 1; fi
 mkdir -p "artifacts/$RUN_ID"
 prepare_args=()
 [[ -n "${CONDITIONS:-}" ]] && prepare_args+=(--conditions "$CONDITIONS")

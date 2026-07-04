@@ -165,7 +165,7 @@ cmd_next_batch() {
   # fresh start hooks bind cleanly. (pkill on a GPU worker also drops the vLLM
   # engine -> ~model-reload on restart; acceptable/known cost per batch.)
   gcloud compute ssh "$coord" --zone "$zone" --command \
-    "pkill -f 'distributed-role coordinator-serve' 2>/dev/null; sleep 2; true" >/dev/null 2>&1 || true
+    "pkill -f 'distributed-role coordinator-serve' 2>/dev/null; sleep 2; pkill -9 -f 'distributed-role coordinator-serve' 2>/dev/null; true" >/dev/null 2>&1 || true
   for vm in $(manifest_worker_names); do
     gcloud compute ssh "$vm" --zone "$zone" --command \
       "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
