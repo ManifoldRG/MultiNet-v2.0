@@ -162,13 +162,21 @@ cmd_next_batch() {
   done
 
   # Free coordinator port 8765 + stop the prior batch's worker processes so the
-  # fresh start hooks bind cleanly. (pkill on a GPU worker also drops the vLLM
-  # engine -> ~model-reload on restart; acceptable/known cost per batch.)
+  # fresh start hooks bind cleanly. GPU workers need a REAL teardown: a plain
+  # pkill of the worker leaves vLLM's separate EngineCore process orphaned holding
+  # the GPU, and the next batch's LLM() then OOMs. stop_gpu_worker frees the GPU
+  # (SIGTERM + poll-until-free) and FAILS CLOSED if it can't. The model still
+  # reloads on the fresh worker start (~14min, known cost).
   gcloud compute ssh "$coord" --zone "$zone" --command \
     "pkill -f 'distributed-role coordinator-serve' 2>/dev/null; sleep 2; pkill -9 -f 'distributed-role coordinator-serve' 2>/dev/null; true" >/dev/null 2>&1 || true
   for vm in $(manifest_worker_names); do
-    gcloud compute ssh "$vm" --zone "$zone" --command \
-      "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
+    if [[ "$(worker_field "$vm" kind)" == "gpu" ]]; then
+      stop_gpu_worker "$vm" \
+        || { echo "[sweep_run] GPU did not free on $vm after teardown; NOT starting batch $n (would OOM) — needs manual attention" >&2; return 41; }
+    else
+      gcloud compute ssh "$vm" --zone "$zone" --command \
+        "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
+    fi
   done
 
   # Derive TOPO_JSON keyed to SWEEP_ID so worker names match the provisioned VMs;

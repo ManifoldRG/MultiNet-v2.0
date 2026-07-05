@@ -130,3 +130,17 @@ nohup python -m scripts.run_pipeline \\
 echo "\$!" > "\$HOME/multinet-worker-artifacts/\$RUN_ID/worker.pid"
 REMOTE
 }
+
+# stop_gpu_worker VM: tear down a GPU worker BEFORE a batch restart, freeing the
+# GPU. Ships lib/gpu_teardown.sh to the VM and runs gpu_teardown_local there,
+# which SIGTERMs the worker AND the orphaned vLLM EngineCore holding the GPU and
+# polls until it frees. Returns nonzero (FAIL-CLOSED) if the GPU will not free,
+# so the caller must NOT start a new worker (it would OOM). See lib/gpu_teardown.sh.
+stop_gpu_worker() {  # $1 vm
+  local vm="$1" here
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  gcloud compute ssh "$vm" --zone "$ZONE" --command "bash -s" < <(
+    cat "$here/gpu_teardown.sh"
+    printf '\ngpu_teardown_local\n'
+  )
+}
