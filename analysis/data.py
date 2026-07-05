@@ -67,3 +67,51 @@ def load_episodes(root="artifacts-pulled", cache="analysis/.cache/episodes.parqu
     cache.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(cache)
     return df
+
+
+_Q_COLS = ["episode_id", "task_id", "model", "config", "seed", "query_index",
+           "env_step", "parse_ok", "n_actions", "has_image", "latency_s", "query_path"]
+
+
+def _episode_id(cell: Path, rel_parts) -> str:
+    # rel_parts = (task_id, 'minigrid', model, 'seed_N', prompt_variant, 'queries', ...)
+    task_id, _, model, seed_dir, variant = rel_parts[:5]
+    return f"{cell.parent.name}/{cell.name}/{task_id}/{model}/{seed_dir}/{variant}"
+
+
+def load_queries(root="artifacts-pulled", cache="analysis/.cache/queries.parquet",
+                 force=False) -> pd.DataFrame:
+    """One row per model query (step) across all sweeps. ``query_path`` points at the
+    ``query.json``; its ``agent_messages``/``assistant_reply`` text is loaded lazily via
+    :func:`load_query_text` to keep this table small."""
+    cache = Path(cache)
+    if cache.exists() and not force:
+        return pd.read_parquet(cache)
+    rows = []
+    for cell in discover_sweeps(root):
+        for qjson in (cell / "runs").rglob("queries/query_*/query.json"):
+            rel = qjson.relative_to(cell / "runs").parts
+            task_id, _, model, seed_dir, variant = rel[:5]
+            seed = int(seed_dir.split("_")[1]) if "_" in seed_dir else None
+            try:
+                q = json.loads(qjson.read_text())
+            except ValueError:
+                continue
+            rows.append({
+                "episode_id": _episode_id(cell, rel),
+                "task_id": task_id, "model": model, "config": cell.name, "seed": seed,
+                "query_index": q.get("query_index"), "env_step": q.get("env_step_count"),
+                "parse_ok": bool(q.get("parse_ok")),
+                "n_actions": len(q.get("parsed_actions") or []),
+                "has_image": bool(q.get("has_image")), "latency_s": q.get("llm_latency_s"),
+                "query_path": str(qjson)})
+    df = pd.DataFrame(rows, columns=_Q_COLS)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(cache)
+    return df
+
+
+def load_query_text(query_path: str) -> tuple[list[dict], str]:
+    """Return ``(agent_messages, assistant_reply)`` for one query.json."""
+    q = json.loads(Path(query_path).read_text())
+    return q.get("agent_messages") or [], q.get("assistant_reply") or ""
