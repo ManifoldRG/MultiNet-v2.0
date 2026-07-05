@@ -130,6 +130,37 @@ def _unit_id(job_id: str, payload: dict[str, Any]) -> str:
     return f"unit_{digest[:16]}"
 
 
+# Unit statuses that represent completed, paid-for work: preserved across a
+# same-job re-prepare so we never re-run them. Everything else is reset.
+_TERMINAL_OK_STATUSES = frozenset({"verified", "uploaded"})
+
+
+def _reset_state_for_rerun(
+    existing_state: dict[str, Any], fresh_state: dict[str, Any]
+) -> dict[str, Any]:
+    """Merge an all-pending ``fresh_state`` onto an existing SAME-job state.
+
+    Keep only terminal-OK units (verified/uploaded) so completed work isn't
+    re-run, and reset every other unit (failed/stale/assigned/running/pending)
+    to its fresh pending/attempts=0 entry so a re-prepared batch can retry units
+    a prior run failed at the attempt cap. New units absent from the old state
+    stay pending.
+    """
+    existing_units = (existing_state or {}).get("units") or {}
+    merged_units: dict[str, Any] = {}
+    for uid, fresh_unit in fresh_state["units"].items():
+        prev = existing_units.get(uid)
+        if prev is not None and prev.get("status") in _TERMINAL_OK_STATUSES:
+            merged_units[uid] = prev
+        else:
+            merged_units[uid] = fresh_unit
+    merged = dict(existing_state)
+    merged["job_id"] = fresh_state["job_id"]
+    merged["units"] = merged_units
+    merged["updated_at"] = _iso()
+    return merged
+
+
 def prepare_job(
     *,
     run_config_path: str | Path,
@@ -305,6 +336,14 @@ def prepare_job(
             existing_state = None
     if existing_state is None or existing_state.get("job_id") != job_id:
         _write_json_atomic(existing_state_path, state)
+    else:
+        # Same job re-prepared (e.g. next-batch re-running a batch on a reused
+        # fleet): keep completed units so paid work isn't re-run, but reset every
+        # non-terminal unit to fresh pending. Without this, a prior run that
+        # failed all units at the attempt cap (e.g. the since-fixed vLLM GPU-OOM)
+        # leaves them failed-at-cap forever, so the coordinator dispatches nothing
+        # and every worker idles.
+        _write_json_atomic(existing_state_path, _reset_state_for_rerun(existing_state, state))
     _uploads_root(artifacts_root).mkdir(parents=True, exist_ok=True)
     return plan
 
