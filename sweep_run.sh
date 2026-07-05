@@ -161,6 +161,23 @@ cmd_next_batch() {
       || { echo "[sweep_run] watchdog re-arm failed on $vm (batch $n)" >&2; return 1; }
   done
 
+  # Derive TOPO_JSON keyed to SWEEP_ID so worker names match the provisioned VMs;
+  # the batch's run_config supplies each worker's provider/model to the start hook.
+  # This MUST run before the teardown loop below: stop_gpu_worker's gpu/api branch
+  # calls worker_field, which reads TOPO_JSON.
+  export QWEN_WORKER_COUNT
+  local topo coord_ip
+  topo="$(python3 -m scripts.distributed_topology "$run_config" "$SWEEP_ID")" \
+    || { echo "[sweep_run] topology derive failed for $run_config" >&2; return 1; }
+  coord_ip="$(internal_ip "$coord" "$zone")" \
+    || { echo "[sweep_run] internal_ip failed for $coord" >&2; return 1; }
+
+  # Globals consumed by the start hooks (lib/distributed_start.sh) and worker_field.
+  # RUN_ID is the artifacts namespace (art_id): batch 0 -> $SWEEP_ID.
+  export COORD="$coord" ZONE="$zone" RUN_ID="$art_id" RUN_CONFIG="$run_config" \
+         MANIFEST="$manifest" CONDITIONS="$conditions" PROMPT_VARIANT="$prompt_variant" \
+         DIFFICULTY_MAX="$DIFFICULTY_MAX" TOPO_JSON="$topo"
+
   # Free coordinator port 8765 + stop the prior batch's worker processes so the
   # fresh start hooks bind cleanly. GPU workers need a REAL teardown: a plain
   # pkill of the worker leaves vLLM's separate EngineCore process orphaned holding
@@ -178,21 +195,6 @@ cmd_next_batch() {
         "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
     fi
   done
-
-  # Derive TOPO_JSON keyed to SWEEP_ID so worker names match the provisioned VMs;
-  # the batch's run_config supplies each worker's provider/model to the start hook.
-  export QWEN_WORKER_COUNT
-  local topo coord_ip
-  topo="$(python3 -m scripts.distributed_topology "$run_config" "$SWEEP_ID")" \
-    || { echo "[sweep_run] topology derive failed for $run_config" >&2; return 1; }
-  coord_ip="$(internal_ip "$coord" "$zone")" \
-    || { echo "[sweep_run] internal_ip failed for $coord" >&2; return 1; }
-
-  # Globals consumed by the start hooks (lib/distributed_start.sh). RUN_ID is the
-  # artifacts namespace (art_id): batch 0 -> $SWEEP_ID, which is what finalize-batch reads.
-  export COORD="$coord" ZONE="$zone" RUN_ID="$art_id" RUN_CONFIG="$run_config" \
-         MANIFEST="$manifest" CONDITIONS="$conditions" PROMPT_VARIANT="$prompt_variant" \
-         DIFFICULTY_MAX="$DIFFICULTY_MAX" TOPO_JSON="$topo"
   start_coordinator || { echo "[sweep_run] coordinator prepare/serve failed for batch $n ($name)" >&2; return 1; }
   for vm in $(manifest_worker_names); do
     start_worker "$vm" "$coord_ip" || { echo "[sweep_run] worker start failed on $vm (batch $n)" >&2; return 1; }
