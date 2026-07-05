@@ -316,6 +316,9 @@ class ExperimentRunner:
                 usage = getattr(agent, "last_usage", None)
                 if isinstance(usage, dict):
                     query_record["usage"] = dict(usage)
+                thinking = getattr(agent, "last_thinking", None)
+                if thinking:
+                    query_record["thinking"] = thinking
                 transcript.append(query_record)
                 # check if we got any valid actions; 
                 # if not, we'll count it as a parse failure and give feedback, 
