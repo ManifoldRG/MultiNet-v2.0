@@ -161,6 +161,23 @@ def _reset_state_for_rerun(
     return merged
 
 
+def _order_units_lpt(units: list[dict[str, Any]],
+                     static_by_task: dict[str, Any]) -> list[dict[str, Any]]:
+    """Longest-processing-time-first ordering of units. Keyed on the maze's ``max_steps``
+    (the 3x-BFS step cap = worst-case episode length) with a static ``optimal_steps``
+    fallback; descending, stable. The coordinator assigns in plan order, so the longest
+    mazes claim concurrency slots first and the fast mazes fill the tail — minimizing
+    batch makespan when episodes are long sequential chains."""
+    def _length(unit: dict[str, Any]) -> int:
+        payload = unit.get("task_payload") or {}
+        ms = payload.get("max_steps")
+        if ms is not None:
+            return int(ms)
+        return int((static_by_task.get(unit["task_id"]) or {}).get("optimal_steps", 0) or 0)
+
+    return sorted(units, key=_length, reverse=True)
+
+
 def prepare_job(
     *,
     run_config_path: str | Path,
@@ -285,6 +302,12 @@ def prepare_job(
                     }
                     unit["unit_id"] = _unit_id(job_id, unit)
                     units.append(unit)
+
+    # Longest-processing-time-first: the coordinator assigns in plan order, so ordering
+    # the long mazes first makes them claim concurrency slots immediately and the fast
+    # mazes (empty_room) fill the tail — minimizing batch makespan when episodes are long
+    # sequential chains (a hard corridor can grind hundreds of steps).
+    units = _order_units_lpt(units, static_by_task)
 
     plan = {
         "schema_version": "0.1.0",
