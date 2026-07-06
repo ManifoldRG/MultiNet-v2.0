@@ -1066,6 +1066,47 @@ def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optiona
         return False
 
 
+def _process_assigned_unit(
+    client: Any,
+    worker_id: str,
+    unit: dict[str, Any],
+    *,
+    artifacts_root: str | Path,
+    agent_factory: Optional[AgentFactory],
+    heartbeat_interval_seconds: float,
+) -> bool:
+    """Run one assigned unit end-to-end (heartbeat thread + episode + upload) or report
+    it failed. Returns True on success, False on a *reported* failure. A unit failure
+    never raises, so a long-running worker keeps going; the coordinator's attempt cap
+    stops poison units. Safe to call from many threads at once: all per-unit state
+    (heartbeat event, progress counter) is local to the call."""
+    unit_id = unit["unit_id"]
+    stop_heartbeat = threading.Event()
+    progress = ProgressCounter()
+
+    def heartbeat_loop() -> None:
+        while not stop_heartbeat.wait(heartbeat_interval_seconds):
+            _safe_heartbeat(client, worker_id, unit_id, progress.count)
+
+    hb = threading.Thread(target=heartbeat_loop, daemon=True)
+    try:
+        client.heartbeat(worker_id, unit_id)
+        hb.start()
+        run_assigned_unit(
+            unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
+        )
+        archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
+        client.upload(worker_id, unit_id, archive_path)
+        return True
+    except Exception as exc:
+        client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
+        logger.warning("worker %s: unit %s failed, continuing: %s", worker_id, unit_id, exc)
+        return False
+    finally:
+        stop_heartbeat.set()
+        hb.join(timeout=1.0)
+
+
 def run_worker_loop(
     *,
     coordinator_url: str,
@@ -1076,8 +1117,23 @@ def run_worker_loop(
     heartbeat_interval_seconds: float = 30.0,
     once: bool = False,
     agent_factory: Optional[AgentFactory] = None,
+    concurrency: int = 1,
+    drain: bool = False,
+    client: Optional[Any] = None,
+    process_fn: Optional[Callable[[Any, str, dict[str, Any]], bool]] = None,
 ) -> bool:
-    client = CoordinatorClient(coordinator_url)
+    """Poll the coordinator and run assigned units.
+
+    With ``concurrency > 1`` up to that many units run in parallel, each in its own
+    thread. For a *served*-vLLM worker (each unit's agent hits one shared vLLM server)
+    this lets the server continuously batch the concurrent prefills — the whole point,
+    since the multimodal prompts are prefill-bound at batch size 1. The in-process
+    offline ``LLM`` is NOT safe to drive from multiple threads, so concurrency>1 is
+    only correct with the served (``qwen_vllm_api``) agent.
+
+    ``client`` and ``process_fn`` are injection points for tests.
+    """
+    client = client or CoordinatorClient(coordinator_url)
     state_file = Path(worker_state_path)
     local_state = _load_worker_state(state_file)
     registration = client.register(
@@ -1091,67 +1147,62 @@ def run_worker_loop(
     local_state["worker_id"] = worker_id
     _write_json_atomic(state_file, local_state)
 
-    while True:
+    def _process(unit: dict[str, Any]) -> bool:
+        if process_fn is not None:
+            return process_fn(client, worker_id, unit)
+        return _process_assigned_unit(
+            client, worker_id, unit, artifacts_root=artifacts_root,
+            agent_factory=agent_factory, heartbeat_interval_seconds=heartbeat_interval_seconds,
+        )
+
+    def _next_unit() -> Optional[dict[str, Any]]:
         try:
-            assignment = client.assign(worker_id, capabilities)
+            return client.assign(worker_id, capabilities).get("unit")
         except Exception as exc:
-            # A transient coordinator outage (VM restart, GC pause, a single dropped
-            # HTTP call) must not kill a long-running worker; retry on the next poll.
-            if once:
-                logger.warning("worker %s: assign failed in once-mode: %s", worker_id, exc)
-                return False
+            # A transient coordinator outage must not kill a long-running worker.
             logger.warning(
-                "worker %s: assign failed, retrying in %ss: %s", worker_id, poll_interval_seconds, exc
+                "worker %s: assign failed, retrying in %ss: %s",
+                worker_id, poll_interval_seconds, exc,
             )
-            time.sleep(poll_interval_seconds)
-            continue
-        unit = assignment.get("unit")
-        if not unit:
-            if once:
-                return False
-            time.sleep(poll_interval_seconds)
-            continue
+            return None
 
-        unit_id = unit["unit_id"]
-        local_state["current_unit_id"] = unit_id
-        _write_json_atomic(state_file, local_state)
-        stop_heartbeat = threading.Event()
-        progress = ProgressCounter()
-
-        # Bind unit_id/stop/progress as defaults so a thread that outlives join()
-        # keeps heartbeating *its* unit, not whatever the next loop iteration assigns.
-        def heartbeat_loop(
-            unit_id: str = unit_id,
-            stop: threading.Event = stop_heartbeat,
-            progress: ProgressCounter = progress,
-        ) -> None:
-            while not stop.wait(heartbeat_interval_seconds):
-                _safe_heartbeat(client, worker_id, unit_id, progress.count)
-
-        thread = threading.Thread(target=heartbeat_loop, daemon=True)
-        try:
-            client.heartbeat(worker_id, unit_id)
-            thread.start()
-            run_assigned_unit(
-                unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
-            )
-            archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
-            client.upload(worker_id, unit_id, archive_path)
-            local_state.pop("current_unit_id", None)
-            _write_json_atomic(state_file, local_state)
+    if concurrency <= 1:
+        while True:
+            unit = _next_unit()
+            if not unit:
+                if once or drain:
+                    return False
+                time.sleep(poll_interval_seconds)
+                continue
+            ok = _process(unit)
             if once:
-                return True
-        except Exception as exc:
-            client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
-            # A single failed/transiently-rejected unit must not take a long-running
-            # worker offline; the coordinator's attempt cap stops poison units. In
-            # one-shot mode surface the error instead.
-            if once:
-                raise
-            logger.warning("worker %s: unit %s failed, continuing: %s", worker_id, unit_id, exc)
-        finally:
-            stop_heartbeat.set()
-            thread.join(timeout=1.0)
+                return ok
+
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
+    executor = ThreadPoolExecutor(max_workers=concurrency)
+    in_flight: set = set()
+    any_done = False
+    try:
+        while True:
+            while len(in_flight) < concurrency:
+                unit = _next_unit()
+                if not unit:
+                    break
+                in_flight.add(executor.submit(_process, unit))
+            if not in_flight:
+                if once or drain:
+                    return any_done
+                time.sleep(poll_interval_seconds)
+                continue
+            done, pending = wait(in_flight, timeout=poll_interval_seconds, return_when=FIRST_COMPLETED)
+            in_flight = set(pending)
+            if done:
+                any_done = True
+                if once:
+                    return True
+    finally:
+        executor.shutdown(wait=True)
 
 
 def _api_client_groups(
