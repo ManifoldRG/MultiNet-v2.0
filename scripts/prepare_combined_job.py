@@ -73,11 +73,16 @@ def build(specs: list[dict[str, Any]], *, artifacts_root: Path, run_set_id: str,
             difficulty_max_static_score=difficulty_max,
         )
         part_plans.append(plan)
-        # shared task artifacts (same 15 mazes) -> copy once into the combined root
+        # shared task artifacts (same 15 mazes) -> copy once into the combined root.
+        # tasks/ holds per-task dirs AND a _suite.json file, so handle both.
         for td in (part_root / "tasks").glob("*"):
             dest = tasks_root / td.name
-            if not dest.exists():
+            if dest.exists():
+                continue
+            if td.is_dir():
                 shutil.copytree(td, dest)
+            else:
+                shutil.copy2(td, dest)
     digest = dist.stable_hash({"run_set_id": run_set_id, "run_ids": [s["run_id"] for s in specs]})
     job_id = f"job_massive_{digest[:12]}"
     plan, state = merge_plans(part_plans, job_id)
