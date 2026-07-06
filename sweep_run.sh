@@ -20,6 +20,7 @@ RESULTS_REPO="${RESULTS_REPO:-Multinet-v2-results}"
 QWEN_WORKER_COUNT="${QWEN_WORKER_COUNT:-3}"     # GPU fan-out (Task 1 topology override)
 DIFFICULTY_MAX="${DIFFICULTY_MAX:-1000}"
 BATCH_CAP="${BATCH_CAP:-6h}"                      # per-batch on-VM watchdog (fail-closed)
+WORKER_CONCURRENCY="${WORKER_CONCURRENCY:-16}"    # GPU worker: episodes run in parallel (served vLLM batches them)
 # The launcher to invoke for provision — an indirection so tests can stub it.
 SWEEP_LAUNCHER="${SWEEP_LAUNCHER:-$HERE/launch_distributed.sh}"
 # Fleet-topology + first (smoke) run. The fleet shape derives from this config;
@@ -162,9 +163,8 @@ cmd_next_batch() {
   done
 
   # Derive TOPO_JSON keyed to SWEEP_ID so worker names match the provisioned VMs;
-  # the batch's run_config supplies each worker's provider/model to the start hook.
-  # This MUST run before the teardown loop below: stop_gpu_worker's gpu/api branch
-  # calls worker_field, which reads TOPO_JSON.
+  # the batch's run_config supplies each worker's provider/model to the start hooks
+  # (start_coordinator / start_worker) via worker_field, which reads TOPO_JSON.
   export QWEN_WORKER_COUNT
   local topo coord_ip
   topo="$(python3 -m scripts.distributed_topology "$run_config" "$SWEEP_ID")" \
@@ -178,22 +178,17 @@ cmd_next_batch() {
          MANIFEST="$manifest" CONDITIONS="$conditions" PROMPT_VARIANT="$prompt_variant" \
          DIFFICULTY_MAX="$DIFFICULTY_MAX" TOPO_JSON="$topo"
 
-  # Free coordinator port 8765 + stop the prior batch's worker processes so the
-  # fresh start hooks bind cleanly. GPU workers need a REAL teardown: a plain
-  # pkill of the worker leaves vLLM's separate EngineCore process orphaned holding
-  # the GPU, and the next batch's LLM() then OOMs. stop_gpu_worker frees the GPU
-  # (SIGTERM + poll-until-free) and FAILS CLOSED if it can't. The model still
-  # reloads on the fresh worker start (~14min, known cost).
+  # Free coordinator port 8765 + stop the prior batch's WORKER processes so the fresh
+  # start hooks bind cleanly. GPU workers keep their PERSISTENT vLLM server running
+  # (it holds the GPU intentionally and is reused across batches — no model reload, and
+  # no orphan-EngineCore to clean), so only the worker process is killed here, same as
+  # the API workers. (lib/gpu_teardown.sh::stop_gpu_worker remains available to fully
+  # free a GPU if a server ever needs a clean restart.)
   gcloud compute ssh "$coord" --zone "$zone" --command \
     "pkill -f 'distributed-role coordinator-serve' 2>/dev/null; sleep 2; pkill -9 -f 'distributed-role coordinator-serve' 2>/dev/null; true" >/dev/null 2>&1 || true
   for vm in $(manifest_worker_names); do
-    if [[ "$(worker_field "$vm" kind)" == "gpu" ]]; then
-      stop_gpu_worker "$vm" \
-        || { echo "[sweep_run] GPU did not free on $vm after teardown; NOT starting batch $n (would OOM) — needs manual attention" >&2; return 41; }
-    else
-      gcloud compute ssh "$vm" --zone "$zone" --command \
-        "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
-    fi
+    gcloud compute ssh "$vm" --zone "$zone" --command \
+      "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
   done
   start_coordinator || { echo "[sweep_run] coordinator prepare/serve failed for batch $n ($name)" >&2; return 1; }
   for vm in $(manifest_worker_names); do

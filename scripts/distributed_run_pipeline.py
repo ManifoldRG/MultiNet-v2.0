@@ -1476,6 +1476,7 @@ def dispatch_distributed_role(args: Any) -> None:
             poll_interval_seconds=args.poll_interval_seconds,
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
             once=args.once,
+            concurrency=int(getattr(args, "worker_concurrency", 1) or 1),
         )
         print(f"Worker {'completed one unit' if completed else 'found no unit'}.")
         return

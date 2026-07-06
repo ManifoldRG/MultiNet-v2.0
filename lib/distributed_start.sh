@@ -85,11 +85,34 @@ start_worker() {  # $1 vm  $2 coord_ip  — metadata from TOPO_JSON
 
   if [[ "$kind" == "gpu" ]]; then
     gcloud compute ssh "$vm" --zone "$ZONE" \
-      --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' MODEL='$model' bash -s" <<'REMOTE'
+      --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' MODEL='$model' CONCURRENCY='${WORKER_CONCURRENCY:-16}' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-qwen-vllm/bin/activate
 mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
+
+# 1. Persistent vLLM OpenAI server (continuous batching across concurrent episode
+#    requests). It is REUSED across batches — only (re)launched if not already
+#    serving on :8000 — so switching batches costs no model reload. It intentionally
+#    holds the GPU, so there is no orphan-EngineCore problem for next-batch to clean.
+if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
+  nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    vllm serve "$MODEL" --port 8000 --served-model-name "$MODEL" \
+      --gpu-memory-utilization 0.9 --max-model-len 16384 --max-num-seqs 64 \
+      --dtype bfloat16 --trust-remote-code \
+    > "$HOME/multinet-worker-artifacts/vllm_server.log" 2>&1 &
+  echo "$!" > "$HOME/multinet-worker-artifacts/vllm_server.pid"
+fi
+# Wait for the server to finish loading the model (first launch ~ minutes).
+for _ in $(seq 1 150); do
+  curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && break
+  sleep 10
+done
+curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 \
+  || { echo "vllm server never became ready on :8000" >&2; exit 1; }
+
+# 2. Worker: uses the served qwen_vllm_api agent (per the run-config's base_url),
+#    running CONCURRENCY episodes in parallel so the server batches their prefills.
 nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline \
   --distributed-role worker \
   --coordinator-url "http://$COORD_IP:8765" \
@@ -98,6 +121,7 @@ nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline
   --model-group "$GROUP" \
   --hardware-profile local-gpu \
   --local-model-cache "$MODEL" \
+  --worker-concurrency "$CONCURRENCY" \
   > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.log" 2>&1 &
 echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid"
 REMOTE
