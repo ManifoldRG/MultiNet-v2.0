@@ -95,7 +95,7 @@ mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
 #    requests). It is REUSED across batches — only (re)launched if not already
 #    serving on :8000 — so switching batches costs no model reload. It intentionally
 #    holds the GPU, so there is no orphan-EngineCore problem for next-batch to clean.
-if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
+if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && ! pgrep -f 'vllm serve' >/dev/null 2>&1; then
   nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
     vllm serve "$MODEL" --port 8000 --served-model-name "$MODEL" \
       --gpu-memory-utilization 0.9 --max-model-len 16384 --max-num-seqs 64 \

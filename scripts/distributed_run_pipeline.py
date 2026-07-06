@@ -465,10 +465,23 @@ class CoordinatorStore:
             worker["status"] = "polling"
             self._mark_stale(plan, state)
 
-            active = self._active_unit_for_worker(plan, state, worker_id)
-            if active is not None:
+            # A worker may hold up to its declared concurrency in active units at once
+            # (served-vLLM workers run many episodes in parallel so the server batches
+            # their prefills). Re-return an already-active unit ONLY when the worker is
+            # at its limit — a fresh assign call below its limit falls through and hands
+            # out a new *distinct* unit. worker_concurrency defaults to 1, preserving the
+            # original serial one-unit-per-worker behaviour exactly.
+            active_units = [
+                unit for unit in plan["units"]
+                if state["units"][unit["unit_id"]].get("worker_id") == worker_id
+                and state["units"][unit["unit_id"]].get("status") in ACTIVE_STATUSES
+            ]
+            worker_concurrency = max(
+                int((worker.get("capabilities") or {}).get("worker_concurrency") or 1), 1
+            )
+            if active_units and len(active_units) >= worker_concurrency:
                 self.save_state(state)
-                return {"unit": self._unit_payload(plan, active), "job_id": plan["job_id"]}
+                return {"unit": self._unit_payload(plan, active_units[0]), "job_id": plan["job_id"]}
 
             for unit in plan["units"]:
                 unit_state = state["units"][unit["unit_id"]]
@@ -1467,6 +1480,7 @@ def dispatch_distributed_role(args: Any) -> None:
             "hardware_profile": args.hardware_profile,
             "worker_tags": args.worker_tag or [],
             "local_model_cache": args.local_model_cache or [],
+            "worker_concurrency": int(getattr(args, "worker_concurrency", 1) or 1),
         }
         completed = run_worker_loop(
             coordinator_url=args.coordinator_url,

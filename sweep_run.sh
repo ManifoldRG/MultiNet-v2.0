@@ -191,9 +191,15 @@ cmd_next_batch() {
       "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
   done
   start_coordinator || { echo "[sweep_run] coordinator prepare/serve failed for batch $n ($name)" >&2; return 1; }
+  # Start workers in PARALLEL: a GPU worker's start hook blocks until its vLLM server
+  # has loaded the model, so a serial loop would load the 3 servers back-to-back
+  # (~14min each). Backgrounding lets all 3 load at once. (Reused servers return fast.)
+  local wpids=() wrc=0
   for vm in $(manifest_worker_names); do
-    start_worker "$vm" "$coord_ip" || { echo "[sweep_run] worker start failed on $vm (batch $n)" >&2; return 1; }
+    start_worker "$vm" "$coord_ip" & wpids+=("$!")
   done
+  for wpid in "${wpids[@]}"; do wait "$wpid" || wrc=1; done
+  [[ $wrc -eq 0 ]] || { echo "[sweep_run] one or more workers failed to start for batch $n ($name)" >&2; return 1; }
 
   _state_mark "$n" running
   log "batch $n ($name -> run_id=$art_id) started on the reused fleet; watchdog re-armed @ $BATCH_CAP"
