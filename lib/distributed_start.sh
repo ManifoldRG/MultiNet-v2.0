@@ -76,6 +76,58 @@ done
 REMOTE
 }
 
+# start_coordinator_combined: like start_coordinator but prepares ONE massive job from
+# several batches (MASSIVE_BATCHES = space-separated batch indices) via
+# scripts.prepare_combined_job, so the fleet stays saturated instead of idling through
+# each batch's hard-maze tail. Globals: COORD ZONE RUN_ID MANIFEST [SEEDS]
+# [DIFFICULTY_MAX] MASSIVE_BATCHES [SWEEP_TOPO].
+start_coordinator_combined() {
+  local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}" batch_args="" n
+  for n in $MASSIVE_BATCHES; do batch_args="$batch_args --batch $n"; done
+  gcloud compute ssh "$COORD" --zone "$ZONE" \
+    --command "RUN_ID='$RUN_ID' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' BATCH_ARGS='$batch_args' SWEEP_TOPO='${SWEEP_TOPO:-}' bash -s" <<'REMOTE'
+set -euo pipefail
+cd ~/MultiNet-v2.0
+source .venv-multinet/bin/activate
+if python - <<'PY'
+import socket, time
+deadline = time.time() + 90
+ok = False
+while time.time() < deadline:
+    s = socket.socket()
+    try:
+        s.bind(("0.0.0.0", 8765)); ok = True
+    except OSError:
+        ok = False
+    finally:
+        s.close()
+    if ok:
+        break
+    time.sleep(1)
+raise SystemExit(0 if ok else 1)
+PY
+then :; else echo "Port 8765 still in use on the coordinator after 90s." >&2; exit 1; fi
+mkdir -p "artifacts/$RUN_ID"
+# shellcheck disable=SC2086
+SWEEP_TOPO="$SWEEP_TOPO" python -m scripts.prepare_combined_job \
+  --artifacts-root "artifacts/$RUN_ID" --run-set-id "$RUN_ID" \
+  --manifest "$MANIFEST" --difficulty-max-static-score "$DIFFICULTY_MAX" \
+  --seeds $SEEDS $BATCH_ARGS
+nohup python -m scripts.run_pipeline \
+  --distributed-role coordinator-serve \
+  --artifacts-root "artifacts/$RUN_ID" \
+  --host 0.0.0.0 --port 8765 \
+  > "artifacts/$RUN_ID/coordinator-serve.log" 2>&1 &
+echo "$!" > "artifacts/$RUN_ID/coordinator-serve.pid"
+coord_up=0
+for _ in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:8765/status >/dev/null; then coord_up=1; break; fi
+  sleep 2
+done
+[[ "$coord_up" -eq 1 ]] || { echo "Coordinator not healthy on :8765 within ~60s." >&2; exit 1; }
+REMOTE
+}
+
 start_worker() {  # $1 vm  $2 coord_ip  — metadata from TOPO_JSON
   local vm="$1" coord_ip="$2" kind group provider model
   kind="$(worker_field "$vm" kind)"

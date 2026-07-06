@@ -205,6 +205,51 @@ cmd_next_batch() {
   log "batch $n ($name -> run_id=$art_id) started on the reused fleet; watchdog re-armed @ $BATCH_CAP"
 }
 
+# run-massive N [N ...]: prepare+serve ONE combined job from the given batches (all their
+# units in a single LPT-ordered plan) so the fleet stays saturated instead of idling
+# through each batch's long hard-maze tail. Reuses the persistent GPU servers.
+# RUN_ID=cond_massive; finalize with finalize-batch on that run_id, then split per config.
+cmd_run_massive() {
+  _require_manifest || return 1
+  require_gcloud || return 1
+  [[ "$#" -ge 1 ]] || { echo "usage: sweep_run.sh run-massive N [N ...]" >&2; return 2; }
+  local run_id="cond_massive" first="$1" run_config manifest zone coord vm
+  run_config="$(batch_field "$first" run_config)"   # topo identical across qwen batches
+  manifest="$(batch_field "$first" manifest)"
+  zone="$(manifest_zone)"; coord="$(manifest_coord)"
+
+  for vm in $(manifest_vm_names); do
+    MAX_RUN_DURATION="$BATCH_CAP" arm_watchdog "$vm" "$zone" 0 \
+      || { echo "[sweep_run] watchdog re-arm failed on $vm (run-massive)" >&2; return 1; }
+  done
+
+  export QWEN_WORKER_COUNT
+  local topo coord_ip
+  topo="$(python3 -m scripts.distributed_topology "$run_config" "$SWEEP_ID")" \
+    || { echo "[sweep_run] topology derive failed for $run_config" >&2; return 1; }
+  coord_ip="$(internal_ip "$coord" "$zone")" \
+    || { echo "[sweep_run] internal_ip failed for $coord" >&2; return 1; }
+  export COORD="$coord" ZONE="$zone" RUN_ID="$run_id" MANIFEST="$manifest" \
+         DIFFICULTY_MAX="$DIFFICULTY_MAX" TOPO_JSON="$topo" \
+         MASSIVE_BATCHES="$*" SEEDS="${SEEDS:-0}"
+
+  gcloud compute ssh "$coord" --zone "$zone" --command \
+    "pkill -f 'distributed-role coordinator-serve' 2>/dev/null; sleep 2; pkill -9 -f 'distributed-role coordinator-serve' 2>/dev/null; true" >/dev/null 2>&1 || true
+  for vm in $(manifest_worker_names); do
+    gcloud compute ssh "$vm" --zone "$zone" --command \
+      "pkill -f 'distributed-role worker' 2>/dev/null; true" >/dev/null 2>&1 || true
+  done
+
+  start_coordinator_combined || { echo "[sweep_run] combined coordinator prepare/serve failed" >&2; return 1; }
+  local wpids=() wrc=0
+  for vm in $(manifest_worker_names); do
+    start_worker "$vm" "$coord_ip" & wpids+=("$!")
+  done
+  for wpid in "${wpids[@]}"; do wait "$wpid" || wrc=1; done
+  [[ $wrc -eq 0 ]] || { echo "[sweep_run] one or more workers failed to start (run-massive)" >&2; return 1; }
+  log "MASSIVE job (batches $*) started as run_id=$run_id on the reused fleet; watchdog re-armed @ $BATCH_CAP"
+}
+
 # finalize-batch N: aggregate on the coordinator, egress the batch's artifacts to
 # DEST/<run_id>, and FAIL-CLOSED if nothing lands (fleet left up, no advance).
 cmd_finalize_batch() {
@@ -301,6 +346,7 @@ main() {
   case "${1:-}" in
     provision)       shift; cmd_provision "$@" ;;
     next-batch)      shift; cmd_next_batch "$@" ;;
+    run-massive)     shift; cmd_run_massive "$@" ;;
     finalize-batch)  shift; cmd_finalize_batch "$@" ;;
     stop-apis)       shift; cmd_stop_apis "$@" ;;
     publish)         shift; cmd_publish "$@" ;;
