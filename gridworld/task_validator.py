@@ -133,7 +133,7 @@ class TaskValidator:
             if tp.bidirectional:
                 self.teleporter_map[b] = a
 
-        self.goal = (spec.maze.goal.x, spec.maze.goal.y)
+        self.goal = spec.resolved_goal()
         self.start = (spec.maze.start.x, spec.maze.start.y)
         self.key_consumption = spec.rules.key_consumption
 
@@ -786,11 +786,25 @@ def compute_difficulty(
         validation_result = task_validator.validate()
     is_beatable, solution, message = validation_result
 
-    optimal_steps = len(solution) - 1 if solution else 0  # -1 because path includes start
-    # Extract states_explored from message
-    import re
-    match = re.search(r"(\d+) states explored", message)
-    states_explored = int(match.group(1)) if match else 0
+    # Prefer the executable-action planner: it charges what an agent must
+    # actually pay (a locked door is TOGGLE + MOVE_FORWARD, hold-switches
+    # release on move-off), so its step count matches episode step counts.
+    # The validator's abstract transitions remain the beatability authority
+    # and the fallback for mechanics the executable planner can't traverse
+    # (block pushes).
+    from gridworld.baselines import plan_bfs_path  # lazy: avoids model_interface at import
+
+    bfs_path = plan_bfs_path(spec) if is_beatable else None
+    if bfs_path is not None and bfs_path.success:
+        optimal_steps = len(bfs_path.action_labels)
+        solution = [tuple(pos) for pos in bfs_path.positions]
+        states_explored = bfs_path.states_explored
+    else:
+        optimal_steps = len(solution) - 1 if solution else 0  # -1: path includes start
+        import re
+        match = re.search(r"(\d+) states explored", message)
+        states_explored = int(match.group(1)) if match else 0
+
     seen = set()
     backtrack_count = 0
     previous_pos = None

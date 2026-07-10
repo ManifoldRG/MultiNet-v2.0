@@ -40,8 +40,7 @@ def agent_facing(state: GridState) -> str:
 
 
 def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:
-    target = task_spec.goal.target or task_spec.maze.goal
-    return to_row_col(target)
+    return to_row_col(task_spec.resolved_goal())
 
 
 def maze_rows_cols(task_spec: TaskSpecification) -> tuple[int, int]:
