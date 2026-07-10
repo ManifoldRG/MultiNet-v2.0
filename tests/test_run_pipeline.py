@@ -1844,3 +1844,41 @@ def test_distributed_finalize_requires_complete_work_by_default(tmp_path):
     partial = finalize_job(artifacts_root=artifacts, allow_partial=True)
     assert partial["run_count"] == 0
     assert len(partial["missing_units"]) == 1
+
+
+def test_cross_model_run_configs_must_declare_equal_token_caps(tmp_path):
+    """Unequal per-model max_tokens confounded baseline_thinking (FINDINGS §4):
+    the 4k/8k/16k spread measured budget, not reasoning. Cross-model configs
+    must use one cap — or opt out explicitly so the asymmetry is on record."""
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}")
+    base = {
+        "manifest": str(manifest),
+        "models": {
+            "a": {"provider": "claude", "max_tokens": 8192},
+            "b": {"provider": "kimi", "max_tokens": 16384},
+        },
+    }
+
+    with pytest.raises(ValueError, match="unequal max_tokens"):
+        check_run_config_expectations(base, manifest, None)
+
+    # Equal caps pass.
+    equal = json.loads(json.dumps(base))
+    equal["models"]["b"]["max_tokens"] = 8192
+    check_run_config_expectations(equal, manifest, None)  # no raise
+
+    # Single-model configs are unconstrained.
+    solo = {"manifest": str(manifest), "models": {"a": {"max_tokens": 4096}}}
+    check_run_config_expectations(solo, manifest, None)  # no raise
+
+    # The explicit opt-out documents an intentional asymmetry.
+    declared = json.loads(json.dumps(base))
+    declared["allow_unequal_max_tokens"] = True
+    check_run_config_expectations(declared, manifest, None)  # no raise
+
+
+def test_baseline_thinking_fixture_declares_its_unequal_caps():
+    path = _FIXTURES / "run_config.conditional_baseline_thinking_claude_kimi_qwen.json"
+    rc = load_run_config(path)
+    assert rc.get("allow_unequal_max_tokens") is True

@@ -137,8 +137,16 @@ def test_next_batch_rearms_watchdog_never_creates_or_deletes(tmp_path):
     runs = tmp_path / ".runs"
     _write_manifest(runs, "swp", FULL_FLEET)
     log = tmp_path / "gcloud.log"; log.write_text("")
+    # BATCH_CAP has no default: a 6h default once killed a legit ~7h massive
+    # tail before egress. Batch-starting subcommands refuse to run without it.
     r = bash(f'PATH="{tmp_path}:$PATH" GCLOUD_LOG="{log}" ZONE=z1 SWEEP_ID=swp '
              f'RUNS_DIR="{runs}" ./sweep_run.sh next-batch 2', env={"MAX_RUN_DURATION": "120h"})
+    assert r.returncode != 0
+    assert "BATCH_CAP is required" in r.stderr
+
+    r = bash(f'PATH="{tmp_path}:$PATH" GCLOUD_LOG="{log}" ZONE=z1 SWEEP_ID=swp '
+             f'RUNS_DIR="{runs}" ./sweep_run.sh next-batch 2',
+             env={"MAX_RUN_DURATION": "120h", "BATCH_CAP": "9h"})
     assert r.returncode == 0, r.stderr
     calls = log.read_text()
     assert "shutdown -h" in calls                        # watchdog re-armed on the reused VMs

@@ -19,7 +19,11 @@ SWEEP_ID="${SWEEP_ID:-sweep-$(date +%Y%m%d-%H%M%S)}"
 RESULTS_REPO="${RESULTS_REPO:-Multinet-v2-results}"
 QWEN_WORKER_COUNT="${QWEN_WORKER_COUNT:-3}"     # GPU fan-out (Task 1 topology override)
 DIFFICULTY_MAX="${DIFFICULTY_MAX:-1000}"
-BATCH_CAP="${BATCH_CAP:-6h}"                      # per-batch on-VM watchdog (fail-closed)
+# Per-batch on-VM watchdog (fail-closed). No default: the old 6h default
+# silently killed a legitimate ~7h run-massive tail before its data was pulled
+# (the 134/135 recovery). Batch-starting subcommands require it via
+# require_batch_cap; size it to expected batch runtime + margin (e.g. 9h).
+BATCH_CAP="${BATCH_CAP:-}"
 WORKER_CONCURRENCY="${WORKER_CONCURRENCY:-16}"    # GPU worker: episodes run in parallel (served vLLM batches them)
 # The launcher to invoke for provision — an indirection so tests can stub it.
 SWEEP_LAUNCHER="${SWEEP_LAUNCHER:-$HERE/launch_distributed.sh}"
@@ -133,10 +137,20 @@ PY
 # next-batch N: on the ALREADY-RUNNING fleet, stop the prior batch's processes,
 # re-prepare the coordinator + restart workers for batch N, re-arm the watchdog.
 # Never creates or deletes VMs.
+require_batch_cap() {
+  if [[ -z "${BATCH_CAP:-}" ]]; then
+    echo "BATCH_CAP is required for batch-starting subcommands (per-batch watchdog," >&2
+    echo "e.g. BATCH_CAP=9h — expected batch runtime + margin). No default: a wrong" >&2
+    echo "default either kills a legit run mid-tail or fails to protect." >&2
+    return 1
+  fi
+}
+
 cmd_next_batch() {
   local n="$1"
   _require_manifest || return 1
   require_gcloud || return 1
+  require_batch_cap || return 1
   local name run_id art_id run_config manifest conditions prompt_variant zone coord
   name="$(batch_field "$n" name)"; run_id="$(batch_field "$n" run_id)"
   art_id="$(_artifacts_run_id "$n")"   # artifacts namespace (batch 0 -> $SWEEP_ID)
@@ -212,6 +226,7 @@ cmd_next_batch() {
 cmd_run_massive() {
   _require_manifest || return 1
   require_gcloud || return 1
+  require_batch_cap || return 1
   [[ "$#" -ge 1 ]] || { echo "usage: sweep_run.sh run-massive N [N ...]" >&2; return 2; }
   local run_id="cond_massive" first="$1" run_config manifest zone coord vm
   run_config="$(batch_field "$first" run_config)"   # topo identical across qwen batches
