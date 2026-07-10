@@ -28,11 +28,17 @@ def merge_plans(part_plans: list[dict[str, Any]], job_id: str) -> tuple[dict, di
     and LPT-ordered; static_by_task is unioned; state is fresh all-pending."""
     units: list[dict[str, Any]] = []
     static_by_task: dict[str, Any] = {}
+    tasks: list[dict[str, Any]] = []
     scorer_config = None
     difficulty_max = None
     for plan in part_plans:
         units.extend(plan["units"])
         static_by_task.update(plan.get("static_by_task") or {})
+        # ``tasks`` (per-(task,variant) manifest metadata rows) is REQUIRED by
+        # finalize_job -> _write_aggregate; dropping it makes the combined job
+        # runnable but not finalizable (KeyError: 'tasks'). Each part covers a
+        # distinct prompt_variant, so the rows are distinct -> concatenate.
+        tasks.extend(plan.get("tasks") or [])
         scorer_config = scorer_config or plan.get("scorer_config")
         difficulty_max = plan.get("difficulty_max_static_score") if difficulty_max is None else difficulty_max
     units = dist._order_units_lpt(units, static_by_task)
@@ -44,6 +50,7 @@ def merge_plans(part_plans: list[dict[str, Any]], job_id: str) -> tuple[dict, di
         "scorer_config": scorer_config,
         "difficulty_max_static_score": difficulty_max,
         "static_by_task": static_by_task,
+        "tasks": tasks,
         "units": units,
     }
     state = {
