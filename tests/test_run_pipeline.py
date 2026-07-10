@@ -1006,7 +1006,7 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         assert rc["conditions"] == cond
         check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, cond)  # no raise
         assert set(rc["models"]) == {"qwen36_27b_vllm", "kimi_k26", "claude_opus"}
-        assert {m["provider"] for m in rc["models"].values()} == {"qwen_vllm", "kimi", "claude"}
+        assert {m["provider"] for m in rc["models"].values()} == {"qwen_vllm_api", "kimi", "claude"}
         # Opus 4.8 is the Claude model. The experimental sweep runs adaptive
         # thinking at effort:low, and MUST NOT send temperature (Opus 4.7+ reject
         # sampling params with a 400 — see interface/agents/claude.py).
@@ -1024,15 +1024,12 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         for model_cfg in rc["models"].values():
             rows = resolve_task_rows(model_cfg["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
             assert len(rows) == 15
-            # M6: the live 1-task API smoke validates the API models' budget, so
-            # the paid models (kimi, claude) must declare max_tokens=4096. Local
-            # Qwen runs with thinking enabled and needs a larger budget for the
-            # chain-of-thought plus the trailing FINAL_OUTPUT line.
-            if model_cfg["provider"] == "qwen_vllm":
-                assert model_cfg["max_tokens"] == 8192
-                assert model_cfg["enable_thinking"] is True
-            else:
-                assert model_cfg["max_tokens"] == 4096
+            # Cross-model comparability: the 10 experimental configs run all
+            # three models at the SAME cap (unequal caps confounded
+            # baseline_thinking — see FINDINGS §4). Qwen runs thinking OFF on
+            # the experimental sweep.
+            assert model_cfg["max_tokens"] == 4096
+        assert rc["models"]["qwen36_27b_vllm"]["enable_thinking"] is False
 
 
 def test_baseline_thinking_config_11_runs_full_thinking():
@@ -1062,11 +1059,15 @@ def test_baseline_thinking_config_11_runs_full_thinking():
     assert kimi["enable_thinking"] is True
     assert kimi["max_tokens"] == 16384
 
+    # ⚠️ These per-model caps are UNEQUAL (4k/8k/16k) — a fair within-model
+    # budget but an invalid cross-model thinking comparison (FINDINGS §4).
+    # The archived config is asserted as-run; a clean re-run needs one equal,
+    # large cap for all three models.
     qwen = rc["models"]["qwen36_27b_vllm"]
-    assert qwen["provider"] == "qwen_vllm"
+    assert qwen["provider"] == "qwen_vllm_api"
     assert qwen["model"] == "Qwen/Qwen3.6-27B"
     assert qwen["enable_thinking"] is True
-    assert qwen["max_tokens"] == 8192
+    assert qwen["max_tokens"] == 4096
 
 
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
