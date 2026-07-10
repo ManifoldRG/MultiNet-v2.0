@@ -51,6 +51,15 @@ embedded history sections are disabled (`with_context_history=False` in
 `interface/runner.py`) — `summary_last3` composes with multiturn chat the same
 way `last3` does: the chat carries it.
 
+**Landed alongside (2026-07-10, `fix/run-bugfixes`):** the summary itself is
+now additive — mechanism events *plus* the movement trail since the last
+event — instead of events-XOR-waypoints. The old form carried zero spatial
+information from the first pickup onward (29/45 sweep episodes), which is the
+likely driver of `ctx_text_summary`'s weak showing; an audit found the
+generation itself bug-free (4054/4054 sent summaries regenerate identically;
+0 phantom/missed events). ⚠️ Future `text_summary` cells are therefore not
+directly comparable to the sweep's — rank them within the next run.
+
 **Cost note:** ~3 extra images per query on top of `text_summary`'s flat text;
 expect `ctx_last3`-like token profiles (~146-159k median/episode), not
 `obs_image_only`'s 195k.

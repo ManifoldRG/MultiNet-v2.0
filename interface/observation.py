@@ -78,38 +78,42 @@ def text_summary_history(
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
 ) -> str:
-    """Build a one-sentence summary of all prior mechanism events or path waypoints."""
+    """Summarize prior mechanism events plus the movement trail since the last one.
+
+    The trail is essential: an events-only summary carried zero spatial
+    information from the first pickup onward, exactly when a keyed maze turns
+    back into a navigation problem (29/45 sweep episodes).
+    """
     steps = history_steps(transcript)
     mechanism_events = _extract_mechanism_events(steps, task_spec)
+    parts = [text for _, text in mechanism_events]
 
-    if mechanism_events:
-        summary = _format_summary_chain(mechanism_events)
-    else:
-        move_steps = [rec for rec in steps if rec.get("event_type") == "MOVED"]
-        if move_steps:
-            waypoints = _pick_waypoints(move_steps, 3)
-            nav_parts: list[str] = []
-            for i, (row, col) in enumerate(waypoints):
-                if i == len(waypoints) - 1:
-                    nav_parts.append(
-                        observation_templates.TEXT_SUMMARY_PASSED.format(row=row, col=col)
-                    )
-                else:
-                    nav_parts.append(
-                        observation_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col)
-                    )
-            summary = _format_summary_chain(nav_parts)
-        else:
-            return observation_templates.TEXT_SUMMARY_EMPTY
+    trail_start = mechanism_events[-1][0] + 1 if mechanism_events else 0
+    move_steps = [rec for rec in steps[trail_start:] if rec.get("event_type") == "MOVED"]
+    if move_steps:
+        waypoints = _pick_waypoints(move_steps, 3)
+        for i, (row, col) in enumerate(waypoints):
+            if i == len(waypoints) - 1:
+                parts.append(
+                    observation_templates.TEXT_SUMMARY_PASSED.format(row=row, col=col)
+                )
+            else:
+                parts.append(
+                    observation_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col)
+                )
 
+    if not parts:
+        return observation_templates.TEXT_SUMMARY_EMPTY
+    summary = _format_summary_chain(parts)
     return f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
 
 
 def _extract_mechanism_events(
     steps: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
-) -> list[str]:
-    events: list[str] = []
+) -> list[tuple[int, str]]:
+    """Return (index-into-steps, event text) pairs, in step order."""
+    events: list[tuple[int, str]] = []
     key_colors = {
         key.id: key.color for key in task_spec.mechanisms.keys
     } if task_spec else {}
@@ -119,7 +123,7 @@ def _extract_mechanism_events(
     gate_colors = {
         gate.id: getattr(gate, "color", "grey") for gate in task_spec.mechanisms.gates
     } if task_spec else {}
-    for rec in steps:
+    for index, rec in enumerate(steps):
         event_type = rec.get("event_type", "")
         sb = rec.get("state_before") or {}
         sa = rec.get("state_after") or {}
@@ -133,8 +137,11 @@ def _extract_mechanism_events(
             else:
                 key_id = sa.get("agent_carrying") or sb.get("agent_carrying") or "a"
             events.append(
-                observation_templates.TEXT_SUMMARY_PICKUP_KEY.format(
-                    key_color=key_colors.get(key_id, sa.get("agent_carrying") or key_id)
+                (
+                    index,
+                    observation_templates.TEXT_SUMMARY_PICKUP_KEY.format(
+                        key_color=key_colors.get(key_id, sa.get("agent_carrying") or key_id)
+                    ),
                 )
             )
 
@@ -144,8 +151,11 @@ def _extract_mechanism_events(
             new_doors = after_doors - before_doors
             door_id = sorted(new_doors)[0] if new_doors else "a"
             events.append(
-                observation_templates.TEXT_SUMMARY_OPEN_DOOR.format(
-                    door_color=door_colors.get(door_id, door_id)
+                (
+                    index,
+                    observation_templates.TEXT_SUMMARY_OPEN_DOOR.format(
+                        door_color=door_colors.get(door_id, door_id)
+                    ),
                 )
             )
 
@@ -156,14 +166,20 @@ def _extract_mechanism_events(
             closed = before_gates - after_gates
             if opened:
                 events.append(
-                    observation_templates.TEXT_SUMMARY_OPEN_GATE.format(
-                        gate_color=gate_colors.get(sorted(opened)[0], sorted(opened)[0])
+                    (
+                        index,
+                        observation_templates.TEXT_SUMMARY_OPEN_GATE.format(
+                            gate_color=gate_colors.get(sorted(opened)[0], sorted(opened)[0])
+                        ),
                     )
                 )
             elif closed:
                 events.append(
-                    observation_templates.TEXT_SUMMARY_CLOSE_GATE.format(
-                        gate_color=gate_colors.get(sorted(closed)[0], sorted(closed)[0])
+                    (
+                        index,
+                        observation_templates.TEXT_SUMMARY_CLOSE_GATE.format(
+                            gate_color=gate_colors.get(sorted(closed)[0], sorted(closed)[0])
+                        ),
                     )
                 )
 
