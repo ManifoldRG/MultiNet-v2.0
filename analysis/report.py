@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from analysis.data import load_episodes
+from analysis.data import CONDITIONAL_CONFIGS, load_episodes
 
 
 def summarise(episodes: pd.DataFrame) -> dict:
@@ -18,6 +18,7 @@ def summarise(episodes: pd.DataFrame) -> dict:
 
 def build_report(out="artifacts/analysis/REPORT.md", force=False) -> Path:
     ep = load_episodes(force=force)
+    ep = ep[ep.config.isin(CONDITIONAL_CONFIGS)].copy()
     s = summarise(ep)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)

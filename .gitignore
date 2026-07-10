@@ -58,4 +58,5 @@ docs/superpowers/
 # push target by sweep_run.sh publish) — never track it from the code repo.
 Multinet-v2-results/
 analysis/.cache/
+analysis/figures/
 artifacts/analysis/
