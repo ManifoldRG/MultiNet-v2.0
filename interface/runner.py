@@ -24,6 +24,7 @@ from interface.observation import (
     current_observation_text,
     history_content_blocks,
     history_text,
+    leading_summary_blocks,
     recent_history_steps,
 )
 from interface.prompt_strategies import (
@@ -489,6 +490,7 @@ class ExperimentRunner:
         if obs == "image_text":
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
+        summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
         hist_blocks = history_content_blocks(obs, ctx, transcript)
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
@@ -496,8 +498,11 @@ class ExperimentRunner:
         if self.config.in_context_learning == "one_shot":
             from interface.one_shot import one_shot_content_blocks
             one_shot_blocks = one_shot_content_blocks(obs)
-        if one_shot_blocks or hist_blocks or images:
-            return {"role": "user", "content": one_shot_blocks + hist_blocks + prompt_blocks}
+        if one_shot_blocks or summary_blocks or hist_blocks or images:
+            return {
+                "role": "user",
+                "content": one_shot_blocks + summary_blocks + hist_blocks + prompt_blocks,
+            }
         return {"role": "user", "content": prompt_text}
 
     def _result(

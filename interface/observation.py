@@ -26,7 +26,7 @@ from prompting_experiments.prompt_templates import observation as observation_te
 from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3", "text_summary"]
+ContextWindow = Literal["current", "last3", "text_summary", "text_summary_and_last3"]
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -40,7 +40,7 @@ def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def recent_history_steps(
     transcript: list[dict[str, Any]], context_window: ContextWindow
 ) -> list[dict[str, Any]]:
-    if context_window != "last3":
+    if context_window not in ("last3", "text_summary_and_last3"):
         return []
     return history_steps(transcript)[-3:]
 
@@ -53,8 +53,55 @@ def history_text(
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
+    if context_window == "text_summary_and_last3":
+        if observation not in ("text_only", "image_text"):
+            # image_only: the summary is emitted separately (see
+            # leading_summary_blocks) so it can precede the last3 image
+            # blocks in the message content list.
+            return ""
+        recent_text = _last3_history_text(context_window, transcript)
+        if observation == "image_text":
+            # Same reason: the summary precedes the last3 image blocks, so
+            # it is supplied by leading_summary_blocks instead of here.
+            return recent_text
+        summary = text_summary_history(transcript, task_spec)
+        if not recent_text:
+            return summary
+        return f"{summary}\n\n{recent_text}"
     if observation not in ("text_only", "image_text"):
         return ""
+    return _last3_history_text(context_window, transcript)
+
+
+def leading_summary_blocks(
+    observation: ObservationMode,
+    context_window: ContextWindow,
+    transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+) -> list[dict]:
+    """Text-summary content block that must precede the last3 image blocks.
+
+    For ``text_summary_and_last3`` with an image-bearing observation mode,
+    the last3 steps are rendered as separate image blocks (see
+    ``history_content_blocks``) rather than folded into the main prompt
+    text, so the summary has to be surfaced here to keep summary-then-last3
+    ordering in the final message content list.
+    """
+    if context_window != "text_summary_and_last3" or observation not in (
+        "image_only",
+        "image_text",
+    ):
+        return []
+    summary = text_summary_history(transcript, task_spec)
+    if not summary:
+        return []
+    return [{"type": "text", "text": summary}]
+
+
+def _last3_history_text(
+    context_window: ContextWindow,
+    transcript: list[dict[str, Any]],
+) -> str:
     recs = recent_history_steps(transcript, context_window)
     if not recs:
         return ""
