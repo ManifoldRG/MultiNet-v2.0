@@ -18,6 +18,20 @@ from interface.coords import (
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
 
+def _direction_changed(prev_direction, curr_direction, eps: float = 1e-6) -> bool:
+    """Whether the agent's facing changed, for both discrete (int 0-3) and
+    continuous (float degrees) ``GridState.agent_direction`` representations.
+
+    Int comparison is exact (an int check is the ``eps=0`` degenerate case);
+    float comparison is wraparound-aware (e.g. 359° vs 1° is a 2° change, not
+    a 358° one) and tolerant of float noise from repeated heading rotations.
+    """
+    if isinstance(prev_direction, int) and isinstance(curr_direction, int):
+        return prev_direction != curr_direction
+    diff = abs((float(curr_direction) - float(prev_direction) + 180.0) % 360.0 - 180.0)
+    return diff > eps
+
+
 def infer_step_outcome(
     action: str,
     prev: GridState,
@@ -25,7 +39,12 @@ def infer_step_outcome(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    info: dict | None = None,
 ) -> tuple[str, str]:
+    # Continuous-navigation backends (e.g. OgbenchBackend) may send actions
+    # with a numeric magnitude suffix, e.g. "MOVE_FORWARD(0.5)" — compare on
+    # the bare verb but keep `action` (with its suffix) in feedback text.
+    verb = action.split("(", 1)[0]
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
     curr_pos = agent_row_col(curr)
@@ -35,7 +54,7 @@ def infer_step_outcome(
         door_id = sorted(newly_open)[0]
         door = next((d for d in task_spec.mechanisms.doors if d.id == door_id), None)
         color = door.requires_key if door else "matching"
-        if action == "MOVE_FORWARD" and prev_pos != curr_pos:
+        if verb == "MOVE_FORWARD" and prev_pos != curr_pos:
             return "OPENED", feedback_templates.OPENED_AND_MOVED.format(
                 color=color,
                 door_id=door_id,
@@ -43,13 +62,18 @@ def infer_step_outcome(
             )
         return "OPENED", feedback_templates.OPENED_DOOR.format(color=color, door_id=door_id)
 
-    if action in ("TURN_LEFT", "TURN_RIGHT"):
-        if prev.agent_direction != curr.agent_direction:
+    if verb in ("TURN_LEFT", "TURN_RIGHT"):
+        if _direction_changed(prev.agent_direction, curr.agent_direction):
             return "TURNED", feedback_templates.NOW_FACING.format(facing=agent_facing(curr))
         return "NOTHING", feedback_templates.ACTION_NO_EFFECT.format(action=action)
 
-    if action == "MOVE_FORWARD":
-        if prev_pos == curr_pos:
+    if verb == "MOVE_FORWARD":
+        # Prefer an explicit collision signal when the backend reports one
+        # (e.g. ogbench's MazeEnv sets info['movement_blocked']); MiniGrid/
+        # MultiGrid never set this key, so they keep relying purely on the
+        # position-equality check below.
+        blocked = bool(info.get("movement_blocked")) if info else False
+        if blocked or prev_pos == curr_pos:
             fwd = forward_cell(prev)
             key_color = key_at_cell(task_spec, prev, fwd[0], fwd[1])
             if key_color:
@@ -85,7 +109,7 @@ def infer_step_outcome(
             return "DONE", feedback_templates.REACHED_GOAL.format(goal=goal)
         return "MOVED", feedback_templates.MOVED_TO.format(position=curr_pos)
 
-    if action == "PICKUP":
+    if verb == "PICKUP":
         if (
             prev.agent_carrying != curr.agent_carrying
             or len(curr.collected_keys) > len(prev.collected_keys)
@@ -94,7 +118,7 @@ def infer_step_outcome(
             return "PICKUP", feedback_templates.PICKED_UP_KEY.format(key_color=carried)
         return "NOTHING", feedback_templates.NOTHING_TO_PICK_UP
 
-    if action == "TOGGLE":
+    if verb == "TOGGLE":
         if (
             prev.active_switches != curr.active_switches
             or prev.open_gates != curr.open_gates
@@ -130,7 +154,7 @@ def infer_step_outcome(
             feedback_templates.TOGGLE_NO_EFFECT,
         )
 
-    if action == "DONE":
+    if verb == "DONE":
         if terminated and reward > 0 and curr_pos == goal:
             return "DONE", feedback_templates.TASK_COMPLETE.format(goal=goal)
         return "WRONG_DONE", feedback_templates.WRONG_DONE.format(goal=goal)
@@ -145,9 +169,10 @@ def format_step_feedback(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    info: dict | None = None,
 ) -> tuple[str, str]:
     event_type, event_message = infer_step_outcome(
-        action, prev, curr, reward, terminated, task_spec
+        action, prev, curr, reward, terminated, task_spec, info
     )
     prev_pos = agent_row_col(prev)
     if event_type == "BLOCKED":

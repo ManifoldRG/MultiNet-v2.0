@@ -24,11 +24,18 @@ _DIR_TO_FACING = {
 
 
 def to_row_col(pos: Position | tuple[int, int]) -> tuple[int, int]:
-    """Gridworld ``(x, y)`` or ``Position`` → 1-based ``(row, column)`` with row southward."""
+    """Gridworld ``(x, y)`` or ``Position`` → 1-based ``(row, column)`` with row southward.
+
+    Rounds to the nearest integer cell. This is a no-op for the already-integer
+    coordinates discrete-grid backends (MiniGrid/MultiGrid) produce, and gives a
+    "nearest cell" approximation for continuous-navigation backends (e.g.
+    OgbenchBackend), so mechanism-adjacency/feedback logic elsewhere in this
+    module can keep comparing exact ``(row, col)`` tuples either way.
+    """
     if isinstance(pos, Position):
         return (int(pos.y), int(pos.x))
     x, y = pos
-    return (int(y), int(x))
+    return (round(y), round(x))
 
 
 def agent_row_col(state: GridState) -> tuple[int, int]:
@@ -36,7 +43,14 @@ def agent_row_col(state: GridState) -> tuple[int, int]:
 
 
 def agent_facing(state: GridState) -> str:
-    return _DIR_TO_FACING.get(state.agent_direction, "NORTH")
+    direction = state.agent_direction
+    if isinstance(direction, int):
+        return _DIR_TO_FACING.get(direction, "NORTH")
+    # Continuous heading in degrees (task-spec frame: 0=EAST, 90=NORTH,
+    # 180=WEST, 270=SOUTH) — quantized to a compass label for display only,
+    # never used to decide movement outcomes.
+    quadrant = round(float(direction) / 90.0) % 4
+    return {0: "EAST", 1: "NORTH", 2: "WEST", 3: "SOUTH"}[quadrant]
 
 
 def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:

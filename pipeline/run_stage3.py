@@ -38,17 +38,24 @@ def run_episode(
     agent: Agent,
     seed: int,
     out_dir: str | Path,
+    backend: str = "minigrid",
 ) -> dict[str, Any]:
     """Run one episode and flush ``episode.json`` into ``out_dir``.
 
     Returns the in-memory episode dict (the JSON-safe payload written to
     ``out_dir/episode.json``), so callers can derive metrics without re-reading.
     """
-    backend, spec = load_task(task_source)
-    spec = _spec_with_seed(spec, seed)
-    backend.configure(spec)
+    backend_obj, spec = load_task(task_source, backend=backend)
+    seeded_spec = _spec_with_seed(spec, seed)
+    if seeded_spec is not spec:
+        # Only re-configure (rebuilds the backend's env from scratch — cheap
+        # for MiniGrid, but a real MuJoCo XML recompile for OgbenchBackend)
+        # when the seed actually changed the spec load_task() already
+        # configured with.
+        backend_obj.configure(seeded_spec)
+    spec = seeded_spec
 
-    runner = build_runner(config, backend, spec)
+    runner = build_runner(config, backend_obj, spec)
     result = runner.run(agent, verbose=False, maze_path=str(task_source))
 
     out_dir = Path(out_dir)

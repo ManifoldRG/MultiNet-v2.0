@@ -290,8 +290,10 @@ def _score_suite(
 # --------------------------------------------------------------------------- #
 # Stages 3-4 — runs + runtime score (per model)
 # --------------------------------------------------------------------------- #
-def _run_dir(artifacts_root: Path, task_id: str, model: str, seed: int, condition: str) -> Path:
-    return artifacts_root / "runs" / task_id / "minigrid" / model / f"seed_{seed}" / condition
+def _run_dir(
+    artifacts_root: Path, task_id: str, model: str, seed: int, condition: str, backend: str = "minigrid"
+) -> Path:
+    return artifacts_root / "runs" / task_id / backend / model / f"seed_{seed}" / condition
 
 
 def _run_one_model(
@@ -307,6 +309,7 @@ def _run_one_model(
     seeds: Iterable[int],
     conditions: Optional[str],
     force: bool,
+    backend: str = "minigrid",
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
     from pipeline.run_stage3 import run_episode
 
@@ -330,7 +333,7 @@ def _run_one_model(
 
         for seed in seeds:
             for variant, cfg in condition_configs:
-                run_dir = _run_dir(artifacts_root, task_id, model_name, seed, variant)
+                run_dir = _run_dir(artifacts_root, task_id, model_name, seed, variant, backend)
                 episode_path = run_dir / "episode.json"
                 sidecar_path = run_dir / "run_inputs.json"
                 run_score_path = run_dir / "run_score.json"
@@ -343,7 +346,7 @@ def _run_one_model(
 
                 # Stage 3 (expensive: model calls) is hash-cached. Reuse a cached
                 # episode only when its stamped run-inputs hash still matches.
-                expected_hash = _expected_run_hash(spec, model_name, seed, "minigrid")
+                expected_hash = _expected_run_hash(spec, model_name, seed, backend)
                 episode = None
                 if not force and episode_path.exists() and sidecar_path.exists():
                     sidecar = _load_json_object_if_valid(sidecar_path)
@@ -351,7 +354,7 @@ def _run_one_model(
                         episode = _load_json_object_if_valid(episode_path)
 
                 if episode is None:
-                    episode = run_episode(source, cfg, agent, seed, run_dir)
+                    episode = run_episode(source, cfg, agent, seed, run_dir, backend=backend)
                     _write_json_atomic(
                         sidecar_path,
                         {
@@ -360,7 +363,7 @@ def _run_one_model(
                             "task_id": task_id,
                             "model_id": model_name,
                             "seed": seed,
-                            "backend": "minigrid",
+                            "backend": backend,
                             "condition": variant,
                         },
                     )
@@ -373,7 +376,12 @@ def _run_one_model(
                 # Stage 4 is cheap + deterministic: always (re)score from the
                 # episode so scorer-config / static / canonical changes propagate.
                 enriched = episode_metrics.enrich_run_for_scoring(
-                    episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
+                    episode,
+                    manifest_row,
+                    agent_or_model=model_name,
+                    seed=seed,
+                    backend=backend,
+                    metrics=metrics,
                 )
                 run_score = compute_runtime_score(
                     enriched,
@@ -391,6 +399,7 @@ def _run_one_model(
                         manifest_row,
                         agent_or_model=model_name,
                         seed=seed,
+                        backend=backend,
                         raw_output_ref=str(episode_path.relative_to(artifacts_root)),
                         metrics=metrics,
                         prompt_variant=variant,
@@ -459,6 +468,7 @@ def run_pipeline(
     scorer_config: Optional[ScorerConfig] = None,
     difficulty_max_static_score: Optional[float] = None,
     force: bool = False,
+    backend: str = "minigrid",
 ) -> dict[str, Any]:
     """Single-model convenience entry: run one experiment with one agent."""
     manifest_path = Path(manifest_path)
@@ -487,6 +497,7 @@ def run_pipeline(
         seeds=seeds,
         conditions=conditions,
         force=force,
+        backend=backend,
     )
     return _write_aggregate(run_rows, composites, static_by_task, rows, artifacts_root, run_set_id)
 
@@ -503,8 +514,13 @@ def run_from_config(
     difficulty_max_static_score: Optional[float] = None,
     force: bool = False,
     agent_factory: Optional[AgentFactory] = None,
+    backend: str = "minigrid",
 ) -> dict[str, Any]:
-    """Run-config entry: each model runs its own task selection (model -> task files)."""
+    """Run-config entry: each model runs its own task selection (model -> task files).
+
+    ``backend`` is the fallback default; a model entry may override it with
+    its own ``"backend"`` key so one run-config can mix backends across models.
+    """
     manifest_path = Path(manifest_path)
     artifacts_root = Path(artifacts_root)
     config = scorer_config or load_scorer_config()
@@ -514,7 +530,7 @@ def run_from_config(
     catalog = load_manifest(manifest_path)
 
     # Resolve each model's task rows + build its agent.
-    plans: list[tuple[str, Agent, list[dict[str, Any]]]] = []
+    plans: list[tuple[str, Agent, list[dict[str, Any]], str]] = []
     union: dict[str, dict[str, Any]] = {}
     for name, model_cfg in run_config["models"].items():
         entries = model_cfg.get("tasks") or model_cfg.get("runs") or []
@@ -522,7 +538,8 @@ def run_from_config(
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
         agent, label = factory(name, model_cfg)
-        plans.append((_sanitize(label), agent, rows))
+        model_backend = model_cfg.get("backend", backend)
+        plans.append((_sanitize(label), agent, rows, model_backend))
         for r in rows:
             union.setdefault(r["task_id"], r)
 
@@ -538,7 +555,7 @@ def run_from_config(
 
     all_run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
-    for model_name, agent, rows in plans:
+    for model_name, agent, rows, model_backend in plans:
         rr, comp = _run_one_model(
             rows,
             agent,
@@ -551,6 +568,7 @@ def run_from_config(
             seeds=seeds,
             conditions=conditions,
             force=force,
+            backend=model_backend,
         )
         all_run_rows.extend(rr)
         composites.update(comp)
@@ -626,6 +644,13 @@ def main(argv: Optional[list[str]] = None) -> None:
     # Single-model fallback (when --run-config is not supplied):
     parser.add_argument("--experiment", choices=["test1", "test2", "test3", "all"], default="all")
     parser.add_argument("--agent", choices=["claude", "qwen"], help="Single-model provider.")
+    parser.add_argument(
+        "--backend",
+        choices=["minigrid", "multigrid", "ogbench"],
+        default="minigrid",
+        help="Grid backend to run episodes against. For --run-config, this is the "
+        "fallback default for any model entry without its own 'backend' key.",
+    )
     args = parser.parse_args(argv)
 
     if args.run_config:
@@ -638,6 +663,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             run_set_id=args.run_set_id,
             difficulty_max_static_score=args.difficulty_max_static_score,
             force=args.force,
+            backend=args.backend,
         )
     else:
         if not args.agent:
@@ -654,6 +680,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             run_set_id=args.run_set_id,
             difficulty_max_static_score=args.difficulty_max_static_score,
             force=args.force,
+            backend=args.backend,
         )
 
     summary = payloads["scoring_calibration_summary"]

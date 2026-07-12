@@ -1,4 +1,4 @@
-"""ExperimentRunner — LLM episode loop using gridworld MiniGridBackend."""
+"""ExperimentRunner — LLM episode loop over any AbstractGridBackend."""
 
 from __future__ import annotations
 
@@ -10,10 +10,9 @@ from typing import Callable, List
 
 import numpy as np
 
-from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
-from interface.actions_map import nlu_action_to_int
 from interface.config import ExperimentConfig
 from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
@@ -25,7 +24,6 @@ from interface.observation import (
     history_text,
     recent_history_steps,
 )
-from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
     PromptStrategy,
@@ -113,14 +111,14 @@ def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> l
 
 def build_runner(
     config: ExperimentConfig,
-    backend: MiniGridBackend,
+    backend: AbstractGridBackend,
     task_spec: TaskSpecification,
 ) -> ExperimentRunner:
     return ExperimentRunner(
         backend=backend,
         task_spec=task_spec,
         config=config,
-        prompt=_PROMPT_STRATEGIES[config.prompting](ACTIONS_HINT),
+        prompt=_PROMPT_STRATEGIES[config.prompting](backend.actions_hint()),
         querying=QueryingMode(config.querying),
     )
 
@@ -128,7 +126,7 @@ def build_runner(
 class ExperimentRunner:
     def __init__(
         self,
-        backend: MiniGridBackend,
+        backend: AbstractGridBackend,
         task_spec: TaskSpecification,
         config: ExperimentConfig,
         prompt: PromptStrategy,
@@ -300,7 +298,7 @@ class ExperimentRunner:
                     )
                     last_feedback = (
                         feedback_templates.PARSE_FAILURE_FEEDBACK.format(
-                            actions_hint=ACTIONS_HINT
+                            actions_hint=self.backend.actions_hint()
                         )
                     )
                     if parse_failures >= self.config.max_parse_retries:
@@ -324,7 +322,7 @@ class ExperimentRunner:
 
             prev_state = state
             try:
-                action_int = nlu_action_to_int(action)
+                action_value = self.backend.parse_action(action)
             except ValueError:
                 step_detail, event_type = format_step_feedback(
                     action, prev_state, prev_state, 0.0, False, self.task_spec
@@ -364,10 +362,10 @@ class ExperimentRunner:
                 continue
 
             self.last_rgb, reward, terminated, truncated, state, info = self.backend.step(
-                action_int
+                action_value
             )
             step_detail, event_type = format_step_feedback(
-                action, prev_state, state, reward, terminated, self.task_spec
+                action, prev_state, state, reward, terminated, self.task_spec, info
             )
             last_feedback = step_detail
 

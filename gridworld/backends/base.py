@@ -111,6 +111,13 @@ class GridState:
 
     This is a backend-agnostic representation of the environment state
     that can be used for evaluation and comparison.
+
+    ``agent_position``/``agent_direction`` are ``(int, int)``/``int`` (grid
+    cell, 0=right/1=down/2=left/3=up) for discrete-grid backends (MiniGrid,
+    MultiGrid). Continuous-navigation backends (e.g. OgbenchBackend) instead
+    populate them with ``(float, float)``/``float`` (world position, heading
+    in degrees) — consumers that need exact grid semantics (``interface/coords.py``,
+    ``interface/feedback.py``) branch on the field's type.
     """
     # Agent state
     agent_position: tuple[int, int]
@@ -272,6 +279,36 @@ class AbstractGridBackend(ABC):
             Current GridState
         """
         pass
+
+    def actions_hint(self) -> str:
+        """
+        Human-readable description of this backend's valid action grammar,
+        injected into the system prompt in place of the runner's own action
+        vocabulary. Discrete-grid backends return the fixed 7-token hint;
+        continuous-navigation backends may describe a richer grammar (e.g.
+        tokens with an optional numeric magnitude).
+        """
+        from interface.parser import ACTIONS_HINT
+
+        return ACTIONS_HINT
+
+    def parse_action(self, token: str) -> Any:
+        """
+        Convert one already-tokenized NLU action string into whatever this
+        backend's ``step()`` expects. Discrete-grid backends map to the
+        MiniGrid action ints; other backends may return a richer action
+        object (e.g. a continuous move vector + interact command).
+
+        Raises:
+            ValueError: If ``token`` is not a valid action for this backend.
+        """
+        from interface.actions_map import nlu_action_to_int
+
+        # Defensive: strip an optional continuous-grammar "(magnitude)" suffix
+        # (e.g. "MOVE_FORWARD(0.5)") that only a continuous-navigation backend's
+        # prompt would ever advertise, so a stray one doesn't crash a discrete backend.
+        verb = token.split("(", 1)[0].strip()
+        return nlu_action_to_int(verb)
 
     @property
     def is_configured(self) -> bool:

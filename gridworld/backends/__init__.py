@@ -15,9 +15,15 @@ Available Backends:
         - Full mechanism set (keys, doors, switches, gates, hazards, teleporters, zones)
         - Partial observability: view cone + fog of war (BFS-based on adjacency graph)
 
+    OgbenchBackend: OGBench's continuous-physics PointyEnv maze
+        - Square grid layout, continuous point-mass navigation (not discretized)
+        - Mechanism set: keys, doors, switches, gates (no blocks/teleporters/hazards)
+        - No partial observability (always full)
+
 Feature Comparison (see base.py for full table):
     - MiniGrid: Best for standard square grid tasks, more mature/tested
     - MultiGrid: Required for hex/triangle tilings or zones/teleporters
+    - Ogbench: Continuous navigation instead of discrete grid steps
 
 Usage:
     from gridworld.backends import get_backend
@@ -27,6 +33,9 @@ Usage:
 
     # Exotic tilings (hex, triangle)
     backend = get_backend("multigrid", tiling="triangle", render_mode="rgb_array")
+
+    # Continuous-navigation PointyEnv maze
+    backend = get_backend("ogbench", render_mode="rgb_array")
 """
 
 from .base import AbstractGridBackend, GridState
@@ -40,11 +49,20 @@ except ImportError:
     MultiGridBackend = None
     _MULTIGRID_AVAILABLE = False
 
+# OgbenchBackend is optional - requires the ogbench submodule (and mujoco)
+try:
+    from .ogbench_backend import OgbenchBackend
+    _OGBENCH_AVAILABLE = True
+except ImportError:
+    OgbenchBackend = None
+    _OGBENCH_AVAILABLE = False
+
 __all__ = [
     "AbstractGridBackend",
     "GridState",
     "MiniGridBackend",
     "MultiGridBackend",
+    "OgbenchBackend",
 ]
 
 
@@ -53,7 +71,7 @@ def get_backend(name: str, **kwargs) -> AbstractGridBackend:
     Get a backend instance by name.
 
     Args:
-        name: Backend name ("minigrid" or "multigrid")
+        name: Backend name ("minigrid", "multigrid", or "ogbench")
         **kwargs: Arguments passed to backend constructor
 
     Returns:
@@ -71,5 +89,12 @@ def get_backend(name: str, **kwargs) -> AbstractGridBackend:
                 "Ensure multigrid module is accessible."
             )
         return MultiGridBackend(**kwargs)
+    elif name == "ogbench":
+        if not _OGBENCH_AVAILABLE:
+            raise ValueError(
+                "OgbenchBackend not available. "
+                "Ensure the ogbench submodule (and mujoco) is importable."
+            )
+        return OgbenchBackend(**kwargs)
     else:
         raise ValueError(f"Unknown backend: {name}")

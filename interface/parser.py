@@ -29,6 +29,13 @@ _SYNONYMS = {
 
 _FINAL_OUTPUT_RE = re.compile(r"(?i)^FINAL_OUTPUT\s*:\s*(.*)\s*$")
 
+# Matches a bare verb ("TURN_LEFT", "turn left") or a verb with an optional
+# numeric magnitude suffix ("MOVE_FORWARD(0.5)", "TURN_LEFT(45)") — the
+# magnitude form is only meaningful to continuous-navigation backends
+# (see gridworld/backends/ogbench_backend.py), but tokenization for it lives
+# here so every backend shares the same FINAL_OUTPUT parsing.
+_ACTION_TOKEN_RE = re.compile(r"^([A-Za-z_ ]+?)\s*(\(\s*(-?\d+(?:\.\d+)?)\s*\))?$")
+
 
 def parse_final_output(
     text: str, allow_regex_fallback: bool = True
@@ -70,5 +77,11 @@ def parse_final_output(
 
 
 def normalize_action(raw: str) -> str:
-    verb = raw.strip().upper().replace(" ", "_")
-    return verb if verb in VALID_ACTIONS else ""
+    m = _ACTION_TOKEN_RE.match(raw.strip())
+    if not m:
+        return ""
+    verb = m.group(1).strip().upper().replace(" ", "_")
+    if verb not in VALID_ACTIONS:
+        return ""
+    magnitude = m.group(3)
+    return f"{verb}({magnitude})" if magnitude is not None else verb
