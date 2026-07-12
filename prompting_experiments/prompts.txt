@@ -16,13 +16,51 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: minimal
 description: Minimal prompt with action list only.
@@ -32,13 +70,51 @@ preview steps: 3  rollout seed: 0
 Task: Solve the maze by reaching the goal.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: verbose
 description: Standard prompt plus explicit domain rules.
@@ -59,19 +135,57 @@ RULES (domain logic):
   - Closed doors you lack a key for block movement like walls until resolved.
   - Use DONE only when you are standing on the goal cell.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 2: Observation format
 ========================================================================================
 variant name: standard
-description: Image block with no initial natural-language maze map-same as the standard prompt.
+description: Image block only, no natural-language observation (ablates the text half of the image+text default).
 prompts:
 preview steps: 3  rollout seed: 0
 [system prompt]
@@ -81,7 +195,28 @@ Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
+Your inventory: empty.
+Action: PICKUP
+
+[image block 3]
+Your inventory: empty.
+Action: PICKUP
+
+[image block 4]
+Your inventory: empty.
+Action: TURN_LEFT
+
+[image block 5]
 Your inventory: empty.
 What is your next action?
 
@@ -100,12 +235,32 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 Initial maze (fixed for this episode):
 The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
 
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+The world is a 14 by 14 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (1, 12).
+The following cells are walls: (1,3), (2,1), (2,3), (2,4), (2,6), (2,8), (2,10), (2,11), (2,12), (3,1), (3,4), (3,6), (3,8), (3,12), (4,1), (4,2), (4,4), (4,6), (4,8), (4,9), (4,10), (4,12), (5,2), (5,4), (5,6), (5,9), (5,12), (6,1), (6,2), (6,4), (6,5), (6,6), (6,7), (6,8), (6,9), (6,11), (6,12), (7,1), (7,4), (7,11), (7,12), (8,1), (8,2), (8,4), (8,6), (8,7), (8,9), (8,10), (8,12), (9,2), (9,6), (9,10), (9,12), (10,1), (10,2), (10,3), (10,5), (10,6), (10,8), (10,10), (10,12), (11,1), (11,5), (11,8), (12,1), (12,2), (12,3), (12,4), (12,5), (12,6), (12,7), (12,8), (12,9), (12,10), (12,11).
+There is a red key at (8,5).
+There is a blue key at (1,8).
+There is a locked red door at (7,6). It requires the red key to open.
+There is a locked blue door at (1,11). It requires the blue key to open.
+There is a toggle switch at (5,10) (currently off). It controls: g1.
+There is a gate (g1) at (4,11). It is currently closed (initially closed).
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
 You are at (1, 1) facing NORTH.
 Your inventory: empty.
 
@@ -129,13 +284,37 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 Initial maze (fixed for this episode):
 The world is a 8 by 8 grid.
-Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``; tuples in this text use ``(row, column)`` matching env state (row southward, column east). So ``x`` = column index, ``y`` = row index.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
 The start is at (1, 1).
 The goal is at (6, 6).
 The following cells are walls: none.
 
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
+Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
 You are at (1, 1) facing NORTH.
 Your inventory: empty.
 
@@ -153,7 +332,7 @@ Reminder: decide your single next action without narrating your reasoning. Your 
 condition set 3: Context window
 ========================================================================================
 variant name: standard
-description: Prompt only with the current observation-same as the standard prompt.
+description: Current observation only, no history (the 0-history ablation of the last3 default).
 prompts:
 preview steps: 3  rollout seed: 0
 [system prompt]
@@ -162,16 +341,37 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+[image block 2]
+You are at (1, 1) facing NORTH.
 Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: last3
-description: Include up to the last three executed steps.
+description: Last three executed steps rendered in one stateless message - same as the fair default.
 prompts:
 preview steps: 3  rollout seed: 0
 [system prompt]
@@ -180,30 +380,54 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
-Recent steps (oldest first):
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
 
 [image block 1]
-Your inventory: empty.
-Action: PICKUP
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
 
 [image block 2]
 Your inventory: empty.
-Action: PICKUP
 
 [image block 3]
 Your inventory: empty.
-Action: TURN_LEFT
 
 [image block 4]
 Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: text_summary
-description: One-sentence summary of all prior mechanism events or path waypoints.
+description: One-sentence summary of all prior mechanism events/path waypoints, in one stateless message.
 prompts:
 preview steps: 10  rollout seed: 5
 [system prompt]
@@ -212,20 +436,41 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
+[image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
 Activity summary:
 first you navigated to (1, 2), then you navigated to (2, 2), finally you passed (2, 1)
 
 
-[image block 1]
+[image block 2]
+You are at (2, 1) facing WEST.
 Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 additional text_summary example: one_shot_example maze after one_shot_example_solution
-maze: /home/sean/AI_training/Manifold/MultiNet-v2.0/mazes/one_shot_example/one_shot_example_14x14_dense_kr_sg_kb_2.json
+maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/one_shot_example/one_shot_example_14x14_dense_kr_sg_kb_2.json
 solution steps replayed: 51
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
@@ -233,23 +478,50 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
-[user prompt]
-Activity summary:
-first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, finally you opened the blue door
+Initial maze (fixed for this episode):
+The world is a 14 by 14 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (1, 12).
+The following cells are walls: (1,3), (2,1), (2,3), (2,4), (2,6), (2,8), (2,10), (2,11), (2,12), (3,1), (3,4), (3,6), (3,8), (3,12), (4,1), (4,2), (4,4), (4,6), (4,8), (4,9), (4,10), (4,12), (5,2), (5,4), (5,6), (5,9), (5,12), (6,1), (6,2), (6,4), (6,5), (6,6), (6,7), (6,8), (6,9), (6,11), (6,12), (7,1), (7,4), (7,11), (7,12), (8,1), (8,2), (8,4), (8,6), (8,7), (8,9), (8,10), (8,12), (9,2), (9,6), (9,10), (9,12), (10,1), (10,2), (10,3), (10,5), (10,6), (10,8), (10,10), (10,12), (11,1), (11,5), (11,8), (12,1), (12,2), (12,3), (12,4), (12,5), (12,6), (12,7), (12,8), (12,9), (12,10), (12,11).
+There is a red key at (8,5).
+There is a blue key at (1,8).
+There is a locked red door at (7,6). It requires the red key to open.
+There is a locked blue door at (1,11). It requires the blue key to open.
+There is a toggle switch at (5,10) (currently off). It controls: g1.
+There is a gate (g1) at (4,11). It is currently closed (initially closed).
 
+[user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
 
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Activity summary:
+first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, then you opened the blue door, finally you passed (1, 11)
+
+
+[image block 2]
+You are at (1, 12) facing SOUTH.
 Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+There is a open red door at (7,6). It requires the red key to open.
+There is a open blue door at (1,11). It requires the blue key to open.
+There is a toggle switch at (5,10) (currently on). It controls: g1.
+There is a gate (g1) at (4,11). It is currently open (initially closed).
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
-========================================================================================
-condition set 4: Action space
-========================================================================================
-variant name: egocentric
-description: Turn-and-move interface-same as the standard prompt.
+variant name: text_summary_and_last3
+description: One-sentence summary of all prior mechanism events/path waypoints, in one stateless message, and last three executed steps rendered in one stateless message.
 prompts:
 preview steps: 3  rollout seed: 0
 [system prompt]
@@ -258,13 +530,112 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+you haven't done anything yet
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 4: Action space
+========================================================================================
+variant name: egocentric
+description: Turn-and-move interface - same as the standard prompt (the default).
+prompts:
+preview steps: 3  rollout seed: 0
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
+[image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
+Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: cardinal
 description: Absolute moves (MOVE_NORTH/SOUTH/EAST/WEST) plus PICKUP, INTERACT, DONE; each move is expanded into egocentric primitives at runtime.
@@ -276,13 +647,51 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: MOVE_NORTH, MOVE_SOUTH, MOVE_EAST, MOVE_WEST, PICKUP, INTERACT, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 5: Querying strategy
@@ -297,13 +706,51 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: subgoal
 description: Ask for a short subgoal and action chunk.
@@ -315,14 +762,52 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 SUB_GOAL: <short description of your next sub_goal>
 FINAL_OUTPUT:  <a>, <b>, ...  (comma-separated; one or more valid actions to reach it)
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: full_trajectory
 description: Ask once for a complete action trajectory.
@@ -334,19 +819,57 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
 [image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
 Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is the full sequence of actions you will take to complete the task?
 
 Output exactly:
 FINAL_OUTPUT: <a>, <b>, ...  (comma-separated; one or more valid actions)
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 ========================================================================================
 condition set 6: In-context learning
 ========================================================================================
 variant name: standard
-description: No examples — same as the standard prompt.
+description: No examples (the ablation of the one_shot default).
 prompts:
 preview steps: 3  rollout seed: 0
 [system prompt]
@@ -355,13 +878,44 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
+Recent steps (oldest first):
+
 [image block 1]
 Your inventory: empty.
+
+[image block 2]
+Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 4]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------
 variant name: one_shot
 description: One example trajectory prepended to each user message (14x14 dense kr_sg_kb maze, separate from evaluation mazes).
@@ -373,6 +927,128 @@ The environment may contain:
 Keys, doors, switches, and gates.
 Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
+[image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
+Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
+----------------------------------------------------------------------------------------
+========================================================================================
+condition set 7: History mechanism
+========================================================================================
+variant name: single_message
+description: History in one stateless message (last3) - same as the fair default.
+prompts:
+preview steps: 3  rollout seed: 0
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
+[user prompt]
+Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
+
+[image block 1]
+
+Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE
+
+
+Recent steps (oldest first):
+
+[image block 2]
+Your inventory: empty.
+
+[image block 3]
+Your inventory: empty.
+
+[image block 4]
+Your inventory: empty.
+
+Recent history (last 3 steps, oldest first):
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing EAST -> PICKUP -> NOTHING — PICKUP: Nothing to pick up here. You remain at (1, 1).
+  (1, 1) facing NORTH -> TURN_LEFT -> TURNED — TURN_LEFT: Now facing NORTH.
+
+
+[image block 5]
+You are at (1, 1) facing NORTH.
+Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
+----------------------------------------------------------------------------------------
+variant name: multiturn
+description: Rolling 3-turn chat; each prior turn carries its own observation image (context_window=current so history comes from turns, not in-prompt, avoiding duplication).
+prompts:
+preview steps: 3  rollout seed: 0
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+Initial maze (fixed for this episode):
+The world is a 8 by 8 grid.
+Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.
+The start is at (1, 1).
+The goal is at (6, 6).
+The following cells are walls: none.
+
 [user prompt]
 Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):
 
@@ -382,9 +1058,16 @@ Actions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWA
 
 
 [image block 2]
+You are at (1, 1) facing NORTH.
 Your inventory: empty.
+
+Map contents as of this step (keys on the ground, doors, switches, gates):
+(No keys on the ground, doors, switches, or gates in the current state description.)
+
 What is your next action?
 
 Output exactly:
 FINAL_OUTPUT: <action>
+
+Reminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it.
 ----------------------------------------------------------------------------------------

@@ -28,9 +28,15 @@ CONDITION_SET = ConditionSet(
             name="text_summary",
             description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message.",
             config_overrides={"context_window": "text_summary", "chat_history": "stateless"},
+            # Roll out farther in prompt previews so the summary has useful content.
             preview_steps=10,
             preview_rollout_seed=5,
             preview_move_only=True,
+        ),
+        "text_summary_and_last3": Variant(
+            name="text_summary_and_last3",
+            description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message, and last three executed steps rendered in one stateless message.",
+            config_overrides={"context_window": "text_summary_and_last3", "chat_history": "stateless"},
         ),
     },
 )

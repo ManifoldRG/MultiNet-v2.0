@@ -26,7 +26,7 @@ from prompting_experiments.prompt_templates import observation as observation_te
 from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3", "text_summary"]
+ContextWindow = Literal["current", "last3", "text_summary", "text_summary_and_last3"]
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -40,7 +40,7 @@ def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def recent_history_steps(
     transcript: list[dict[str, Any]], context_window: ContextWindow
 ) -> list[dict[str, Any]]:
-    if context_window != "last3":
+    if context_window not in ("last3", "text_summary_and_last3"):
         return []
     return history_steps(transcript)[-3:]
 
@@ -53,6 +53,27 @@ def history_text(
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
+    if context_window == "text_summary_and_last3":
+        summary = text_summary_history(transcript, task_spec)
+        if observation not in ("text_only", "image_text"):
+            return summary
+        recs = recent_history_steps(transcript, context_window)
+        if not recs:
+            return summary
+
+        lines = [summary, "", observation_templates.RECENT_HISTORY_HEADER]
+        for rec in recs:
+            row, col = rec["position_after"]
+            lines.append(
+                observation_templates.RECENT_HISTORY_STEP.format(
+                    row=int(row),
+                    col=int(col),
+                    facing=rec["facing_after"],
+                    action=rec["action"],
+                    feedback=rec["prompt_feedback"],
+                )
+            )
+        return "\n".join(lines)
     if observation not in ("text_only", "image_text"):
         return ""
     recs = recent_history_steps(transcript, context_window)

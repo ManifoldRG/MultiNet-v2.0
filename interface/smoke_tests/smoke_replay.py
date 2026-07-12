@@ -54,7 +54,11 @@ def main() -> None:
     parser.add_argument("--maze", default="V04_single_key.json")
     parser.add_argument("--observation", default="image_text", choices=["text_only", "image_text", "image_only"])
     parser.add_argument("--prompting", default="standard", choices=["minimal", "standard", "verbose"])
-    parser.add_argument("--context-window", default="last3", choices=["current", "last3"])
+    parser.add_argument(
+        "--context-window",
+        default="last3",
+        choices=["current", "last3", "text_summary", "text_summary_and_last3"],
+    )
     parser.add_argument(
         "--querying",
         default="step_by_step",

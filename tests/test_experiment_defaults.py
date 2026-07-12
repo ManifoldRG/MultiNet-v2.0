@@ -35,6 +35,10 @@ def test_ablation_arms_flip_from_fair_default() -> None:
     ctx = _by_variant("Context window")
     assert ctx["current"].context_window == "current" and ctx["current"].chat_history == "stateless"
     assert ctx["text_summary"].context_window == "text_summary" and ctx["text_summary"].chat_history == "stateless"
+    assert (
+        ctx["text_summary_and_last3"].context_window == "text_summary_and_last3"
+        and ctx["text_summary_and_last3"].chat_history == "stateless"
+    )
     act = _by_variant("Action space")
     assert act["cardinal"].action_space == "cardinal"  # cardinal is the arm; egocentric is the default
     icl = _by_variant("In-context learning")

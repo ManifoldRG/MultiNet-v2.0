@@ -6,7 +6,7 @@ from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
 from interface.coords import inventory_list
 from interface.loader import default_maze_path, load_task
-from interface.observation import current_observation_text, history_content_blocks
+from interface.observation import current_observation_text, history_content_blocks, history_text
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
@@ -194,6 +194,69 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
         "type": "text",
         "text": "Your inventory: red.\nAction: PICKUP\n",
     }
+
+
+def test_text_summary_and_last3_includes_summary_then_recent_history_text():
+    spec, _state = _initial_spec_and_state()
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after": (1, 2),
+            "facing_after": "EAST",
+            "action": "MOVE_FORWARD",
+            "prompt_feedback": "Moved to (1, 2).",
+            "state_before": {},
+            "state_after": {},
+        },
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after": (1, 3),
+            "facing_after": "EAST",
+            "action": "MOVE_FORWARD",
+            "prompt_feedback": "Moved to (1, 3).",
+            "state_before": {},
+            "state_after": {},
+        },
+    ]
+
+    text = history_text("text_only", "text_summary_and_last3", transcript, spec)
+
+    assert text.index("Activity summary:") < text.index(
+        "Recent history (last 3 steps, oldest first):"
+    )
+    assert "first you navigated to (1, 2), finally you passed (1, 3)" in text
+    assert "  (1, 2) facing EAST -> MOVE_FORWARD -> Moved to (1, 2)." in text
+    assert "  (1, 3) facing EAST -> MOVE_FORWARD -> Moved to (1, 3)." in text
+
+
+def test_image_only_text_summary_and_last3_includes_summary_and_last3_image_blocks():
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after": (1, 2),
+            "facing_after": "EAST",
+            "action": "MOVE_FORWARD",
+            "prompt_feedback": "Moved to (1, 2).",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        }
+    ]
+
+    prompt_text = _user_prompt_text_with_transcript(
+        ExperimentConfig(observation="image_only", context_window="text_summary_and_last3"),
+        transcript,
+    )
+    blocks = history_content_blocks("image_only", "text_summary_and_last3", transcript)
+
+    assert "Activity summary:" in prompt_text
+    assert "first you passed (1, 2)" in prompt_text
+    assert blocks[0]["type"] == "text"
+    assert blocks[1]["type"] == "image_url"
+    assert blocks[2]["text"] == "Your inventory: empty.\nAction: MOVE_FORWARD\n"
 
 
 def test_non_observation_format_conditions_omit_current_description_from_prompt():
