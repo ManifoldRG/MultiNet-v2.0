@@ -235,7 +235,7 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 Activity summary:
-first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, finally you opened the blue door
+first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, then you opened the blue door, finally you passed (1, 11)
 
 
 [image block 1]
