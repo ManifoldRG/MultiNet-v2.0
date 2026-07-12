@@ -33,6 +33,8 @@ SWEEP_LAUNCHER="${SWEEP_LAUNCHER:-$HERE/launch_distributed.sh}"
 # must also drop the qwen model or provision would prepare orphaned qwen units.
 if [[ "${SWEEP_TOPO:-}" == "api" ]]; then
   PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_kimi_claude.json}"
+elif [[ "${SWEEP_TOPO:-}" == "kimictx" ]]; then
+  PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_kimi3.json}"
 else
   PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json}"
 fi

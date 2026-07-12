@@ -9,25 +9,55 @@ from pathlib import Path
 from typing import Any
 
 # SWEEP_TOPO selects the run-config family:
-#   api  -> Kimi+Claude only (0 GPU workers, no A100 hunt)
-#   qwen -> Qwen-only (3 A100 workers, no API cost) for the Qwen throughput pass
-#   else -> full Qwen+Kimi+Claude
+#   api     -> Kimi+Claude only (0 GPU workers, no A100 hunt)
+#   qwen    -> Qwen-only (3 A100 workers, no API cost) for the Qwen throughput pass
+#   kimictx -> Kimi-only 3-worker fleet; the one-off Context-window summary
+#              comparison (last3 vs text_summary vs text_summary_and_last3),
+#              thinking OFF. A distinct 3-batch family (see below), NOT the
+#              10-config sweep.
+#   else    -> full Qwen+Kimi+Claude
 _TOPO = os.environ.get("SWEEP_TOPO", "").lower()
 _API_ONLY = _TOPO == "api"
 _QWEN_ONLY = _TOPO == "qwen"
+_KIMI_CTX = _TOPO == "kimictx"
 if _API_ONLY:
     _CFG = "gridworld/fixtures/run_config.{}_claude_kimi.json"
     _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_kimi_claude.json"
 elif _QWEN_ONLY:
     _CFG = "gridworld/fixtures/run_config.{}_qwen.json"
     _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_qwen36.json"
+elif _KIMI_CTX:
+    _CFG = "gridworld/fixtures/run_config.conditional_context_window_kimi.json"
+    _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_kimi3.json"
 else:
     _CFG = "gridworld/fixtures/run_config.{}_claude_kimi_qwen.json"
     _SMOKE_CFG = "gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json"
 _MANIFEST = "gridworld/fixtures/manifest.conditional_eval.json"
 
 # n, name, run_config, manifest, conditions, prompt_variant, artifacts_root, run_id, weight
-BATCHES: list[dict[str, Any]] = [
+#
+# SWEEP_TOPO=kimictx: the one-off Kimi-only Context-window comparison. Batch 0 is
+# the 3-Kimi-worker smoke; batches 1-3 are the three context_window prompt
+# variants over the 15-maze conditional set (run via `run-massive 1 2 3`).
+_KIMI_CTX_BATCHES: list[dict[str, Any]] = [
+    {"n": 0, "name": "smoke",
+     "run_config": _SMOKE_CFG,
+     "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+     "conditions": None, "prompt_variant": None,
+     "artifacts_root": "artifacts/smoke", "run_id": "smoke", "weight": 0.1},
+    {"n": 1, "name": "ctx_last3", "run_config": _CFG,
+     "manifest": _MANIFEST, "conditions": "Context window", "prompt_variant": "last3",
+     "artifacts_root": "artifacts/cond/ctx_last3", "run_id": "cond_ctx_last3", "weight": 1.0},
+    {"n": 2, "name": "ctx_text_summary", "run_config": _CFG,
+     "manifest": _MANIFEST, "conditions": "Context window", "prompt_variant": "text_summary",
+     "artifacts_root": "artifacts/cond/ctx_text_summary", "run_id": "cond_ctx_text_summary", "weight": 1.0},
+    {"n": 3, "name": "ctx_text_summary_and_last3", "run_config": _CFG,
+     "manifest": _MANIFEST, "conditions": "Context window", "prompt_variant": "text_summary_and_last3",
+     "artifacts_root": "artifacts/cond/ctx_text_summary_and_last3",
+     "run_id": "cond_ctx_text_summary_and_last3", "weight": 1.0},
+]
+
+_FULL_BATCHES: list[dict[str, Any]] = [
     {"n": 0, "name": "smoke",
      "run_config": _SMOKE_CFG,
      "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
@@ -64,6 +94,8 @@ BATCHES: list[dict[str, Any]] = [
      "manifest": _MANIFEST, "conditions": "Prompt", "prompt_variant": "standard",
      "artifacts_root": "artifacts/cond/baseline_thinking", "run_id": "cond_baseline_thinking", "weight": 3.0},
 ]
+
+BATCHES: list[dict[str, Any]] = _KIMI_CTX_BATCHES if _KIMI_CTX else _FULL_BATCHES
 
 _DEFAULT_ANCHOR_HOURS = 3.0  # coarse; calibrated live after batch 1
 

@@ -1070,6 +1070,33 @@ def test_baseline_thinking_config_11_runs_full_thinking():
     assert qwen["max_tokens"] == 4096
 
 
+def test_kimictx_configs_are_kimi_only_thinking_off_over_15_mazes():
+    """SWEEP_TOPO=kimictx: a Kimi-only 3-worker fleet running the Context-window
+    comparison (last3 / text_summary / text_summary_and_last3) thinking OFF. No
+    Claude/Qwen — the fleet provisions 3 kimi-api VMs + coordinator."""
+    catalog = json.loads(_CONDITIONAL_EVAL_MANIFEST.read_text(encoding="utf-8"))["tasks"]
+
+    rc = load_run_config(_FIXTURES / "run_config.conditional_context_window_kimi.json")
+    assert (_REPO_ROOT / rc["manifest"]).resolve() == _CONDITIONAL_EVAL_MANIFEST.resolve()
+    assert rc["conditions"] == "Context window"
+    check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, "Context window")  # no raise
+    assert set(rc["models"]) == {"kimi_k26"}             # Kimi ONLY
+    kimi = rc["models"]["kimi_k26"]
+    assert kimi["provider"] == "kimi" and kimi["model"] == "kimi-k2.6"
+    assert kimi["temperature"] == 0.6 and kimi["enable_thinking"] is False
+    assert kimi["worker_count"] == 3                     # 3 Kimi worker VMs
+    assert kimi["max_tokens"] == 4096
+    rows = resolve_task_rows(kimi["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
+    assert len(rows) == 15
+
+    # The provision/smoke config must match the fleet topology (3 kimi-api VMs).
+    smoke = load_run_config(_FIXTURES / "run_config.smoke_kimi3.json")
+    assert smoke["conditions"] is None
+    assert set(smoke["models"]) == {"kimi_k26"}
+    assert smoke["models"]["kimi_k26"]["worker_count"] == 3
+    assert smoke["models"]["kimi_k26"]["enable_thinking"] is False
+
+
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
     rc = load_run_config(_SMOKE_EVAL_RUN_CONFIG)
     assert (_REPO_ROOT / rc["manifest"]).resolve() == _SMOKE_EVAL_MANIFEST.resolve()

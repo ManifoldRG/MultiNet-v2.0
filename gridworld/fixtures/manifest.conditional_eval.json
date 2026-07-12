@@ -163,10 +163,10 @@
       "experiment": "conditional",
       "condition": "D",
       "variant": "10x10_dense_deadend_ky_dy",
-      "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_deadend_ky_dy_1.json",
+      "source": "mazes/conditional/d3_10x10_dense_deadend_ky_dy_1.json",
       "expected_mechanisms": [],
       "maze_family": "D",
-      "notes": "Held-out distractor maze (dead-end decoy; not in the 50-run)."
+      "notes": "Held-out distractor maze (dead-end decoy; not in the 50-run). Vendored into the main repo (not the ogbench submodule) with maze.goal corrected to match goal.target=(8,8) — the upstream ogbench JSON had a stale maze.goal=(8,1) behind the dead-end door, which the single-goal validator rejects. Vendoring keeps the fix in the git-archive'd tree so it reaches the coordinator (git archive excludes submodules)."
     }
   ]
 }
