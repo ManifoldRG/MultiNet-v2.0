@@ -58,6 +58,7 @@ _CONDITIONAL_CONFIGS = {
     "Action space": _FIXTURES / "run_config.conditional_action_space_claude_kimi_qwen.json",
     "Querying strategy": _FIXTURES / "run_config.conditional_querying_strategy_claude_kimi_qwen.json",
     "In-context learning": _FIXTURES / "run_config.conditional_in_context_learning_claude_kimi_qwen.json",
+    "History mechanism": _FIXTURES / "run_config.conditional_history_mechanism_claude_kimi_qwen.json",
 }
 _SMOKE_EVAL_RUN_CONFIG = _FIXTURES / "run_config.smoke_eval_qwen_kimi.json"
 _STABLE_DIFFICULTY_MAX = 1000.0
@@ -996,6 +997,7 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         "Action space",
         "Querying strategy",
         "In-context learning",
+        "History mechanism",
     }
     catalog = json.loads(_CONDITIONAL_EVAL_MANIFEST.read_text(encoding="utf-8"))["tasks"]
     for cond, path in _CONDITIONAL_CONFIGS.items():
@@ -1161,25 +1163,30 @@ _LAUNCH_CONDITION_SETS = [
     "Action space",
     "Querying strategy",
     "In-context learning",
+    "History mechanism",
 ]
+# Each set's variant that EQUALS the fair default ExperimentConfig (the shared
+# baseline). After the fair-default rebase, these are the "strong" variants.
 _BASELINE_VARIANT = {
     "Prompt": "standard",
-    "Observation format": "image_only",
-    "Context window": "current",
+    "Observation format": "image_text",
+    "Context window": "last3",
     "Action space": "egocentric",
     "Querying strategy": "step_by_step",
-    "In-context learning": "zero_shot",
+    "In-context learning": "one_shot",
+    "History mechanism": "single_message",
 }
 _DEDUP_ROLLOUT = [
     ("Prompt", None),  # shared baseline ("standard") + minimal + verbose
+    ("Observation format", "image_only"),
     ("Observation format", "text_only"),
-    ("Observation format", "image_text"),
-    ("Context window", "last3"),
+    ("Context window", "current"),
     ("Context window", "text_summary"),
     ("Action space", "cardinal"),
     ("Querying strategy", "subgoal"),
     ("Querying strategy", "full_trajectory"),
-    ("In-context learning", "one_shot"),
+    ("In-context learning", "zero_shot"),
+    ("History mechanism", "multiturn"),
 ]
 
 
@@ -1197,6 +1204,7 @@ def test_launch_condition_sets_expose_expected_variants():
         "Action space": ["egocentric", "cardinal"],
         "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
         "In-context learning": ["zero_shot", "one_shot"],
+        "History mechanism": ["single_message", "multiturn"],
     }
 
 

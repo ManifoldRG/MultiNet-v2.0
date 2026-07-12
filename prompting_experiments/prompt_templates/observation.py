@@ -17,9 +17,10 @@ TEXT_SUMMARY_EMPTY = "you haven't done anything yet"
 
 WORLD_SIZE_LINE = "The world is a {rows} by {cols} grid."
 COORDINATE_EXPLANATION = (
-    "Coordinates: JSON lists use ``[x, y]`` (east, south) from the **top-left** corner ``(1, 1)``;"
-    " tuples in this text use ``(row, column)`` matching env state (row southward, column east)."
-    " So ``x`` = column index, ``y`` = row index."
+    "Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``:"
+    " the row number increases going **south** (down); the column number increases"
+    " going **east** (right). To reach a cell with a larger row number, go south;"
+    " with a larger column number, go east."
 )
 START_LINE = "The start is at {start}."
 GOAL_LINE = "The goal is at {goal}."

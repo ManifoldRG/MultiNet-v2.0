@@ -130,6 +130,54 @@ def _unit_id(job_id: str, payload: dict[str, Any]) -> str:
     return f"unit_{digest[:16]}"
 
 
+# Unit statuses that represent completed, paid-for work: preserved across a
+# same-job re-prepare so we never re-run them. Everything else is reset.
+_TERMINAL_OK_STATUSES = frozenset({"verified", "uploaded"})
+
+
+def _reset_state_for_rerun(
+    existing_state: dict[str, Any], fresh_state: dict[str, Any]
+) -> dict[str, Any]:
+    """Merge an all-pending ``fresh_state`` onto an existing SAME-job state.
+
+    Keep only terminal-OK units (verified/uploaded) so completed work isn't
+    re-run, and reset every other unit (failed/stale/assigned/running/pending)
+    to its fresh pending/attempts=0 entry so a re-prepared batch can retry units
+    a prior run failed at the attempt cap. New units absent from the old state
+    stay pending.
+    """
+    existing_units = (existing_state or {}).get("units") or {}
+    merged_units: dict[str, Any] = {}
+    for uid, fresh_unit in fresh_state["units"].items():
+        prev = existing_units.get(uid)
+        if prev is not None and prev.get("status") in _TERMINAL_OK_STATUSES:
+            merged_units[uid] = prev
+        else:
+            merged_units[uid] = fresh_unit
+    merged = dict(existing_state)
+    merged["job_id"] = fresh_state["job_id"]
+    merged["units"] = merged_units
+    merged["updated_at"] = _iso()
+    return merged
+
+
+def _order_units_lpt(units: list[dict[str, Any]],
+                     static_by_task: dict[str, Any]) -> list[dict[str, Any]]:
+    """Longest-processing-time-first ordering of units. Keyed on the maze's ``max_steps``
+    (the 3x-BFS step cap = worst-case episode length) with a static ``optimal_steps``
+    fallback; descending, stable. The coordinator assigns in plan order, so the longest
+    mazes claim concurrency slots first and the fast mazes fill the tail — minimizing
+    batch makespan when episodes are long sequential chains."""
+    def _length(unit: dict[str, Any]) -> int:
+        payload = unit.get("task_payload") or {}
+        ms = payload.get("max_steps")
+        if ms is not None:
+            return int(ms)
+        return int((static_by_task.get(unit["task_id"]) or {}).get("optimal_steps", 0) or 0)
+
+    return sorted(units, key=_length, reverse=True)
+
+
 def prepare_job(
     *,
     run_config_path: str | Path,
@@ -255,6 +303,12 @@ def prepare_job(
                     unit["unit_id"] = _unit_id(job_id, unit)
                     units.append(unit)
 
+    # Longest-processing-time-first: the coordinator assigns in plan order, so ordering
+    # the long mazes first makes them claim concurrency slots immediately and the fast
+    # mazes (empty_room) fill the tail — minimizing batch makespan when episodes are long
+    # sequential chains (a hard corridor can grind hundreds of steps).
+    units = _order_units_lpt(units, static_by_task)
+
     plan = {
         "schema_version": "0.1.0",
         "job_id": job_id,
@@ -305,6 +359,14 @@ def prepare_job(
             existing_state = None
     if existing_state is None or existing_state.get("job_id") != job_id:
         _write_json_atomic(existing_state_path, state)
+    else:
+        # Same job re-prepared (e.g. next-batch re-running a batch on a reused
+        # fleet): keep completed units so paid work isn't re-run, but reset every
+        # non-terminal unit to fresh pending. Without this, a prior run that
+        # failed all units at the attempt cap (e.g. the since-fixed vLLM GPU-OOM)
+        # leaves them failed-at-cap forever, so the coordinator dispatches nothing
+        # and every worker idles.
+        _write_json_atomic(existing_state_path, _reset_state_for_rerun(existing_state, state))
     _uploads_root(artifacts_root).mkdir(parents=True, exist_ok=True)
     return plan
 
@@ -426,10 +488,23 @@ class CoordinatorStore:
             worker["status"] = "polling"
             self._mark_stale(plan, state)
 
-            active = self._active_unit_for_worker(plan, state, worker_id)
-            if active is not None:
+            # A worker may hold up to its declared concurrency in active units at once
+            # (served-vLLM workers run many episodes in parallel so the server batches
+            # their prefills). Re-return an already-active unit ONLY when the worker is
+            # at its limit — a fresh assign call below its limit falls through and hands
+            # out a new *distinct* unit. worker_concurrency defaults to 1, preserving the
+            # original serial one-unit-per-worker behaviour exactly.
+            active_units = [
+                unit for unit in plan["units"]
+                if state["units"][unit["unit_id"]].get("worker_id") == worker_id
+                and state["units"][unit["unit_id"]].get("status") in ACTIVE_STATUSES
+            ]
+            worker_concurrency = max(
+                int((worker.get("capabilities") or {}).get("worker_concurrency") or 1), 1
+            )
+            if active_units and len(active_units) >= worker_concurrency:
                 self.save_state(state)
-                return {"unit": self._unit_payload(plan, active), "job_id": plan["job_id"]}
+                return {"unit": self._unit_payload(plan, active_units[0]), "job_id": plan["job_id"]}
 
             for unit in plan["units"]:
                 unit_state = state["units"][unit["unit_id"]]
@@ -1027,6 +1102,47 @@ def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optiona
         return False
 
 
+def _process_assigned_unit(
+    client: Any,
+    worker_id: str,
+    unit: dict[str, Any],
+    *,
+    artifacts_root: str | Path,
+    agent_factory: Optional[AgentFactory],
+    heartbeat_interval_seconds: float,
+) -> bool:
+    """Run one assigned unit end-to-end (heartbeat thread + episode + upload) or report
+    it failed. Returns True on success, False on a *reported* failure. A unit failure
+    never raises, so a long-running worker keeps going; the coordinator's attempt cap
+    stops poison units. Safe to call from many threads at once: all per-unit state
+    (heartbeat event, progress counter) is local to the call."""
+    unit_id = unit["unit_id"]
+    stop_heartbeat = threading.Event()
+    progress = ProgressCounter()
+
+    def heartbeat_loop() -> None:
+        while not stop_heartbeat.wait(heartbeat_interval_seconds):
+            _safe_heartbeat(client, worker_id, unit_id, progress.count)
+
+    hb = threading.Thread(target=heartbeat_loop, daemon=True)
+    try:
+        client.heartbeat(worker_id, unit_id)
+        hb.start()
+        run_assigned_unit(
+            unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
+        )
+        archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
+        client.upload(worker_id, unit_id, archive_path)
+        return True
+    except Exception as exc:
+        client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
+        logger.warning("worker %s: unit %s failed, continuing: %s", worker_id, unit_id, exc)
+        return False
+    finally:
+        stop_heartbeat.set()
+        hb.join(timeout=1.0)
+
+
 def run_worker_loop(
     *,
     coordinator_url: str,
@@ -1037,8 +1153,23 @@ def run_worker_loop(
     heartbeat_interval_seconds: float = 30.0,
     once: bool = False,
     agent_factory: Optional[AgentFactory] = None,
+    concurrency: int = 1,
+    drain: bool = False,
+    client: Optional[Any] = None,
+    process_fn: Optional[Callable[[Any, str, dict[str, Any]], bool]] = None,
 ) -> bool:
-    client = CoordinatorClient(coordinator_url)
+    """Poll the coordinator and run assigned units.
+
+    With ``concurrency > 1`` up to that many units run in parallel, each in its own
+    thread. For a *served*-vLLM worker (each unit's agent hits one shared vLLM server)
+    this lets the server continuously batch the concurrent prefills — the whole point,
+    since the multimodal prompts are prefill-bound at batch size 1. The in-process
+    offline ``LLM`` is NOT safe to drive from multiple threads, so concurrency>1 is
+    only correct with the served (``qwen_vllm_api``) agent.
+
+    ``client`` and ``process_fn`` are injection points for tests.
+    """
+    client = client or CoordinatorClient(coordinator_url)
     state_file = Path(worker_state_path)
     local_state = _load_worker_state(state_file)
     registration = client.register(
@@ -1052,67 +1183,62 @@ def run_worker_loop(
     local_state["worker_id"] = worker_id
     _write_json_atomic(state_file, local_state)
 
-    while True:
+    def _process(unit: dict[str, Any]) -> bool:
+        if process_fn is not None:
+            return process_fn(client, worker_id, unit)
+        return _process_assigned_unit(
+            client, worker_id, unit, artifacts_root=artifacts_root,
+            agent_factory=agent_factory, heartbeat_interval_seconds=heartbeat_interval_seconds,
+        )
+
+    def _next_unit() -> Optional[dict[str, Any]]:
         try:
-            assignment = client.assign(worker_id, capabilities)
+            return client.assign(worker_id, capabilities).get("unit")
         except Exception as exc:
-            # A transient coordinator outage (VM restart, GC pause, a single dropped
-            # HTTP call) must not kill a long-running worker; retry on the next poll.
-            if once:
-                logger.warning("worker %s: assign failed in once-mode: %s", worker_id, exc)
-                return False
+            # A transient coordinator outage must not kill a long-running worker.
             logger.warning(
-                "worker %s: assign failed, retrying in %ss: %s", worker_id, poll_interval_seconds, exc
+                "worker %s: assign failed, retrying in %ss: %s",
+                worker_id, poll_interval_seconds, exc,
             )
-            time.sleep(poll_interval_seconds)
-            continue
-        unit = assignment.get("unit")
-        if not unit:
-            if once:
-                return False
-            time.sleep(poll_interval_seconds)
-            continue
+            return None
 
-        unit_id = unit["unit_id"]
-        local_state["current_unit_id"] = unit_id
-        _write_json_atomic(state_file, local_state)
-        stop_heartbeat = threading.Event()
-        progress = ProgressCounter()
-
-        # Bind unit_id/stop/progress as defaults so a thread that outlives join()
-        # keeps heartbeating *its* unit, not whatever the next loop iteration assigns.
-        def heartbeat_loop(
-            unit_id: str = unit_id,
-            stop: threading.Event = stop_heartbeat,
-            progress: ProgressCounter = progress,
-        ) -> None:
-            while not stop.wait(heartbeat_interval_seconds):
-                _safe_heartbeat(client, worker_id, unit_id, progress.count)
-
-        thread = threading.Thread(target=heartbeat_loop, daemon=True)
-        try:
-            client.heartbeat(worker_id, unit_id)
-            thread.start()
-            run_assigned_unit(
-                unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
-            )
-            archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
-            client.upload(worker_id, unit_id, archive_path)
-            local_state.pop("current_unit_id", None)
-            _write_json_atomic(state_file, local_state)
+    if concurrency <= 1:
+        while True:
+            unit = _next_unit()
+            if not unit:
+                if once or drain:
+                    return False
+                time.sleep(poll_interval_seconds)
+                continue
+            ok = _process(unit)
             if once:
-                return True
-        except Exception as exc:
-            client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
-            # A single failed/transiently-rejected unit must not take a long-running
-            # worker offline; the coordinator's attempt cap stops poison units. In
-            # one-shot mode surface the error instead.
-            if once:
-                raise
-            logger.warning("worker %s: unit %s failed, continuing: %s", worker_id, unit_id, exc)
-        finally:
-            stop_heartbeat.set()
-            thread.join(timeout=1.0)
+                return ok
+
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
+    executor = ThreadPoolExecutor(max_workers=concurrency)
+    in_flight: set = set()
+    any_done = False
+    try:
+        while True:
+            while len(in_flight) < concurrency:
+                unit = _next_unit()
+                if not unit:
+                    break
+                in_flight.add(executor.submit(_process, unit))
+            if not in_flight:
+                if once or drain:
+                    return any_done
+                time.sleep(poll_interval_seconds)
+                continue
+            done, pending = wait(in_flight, timeout=poll_interval_seconds, return_when=FIRST_COMPLETED)
+            in_flight = set(pending)
+            if done:
+                any_done = True
+                if once:
+                    return True
+    finally:
+        executor.shutdown(wait=True)
 
 
 def _api_client_groups(
@@ -1377,6 +1503,7 @@ def dispatch_distributed_role(args: Any) -> None:
             "hardware_profile": args.hardware_profile,
             "worker_tags": args.worker_tag or [],
             "local_model_cache": args.local_model_cache or [],
+            "worker_concurrency": int(getattr(args, "worker_concurrency", 1) or 1),
         }
         completed = run_worker_loop(
             coordinator_url=args.coordinator_url,
@@ -1386,6 +1513,7 @@ def dispatch_distributed_role(args: Any) -> None:
             poll_interval_seconds=args.poll_interval_seconds,
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
             once=args.once,
+            concurrency=int(getattr(args, "worker_concurrency", 1) or 1),
         )
         print(f"Worker {'completed one unit' if completed else 'found no unit'}.")
         return

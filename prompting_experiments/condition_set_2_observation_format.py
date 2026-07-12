@@ -16,7 +16,12 @@ CONDITION_SET = ConditionSet(
     variants={
         "standard": Variant(
             name="image_only",
-            description="Image block with no initial natural-language maze map-same as the standard prompt.",
+            description="Image block only, no natural-language observation (ablates the text half of the image+text default).",
+            config_overrides={
+                "observation": "image_only",
+                "include_current_observation_description": False,
+                "observation_text_includes_facing": False,
+            },
         ),
         "text_only": Variant(
             name="text_only",
