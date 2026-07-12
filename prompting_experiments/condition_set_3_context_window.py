@@ -32,5 +32,13 @@ CONDITION_SET = ConditionSet(
             preview_rollout_seed=5,
             preview_move_only=True,
         ),
+        "text_summary_and_last3": Variant(
+            name="text_summary_and_last3",
+            description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message, and last three executed steps rendered as 3 images-each with the action taken in that step.",
+            config_overrides={"context_window": "text_summary_and_last3", "chat_history": "stateless"},
+            preview_steps=10,
+            preview_rollout_seed=5,
+            preview_move_only=True,
+        ),
     },
 )

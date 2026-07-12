@@ -258,7 +258,7 @@ def test_pending_validation10_condition_run_configs_load_and_resolve_all_tasks()
     expected_variant_counts = {
         "Prompt": 3,
         "Observation format": 3,
-        "Context window": 3,
+        "Context window": 4,
         "Querying strategy": 3,
     }
 
@@ -1189,6 +1189,11 @@ _DEDUP_ROLLOUT = [
     ("In-context learning", "zero_shot"),
     ("History mechanism", "multiturn"),
 ]
+# Variants registered after the validation10 rollout above was launched;
+# intentionally not part of that already-run batch.
+_NOT_IN_VALIDATION10_ROLLOUT = {
+    ("Context window", "text_summary_and_last3"),
+}
 
 
 def _config_key(cfg) -> str:
@@ -1201,7 +1206,7 @@ def test_launch_condition_sets_expose_expected_variants():
     assert {cs: condition_variant_names(cs) for cs in _LAUNCH_CONDITION_SETS} == {
         "Prompt": ["standard", "minimal", "verbose"],
         "Observation format": ["image_only", "text_only", "image_text"],
-        "Context window": ["current", "last3", "text_summary"],
+        "Context window": ["current", "last3", "text_summary", "text_summary_and_last3"],
         "Action space": ["egocentric", "cardinal"],
         "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
         "In-context learning": ["zero_shot", "one_shot"],
@@ -1228,6 +1233,7 @@ def test_dedup_rollout_covers_every_unique_variant_config_once():
         _config_key(cfg)
         for cs in _LAUNCH_CONDITION_SETS
         for _name, cfg in _condition_configs(cs)
+        if (cs, _name) not in _NOT_IN_VALIDATION10_ROLLOUT
     }
     rolled = [
         _config_key(cfg)

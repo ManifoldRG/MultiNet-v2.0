@@ -187,12 +187,12 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
     assert blocks[1]["type"] == "image_url"
     assert blocks[2] == {
         "type": "text",
-        "text": "Your inventory: empty.\nAction: MOVE_FORWARD\n",
+        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
     }
     assert blocks[3]["type"] == "image_url"
     assert blocks[4] == {
         "type": "text",
-        "text": "Your inventory: red.\nAction: PICKUP\n",
+        "text": "Your inventory: red.\nFINAL_OUTPUT: PICKUP\n",
     }
 
 
@@ -307,6 +307,85 @@ def test_text_last3_prompt_includes_recent_history_text():
     assert "What is your next action?" in prompt_text
     assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
     assert "Last result: Episode start." not in prompt_text
+
+
+def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text():
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after": (1, 2),
+            "facing_after": "EAST",
+            "action": "MOVE_FORWARD",
+            "prompt_feedback": "MOVED",
+        }
+    ]
+    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last3")
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
+
+    assert "Activity summary:" in prompt_text
+    assert "first you passed (1, 2)" in prompt_text
+    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED" in prompt_text
+    assert "What is your next action?" in prompt_text
+
+
+def test_image_only_text_summary_and_last3_includes_summary_text_and_last3_images():
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after": (1, 2),
+            "action": "MOVE_FORWARD",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        },
+    ]
+    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last3")
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
+
+    assert "Activity summary:" in prompt_text
+    assert "first you passed (1, 2)" in prompt_text
+    # image_only never gets the last3 *text* history block, only the images.
+    assert "Recent history (last 3 steps, oldest first):" not in prompt_text
+    assert "Recent steps (oldest first):" in prompt_text
+    assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
+    # Summary must precede the last3 steps in the message content.
+    assert prompt_text.index("Activity summary:") < prompt_text.index(
+        "Recent steps (oldest first):"
+    )
+
+
+def test_image_text_summary_and_last3_orders_summary_before_last3():
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after": (1, 2),
+            "facing_after": "EAST",
+            "action": "MOVE_FORWARD",
+            "prompt_feedback": "MOVED",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        },
+    ]
+    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last3")
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
+
+    assert "Activity summary:" in prompt_text
+    assert "first you passed (1, 2)" in prompt_text
+    assert "Recent steps (oldest first):" in prompt_text
+    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    # Summary must precede the last3 steps (both the image labels and the
+    # text recap) in the message content.
+    summary_idx = prompt_text.index("Activity summary:")
+    assert summary_idx < prompt_text.index("Recent steps (oldest first):")
+    assert summary_idx < prompt_text.index("Recent history (last 3 steps, oldest first):")
 
 
 def test_observation_format_image_only_differs_from_image_text_default():
