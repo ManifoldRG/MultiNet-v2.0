@@ -14,7 +14,10 @@ from prompting_experiments.prompt_templates import querying as querying_template
 QueryingKind = Literal["step_by_step", "subgoal", "full_trajectory"]
 
 _SUBGOAL_RE = re.compile(r"(?i)SUB_GOAL\s*:\s*(.+)")
-_ACTIONS_RE = re.compile(r"(?i)ACTIONS\s*:\s*(.+)")
+# Line-anchored: a mid-reasoning "... actions: MOVE_FORWARD x 5" must never be
+# read as the answer. Only a line that *starts* with ACTIONS: qualifies, and
+# the last such line wins (models revise plans mid-reply).
+_ACTIONS_LINE_RE = re.compile(r"(?im)^\s*ACTIONS\s*:\s*(.+)$")
 
 
 class QueryingMode:
@@ -54,23 +57,34 @@ class QueryingMode:
         m = _SUBGOAL_RE.search(model_text)
         self.current_subgoal = m.group(1).strip() if m else ""
 
-        m2 = _ACTIONS_RE.search(model_text)
-        if m2:
-            actions = [
-                a
-                for a in (
-                    normalize_action(t, valid_actions=self._valid_actions)
-                    for t in m2.group(1).split(",")
-                )
-                if a
-            ]
-        else:
-            out = parse_final_output(
+        # FINAL_OUTPUT is the designated answer line for every query mode, so
+        # it is parsed first; ACTIONS: lines are a legacy fallback. Searching
+        # ACTIONS anywhere first let reasoning prose preempt valid plans (28%
+        # of full_trajectory queries were rejected that way).
+        actions = parse_final_output(
+            model_text,
+            allow_regex_fallback=False,
+            valid_actions=self._valid_actions,
+            synonyms=self._synonyms,
+        ) or []
+        if not actions:
+            for m2 in _ACTIONS_LINE_RE.finditer(model_text):
+                parsed = [
+                    a
+                    for a in (
+                        normalize_action(t, valid_actions=self._valid_actions)
+                        for t in m2.group(1).split(",")
+                    )
+                    if a
+                ]
+                if parsed:
+                    actions = parsed
+        if not actions:
+            actions = parse_final_output(
                 model_text,
                 valid_actions=self._valid_actions,
                 synonyms=self._synonyms,
-            )
-            actions = out if out else []
+            ) or []
 
         if self.kind == "full_trajectory" and actions:
             self._trajectory_loaded = True

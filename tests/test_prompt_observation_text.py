@@ -133,7 +133,12 @@ def test_observation_format_image_only_has_no_current_observation_text():
 
 def test_image_only_prompt_puts_inventory_text_after_current_image():
     backend, spec = load_task(default_maze_path())
-    runner = build_runner(ExperimentConfig(observation="image_only"), backend, spec)
+    # image_only ablation arm: pure image, no description, no ICL example.
+    cfg = ExperimentConfig(observation="image_only",
+                           include_current_observation_description=False,
+                           observation_text_includes_facing=False,
+                           in_context_learning="zero_shot")
+    runner = build_runner(cfg, backend, spec)
     runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
 
     message = runner._build_message(state, feedback_templates.INITIAL_FEEDBACK, [])
@@ -389,12 +394,22 @@ def test_observation_format_image_only_matches_standard_prompt_text():
         CONDITION_SET.variants["standard"].build_config(ExperimentConfig())
     )
 
-    assert image_only_text == standard_text
+    assert image_only_text != standard_text
+    # image_text carries the current-observation description ("You are at ..."),
+    # image_only does not.
+    assert "You are at" not in image_only_text
+    assert "You are at" in standard_text
 
 
 def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
     system_prompt = MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
-    prompt_text = _initial_user_prompt_text(ExperimentConfig(prompting="minimal"))
+    # Isolate the minimal *prompting* axis from the observation: pin image_only so
+    # the user status is inventory-only (the default is now image_text + description).
+    prompt_text = _initial_user_prompt_text(ExperimentConfig(
+        prompting="minimal", observation="image_only",
+        include_current_observation_description=False,
+        observation_text_includes_facing=False,
+        in_context_learning="zero_shot"))
 
     assert system_prompt.startswith("Task: Solve the maze by reaching the goal.")
     assert "The environment may contain:" not in system_prompt
@@ -407,9 +422,16 @@ def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
 
 
 def test_prompting_variants_share_image_only_user_prompt():
-    standard_text = _initial_user_prompt_text(ExperimentConfig(prompting="standard"))
-    minimal_text = _initial_user_prompt_text(ExperimentConfig(prompting="minimal"))
-    verbose_text = _initial_user_prompt_text(ExperimentConfig(prompting="verbose"))
+    # Prompting only changes the SYSTEM prompt; the user prompt is identical across
+    # prompting variants. Pin image_only to keep the user status inventory-only.
+    def _cfg(p):
+        return ExperimentConfig(prompting=p, observation="image_only",
+                                include_current_observation_description=False,
+                                observation_text_includes_facing=False,
+                                in_context_learning="zero_shot")
+    standard_text = _initial_user_prompt_text(_cfg("standard"))
+    minimal_text = _initial_user_prompt_text(_cfg("minimal"))
+    verbose_text = _initial_user_prompt_text(_cfg("verbose"))
 
     assert standard_text == minimal_text == verbose_text
     assert standard_text.startswith("Your inventory: empty.\nWhat is your next action?")
@@ -418,16 +440,23 @@ def test_prompting_variants_share_image_only_user_prompt():
     assert "Hints:" not in standard_text
 
 
-def test_standard_variants_use_default_config_without_overrides():
-    for condition in CONDITION_SETS.values():
-        variant = condition.variants.get("standard")
-        if variant is None or not variant.implemented:
-            continue
+def test_each_set_has_exactly_one_baseline_equal_to_default():
+    # After the fair-default rebase the baseline arm of most sets carries an
+    # explicit override that RESOLVES to the default (e.g. image_text, last3,
+    # one_shot). The invariant is: every set has exactly one variant that builds
+    # the default ExperimentConfig, and Prompt/standard is the canonical no-override
+    # one (run once as the shared baseline for all axes).
+    default = ExperimentConfig()
+    prompt_std = CONDITION_SETS["Prompt"].variants["standard"]
+    assert prompt_std.config_overrides is None
+    assert prompt_std.build_config() == default
 
-        cfg = variant.build_config()
-
-        assert cfg == ExperimentConfig()
-        assert variant.config_overrides is None
+    for name, condition in CONDITION_SETS.items():
+        baselines = [
+            v for v in condition.variants.values()
+            if v.implemented and v.build_config() == default
+        ]
+        assert len(baselines) == 1, (name, [v.name for v in baselines])
 
 
 def test_implemented_non_verbose_conditions_share_standard_system_prompt():

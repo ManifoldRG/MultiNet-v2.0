@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 
 from interface.agents.qwen_vllm import QwenVLLMAgent, QwenVLLMConfig, _to_openai_messages
+from interface.agents.qwen_vllm_api import QwenVLLMAPIAgent, QwenVLLMAPIConfig
 
 
 class FakeSamplingParams:
@@ -112,3 +114,72 @@ def test_run_pipeline_builds_qwen_vllm_agent(monkeypatch):
     assert isinstance(agent, QwenVLLMAgent)
     assert FakeLLM.instances[-1].kwargs["model"] == "Qwen/Qwen3.6-27B"
     assert FakeLLM.instances[-1].kwargs["max_model_len"] == 2048
+
+
+def test_qwen_vllm_api_agent_posts_openai_chat(monkeypatch):
+    seen = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [{"message": {"content": " FINAL_OUTPUT: DONE "}}],
+                    "usage": {
+                        "prompt_tokens": 7,
+                        "completion_tokens": 3,
+                        "total_tokens": 10,
+                    },
+                }
+            ).encode()
+
+    def fake_urlopen(req, timeout):
+        seen["url"] = req.full_url
+        seen["timeout"] = timeout
+        seen["body"] = json.loads(req.data.decode())
+        seen["auth"] = req.headers.get("Authorization")
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    agent = QwenVLLMAPIAgent(
+        QwenVLLMAPIConfig(
+            model="Qwen/Qwen3.6-27B",
+            base_url="http://127.0.0.1:8000/v1",
+            api_key="EMPTY",
+            max_tokens=32,
+            enable_thinking=False,
+        )
+    )
+
+    assert agent([{"role": "user", "content": "move"}]) == "FINAL_OUTPUT: DONE"
+    assert seen["url"] == "http://127.0.0.1:8000/v1/chat/completions"
+    assert seen["body"]["model"] == "Qwen/Qwen3.6-27B"
+    assert seen["body"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert seen["auth"] == "Bearer EMPTY"
+    assert agent.last_usage == {"input_tokens": 7, "output_tokens": 3, "total_tokens": 10}
+
+
+def test_run_pipeline_builds_qwen_vllm_api_agent(monkeypatch):
+    from scripts.run_pipeline import _build_agent_from_spec
+
+    agent, label = _build_agent_from_spec(
+        "qwen36_vllm_server",
+        {
+            "provider": "qwen_vllm_api",
+            "model": "Qwen/Qwen3.6-27B",
+            "base_url": "http://127.0.0.1:8000/v1",
+            "max_tokens": 64,
+            "timeout": 240,
+            "enable_thinking": False,
+        },
+    )
+
+    assert label == "Qwen/Qwen3.6-27B"
+    assert isinstance(agent, QwenVLLMAPIAgent)
+    assert agent.config.base_url == "http://127.0.0.1:8000/v1"
+    assert agent.config.max_tokens == 64

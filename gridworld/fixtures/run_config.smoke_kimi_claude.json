@@ -1,0 +1,34 @@
+{
+  "description": "3-model fleet smoke: offline-vLLM Qwen3.6-27B (FP16) + Kimi + Claude Opus over the 3-maze smoke manifest, using the SAME per-model settings as the conditional batches (qwen enforce_eager=false/thinking, kimi temp 0.6, claude effort=low) so a green smoke proves the whole reused fleet before any paid conditional batch. Non-conditional (conditions=null). Not for measurement. [API-only: Kimi + Claude, no Qwen.]",
+  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "conditions": null,
+  "models": {
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.6,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": false
+    },
+    "claude_opus": {
+      "provider": "claude",
+      "model": "claude-opus-4-8",
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "claude-api",
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": true,
+      "effort": "low"
+    }
+  }
+}

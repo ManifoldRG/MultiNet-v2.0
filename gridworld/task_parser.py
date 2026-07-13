@@ -114,7 +114,7 @@ class TaskParser:
             max_steps=spec.max_steps,
             agent_start_pos=spec.maze.start.to_tuple(),
             agent_start_dir=0,  # Default facing right (standard MiniGrid convention)
-            goal_pos=spec.maze.goal.to_tuple(),
+            goal_pos=spec.resolved_goal(),
             mission_text=spec.get_mission_text(),
             render_mode=self.render_mode,
             task_spec=spec,
@@ -213,9 +213,10 @@ class TaskParser:
             if 0 < x < width - 1 and 0 < y < height - 1:
                 env.place_wall(x, y)
 
-        # Place goal marker
-        # The goal position is typically the win condition for navigation tasks
-        env.place_goal(spec.maze.goal.x, spec.maze.goal.y)
+        # Place goal marker at the cell the episode is scored against (the env
+        # checks goal.target for reach_position, so the tile must match it).
+        goal_x, goal_y = spec.resolved_goal()
+        env.place_goal(goal_x, goal_y)
 
         # Place keys
         # Keys are collectible items that can unlock doors of matching color

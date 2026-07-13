@@ -16,7 +16,8 @@ CONDITION_SET = ConditionSet(
     variants={
         "standard": Variant(
             name="current",
-            description="Prompt only with the current observation-same as the standard prompt.",
+            description="Current observation only, no history (the 0-history ablation of the last3 default).",
+            config_overrides={"context_window": "current", "chat_history": "stateless"},
         ),
         "last3": Variant(
             name="last3",
@@ -25,8 +26,8 @@ CONDITION_SET = ConditionSet(
         ),
         "text_summary": Variant(
             name="text_summary",
-            description="One-sentence summary of all prior mechanism events or path waypoints.",
-            config_overrides={"context_window": "text_summary"},
+            description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message.",
+            config_overrides={"context_window": "text_summary", "chat_history": "stateless"},
             preview_steps=10,
             preview_rollout_seed=5,
             preview_move_only=True,

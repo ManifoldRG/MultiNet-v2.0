@@ -808,6 +808,29 @@ def check_run_config_expectations(
             f"Run-config expects --conditions {run_config['conditions']!r} but got {conditions!r}. "
             "Pass the matching --conditions."
         )
+    _check_equal_token_caps(run_config)
+
+
+def _check_equal_token_caps(run_config: dict[str, Any]) -> None:
+    """Cross-model runs must use one max_tokens for every model.
+
+    Unequal budgets confounded baseline_thinking (FINDINGS §4): with thinking
+    on, a model can spend its whole budget before the answer line, so caps of
+    4k/8k/16k made the ranking measure budget, not reasoning. A config that
+    intentionally runs asymmetric budgets must say so with
+    ``"allow_unequal_max_tokens": true``.
+    """
+    models = run_config.get("models") or {}
+    if len(models) < 2 or run_config.get("allow_unequal_max_tokens") is True:
+        return
+    caps = {name: cfg.get("max_tokens") for name, cfg in models.items()}
+    if len(set(caps.values())) > 1:
+        raise ValueError(
+            f"Cross-model run declares unequal max_tokens {caps}. Unequal budgets make the "
+            "comparison measure budget, not ability (models truncate at different depths). "
+            'Use one cap for every model, or set "allow_unequal_max_tokens": true to put '
+            "the asymmetry on record."
+        )
 
 
 def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent, str]:
@@ -899,6 +922,25 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])
         return QwenVLLMAgent(config=cfg), model or cfg.model
+    if provider in {"qwen_vllm_api", "qwen_openai", "openai_compatible"}:
+        from interface.agents import QwenVLLMAPIAgent, QwenVLLMAPIConfig
+
+        cfg = QwenVLLMAPIConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        for key in (
+            "base_url",
+            "api_key",
+            "timeout",
+            "enable_thinking",
+            "extra_body",
+            "max_attempts",
+        ):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
+        return QwenVLLMAPIAgent(config=cfg), model or cfg.model
     raise ValueError(
         f"Model {name!r}: unknown provider {provider!r} "
         "(expected 'claude', 'kimi', 'qwen', or 'qwen_vllm')."
@@ -955,6 +997,8 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--max-units", type=int, default=1, help="Maximum local API-client units to run (0 or less = drain all pending).")
     parser.add_argument("--client-artifacts-root", help="Local artifact root for coordinator-run-api-client.")
     parser.add_argument("--once", action="store_true", help="Worker mode: process at most one assignment.")
+    parser.add_argument("--worker-concurrency", type=int, default=1,
+                        help="Worker mode: run up to N units in parallel (served-vLLM agents only).")
     parser.add_argument(
         "--allow-partial-finalize",
         action="store_true",

@@ -1,6 +1,19 @@
-"""text_summary must keep a navigation trail after mechanism events."""
-
 from __future__ import annotations
+"""text_summary must keep a navigation trail after mechanism events.
+
+The sweep's summary was mechanism-events XOR waypoints: from the first
+pickup/door/gate onward it carried zero spatial information (29/45 episodes) —
+e.g. 31 steps of exploration collapsed to "first you picked up the red key".
+Now the chain is mechanism events (chronological) plus the recent movement
+trail SINCE the last mechanism event; pre-event behavior is unchanged.
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from gridworld.task_spec import TaskSpecification
 from interface.observation import text_summary_history

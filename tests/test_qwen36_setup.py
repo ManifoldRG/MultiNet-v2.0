@@ -17,7 +17,10 @@ def test_qwen36_class_is_preferred_over_qwen35():
 def test_smoke_qwen36_run_config_uses_vllm_fp16_model():
     cfg = load_run_config(REPO_ROOT / "gridworld" / "fixtures" / "run_config.smoke_qwen36_kimi.json")
     qwen = cfg["models"]["qwen36_27b_vllm"]
-    assert qwen["provider"] == "qwen_vllm"
+    # served-vLLM concurrency switched the smoke config to the API provider
+    # (agent talks to a standing vllm serve on base_url).
+    assert qwen["provider"] == "qwen_vllm_api"
+    assert qwen["base_url"] == "http://127.0.0.1:8000/v1"
     assert qwen["model"] == "Qwen/Qwen3.6-27B"
     assert qwen["group"] == "qwen36-27b"
     assert qwen["max_model_len"] == 8192

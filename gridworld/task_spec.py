@@ -456,6 +456,17 @@ class TaskSpecification:
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
+    def resolved_goal(self) -> tuple[int, int]:
+        """The (x, y) cell the episode is actually scored against.
+
+        The runtime env checks ``goal.target`` for reach_position goals, so
+        every other consumer (solvers, prompt, rendered goal tile) must use
+        the same source or "optimal" is computed for the wrong cell.
+        """
+        if self.goal.goal_type == "reach_position" and self.goal.target is not None:
+            return self.goal.target.to_tuple()
+        return self.maze.goal.to_tuple()
+
     def validate(self) -> tuple[bool, list[str]]:
         """
         Validate the task specification for consistency.
@@ -635,6 +646,13 @@ class TaskSpecification:
                 errors.append("Goal type 'reach_position' requires target")
             else:
                 check_position(self.goal.target, "Goal target")
+                if self.goal.target.to_tuple() != self.maze.goal.to_tuple():
+                    errors.append(
+                        f"maze.goal {self.maze.goal.to_tuple()} and goal.target "
+                        f"{self.goal.target.to_tuple()} disagree; the env scores "
+                        "goal.target, so a mismatch makes solver optima and the "
+                        "rendered goal tile wrong"
+                    )
         elif self.goal.goal_type == "collect_all":
             if not self.goal.target_ids:
                 errors.append("Goal type 'collect_all' requires target_ids")

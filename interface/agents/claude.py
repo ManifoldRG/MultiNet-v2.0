@@ -161,6 +161,30 @@ def _apply_prompt_cache(
     return system_out, turns
 
 
+def _parse_response(
+    payload: Dict[str, object],
+) -> Tuple[str, Optional[Dict[str, int]], Optional[str]]:
+    """Split an Anthropic Messages response into (final text, usage, thinking).
+
+    The visible answer is the concatenation of `text` blocks; the model's
+    reasoning lives in separate `thinking` blocks which the pipeline otherwise
+    discards (only ~a handful of the reported output tokens are the FINAL_OUTPUT).
+    We keep the thinking so the episode log can show *why* the model chose an
+    action.
+    """
+    parts: List[str] = []
+    thinking_parts: List[str] = []
+    for block in payload.get("content", []) or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") == "text":
+            parts.append(str(block.get("text", "")))
+        elif block.get("type") == "thinking":
+            thinking_parts.append(str(block.get("thinking", "")))
+    thinking = "\n".join(t for t in thinking_parts if t).strip() or None
+    return "".join(parts).strip(), normalize_token_usage(payload.get("usage")), thinking
+
+
 def _post_messages(
     api_key: str,
     *,
@@ -173,7 +197,7 @@ def _post_messages(
     max_attempts: int = 5,
     enable_thinking: bool = False,
     effort: Optional[str] = None,
-) -> Tuple[str, Optional[Dict[str, int]]]:
+) -> Tuple[str, Optional[Dict[str, int]], Optional[str]]:
     body = _build_request_body(
         model=model,
         max_tokens=max_tokens,
@@ -227,11 +251,7 @@ def _post_messages(
             time.perf_counter() - t0,
         )
 
-    parts: List[str] = []
-    for block in payload.get("content", []) or []:
-        if isinstance(block, dict) and block.get("type") == "text":
-            parts.append(str(block.get("text", "")))
-    return "".join(parts).strip(), normalize_token_usage(payload.get("usage"))
+    return _parse_response(payload)
 
 
 @dataclass
@@ -253,6 +273,7 @@ class ClaudeAnthropicAgent:
     config: ClaudeAnthropicConfig = field(default_factory=ClaudeAnthropicConfig)
     api_key: Optional[str] = None
     last_usage: Optional[Dict[str, int]] = field(default=None, init=False)
+    last_thinking: Optional[str] = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         key = (self.api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
@@ -267,7 +288,7 @@ class ClaudeAnthropicAgent:
         system, turns = _to_anthropic_turns(messages)
         if self.config.enable_prompt_cache:
             system, turns = _apply_prompt_cache(system, turns)
-        text, self.last_usage = _post_messages(
+        text, self.last_usage, self.last_thinking = _post_messages(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,

@@ -1,4 +1,4 @@
-"""LLM agents for the interface runner (Claude, Kimi K2.6 API, Qwen 3.5 VL local)."""
+"""LLM agents for the interface runner."""
 
 from __future__ import annotations
 
@@ -28,6 +28,10 @@ from interface.agents.qwen_vllm import (
     QwenVLLMAgent,
     QwenVLLMConfig,
 )
+from interface.agents.qwen_vllm_api import (
+    QwenVLLMAPIAgent,
+    QwenVLLMAPIConfig,
+)
 
 __all__ = [
     "DEFAULT_CLAUDE_MODEL",
@@ -41,5 +45,7 @@ __all__ = [
     "Qwen35VLAgent",
     "Qwen35VLConfig",
     "QwenVLLMAgent",
+    "QwenVLLMAPIAgent",
+    "QwenVLLMAPIConfig",
     "QwenVLLMConfig",
 ]

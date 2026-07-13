@@ -125,7 +125,12 @@ def text_summary_history(
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
 ) -> str:
-    """Summarize mechanism events plus the movement trail since the last one."""
+    """Summarize prior mechanism events plus the movement trail since the last one.
+
+    The trail is essential: an events-only summary carried zero spatial
+    information from the first pickup onward, exactly when a keyed maze turns
+    back into a navigation problem (29/45 sweep episodes).
+    """
     steps = history_steps(transcript)
     mechanism_events = _extract_mechanism_events(steps, task_spec)
     parts = [text for _, text in mechanism_events]

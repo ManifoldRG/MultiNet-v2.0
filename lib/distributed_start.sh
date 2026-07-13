@@ -27,16 +27,27 @@ set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
 if python - <<'PY'
-import socket
-s = socket.socket()
-try:
-    s.bind(("0.0.0.0", 8765))
-except OSError:
-    raise SystemExit(1)
-finally:
-    s.close()
+import socket, time
+# Wait for a just-killed prior coordinator-serve to release :8765 rather than
+# failing on the transient race. The killed serve's worker connections linger in
+# TIME_WAIT (~60s) and block a fresh bind without SO_REUSEADDR, so allow 90s.
+deadline = time.time() + 90
+ok = False
+while time.time() < deadline:
+    s = socket.socket()
+    try:
+        s.bind(("0.0.0.0", 8765))
+        ok = True
+    except OSError:
+        ok = False
+    finally:
+        s.close()
+    if ok:
+        break
+    time.sleep(1)
+raise SystemExit(0 if ok else 1)
 PY
-then :; else echo "Port 8765 already in use on the coordinator." >&2; exit 1; fi
+then :; else echo "Port 8765 still in use on the coordinator after 90s." >&2; exit 1; fi
 mkdir -p "artifacts/$RUN_ID"
 prepare_args=()
 [[ -n "${CONDITIONS:-}" ]] && prepare_args+=(--conditions "$CONDITIONS")
@@ -65,6 +76,58 @@ done
 REMOTE
 }
 
+# start_coordinator_combined: like start_coordinator but prepares ONE massive job from
+# several batches (MASSIVE_BATCHES = space-separated batch indices) via
+# scripts.prepare_combined_job, so the fleet stays saturated instead of idling through
+# each batch's hard-maze tail. Globals: COORD ZONE RUN_ID MANIFEST [SEEDS]
+# [DIFFICULTY_MAX] MASSIVE_BATCHES [SWEEP_TOPO].
+start_coordinator_combined() {
+  local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}" batch_args="" n
+  for n in $MASSIVE_BATCHES; do batch_args="$batch_args --batch $n"; done
+  gcloud compute ssh "$COORD" --zone "$ZONE" \
+    --command "RUN_ID='$RUN_ID' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' BATCH_ARGS='$batch_args' SWEEP_TOPO='${SWEEP_TOPO:-}' bash -s" <<'REMOTE'
+set -euo pipefail
+cd ~/MultiNet-v2.0
+source .venv-multinet/bin/activate
+if python - <<'PY'
+import socket, time
+deadline = time.time() + 90
+ok = False
+while time.time() < deadline:
+    s = socket.socket()
+    try:
+        s.bind(("0.0.0.0", 8765)); ok = True
+    except OSError:
+        ok = False
+    finally:
+        s.close()
+    if ok:
+        break
+    time.sleep(1)
+raise SystemExit(0 if ok else 1)
+PY
+then :; else echo "Port 8765 still in use on the coordinator after 90s." >&2; exit 1; fi
+mkdir -p "artifacts/$RUN_ID"
+# shellcheck disable=SC2086
+SWEEP_TOPO="$SWEEP_TOPO" python -m scripts.prepare_combined_job \
+  --artifacts-root "artifacts/$RUN_ID" --run-set-id "$RUN_ID" \
+  --manifest "$MANIFEST" --difficulty-max-static-score "$DIFFICULTY_MAX" \
+  --seeds $SEEDS $BATCH_ARGS
+nohup python -m scripts.run_pipeline \
+  --distributed-role coordinator-serve \
+  --artifacts-root "artifacts/$RUN_ID" \
+  --host 0.0.0.0 --port 8765 \
+  > "artifacts/$RUN_ID/coordinator-serve.log" 2>&1 &
+echo "$!" > "artifacts/$RUN_ID/coordinator-serve.pid"
+coord_up=0
+for _ in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:8765/status >/dev/null; then coord_up=1; break; fi
+  sleep 2
+done
+[[ "$coord_up" -eq 1 ]] || { echo "Coordinator not healthy on :8765 within ~60s." >&2; exit 1; }
+REMOTE
+}
+
 start_worker() {  # $1 vm  $2 coord_ip  — metadata from TOPO_JSON
   local vm="$1" coord_ip="$2" kind group provider model
   kind="$(worker_field "$vm" kind)"
@@ -74,11 +137,34 @@ start_worker() {  # $1 vm  $2 coord_ip  — metadata from TOPO_JSON
 
   if [[ "$kind" == "gpu" ]]; then
     gcloud compute ssh "$vm" --zone "$ZONE" \
-      --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' MODEL='$model' bash -s" <<'REMOTE'
+      --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' MODEL='$model' CONCURRENCY='${WORKER_CONCURRENCY:-16}' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-qwen-vllm/bin/activate
 mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
+
+# 1. Persistent vLLM OpenAI server (continuous batching across concurrent episode
+#    requests). It is REUSED across batches — only (re)launched if not already
+#    serving on :8000 — so switching batches costs no model reload. It intentionally
+#    holds the GPU, so there is no orphan-EngineCore problem for next-batch to clean.
+if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && ! pgrep -f 'vllm serve' >/dev/null 2>&1; then
+  nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    vllm serve "$MODEL" --port 8000 --served-model-name "$MODEL" \
+      --gpu-memory-utilization 0.9 --max-model-len 16384 --max-num-seqs 64 \
+      --dtype bfloat16 --trust-remote-code \
+    > "$HOME/multinet-worker-artifacts/vllm_server.log" 2>&1 &
+  echo "$!" > "$HOME/multinet-worker-artifacts/vllm_server.pid"
+fi
+# Wait for the server to finish loading the model (first launch ~ minutes).
+for _ in $(seq 1 150); do
+  curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && break
+  sleep 10
+done
+curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 \
+  || { echo "vllm server never became ready on :8000" >&2; exit 1; }
+
+# 2. Worker: uses the served qwen_vllm_api agent (per the run-config's base_url),
+#    running CONCURRENCY episodes in parallel so the server batches their prefills.
 nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline \
   --distributed-role worker \
   --coordinator-url "http://$COORD_IP:8765" \
@@ -87,6 +173,7 @@ nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m scripts.run_pipeline
   --model-group "$GROUP" \
   --hardware-profile local-gpu \
   --local-model-cache "$MODEL" \
+  --worker-concurrency "$CONCURRENCY" \
   > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.log" 2>&1 &
 echo "$!" > "$HOME/multinet-worker-artifacts/$RUN_ID/worker.pid"
 REMOTE
@@ -118,4 +205,18 @@ nohup python -m scripts.run_pipeline \\
   > "\$HOME/multinet-worker-artifacts/\$RUN_ID/worker.log" 2>&1 &
 echo "\$!" > "\$HOME/multinet-worker-artifacts/\$RUN_ID/worker.pid"
 REMOTE
+}
+
+# stop_gpu_worker VM: tear down a GPU worker BEFORE a batch restart, freeing the
+# GPU. Ships lib/gpu_teardown.sh to the VM and runs gpu_teardown_local there,
+# which SIGTERMs the worker AND the orphaned vLLM EngineCore holding the GPU and
+# polls until it frees. Returns nonzero (FAIL-CLOSED) if the GPU will not free,
+# so the caller must NOT start a new worker (it would OOM). See lib/gpu_teardown.sh.
+stop_gpu_worker() {  # $1 vm
+  local vm="$1" here
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  gcloud compute ssh "$vm" --zone "$ZONE" --command "bash -s" < <(
+    cat "$here/gpu_teardown.sh"
+    printf '\ngpu_teardown_local\n'
+  )
 }

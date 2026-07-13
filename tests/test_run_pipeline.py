@@ -58,6 +58,7 @@ _CONDITIONAL_CONFIGS = {
     "Action space": _FIXTURES / "run_config.conditional_action_space_claude_kimi_qwen.json",
     "Querying strategy": _FIXTURES / "run_config.conditional_querying_strategy_claude_kimi_qwen.json",
     "In-context learning": _FIXTURES / "run_config.conditional_in_context_learning_claude_kimi_qwen.json",
+    "History mechanism": _FIXTURES / "run_config.conditional_history_mechanism_claude_kimi_qwen.json",
 }
 _SMOKE_EVAL_RUN_CONFIG = _FIXTURES / "run_config.smoke_eval_qwen_kimi.json"
 _STABLE_DIFFICULTY_MAX = 1000.0
@@ -996,6 +997,7 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         "Action space",
         "Querying strategy",
         "In-context learning",
+        "History mechanism",
     }
     catalog = json.loads(_CONDITIONAL_EVAL_MANIFEST.read_text(encoding="utf-8"))["tasks"]
     for cond, path in _CONDITIONAL_CONFIGS.items():
@@ -1004,7 +1006,7 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         assert rc["conditions"] == cond
         check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, cond)  # no raise
         assert set(rc["models"]) == {"qwen36_27b_vllm", "kimi_k26", "claude_opus"}
-        assert {m["provider"] for m in rc["models"].values()} == {"qwen_vllm", "kimi", "claude"}
+        assert {m["provider"] for m in rc["models"].values()} == {"qwen_vllm_api", "kimi", "claude"}
         # Opus 4.8 is the Claude model. The experimental sweep runs adaptive
         # thinking at effort:low, and MUST NOT send temperature (Opus 4.7+ reject
         # sampling params with a 400 — see interface/agents/claude.py).
@@ -1022,15 +1024,12 @@ def test_conditional_run_configs_pair_conditional_eval_with_all_six_sets():
         for model_cfg in rc["models"].values():
             rows = resolve_task_rows(model_cfg["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
             assert len(rows) == 15
-            # M6: the live 1-task API smoke validates the API models' budget, so
-            # the paid models (kimi, claude) must declare max_tokens=4096. Local
-            # Qwen runs with thinking enabled and needs a larger budget for the
-            # chain-of-thought plus the trailing FINAL_OUTPUT line.
-            if model_cfg["provider"] == "qwen_vllm":
-                assert model_cfg["max_tokens"] == 8192
-                assert model_cfg["enable_thinking"] is True
-            else:
-                assert model_cfg["max_tokens"] == 4096
+            # Cross-model comparability: the 10 experimental configs run all
+            # three models at the SAME cap (unequal caps confounded
+            # baseline_thinking — see FINDINGS §4). Qwen runs thinking OFF on
+            # the experimental sweep.
+            assert model_cfg["max_tokens"] == 4096
+        assert rc["models"]["qwen36_27b_vllm"]["enable_thinking"] is False
 
 
 def test_baseline_thinking_config_11_runs_full_thinking():
@@ -1060,11 +1059,15 @@ def test_baseline_thinking_config_11_runs_full_thinking():
     assert kimi["enable_thinking"] is True
     assert kimi["max_tokens"] == 16384
 
+    # ⚠️ These per-model caps are UNEQUAL (4k/8k/16k) — a fair within-model
+    # budget but an invalid cross-model thinking comparison (FINDINGS §4).
+    # The archived config is asserted as-run; a clean re-run needs one equal,
+    # large cap for all three models.
     qwen = rc["models"]["qwen36_27b_vllm"]
-    assert qwen["provider"] == "qwen_vllm"
+    assert qwen["provider"] == "qwen_vllm_api"
     assert qwen["model"] == "Qwen/Qwen3.6-27B"
     assert qwen["enable_thinking"] is True
-    assert qwen["max_tokens"] == 8192
+    assert qwen["max_tokens"] == 4096
 
 
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
@@ -1161,25 +1164,30 @@ _LAUNCH_CONDITION_SETS = [
     "Action space",
     "Querying strategy",
     "In-context learning",
+    "History mechanism",
 ]
+# Each set's variant that EQUALS the fair default ExperimentConfig (the shared
+# baseline). After the fair-default rebase, these are the "strong" variants.
 _BASELINE_VARIANT = {
     "Prompt": "standard",
-    "Observation format": "image_only",
-    "Context window": "current",
+    "Observation format": "image_text",
+    "Context window": "last3",
     "Action space": "egocentric",
     "Querying strategy": "step_by_step",
-    "In-context learning": "zero_shot",
+    "In-context learning": "one_shot",
+    "History mechanism": "single_message",
 }
 _DEDUP_ROLLOUT = [
     ("Prompt", None),  # shared baseline ("standard") + minimal + verbose
+    ("Observation format", "image_only"),
     ("Observation format", "text_only"),
-    ("Observation format", "image_text"),
-    ("Context window", "last3"),
+    ("Context window", "current"),
     ("Context window", "text_summary"),
     ("Action space", "cardinal"),
     ("Querying strategy", "subgoal"),
     ("Querying strategy", "full_trajectory"),
-    ("In-context learning", "one_shot"),
+    ("In-context learning", "zero_shot"),
+    ("History mechanism", "multiturn"),
 ]
 # Variants registered after the validation10 rollout above was launched;
 # intentionally not part of that already-run batch.
@@ -1202,6 +1210,7 @@ def test_launch_condition_sets_expose_expected_variants():
         "Action space": ["egocentric", "cardinal"],
         "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
         "In-context learning": ["zero_shot", "one_shot"],
+        "History mechanism": ["single_message", "multiturn"],
     }
 
 
@@ -1841,3 +1850,41 @@ def test_distributed_finalize_requires_complete_work_by_default(tmp_path):
     partial = finalize_job(artifacts_root=artifacts, allow_partial=True)
     assert partial["run_count"] == 0
     assert len(partial["missing_units"]) == 1
+
+
+def test_cross_model_run_configs_must_declare_equal_token_caps(tmp_path):
+    """Unequal per-model max_tokens confounded baseline_thinking (FINDINGS §4):
+    the 4k/8k/16k spread measured budget, not reasoning. Cross-model configs
+    must use one cap — or opt out explicitly so the asymmetry is on record."""
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}")
+    base = {
+        "manifest": str(manifest),
+        "models": {
+            "a": {"provider": "claude", "max_tokens": 8192},
+            "b": {"provider": "kimi", "max_tokens": 16384},
+        },
+    }
+
+    with pytest.raises(ValueError, match="unequal max_tokens"):
+        check_run_config_expectations(base, manifest, None)
+
+    # Equal caps pass.
+    equal = json.loads(json.dumps(base))
+    equal["models"]["b"]["max_tokens"] = 8192
+    check_run_config_expectations(equal, manifest, None)  # no raise
+
+    # Single-model configs are unconstrained.
+    solo = {"manifest": str(manifest), "models": {"a": {"max_tokens": 4096}}}
+    check_run_config_expectations(solo, manifest, None)  # no raise
+
+    # The explicit opt-out documents an intentional asymmetry.
+    declared = json.loads(json.dumps(base))
+    declared["allow_unequal_max_tokens"] = True
+    check_run_config_expectations(declared, manifest, None)  # no raise
+
+
+def test_baseline_thinking_fixture_declares_its_unequal_caps():
+    path = _FIXTURES / "run_config.conditional_baseline_thinking_claude_kimi_qwen.json"
+    rc = load_run_config(path)
+    assert rc.get("allow_unequal_max_tokens") is True

@@ -18,7 +18,8 @@ CONDITION_SET = ConditionSet(
     variants={
         "standard": Variant(
             name="zero_shot",
-            description="No examples — same as the standard prompt.",
+            description="No examples (the ablation of the one_shot default).",
+            config_overrides={"in_context_learning": "zero_shot"},
         ),
         "one_shot": Variant(
             name="one_shot",

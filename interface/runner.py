@@ -240,13 +240,33 @@ class ExperimentRunner:
                 query_count += 1
                 current_query_index = query_count
                 action_queue_index = 0
-                user_message = self._build_message(state, last_feedback, transcript)
+                # Multi-turn (rolling/full) history keeps the one-shot ICL example
+                # on the CURRENT turn only and stores lean user turns in history, so
+                # the example is not re-sent every turn (which bloated tokens ~4-5x
+                # and swamped the observation, collapsing Claude to loops). For the
+                # same reason the turns must not embed the context_window history
+                # (last3/text_summary) — the chat itself is the history there.
+                user_message = self._build_message(
+                    state,
+                    last_feedback,
+                    transcript,
+                    with_one_shot=(chat_history == "stateless"),
+                    with_context_history=(chat_history == "stateless"),
+                )
                 has_image = _user_message_has_image(user_message)
                 if chat_history == "stateless":
                     agent_messages: List[dict] = [system_message, user_message]
                 else:
                     messages.append(user_message)
-                    agent_messages = messages
+                    one_shot_blocks = self._one_shot_blocks(self.config.observation)
+                    if one_shot_blocks:
+                        cur = user_message.get("content")
+                        if not isinstance(cur, list):
+                            cur = [{"type": "text", "text": cur}]
+                        current_turn = {"role": "user", "content": one_shot_blocks + cur}
+                        agent_messages = messages[:-1] + [current_turn]
+                    else:
+                        agent_messages = messages
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
                         "LLM query #%d: task_id=%s observation=%s messages_in_context=%d current_turn_has_image=%s",
@@ -300,6 +320,9 @@ class ExperimentRunner:
                 usage = getattr(agent, "last_usage", None)
                 if isinstance(usage, dict):
                     query_record["usage"] = dict(usage)
+                thinking = getattr(agent, "last_thinking", None)
+                if thinking:
+                    query_record["thinking"] = thinking
                 transcript.append(query_record)
                 # check if we got any valid actions; 
                 # if not, we'll count it as a parse failure and give feedback, 
@@ -458,9 +481,26 @@ class ExperimentRunner:
             success, state, transcript, query_count, end_reason, initial_state, maze_path
         )
 
-    def _build_message(self, state, last_feedback: str, transcript: List[dict]) -> dict:
+    def _one_shot_blocks(self, obs) -> list[dict]:
+        """The one-shot ICL example blocks (example image + solution), or []."""
+        if self.config.in_context_learning == "one_shot":
+            from interface.one_shot import one_shot_content_blocks
+            return one_shot_content_blocks(obs)
+        return []
+
+    def _build_message(
+        self,
+        state,
+        last_feedback: str,
+        transcript: List[dict],
+        with_one_shot: bool = True,
+        with_context_history: bool = True,
+    ) -> dict:
         obs = self.config.observation
-        ctx = self.config.context_window
+        # "current" disables the in-prompt history sections; multiturn chat
+        # passes with_context_history=False because its turns already carry
+        # the history and embedding it again duplicates every observation.
+        ctx = self.config.context_window if with_context_history else "current"
         obs_text = current_observation_text(
             obs,
             self.task_spec,
