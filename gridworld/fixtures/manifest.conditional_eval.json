@@ -116,7 +116,7 @@
       "experiment": "conditional",
       "condition": "S",
       "variant": "14x14_corridor",
-      "source": "ogbench/ogbench/procgen/maze_jsons/S5/14x14_corridor_1.json",
+      "source": "mazes/conditional/s5_14x14_corridor_1.json",
       "expected_mechanisms": [],
       "maze_family": "S",
       "notes": "Held-out simple navigation maze (not in the 50-run)."
@@ -126,7 +126,7 @@
       "experiment": "conditional",
       "condition": "M",
       "variant": "10x10_corridor_kr",
-      "source": "ogbench/ogbench/procgen/maze_jsons/M1/10x10_corridor_kr_0.json",
+      "source": "mazes/conditional/m1_10x10_corridor_kr_0.json",
       "expected_mechanisms": [
         "kr"
       ],
@@ -151,7 +151,7 @@
       "experiment": "conditional",
       "condition": "D",
       "variant": "10x10_corridor_wrong_ky_kr",
-      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_kr_0.json",
+      "source": "mazes/conditional/d1_10x10_corridor_wrong_ky_kr_0.json",
       "expected_mechanisms": [
         "kr"
       ],
