@@ -242,12 +242,15 @@ class ExperimentRunner:
                 # Multi-turn (rolling/full) history keeps the one-shot ICL example
                 # on the CURRENT turn only and stores lean user turns in history, so
                 # the example is not re-sent every turn (which bloated tokens ~4-5x
-                # and swamped the observation, collapsing Claude to loops).
+                # and swamped the observation, collapsing Claude to loops). For the
+                # same reason the turns must not embed the context_window history
+                # (last3/text_summary) — the chat itself is the history there.
                 user_message = self._build_message(
                     state,
                     last_feedback,
                     transcript,
                     with_one_shot=(chat_history == "stateless"),
+                    with_context_history=(chat_history == "stateless"),
                 )
                 has_image = _user_message_has_image(user_message)
                 if chat_history == "stateless":
@@ -485,10 +488,18 @@ class ExperimentRunner:
         return []
 
     def _build_message(
-        self, state, last_feedback: str, transcript: List[dict], with_one_shot: bool = True
+        self,
+        state,
+        last_feedback: str,
+        transcript: List[dict],
+        with_one_shot: bool = True,
+        with_context_history: bool = True,
     ) -> dict:
         obs = self.config.observation
-        ctx = self.config.context_window
+        # "current" disables the in-prompt history sections; multiturn chat
+        # passes with_context_history=False because its turns already carry
+        # the history and embedding it again duplicates every observation.
+        ctx = self.config.context_window if with_context_history else "current"
         obs_text = current_observation_text(
             obs,
             self.task_spec,

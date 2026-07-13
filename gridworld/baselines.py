@@ -66,7 +66,7 @@ class TaskPlanningContext:
     def __init__(self, spec: TaskSpecification):
         self.spec = spec
         self.width, self.height = spec.maze.dimensions
-        self.goal = spec.maze.goal.to_tuple()
+        self.goal = spec.resolved_goal()
         self.start = spec.maze.start.to_tuple()
         self.key_consumption = spec.rules.key_consumption
 

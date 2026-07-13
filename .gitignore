@@ -54,8 +54,15 @@ deploy/*.log
 # Dev planning docs (specs/plans) - kept out of the pushed/release branch
 docs/superpowers/
 
+#AI configuration files
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+
 # Sweep results repo (a SEPARATE git repo used as the durable 3rd backup +
 # push target by sweep_run.sh publish) — never track it from the code repo.
 Multinet-v2-results/
 analysis/.cache/
 artifacts/analysis/
+
+

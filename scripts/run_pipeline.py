@@ -808,6 +808,29 @@ def check_run_config_expectations(
             f"Run-config expects --conditions {run_config['conditions']!r} but got {conditions!r}. "
             "Pass the matching --conditions."
         )
+    _check_equal_token_caps(run_config)
+
+
+def _check_equal_token_caps(run_config: dict[str, Any]) -> None:
+    """Cross-model runs must use one max_tokens for every model.
+
+    Unequal budgets confounded baseline_thinking (FINDINGS §4): with thinking
+    on, a model can spend its whole budget before the answer line, so caps of
+    4k/8k/16k made the ranking measure budget, not reasoning. A config that
+    intentionally runs asymmetric budgets must say so with
+    ``"allow_unequal_max_tokens": true``.
+    """
+    models = run_config.get("models") or {}
+    if len(models) < 2 or run_config.get("allow_unequal_max_tokens") is True:
+        return
+    caps = {name: cfg.get("max_tokens") for name, cfg in models.items()}
+    if len(set(caps.values())) > 1:
+        raise ValueError(
+            f"Cross-model run declares unequal max_tokens {caps}. Unequal budgets make the "
+            "comparison measure budget, not ability (models truncate at different depths). "
+            'Use one cap for every model, or set "allow_unequal_max_tokens": true to put '
+            "the asymmetry on record."
+        )
 
 
 def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent, str]:
