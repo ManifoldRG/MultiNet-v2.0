@@ -1085,6 +1085,11 @@ def test_kimictx_configs_are_kimi_only_thinking_off_over_15_mazes():
     assert kimi["provider"] == "kimi" and kimi["model"] == "kimi-k2.6"
     assert kimi["temperature"] == 0.6 and kimi["enable_thinking"] is False
     assert kimi["worker_count"] == 3                     # 3 Kimi worker VMs
+    # max_in_flight is a PER-GROUP concurrency cap (_below_max_in_flight counts
+    # active units across the whole model_group). It must equal worker_count or
+    # the coordinator serializes the fleet — a cap of 1 starved 2 of 3 workers in
+    # the kimictx smoke.
+    assert kimi["max_in_flight"] == kimi["worker_count"] == 3
     assert kimi["max_tokens"] == 4096
     rows = resolve_task_rows(kimi["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
     assert len(rows) == 15
