@@ -1054,6 +1054,12 @@ def run_assigned_unit(
         agent = _CountingAgent(agent, progress)
     from interface.config import ExperimentConfig
 
+    if "experiment_config" not in unit:
+        raise RuntimeError(
+            f"Unit {unit.get('unit_id')} has no 'experiment_config' — this job_plan.json "
+            "predates the resolved-config change; regenerate it with the coordinator-prepare role."
+        )
+
     result = pipeline._run_one_unit(
         row,
         agent,

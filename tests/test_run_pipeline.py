@@ -1802,6 +1802,42 @@ def test_distributed_finalize_is_idempotent(tmp_path):
     assert len(rows) == 1
 
 
+def test_run_assigned_unit_rejects_stale_plan_missing_experiment_config(tmp_path):
+    """A worker resuming a job_plan.json prepared before units carried a
+    resolved experiment_config must get a clear, actionable RuntimeError
+    telling it to regenerate the plan via coordinator-prepare — not a bare
+    KeyError from the from_dict call."""
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job, run_assigned_unit
+
+    manifest_path = _write_manifest(tmp_path)
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "replay-stub", "group": "stub",
+                  "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
+    )
+    art = tmp_path / "coordinator"
+    prepare_job(
+        run_config_path=cfg_path, manifest_path=manifest_path, seeds=[0], conditions=None,
+        artifacts_root=art, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(art)
+    wid = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(wid)["unit"]
+    assert "experiment_config" in unit  # sanity: freshly prepared plans do carry it
+
+    # Simulate a job_plan.json persisted before the resolved-config change.
+    del unit["experiment_config"]
+
+    with pytest.raises(RuntimeError) as excinfo:
+        run_assigned_unit(
+            unit, artifacts_root=tmp_path / "worker",
+            agent_factory=lambda n, mc: (ReplayAgent(v01_empty_room_trajectory()), mc["model"]),
+        )
+    message = str(excinfo.value)
+    assert "coordinator-prepare" in message
+    assert "regenerate" in message
+
+
 def test_distributed_worker_upload_finalize_local_integration(tmp_path):
     from scripts.distributed_run_pipeline import (
         CoordinatorStore,
