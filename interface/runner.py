@@ -231,6 +231,15 @@ class ExperimentRunner:
         end_reason = "max_steps"
         initial_state = state_snapshot(state)
 
+        stall_k = self.config.progress_stall_k
+        if stall_k is not None and getattr(self.task_spec.goal, "goal_type", None) == "survive_steps":
+            raise ValueError(
+                "progress_stall_k is incompatible with survive_steps goals: "
+                "repeated states are the intended behavior."
+            )
+        seen_signatures = {_progress_signature(state)} if stall_k is not None else None
+        stall_count = 0
+
         if logger.isEnabledFor(logging.INFO):
             logger.info(
                 "Episode start: task_id=%s seed=%s max_steps=%s querying=%s observation=%s context_window=%s chat_history=%s",
@@ -482,6 +491,17 @@ class ExperimentRunner:
                 }
             )
             action_queue_index += 1
+
+            if stall_k is not None and not terminated and not truncated:
+                sig = _progress_signature(state)
+                if sig in seen_signatures:
+                    stall_count += 1
+                else:
+                    seen_signatures.add(sig)
+                    stall_count = 0
+                if stall_count >= stall_k:
+                    end_reason = "stalled"
+                    break
 
             reached_goal = event_type == "DONE" or (
                 terminated and getattr(state, "goal_reached", False)

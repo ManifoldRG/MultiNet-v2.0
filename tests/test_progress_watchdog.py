@@ -127,6 +127,54 @@ def test_signature_changes_on_each_mechanism_axis():
     assert _progress_signature(_state(block_positions={"b1": (2, 2)})) != base
 
 
+def _oscillate_spec():
+    # 1-wide, 3-cell-interior corridor: start (1,1), oscillation cell (2,1),
+    # goal (3,1) sits one further cell down the corridor so the scripted
+    # bounce between (1,1) and (2,1) below never reaches it (a goal at
+    # (2,1) would make the very first MOVE_FORWARD succeed immediately,
+    # defeating the point of this fixture).
+    return TaskSpecification.from_dict({
+        "task_id": "osc", "seed": 0, "difficulty_tier": 1,
+        "maze": {"dimensions": [5, 3], "walls": [], "start": [1, 1], "goal": [3, 1]},
+        "mechanisms": {}, "goal": {"type": "reach_position", "target": [3, 1]},
+        "max_steps": 200,
+    })
+
+
+def test_oscillator_stalls_at_exactly_k():
+    # Move to a new cell once (novel), then bounce forever between two visited cells.
+    actions = ["MOVE_FORWARD"] + ["TURN_LEFT", "TURN_LEFT", "MOVE_FORWARD",
+                                  "TURN_LEFT", "TURN_LEFT", "MOVE_FORWARD"] * 50
+    res = _run(_oscillate_spec(), actions, progress_stall_k=20)
+    assert res["end_reason"] == "stalled"
+    assert res["success"] is False
+    # Observed: 1 novel move + 20 repeat-signature steps to trip K=20
+    # (stall_count reaches K on the 20th repeat, i.e. step K+1 overall).
+    assert res["steps_used"] == 21
+
+
+def test_k_none_does_not_stall():
+    actions = ["TURN_LEFT"] * 300  # spins forever
+    res = _run(_oscillate_spec(), actions, progress_stall_k=None)
+    assert res["end_reason"] != "stalled"
+
+
+def test_turn_only_stalls_when_enabled():
+    res = _run(_oscillate_spec(), ["TURN_LEFT"] * 300, progress_stall_k=20)
+    assert res["end_reason"] == "stalled"
+
+
+def test_survive_steps_rejects_watchdog():
+    spec = TaskSpecification.from_dict({
+        "task_id": "surv", "seed": 0, "difficulty_tier": 1,
+        "maze": {"dimensions": [4, 4], "walls": [], "start": [1, 1], "goal": [2, 2]},
+        "mechanisms": {}, "goal": {"type": "survive_steps"}, "max_steps": 50,
+    })
+    import pytest
+    with pytest.raises(ValueError):
+        _run(spec, ["TURN_LEFT"] * 5, progress_stall_k=20)
+
+
 def test_explored_cells_only_counts_under_partial_observation():
     full = _state(observability_mode="full", explored_cells={(9, 9)})
     full2 = _state(observability_mode="full", explored_cells={(8, 8)})
