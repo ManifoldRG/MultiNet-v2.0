@@ -35,8 +35,9 @@ def load_episodes(root="artifacts-pulled", cache="analysis/.cache/episodes.parqu
     """One tidy row per episode across all sweeps (skipping ``issues_``). Cached to parquet.
 
     ``config`` = the cell dir name (experimental arm, e.g. ``cond_ctx_current``); it is
-    distinct from the raw jsonl ``condition`` field. ``end_reason`` is read from each
-    ``episode.json`` (the jsonl lacks it).
+    distinct from the raw jsonl ``condition`` field. ``end_reason`` is read from the
+    aggregate jsonl row when present; older rows that lack it fall back to the
+    per-run ``episode.json``.
     """
     cache = Path(cache)
     if cache.exists() and not force:
@@ -60,7 +61,7 @@ def load_episodes(root="artifacts-pulled", cache="analysis/.cache/episodes.parqu
                 "truncated": bool(r.get("truncated")), "reward": r.get("reward"),
                 "steps": r.get("steps"), "optimal_steps": r.get("optimal_steps"),
                 "optimality_ratio": r.get("optimality_ratio"), "tokens": r.get("tokens"),
-                "end_reason": _read_end_reason(run_dir),
+                "end_reason": r.get("end_reason") or _read_end_reason(run_dir),
                 "failure_point": r.get("failure_point"), "run_dir": str(run_dir.parent),
             })
     df = pd.DataFrame(rows, columns=_EP_COLS)
