@@ -461,7 +461,10 @@ class ExperimentRunner:
             )
             action_queue_index += 1
 
-            if event_type == "DONE":
+            reached_goal = event_type == "DONE" or (
+                terminated and getattr(state, "goal_reached", False)
+            )
+            if reached_goal:
                 end_reason = "success"
                 if verbose:
                     print(f"  Success at step {state.step_count}")
@@ -471,6 +474,11 @@ class ExperimentRunner:
 
             if verbose:
                 print(f"  Step {state.step_count}/{max_steps}: {action} -> {event_type}")
+
+            if terminated:
+                # Backend ended the episode without reaching the goal (e.g. a hazard).
+                end_reason = "terminated_failure"
+                break
 
             if truncated:
                 end_reason = "truncated"
