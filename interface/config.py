@@ -24,3 +24,7 @@ class ExperimentConfig:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ExperimentConfig":
+        return cls(**d)
