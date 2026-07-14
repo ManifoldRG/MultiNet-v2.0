@@ -236,8 +236,9 @@ def build_run_row(
         "agent_or_model": agent_or_model,
         "seed": seed,
         "success": success,
-        "terminated": end_reason == "success",
-        "truncated": end_reason == "truncated",
+        "end_reason": end_reason,
+        "terminated": end_reason in ("success", "terminated_failure"),
+        "truncated": end_reason in ("truncated", "stalled"),
         "reward": _episode_reward(episode),
         "steps": steps,
         "optimal_steps": optimal_steps,
@@ -273,8 +274,8 @@ def enrich_run_for_scoring(
     run["agent_or_model"] = agent_or_model
     run["model_id"] = agent_or_model
     run["seed"] = seed
-    run["terminated"] = episode.get("end_reason") == "success"
-    run["truncated"] = episode.get("end_reason") == "truncated"
+    run["terminated"] = episode.get("end_reason") in ("success", "terminated_failure")
+    run["truncated"] = episode.get("end_reason") in ("truncated", "stalled")
     # episode_log nests reward under final_state; the scorer only reads a
     # top-level ``reward``, so lift it (keeps run_score.json reward in sync
     # with the episode_runs.jsonl row).

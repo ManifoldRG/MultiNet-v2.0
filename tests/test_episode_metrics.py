@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pipeline import episode_metrics as em
 
 
@@ -161,3 +163,22 @@ def test_build_run_row_fields_and_optimality():
     assert row["failure_point"] is None
     assert row["tokens"] == 12
     assert row["raw_output_ref"] == "x/episode.json"
+
+
+@pytest.mark.parametrize(
+    "end_reason,terminated,truncated,success",
+    [
+        ("success", True, False, True),
+        ("terminated_failure", True, False, False),
+        ("truncated", False, True, False),
+        ("stalled", False, True, False),
+    ],
+)
+def test_run_row_boolean_semantics(end_reason, terminated, truncated, success):
+    ep = _episode([_step((2, 1))], success=success, end_reason=end_reason)
+    row = em.build_run_row(
+        ep, {}, {"task_id": "t"}, agent_or_model="stub", seed=0
+    )
+    assert row["end_reason"] == end_reason
+    assert row["terminated"] is terminated
+    assert row["truncated"] is truncated
