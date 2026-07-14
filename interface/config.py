@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 
 @dataclass
@@ -21,6 +21,16 @@ class ExperimentConfig:
     max_parse_retries: int = 3
     in_context_learning: Literal["zero_shot", "one_shot"] = "one_shot"
     action_space: Literal["egocentric", "cardinal"] = "egocentric"
+    progress_stall_k: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        k = self.progress_stall_k
+        if k is None:
+            return
+        if isinstance(k, bool) or not isinstance(k, int) or k <= 0:
+            raise ValueError(
+                f"progress_stall_k must be None or a positive int, got {k!r}"
+            )
 
     def to_dict(self) -> dict:
         return asdict(self)
