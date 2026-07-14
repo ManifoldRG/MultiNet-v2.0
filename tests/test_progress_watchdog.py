@@ -25,6 +25,39 @@ def _reach_spec():
     })
 
 
+def _activate_switch_spec():
+    # Same spec as
+    # tests/test_backend_integration.py::test_minigrid_activate_switch_goal_terminates_from_toggle_branch,
+    # which shows the switch goal terminates (reward>0, goal_reached=True) on
+    # a TOGGLE step whose event_type is "TOGGLED", never "DONE".
+    return TaskSpecification.from_dict({
+        "task_id": "activate_switch_goal",
+        "seed": 13,
+        "difficulty_tier": 2,
+        "maze": {"dimensions": [5, 5], "walls": [], "start": [1, 1], "goal": [3, 3]},
+        "mechanisms": {"switches": [{"id": "s1", "position": [2, 1], "controls": []}]},
+        "goal": {"type": "activate_switch", "target_ids": ["s1"]},
+        "max_steps": 20,
+    })
+
+
+def _hazard_spec():
+    # A lava hazard placed one step south of the start. Verified directly
+    # against MiniGridBackend: MOVE_FORWARD onto the hazard cell yields
+    # terminated=True, reward=0, goal_reached=False, event_type="MOVED"
+    # (never DONE/BLOCKED/WRONG_DONE/INVALID) — a genuine backend
+    # termination without reaching the goal.
+    return TaskSpecification.from_dict({
+        "task_id": "hazard_fail",
+        "seed": 0,
+        "difficulty_tier": 1,
+        "maze": {"dimensions": [5, 5], "walls": [], "start": [1, 1], "goal": [3, 3]},
+        "mechanisms": {"hazards": [{"id": "h1", "position": [1, 2], "hazard_type": "lava"}]},
+        "goal": {"type": "reach_position", "target": [3, 3]},
+        "max_steps": 40,
+    })
+
+
 def _run(spec, actions, **cfg):
     backend = MiniGridBackend(render_mode="rgb_array")
     backend.configure(spec)
@@ -43,3 +76,25 @@ def test_reach_position_done_still_succeeds():
     res = _run(_reach_spec(), ["TURN_RIGHT", "MOVE_FORWARD", "MOVE_FORWARD", "DONE"])
     assert res["success"] is True
     assert res["end_reason"] == "success"
+
+
+def test_goal_reached_from_non_done_event_still_succeeds():
+    # OR-success branch (interface/runner.py): a backend goal can terminate
+    # the episode from an action other than DONE. Here TOGGLE activates the
+    # switch goal and terminates with reward>0/goal_reached=True while
+    # event_type is "TOGGLED" — success must come from
+    # `terminated and state.goal_reached`, not from event_type == "DONE".
+    res = _run(_activate_switch_spec(), ["MOVE_FORWARD", "TOGGLE"])
+    assert res["success"] is True
+    assert res["end_reason"] == "success"
+
+
+def test_backend_termination_without_goal_is_terminated_failure():
+    # terminated_failure branch (interface/runner.py): the backend can end
+    # the episode (terminated=True) without the goal being reached, e.g. a
+    # lava hazard. event_type is "MOVED" here, not DONE/BLOCKED/WRONG_DONE/
+    # INVALID, so this must be caught by the `if terminated:` fallback that
+    # sets end_reason = "terminated_failure", not the success OR-branch.
+    res = _run(_hazard_spec(), ["TURN_RIGHT", "MOVE_FORWARD"])
+    assert res["success"] is False
+    assert res["end_reason"] == "terminated_failure"
