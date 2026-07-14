@@ -799,6 +799,46 @@ def _write_run_config(tmp_path: Path, models: dict) -> Path:
     return path
 
 
+def _prepare_plan_with_overlay(tmp_path: Path, experiment_config: dict) -> dict:
+    """Build a run-config with a top-level experiment_config overlay and
+    resolve it into a distributed job plan."""
+    from scripts.distributed_run_pipeline import prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "stub": {
+                        "provider": "claude",
+                        "model": "stub-model",
+                        "tasks": [task],
+                    }
+                },
+                "experiment_config": experiment_config,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=tmp_path / "artifacts",
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+
+def test_distributed_units_carry_resolved_experiment_config(tmp_path):
+    plan = _prepare_plan_with_overlay(tmp_path, {"progress_stall_k": 20})
+    assert plan["units"], "expected units"
+    for u in plan["units"]:
+        assert u["experiment_config"]["progress_stall_k"] == 20
+
+
 def _dummy_run_archive(files: dict[str, str] | None = None) -> bytes:
     files = files or {
         "episode.json": "{}",

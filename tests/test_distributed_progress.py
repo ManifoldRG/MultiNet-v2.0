@@ -156,6 +156,7 @@ def test_run_assigned_unit_wraps_agent_for_progress(tmp_path, monkeypatch):
         "task_id": "t", "seed": 0, "prompt_variant": "default", "scorer_config": {},
         "difficulty_max_static_score": 1000.0,
         "task_artifacts": {"scored_static": {}},
+        "experiment_config": {},
     }
     drp.run_assigned_unit(
         unit, artifacts_root=tmp_path,

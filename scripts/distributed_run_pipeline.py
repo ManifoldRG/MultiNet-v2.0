@@ -209,6 +209,15 @@ def prepare_job(
             )
         prompt_variants = [prompt_variant]
 
+    # Resolve the fully-composed ExperimentConfig once per (conditions, variant)
+    # so every unit for that variant embeds the exact same resolved config,
+    # including any top-level experiment_config overlay from the run-config.
+    exp_overlay = run_config.get("experiment_config") or {}
+    variant_configs: dict[str, Any] = {
+        name: cfg.to_dict()
+        for name, cfg in pipeline._condition_configs(conditions, base_overrides=exp_overlay)
+    }
+
     model_plans: list[tuple[str, str, str, dict[str, Any], list[dict[str, Any]]]] = []
     models: dict[str, dict[str, Any]] = {}
     union: dict[str, dict[str, Any]] = {}
@@ -293,6 +302,7 @@ def prepare_job(
                         "seed": int(seed),
                         "prompt_variant": variant,
                         "condition_set": conditions,
+                        "experiment_config": variant_configs[variant],
                         "backend": "minigrid",
                         "run_dir": run_rel.as_posix(),
                         "expected_files": list(EXPECTED_RUN_FILES),
@@ -1042,6 +1052,8 @@ def run_assigned_unit(
     agent, _ = factory(unit["model_key"], unit["model_config"])
     if progress is not None:
         agent = _CountingAgent(agent, progress)
+    from interface.config import ExperimentConfig
+
     result = pipeline._run_one_unit(
         row,
         agent,
@@ -1054,6 +1066,7 @@ def run_assigned_unit(
         config=ScorerConfig.from_dict(unit["scorer_config"]),
         seed=int(unit["seed"]),
         prompt_variant=str(unit["prompt_variant"]),
+        experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
         conditions=unit.get("condition_set"),
         force=force,
     )
