@@ -1276,6 +1276,91 @@ def test_dedup_rollout_covers_every_unique_variant_config_once():
     assert len(rolled) == len(all_unique)  # baseline run once, no variant twice
 
 
+def test_experiment_config_overlay_applies_under_condition_variant():
+    """A top-level experiment_config overlay composes with a named condition
+    variant: defaults < overlay < condition variant. The variant stays
+    authoritative for the axis it declares (context_window here); the overlay
+    field it doesn't touch (progress_stall_k) survives."""
+    pairs = _condition_configs(
+        "Context window", prompt_variant="text_summary",
+        base_overrides={"progress_stall_k": 20},
+    )
+    assert len(pairs) == 1
+    _, cfg = pairs[0]
+    assert cfg.progress_stall_k == 20            # overlay preserved
+    assert cfg.context_window == "text_summary"  # variant still authoritative
+
+
+def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
+    """The top-level experiment_config overlay in a run-config JSON must flow
+    all the way into the per-run sidecar, proving run_from_config actually
+    threads base_overrides down through _run_one_model/_run_one_unit."""
+    run_config = {
+        "models": {
+            "stub": {
+                "provider": "claude",
+                "model": "stub-model",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+        "experiment_config": {"progress_stall_k": 20},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="cfg",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = (
+        artifacts / "runs" / "validation_10_v01_empty_room" / "minigrid" / "stub-model" / "seed_0" / "default"
+    )
+    sidecar = load_json(run_dir / "run_inputs.json")
+    assert sidecar["experiment_config"]["progress_stall_k"] == 20
+
+
+def test_run_from_config_rejects_invalid_experiment_config_before_model_call(tmp_path):
+    """An unknown/invalid experiment_config key must fail fast during job
+    preparation, before any (paid) model call happens."""
+
+    def _boom(name, model_cfg):
+        raise AssertionError("model call must not happen when the overlay is invalid")
+
+    run_config = {
+        "models": {
+            "stub": {
+                "provider": "claude",
+                "model": "stub-model",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+        "experiment_config": {"not_a_real_field": True},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+
+    with pytest.raises(TypeError):
+        run_from_config(
+            run_config_path=cfg_path,
+            manifest_path=_MANIFEST,
+            seeds=[0],
+            artifacts_root=tmp_path / "artifacts",
+            run_set_id="cfg",
+            agent_factory=_boom,
+            difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        )
+
+
 def test_distributed_prepare_honors_prompt_variant(tmp_path):
     """coordinator-prepare can plan a single variant so the shared baseline is
     not re-run once per condition set (the deduplicated launch rollout)."""

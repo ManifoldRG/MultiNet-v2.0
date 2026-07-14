@@ -187,18 +187,20 @@ def condition_variant_names(conditions: Optional[str]) -> list[str]:
 def _condition_configs(
     conditions: Optional[str],
     prompt_variant: Optional[str] = None,
+    base_overrides: Optional[dict] = None,
 ) -> list[tuple[str, ExperimentConfig]]:
     from interface.config import ExperimentConfig
 
+    base = ExperimentConfig(**(base_overrides or {}))
     if not conditions:
         if prompt_variant not in (None, "default"):
             raise ValueError("The default condition set only supports prompt_variant='default'.")
-        return [("default", ExperimentConfig())]
+        return [("default", base)]
     if conditions not in CONDITION_SETS:
         raise ValueError(
             f"Unknown --conditions {conditions!r}; available: {sorted(CONDITION_SETS)}."
         )
-    pairs = list(iter_condition_configs(conditions, ExperimentConfig()))
+    pairs = list(iter_condition_configs(conditions, base))
     if prompt_variant is not None:
         pairs = [(name, cfg) for name, cfg in pairs if name == prompt_variant]
         if not pairs:
@@ -447,9 +449,12 @@ def _run_one_model(
     seeds: Iterable[int],
     conditions: Optional[str],
     prompt_variant: Optional[str] = None,
+    base_overrides: Optional[dict] = None,
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
-    condition_configs = _condition_configs(conditions, prompt_variant=prompt_variant)
+    condition_configs = _condition_configs(
+        conditions, prompt_variant=prompt_variant, base_overrides=base_overrides
+    )
     run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
 
@@ -476,6 +481,7 @@ def _run_one_model(
                     prompt_variant=variant,
                     experiment_config=cfg,
                     conditions=conditions,
+                    base_overrides=base_overrides,
                     model_config=model_config,
                     force=force,
                 )
@@ -505,6 +511,7 @@ def _run_one_unit(
     prompt_variant: str,
     experiment_config: Any | None = None,
     conditions: Optional[str] = None,
+    base_overrides: Optional[dict] = None,
     force: bool = False,
 ) -> Optional[tuple[dict[str, Any], Optional[float]]]:
     """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
@@ -516,7 +523,9 @@ def _run_one_unit(
         return None
 
     if experiment_config is None:
-        configs = _condition_configs(conditions, prompt_variant=prompt_variant)
+        configs = _condition_configs(
+            conditions, prompt_variant=prompt_variant, base_overrides=base_overrides
+        )
         if len(configs) != 1:
             raise ValueError(f"Expected one config for prompt variant {prompt_variant!r}.")
         _, experiment_config = configs[0]
@@ -726,6 +735,13 @@ def run_from_config(
     check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = load_manifest(manifest_path)
 
+    from interface.config import ExperimentConfig
+
+    exp_overlay = run_config.get("experiment_config") or {}
+    if exp_overlay:
+        # Fail fast on unknown keys / invalid values before any paid model call.
+        ExperimentConfig.from_dict({**ExperimentConfig().to_dict(), **exp_overlay})
+
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
     union: dict[str, dict[str, Any]] = {}
@@ -765,6 +781,7 @@ def run_from_config(
             seeds=seeds,
             conditions=conditions,
             prompt_variant=prompt_variant,
+            base_overrides=exp_overlay,
             force=force,
         )
         all_run_rows.extend(rr)
