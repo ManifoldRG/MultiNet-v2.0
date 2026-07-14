@@ -1,7 +1,8 @@
 from gridworld.task_spec import TaskSpecification
+from gridworld.backends.base import GridState
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from interface.config import ExperimentConfig
-from interface.runner import build_runner
+from interface.runner import _progress_signature, build_runner
 
 
 class ScriptedAgent:
@@ -98,3 +99,38 @@ def test_backend_termination_without_goal_is_terminated_failure():
     res = _run(_hazard_spec(), ["TURN_RIGHT", "MOVE_FORWARD"])
     assert res["success"] is False
     assert res["end_reason"] == "terminated_failure"
+
+
+def _state(**kw):
+    # GridState's only required fields are agent_position and
+    # agent_direction (0=right/1=down/2=left/3=up); everything else
+    # (agent_carrying, collected_keys, open_doors, active_switches,
+    # open_gates, block_positions, observability_mode, explored_cells, ...)
+    # defaults per gridworld/backends/base.py. agent_direction stands in
+    # for "facing" here — _progress_signature must ignore it.
+    base = dict(agent_position=(1, 1), agent_direction=0)
+    base.update(kw)
+    return GridState(**base)
+
+
+def test_signature_ignores_facing():
+    assert _progress_signature(_state(agent_direction=0)) == _progress_signature(_state(agent_direction=2))
+
+
+def test_signature_changes_on_each_mechanism_axis():
+    base = _progress_signature(_state())
+    assert _progress_signature(_state(agent_carrying="kR")) != base
+    assert _progress_signature(_state(collected_keys={"kR"})) != base
+    assert _progress_signature(_state(open_doors={"DR"})) != base
+    assert _progress_signature(_state(active_switches={"s1"})) != base
+    assert _progress_signature(_state(open_gates={"g1"})) != base
+    assert _progress_signature(_state(block_positions={"b1": (2, 2)})) != base
+
+
+def test_explored_cells_only_counts_under_partial_observation():
+    full = _state(observability_mode="full", explored_cells={(9, 9)})
+    full2 = _state(observability_mode="full", explored_cells={(8, 8)})
+    assert _progress_signature(full) == _progress_signature(full2)  # ignored when full
+    fog = _state(observability_mode="fog_of_war", explored_cells={(9, 9)})
+    fog2 = _state(observability_mode="fog_of_war", explored_cells={(9, 9), (8, 8)})
+    assert _progress_signature(fog) != _progress_signature(fog2)   # counts under fog
