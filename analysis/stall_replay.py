@@ -4,11 +4,16 @@
 transcripts, "what would have happened had the progress-stall watchdog
 (``interface/runner.py``'s ``_progress_signature`` + K-streak rule) been
 active during these runs?" It never re-runs an episode — it walks each
-episode's recorded ``state_after`` snapshots in order and reproduces the
-runner's exact counting rule (seed ``seen_signatures`` with the initial
-state's signature; a signature already seen increments a streak counter, a
-novel one resets it to 0; the watchdog "fires" the first time the streak
-reaches ``K``) so the two never drift apart.
+episode's recorded ``state_after`` snapshots in order and approximates the
+runner's counting rule (seed ``seen_signatures`` with the initial state's
+signature; a signature already seen increments a streak counter, a novel one
+resets it to 0; the watchdog "fires" the first time the streak reaches ``K``).
+
+Two known omissions: (1) the runner gates its watchdog check on
+``not terminated and not truncated`` (skips the stall count on terminal/
+truncated steps), and (2) the replay walks all ``kind == "step"`` records
+with a ``state_after``, whereas the runner does not count pre-backend
+unparseable-action records toward the streak.
 
 This is a decision aid for picking a calibration table across candidate K
 values — NOT a universal-safety assertion that any given K is safe to
