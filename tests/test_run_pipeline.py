@@ -1369,6 +1369,74 @@ def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
     assert sidecar["experiment_config"]["progress_stall_k"] == 20
 
 
+def test_progress_stall_k_reaches_stored_resolved_config(tmp_path):
+    """Task 11 end-to-end proof: a run-config's top-level experiment_config
+    overlay (progress_stall_k=20) must reach the SAME resolved config through
+    both storage paths -- the local pipeline's run_inputs.json sidecar
+    (run_from_config -> _run_one_model -> _run_one_unit) and a prepared
+    distributed unit (prepare_job -> _condition_configs with the same
+    overlay). Individually these paths are covered by
+    test_run_from_config_experiment_config_overlay_reaches_run_inputs (Task 3)
+    and test_distributed_units_carry_resolved_experiment_config (Task 4); this
+    test is the integration proof that both channels reconstruct the
+    identical resolved config from one run-config, not merely that each
+    independently contains 20."""
+    from scripts.distributed_run_pipeline import prepare_job
+
+    run_config = {
+        "models": {
+            "stub": {
+                "provider": "claude",
+                "model": "stub-model",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+        "experiment_config": {"progress_stall_k": 20},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="cfg",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = (
+        artifacts / "runs" / "validation_10_v01_empty_room" / "minigrid" / "stub-model" / "seed_0" / "default"
+    )
+    sidecar = load_json(run_dir / "run_inputs.json")
+    stored_config = sidecar["experiment_config"]
+    assert stored_config["progress_stall_k"] == 20
+
+    plan = prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    assert plan["units"], "expected at least one distributed unit"
+    reconstructed_config = plan["units"][0]["experiment_config"]
+    assert reconstructed_config["progress_stall_k"] == 20
+
+    # The local sidecar's stored config and the distributed unit's
+    # reconstructed config must be the *same* resolved config end to end --
+    # this is what would break (while each half-test above kept passing) if
+    # Task 3's overlay and Task 4's unit-resolution ever drifted apart.
+    assert stored_config == reconstructed_config
+
+
 def test_run_from_config_rejects_invalid_experiment_config_before_model_call(tmp_path):
     """An unknown/invalid experiment_config key must fail fast during job
     preparation, before any (paid) model call happens."""
