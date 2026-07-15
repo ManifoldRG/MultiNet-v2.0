@@ -98,6 +98,18 @@ def leading_summary_blocks(
     return [{"type": "text", "text": summary}]
 
 
+def _history_record_action(rec: dict[str, Any]) -> str:
+    """The action to attribute to a history step in the model's own vocabulary.
+
+    Cardinal runs expand one model action into primitives; each step record
+    keeps the primitive in ``action`` and the model's emission in
+    ``cardinal_action`` (None for egocentric runs). History renders under the
+    ``FINAL_OUTPUT:`` delimiter, so it must show an action the model is
+    actually allowed to output.
+    """
+    return rec.get("cardinal_action") or rec["action"]
+
+
 def _last3_history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
@@ -114,7 +126,7 @@ def _last3_history_text(
                 row=int(row),
                 col=int(col),
                 facing=rec["facing_after"],
-                action=rec["action"],
+                action=_history_record_action(rec),
                 feedback=rec["prompt_feedback"],
             )
         )
@@ -283,11 +295,12 @@ def history_content_blocks(
         text = (
             user_templates.LAST3_USER_PROMPT["image_only_step"].format(
                 inventory=inventory,
-                action=rec["action"],
+                action=_history_record_action(rec),
             )
             if observation == "image_only"
             else user_templates.LAST3_USER_PROMPT["image_text_step"].format(
-                inventory=inventory
+                inventory=inventory,
+                action=_history_record_action(rec),
             )
         )
         blocks.append({"type": "text", "text": text})

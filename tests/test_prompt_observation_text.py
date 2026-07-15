@@ -303,10 +303,37 @@ def test_text_last3_prompt_includes_recent_history_text():
     )
 
     assert "Recent history (last 3 steps, oldest first):" in prompt_text
-    assert "  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED" in prompt_text
+    assert "Position after: (1, 2), facing EAST" in prompt_text
+    assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
+    assert "Feedback: MOVED" in prompt_text
     assert "What is your next action?" in prompt_text
     assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
     assert "Last result: Episode start." not in prompt_text
+
+
+def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
+    # In cardinal runs FINAL_OUTPUT must be MOVE_NORTH/…/DONE; the history line
+    # must therefore show the model's own cardinal emission, not the executed
+    # primitive it expanded into.
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "TURNED",
+            "position_after": (1, 2),
+            "facing_after": "WEST",
+            "action": "TURN_RIGHT",
+            "cardinal_action": "MOVE_WEST",
+            "prompt_feedback": "TURNED",
+        }
+    ]
+    cfg = ExperimentConfig(
+        observation="text_only", context_window="last3", action_space="cardinal"
+    )
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
+
+    assert "FINAL_OUTPUT: MOVE_WEST" in prompt_text
+    assert "FINAL_OUTPUT: TURN_RIGHT" not in prompt_text
 
 
 def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text():
@@ -327,7 +354,9 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
     assert "Activity summary:" in prompt_text
     assert "first you passed (1, 2)" in prompt_text
     assert "Recent history (last 3 steps, oldest first):" in prompt_text
-    assert "  (1, 2) facing EAST -> MOVE_FORWARD -> MOVED" in prompt_text
+    assert "Position after: (1, 2), facing EAST" in prompt_text
+    assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
+    assert "Feedback: MOVED" in prompt_text
     assert "What is your next action?" in prompt_text
 
 
@@ -381,6 +410,9 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
     assert "first you passed (1, 2)" in prompt_text
     assert "Recent steps (oldest first):" in prompt_text
     assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    # Both the image label and text recap represent the prior model action
+    # using exactly the same delimiter required for the next action.
+    assert prompt_text.count("FINAL_OUTPUT: MOVE_FORWARD") == 2
     # Summary must precede the last3 steps (both the image labels and the
     # text recap) in the message content.
     summary_idx = prompt_text.index("Activity summary:")
