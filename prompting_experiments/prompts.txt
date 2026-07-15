@@ -171,7 +171,7 @@ Output exactly:
 FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 variant name: last3
-description: Include up to the last three executed steps.
+description: Include up to the last three executed steps. Each step is rendered as an image with the action taken in that step.
 prompts:
 preview steps: 3  rollout seed: 0
 [system prompt]
@@ -185,15 +185,15 @@ Recent steps (oldest first):
 
 [image block 1]
 Your inventory: empty.
-Action: PICKUP
+FINAL_OUTPUT: PICKUP
 
 [image block 2]
 Your inventory: empty.
-Action: PICKUP
+FINAL_OUTPUT: PICKUP
 
 [image block 3]
 Your inventory: empty.
-Action: TURN_LEFT
+FINAL_OUTPUT: TURN_LEFT
 
 [image block 4]
 Your inventory: empty.
@@ -225,7 +225,7 @@ Output exactly:
 FINAL_OUTPUT: <action>
 ----------------------------------------------------------------------------------------
 additional text_summary example: one_shot_example maze after one_shot_example_solution
-maze: /home/sean/AI_training/Manifold/MultiNet-v2.0/mazes/one_shot_example/one_shot_example_14x14_dense_kr_sg_kb_2.json
+maze: /Users/helenlu/HRI/MultiNet-v2.0/mazes/one_shot_example/one_shot_example_14x14_dense_kr_sg_kb_2.json
 solution steps replayed: 51
 [system prompt]
 Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
@@ -235,10 +235,44 @@ Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
 
 [user prompt]
 Activity summary:
-first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, finally you opened the blue door
+first you picked up the red key, then you opened the red door, then you opened the black gate, then you picked up the blue key, then you opened the blue door, finally you passed (1, 11)
 
 
 [image block 1]
+Your inventory: empty.
+What is your next action?
+
+Output exactly:
+FINAL_OUTPUT: <action>
+----------------------------------------------------------------------------------------
+variant name: text_summary_and_last3
+description: One-sentence summary of all prior mechanism events/path waypoints, in one stateless message, and last three executed steps rendered as 3 images-each with the action taken in that step.
+prompts:
+preview steps: 10  rollout seed: 5
+[system prompt]
+Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.
+The environment may contain:
+Keys, doors, switches, and gates.
+Valid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, TOGGLE, DONE.
+
+[user prompt]
+Activity summary:
+first you navigated to (1, 2), then you navigated to (2, 2), finally you passed (2, 1)
+Recent steps (oldest first):
+
+[image block 1]
+Your inventory: empty.
+FINAL_OUTPUT: MOVE_FORWARD
+
+[image block 2]
+Your inventory: empty.
+FINAL_OUTPUT: TURN_RIGHT
+
+[image block 3]
+Your inventory: empty.
+FINAL_OUTPUT: MOVE_FORWARD
+
+[image block 4]
 Your inventory: empty.
 What is your next action?
 

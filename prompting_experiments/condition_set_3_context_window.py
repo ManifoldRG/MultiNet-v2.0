@@ -21,13 +21,21 @@ CONDITION_SET = ConditionSet(
         ),
         "last3": Variant(
             name="last3",
-            description="Last three executed steps rendered in one stateless message - same as the fair default.",
-            config_overrides={"context_window": "last3", "chat_history": "stateless"},
+            description="Include up to the last three executed steps. Each step is rendered as an image with the action taken in that step.",
+            config_overrides={"context_window": "last3"},
         ),
         "text_summary": Variant(
             name="text_summary",
             description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message.",
             config_overrides={"context_window": "text_summary", "chat_history": "stateless"},
+            preview_steps=10,
+            preview_rollout_seed=5,
+            preview_move_only=True,
+        ),
+        "text_summary_and_last3": Variant(
+            name="text_summary_and_last3",
+            description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message, and last three executed steps rendered as 3 images-each with the action taken in that step.",
+            config_overrides={"context_window": "text_summary_and_last3", "chat_history": "stateless"},
             preview_steps=10,
             preview_rollout_seed=5,
             preview_move_only=True,
