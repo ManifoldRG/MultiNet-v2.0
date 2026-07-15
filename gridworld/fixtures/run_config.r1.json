@@ -1,0 +1,75 @@
+{
+  "description": "R1 fixed-cell run: minimal prompt, image-only, egocentric, zero-shot, text_summary_and_last3 (stateless), progress_stall_k=30. Single condition (no sweep). Swap manifest to run a different candidate set.",
+  "manifest": "gridworld/fixtures/manifest.r1_balanced_03.json",
+  "_manifest_alternatives": [
+    "gridworld/fixtures/manifest.r1_balanced_03.json",
+    "gridworld/fixtures/manifest.r1_long_tail_02.json",
+    "gridworld/fixtures/manifest.r1_mechanism_rich_01.json",
+    "gridworld/fixtures/manifest.r1_pairwise_01.json"
+  ],
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_model_params": "Uniform max_tokens=16384 across all 3 models (equal-cap invariant satisfied; Claude's high-effort thinking sets the ceiling). Claude effort=high + adaptive thinking; Kimi/Qwen thinking off. PENDING PRE-LAUNCH CONFIRMATION: 16384 is not an Anthropic-published number for high effort (their only stated figure is ~64k for xhigh/max); validate via smoke that Opus high-effort thinking is not truncated on hard image-only mazes. Qwen max_model_len raised to 32768 so a 16384 output cap still leaves room for the image_only+last3 prompt (max_model_len is prompt+generation combined).",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "qwen36_27b_vllm": {
+      "provider": "qwen_vllm_api",
+      "model": "Qwen/Qwen3.6-27B",
+      "temperature": 0.0,
+      "max_tokens": 16384,
+      "enable_thinking": false,
+      "max_model_len": 32768,
+      "gpu_memory_utilization": 0.9,
+      "tensor_parallel_size": 1,
+      "dtype": "auto",
+      "quantization": null,
+      "enforce_eager": false,
+      "enable_prefix_caching": true,
+      "local_files_only": true,
+      "group": "qwen36-27b",
+      "hardware_profile": "local-gpu",
+      "worker_count": 1,
+      "max_in_flight": 64,
+      "tasks": [
+        "all"
+      ],
+      "base_url": "http://127.0.0.1:8000/v1",
+      "timeout": 300
+    },
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.6,
+      "max_tokens": 16384,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": false
+    },
+    "claude_opus": {
+      "provider": "claude",
+      "model": "claude-opus-4-8",
+      "max_tokens": 16384,
+      "timeout": 180,
+      "group": "claude-api",
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": true,
+      "effort": "high"
+    }
+  }
+}
