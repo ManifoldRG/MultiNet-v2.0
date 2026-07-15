@@ -334,3 +334,83 @@ def test_launch_sources_real_start_hooks():
     # the stub returned true with no real command; the real one dispatches on kind
     assert "hardware-profile" in bash(
         "source ./launch_distributed.sh 2>/dev/null; type start_worker").stdout
+
+
+def test_sync_ships_and_verifies_submodule_content(tmp_path):
+    # git archive skips submodules; sync_code_to_vm must also archive each
+    # submodule (enumerated via ls-tree commit entries) at its pinned sha, and
+    # verify_code_on_vm must confirm the submodule tree landed on the VM.
+    gclog = tmp_path / "gclog"
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$1" in\n'
+        '  archive) printf "SUPERARCHIVE";;\n'
+        '  show) printf "PIPEBYTES";;\n'                      # $sha:scripts/distributed_run_pipeline.py
+        '  ls-tree) printf "160000 commit deadbeefcafe\\togbench\\n";;\n'
+        '  rev-parse) printf "subsha123";;\n'                 # $sha:ogbench
+        '  diff) exit 0;;\n'
+        '  -C) case "$3" in archive) printf "SUBARCHIVE";; *) exit 0;; esac;;\n'
+        '  *) exit 0;;\n'
+        'esac\n'
+    )
+    gitstub.chmod(0o755)
+    gcloudstub = tmp_path / "gcloud"
+    gcloudstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'cmd=""; prev=""\n'
+        'for a in "$@"; do [[ "$prev" == "--command" ]] && cmd="$a"; prev="$a"; done\n'
+        'echo "$cmd" >> "$GCLOG"\n'
+        'case "$cmd" in\n'
+        '  *deployed_sha*) echo "TARGETSHA";;\n'
+        '  *sha256sum*distributed_run_pipeline.py*)\n'
+        '     echo "$(printf PIPEBYTES | sha256sum | awk "{print \\$1}")  x";;\n'
+        '  *) : ;;\n'                                          # tar extract + find presence -> exit 0
+        'esac\n'
+        'exit 0\n'
+    )
+    gcloudstub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOG": str(gclog)}
+    r = bash("source ./launch_distributed.sh; sync_and_verify TARGETSHA zoneA vm0", env=env)
+    assert r.returncode == 0, (r.stderr + r.stdout)
+    log = gclog.read_text()
+    # submodule tree shipped to the VM's ogbench path...
+    assert "tar -x -C ~/MultiNet-v2.0/ogbench" in log, log
+    # ...and its presence fail-closed-verified.
+    assert "find ~/MultiNet-v2.0/ogbench" in log, log
+
+
+def test_sync_aborts_when_submodule_missing_on_vm(tmp_path):
+    # If the submodule tree did not land, verify_code_on_vm must fail closed.
+    gitstub = tmp_path / "git"
+    gitstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$1" in\n'
+        '  archive) printf "SUPERARCHIVE";;\n'
+        '  show) printf "PIPEBYTES";;\n'
+        '  ls-tree) printf "160000 commit deadbeefcafe\\togbench\\n";;\n'
+        '  rev-parse) printf "subsha123";;\n'
+        '  diff) exit 0;;\n'
+        '  -C) case "$3" in archive) printf "SUBARCHIVE";; *) exit 0;; esac;;\n'
+        '  *) exit 0;;\n'
+        'esac\n'
+    )
+    gitstub.chmod(0o755)
+    gcloudstub = tmp_path / "gcloud"
+    gcloudstub.write_text(
+        '#!/usr/bin/env bash\n'
+        'cmd=""; prev=""\n'
+        'for a in "$@"; do [[ "$prev" == "--command" ]] && cmd="$a"; prev="$a"; done\n'
+        'case "$cmd" in\n'
+        '  *deployed_sha*) echo "TARGETSHA"; exit 0;;\n'
+        '  *sha256sum*distributed_run_pipeline.py*)\n'
+        '     echo "$(printf PIPEBYTES | sha256sum | awk "{print \\$1}")  x"; exit 0;;\n'
+        '  *find*MultiNet-v2.0/ogbench*) exit 1;;\n'           # submodule dir empty/missing
+        '  *) exit 0;;\n'
+        'esac\n'
+    )
+    gcloudstub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    r = bash("source ./launch_distributed.sh; sync_and_verify TARGETSHA zoneA vm0", env=env)
+    assert r.returncode != 0
+    assert "submodule" in (r.stderr + r.stdout).lower()
