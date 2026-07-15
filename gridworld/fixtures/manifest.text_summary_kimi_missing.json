@@ -1,0 +1,72 @@
+{
+  "description": "KIMI missing-maze subset for ctxfix_ctx_text_summary (5 mazes)",
+  "selection": {
+    "counts": {
+      "validation_10": 10,
+      "S": 1,
+      "M": 1,
+      "B": 1,
+      "D": 2
+    },
+    "policy": "validation_10 + 1 S + 1 M + 1 blind B (held-out) + 2 D, all disjoint from the 50-maze run."
+  },
+  "tasks": [
+    {
+      "task_id": "conditional_s_s5_14x14_corridor_1",
+      "experiment": "conditional",
+      "condition": "S",
+      "variant": "14x14_corridor",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S5/14x14_corridor_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "notes": "Held-out simple navigation maze (not in the 50-run)."
+    },
+    {
+      "task_id": "conditional_m_m1_10x10_corridor_kr_0",
+      "experiment": "conditional",
+      "condition": "M",
+      "variant": "10x10_corridor_kr",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M1/10x10_corridor_kr_0.json",
+      "expected_mechanisms": [
+        "kr"
+      ],
+      "maze_family": "M",
+      "notes": "Held-out single key-door maze (not in the 50-run)."
+    },
+    {
+      "task_id": "conditional_b_blind_probe_holdout",
+      "experiment": "conditional",
+      "condition": "B",
+      "variant": "blind_probe_holdout",
+      "source": "mazes/conditional/blind_probe_B_holdout.json",
+      "expected_mechanisms": [
+        "kr",
+        "s1"
+      ],
+      "maze_family": "B",
+      "notes": "Held-out blind probe (11th B): all keys/doors grey, switches white; decoy key k2 + decoy switch s2. See tests/test_blind_probe_maze.py."
+    },
+    {
+      "task_id": "conditional_d_d1_10x10_corridor_wrong_ky_kr_0",
+      "experiment": "conditional",
+      "condition": "D",
+      "variant": "10x10_corridor_wrong_ky_kr",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_corridor_wrong_ky_kr_0.json",
+      "expected_mechanisms": [
+        "kr"
+      ],
+      "maze_family": "D",
+      "notes": "Held-out distractor maze (wrong-key decoy; not in the 50-run)."
+    },
+    {
+      "task_id": "conditional_d_d3_10x10_dense_deadend_ky_dy_1",
+      "experiment": "conditional",
+      "condition": "D",
+      "variant": "10x10_dense_deadend_ky_dy",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_deadend_ky_dy_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "D",
+      "notes": "Held-out distractor maze (dead-end decoy; not in the 50-run)."
+    }
+  ]
+}
