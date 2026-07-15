@@ -8,7 +8,7 @@
     "gridworld/fixtures/manifest.r1_pairwise_01.json"
   ],
   "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
-  "_note_model_params": "Uniform max_tokens=16384 across all 3 models (equal-cap invariant satisfied; Claude's high-effort thinking sets the ceiling). Claude effort=high + adaptive thinking; Kimi/Qwen thinking off. PENDING PRE-LAUNCH CONFIRMATION: 16384 is not an Anthropic-published number for high effort (their only stated figure is ~64k for xhigh/max); validate via smoke that Opus high-effort thinking is not truncated on hard image-only mazes. Qwen max_model_len raised to 32768 so a 16384 output cap still leaves room for the image_only+last3 prompt (max_model_len is prompt+generation combined).",
+  "_note_model_params": "Thinking ON for ALL 3 models; uniform max_tokens=16384 (equal-cap invariant satisfied). Claude: effort=high + adaptive thinking. Kimi: temperature MUST be 1.0 when thinking on (Moonshot mode-forces it; agent pins 1.0 regardless, config kept in sync). Qwen: temperature 0.6 for thinking mode (greedy temp=0.0 risks repetition/degeneration in Qwen thinking). Qwen max_model_len raised to 32768 so the 16384 output cap leaves room for the image_only+last3 prompt (max_model_len = prompt+generation). PENDING PRE-LAUNCH SMOKE: (a) 16384 is not an Anthropic-published high-effort figure (~64k is their xhigh/max number) — confirm Opus high-effort thinking is not truncated on hard image-only mazes; (b) Kimi thinking-on can truncate before FINAL_OUTPUT on large budgets — confirm it emits the answer line at 16384.",
   "experiment_config": {
     "prompting": "minimal",
     "observation": "image_only",
@@ -23,9 +23,9 @@
     "qwen36_27b_vllm": {
       "provider": "qwen_vllm_api",
       "model": "Qwen/Qwen3.6-27B",
-      "temperature": 0.0,
+      "temperature": 0.6,
       "max_tokens": 16384,
-      "enable_thinking": false,
+      "enable_thinking": true,
       "max_model_len": 32768,
       "gpu_memory_utilization": 0.9,
       "tensor_parallel_size": 1,
@@ -47,7 +47,7 @@
     "kimi_k26": {
       "provider": "kimi",
       "model": "kimi-k2.6",
-      "temperature": 0.6,
+      "temperature": 1.0,
       "max_tokens": 16384,
       "timeout": 180,
       "group": "kimi-api",
@@ -56,7 +56,7 @@
       "tasks": [
         "all"
       ],
-      "enable_thinking": false
+      "enable_thinking": true
     },
     "claude_opus": {
       "provider": "claude",
