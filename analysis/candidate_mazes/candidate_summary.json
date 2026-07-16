@@ -1,0 +1,349 @@
+[
+  {
+    "profile": "balanced",
+    "description": "Best overall compromise: two early clusters, broad mechanism coverage, and a long tail.",
+    "loss": 54.161,
+    "maze_count": 50,
+    "length_min": 9,
+    "length_median": 48.5,
+    "length_max": 106,
+    "largest_adjacent_gap": 12,
+    "length_clusters": {
+      "<10": 1,
+      "10-15": 1,
+      "16-19": 0,
+      "20-25": 2,
+      "26-39": 11,
+      "40-59": 14,
+      "60-79": 7,
+      "80+": 14
+    },
+    "families": {
+      "B1": 8,
+      "D1": 3,
+      "D2": 4,
+      "D3": 4,
+      "M1": 8,
+      "M2": 8,
+      "M3": 3,
+      "M4": 3,
+      "M5": 3,
+      "M6": 3,
+      "S1": 2,
+      "S4": 1
+    },
+    "path_signatures": {
+      "none": 4,
+      "K": 8,
+      "S": 16,
+      "K->K": 5,
+      "K->S": 3,
+      "S->K": 5,
+      "K->S->K": 9
+    },
+    "path_depths": {
+      "0": 4,
+      "1": 24,
+      "2": 13,
+      "3": 9
+    },
+    "distractor_mazes": 11,
+    "five_option_mazes": 3,
+    "b_mazes": 8,
+    "matched_M1_M2_cells": 8,
+    "matched_M3_M4_M5_cells": 3,
+    "comparison_bands": {
+      "short comparison (26-39)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 4,
+        "depth3": 1
+      },
+      "medium comparison (40-59)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 3,
+        "depth2": 6,
+        "depth3": 1
+      },
+      "long comparison (60-81)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 0,
+        "depth3": 2
+      },
+      "tail comparison (82+)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 1,
+        "depth2": 3,
+        "depth3": 5
+      }
+    },
+    "duplicate_task_ids": [],
+    "known_D3_length_risk_count": 4,
+    "candidate_number": 1
+  },
+  {
+    "profile": "long_tail",
+    "description": "Maximizes 80+ action coverage and preserves the corpus maximum while retaining both early clusters.",
+    "loss": 50.998,
+    "maze_count": 50,
+    "length_min": 9,
+    "length_median": 64.5,
+    "length_max": 106,
+    "largest_adjacent_gap": 12,
+    "length_clusters": {
+      "<10": 1,
+      "10-15": 1,
+      "16-19": 0,
+      "20-25": 2,
+      "26-39": 10,
+      "40-59": 10,
+      "60-79": 7,
+      "80+": 19
+    },
+    "families": {
+      "B1": 8,
+      "D1": 7,
+      "D2": 5,
+      "D3": 3,
+      "M1": 8,
+      "M2": 8,
+      "M3": 2,
+      "M4": 2,
+      "M5": 2,
+      "M6": 2,
+      "S1": 2,
+      "S4": 1
+    },
+    "path_signatures": {
+      "none": 5,
+      "K": 8,
+      "S": 16,
+      "K->K": 5,
+      "K->S": 4,
+      "S->K": 2,
+      "K->S->K": 10
+    },
+    "path_depths": {
+      "0": 5,
+      "1": 24,
+      "2": 11,
+      "3": 10
+    },
+    "distractor_mazes": 15,
+    "five_option_mazes": 4,
+    "b_mazes": 8,
+    "matched_M1_M2_cells": 7,
+    "matched_M3_M4_M5_cells": 2,
+    "comparison_bands": {
+      "short comparison (26-39)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 3,
+        "depth3": 1
+      },
+      "medium comparison (40-59)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 1,
+        "depth3": 3
+      },
+      "long comparison (60-81)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 0,
+        "depth3": 1
+      },
+      "tail comparison (82+)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 7,
+        "depth3": 5
+      }
+    },
+    "duplicate_task_ids": [],
+    "known_D3_length_risk_count": 3,
+    "candidate_number": 1
+  },
+  {
+    "profile": "mechanism_rich",
+    "description": "Favors depth-2/depth-3 chains, distractors, and five-option D2/M6 mazes.",
+    "loss": 47.55,
+    "maze_count": 50,
+    "length_min": 23,
+    "length_median": 58.0,
+    "length_max": 106,
+    "largest_adjacent_gap": 9,
+    "length_clusters": {
+      "<10": 0,
+      "10-15": 0,
+      "16-19": 0,
+      "20-25": 1,
+      "26-39": 12,
+      "40-59": 13,
+      "60-79": 5,
+      "80+": 19
+    },
+    "families": {
+      "B1": 8,
+      "D1": 8,
+      "D2": 7,
+      "D3": 5,
+      "M1": 4,
+      "M2": 4,
+      "M3": 3,
+      "M4": 3,
+      "M5": 3,
+      "M6": 3,
+      "S5": 2
+    },
+    "path_signatures": {
+      "none": 3,
+      "K": 5,
+      "S": 12,
+      "K->K": 6,
+      "K->S": 7,
+      "S->K": 7,
+      "K->S->K": 10
+    },
+    "path_depths": {
+      "0": 3,
+      "1": 17,
+      "2": 20,
+      "3": 10
+    },
+    "distractor_mazes": 20,
+    "five_option_mazes": 6,
+    "b_mazes": 8,
+    "matched_M1_M2_cells": 4,
+    "matched_M3_M4_M5_cells": 2,
+    "comparison_bands": {
+      "short comparison (26-39)": {
+        "M1_key": 1,
+        "M2_switch": 1,
+        "B1_switch": 3,
+        "depth2": 4,
+        "depth3": 2
+      },
+      "medium comparison (40-59)": {
+        "M1_key": 1,
+        "M2_switch": 1,
+        "B1_switch": 2,
+        "depth2": 6,
+        "depth3": 3
+      },
+      "long comparison (60-81)": {
+        "M1_key": 1,
+        "M2_switch": 1,
+        "B1_switch": 2,
+        "depth2": 0,
+        "depth3": 1
+      },
+      "tail comparison (82+)": {
+        "M1_key": 1,
+        "M2_switch": 1,
+        "B1_switch": 1,
+        "depth2": 10,
+        "depth3": 4
+      }
+    },
+    "duplicate_task_ids": [],
+    "known_D3_length_risk_count": 5,
+    "candidate_number": 1
+  },
+  {
+    "profile": "pairwise",
+    "description": "Prioritizes matched K-vs-S geometries and repeated depth-2 order comparisons.",
+    "loss": 61.271,
+    "maze_count": 50,
+    "length_min": 23,
+    "length_median": 46.0,
+    "length_max": 106,
+    "largest_adjacent_gap": 11,
+    "length_clusters": {
+      "<10": 0,
+      "10-15": 0,
+      "16-19": 0,
+      "20-25": 2,
+      "26-39": 12,
+      "40-59": 16,
+      "60-79": 5,
+      "80+": 15
+    },
+    "families": {
+      "B1": 8,
+      "D1": 2,
+      "D2": 4,
+      "D3": 2,
+      "M1": 8,
+      "M2": 8,
+      "M3": 4,
+      "M4": 4,
+      "M5": 5,
+      "M6": 2,
+      "S2": 1,
+      "S5": 2
+    },
+    "path_signatures": {
+      "none": 4,
+      "K": 8,
+      "S": 16,
+      "K->K": 5,
+      "K->S": 6,
+      "S->K": 5,
+      "K->S->K": 6
+    },
+    "path_depths": {
+      "0": 4,
+      "1": 24,
+      "2": 16,
+      "3": 6
+    },
+    "distractor_mazes": 8,
+    "five_option_mazes": 2,
+    "b_mazes": 8,
+    "matched_M1_M2_cells": 8,
+    "matched_M3_M4_M5_cells": 4,
+    "comparison_bands": {
+      "short comparison (26-39)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 3,
+        "depth2": 4,
+        "depth3": 1
+      },
+      "medium comparison (40-59)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 8,
+        "depth3": 2
+      },
+      "long comparison (60-81)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 1,
+        "depth2": 0,
+        "depth3": 0
+      },
+      "tail comparison (82+)": {
+        "M1_key": 2,
+        "M2_switch": 2,
+        "B1_switch": 2,
+        "depth2": 4,
+        "depth3": 3
+      }
+    },
+    "duplicate_task_ids": [],
+    "known_D3_length_risk_count": 2,
+    "candidate_number": 1
+  }
+]

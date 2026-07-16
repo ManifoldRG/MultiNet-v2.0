@@ -1,0 +1,9 @@
+{
+  "fingerprint": "062a1fa1b1e0f448f6f8031b72b5cd87d206c7b5ae481209b073e4515a65b163",
+  "feature_version": 2,
+  "maze_root": "/home/sean/AI_training/Manifold/MultiNet-v2.0/ogbench/ogbench/procgen/maze_jsons",
+  "maze_count": 214,
+  "duplicate_task_ids": [
+    "10x10_corridor_wrong_ky_inactive_sb_sg_kr_1"
+  ]
+}

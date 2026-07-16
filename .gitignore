@@ -68,3 +68,9 @@ analysis/notion/
 artifacts/analysis/
 
 
+
+# candidate-maze packaging: keep text/metadata tracked, ignore generated renders + bundles
+analysis/candidate_mazes/**/images/
+analysis/candidate_mazes/**/*.zip
+analysis/candidate_mazes/*.png
+analysis/candidate_mazes/sets/*/candidate_curve.png
