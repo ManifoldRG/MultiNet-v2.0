@@ -196,20 +196,32 @@ REMOTE
     *) echo "no credential mapping for provider '$provider' (worker $vm)" >&2; return 1 ;;
   esac
   printf -v key_q '%q' "${!key_var:-}"
+  # API_WORKER_ROLE selects the driver on API VMs: "worker" (serial, default)
+  # or "lockstep-worker" (batch-API lockstep runner; R1 uses this). For lockstep,
+  # API_WORKER_CONCURRENCY is MAX_BATCHES (working-set size; R1: 50) and the
+  # coordinator must be serving with --stale-after-seconds >= worst-case batch
+  # round (see docs/batch-api-lockstep-runner-design.md, docs/r1-run-preparation.md).
+  # Exactly ONE lockstep worker per API model group — a second one double-pays.
+  local api_role="${API_WORKER_ROLE:-worker}"
+  case "$api_role" in
+    worker|lockstep-worker) ;;
+    *) echo "invalid API_WORKER_ROLE '$api_role' (worker|lockstep-worker)" >&2; return 1 ;;
+  esac
   gcloud compute ssh "$vm" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' bash -s" <<REMOTE
+    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='${API_WORKER_CONCURRENCY:-1}' bash -s" <<REMOTE
 set -euo pipefail
 export ${key_var}=${key_q}
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
 mkdir -p "\$HOME/multinet-worker-artifacts/\$RUN_ID"
 nohup python -m scripts.run_pipeline \\
-  --distributed-role worker \\
+  --distributed-role "\$API_ROLE" \\
   --coordinator-url "http://\$COORD_IP:8765" \\
   --artifacts-root "\$HOME/multinet-worker-artifacts/\$RUN_ID" \\
   --worker-state "\$HOME/multinet-worker-artifacts/\$RUN_ID/worker_state.json" \\
   --model-group "\$GROUP" \\
   --hardware-profile api-client \\
+  --worker-concurrency "\$API_CONC" \\
   > "\$HOME/multinet-worker-artifacts/\$RUN_ID/worker.log" 2>&1 &
 echo "\$!" > "\$HOME/multinet-worker-artifacts/\$RUN_ID/worker.pid"
 REMOTE

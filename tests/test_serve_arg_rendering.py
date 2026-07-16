@@ -91,3 +91,23 @@ def test_reload_and_subcommand_wiring_present():
         capture_output=True, text=True, cwd=REPO,
     )
     assert disp.returncode == 0 and "reload-qwen-phase2" in disp.stdout
+
+
+def test_api_worker_role_override_wiring():
+    """start_worker's API branch honors API_WORKER_ROLE (worker|lockstep-worker),
+    rejects other values, and forwards API_WORKER_CONCURRENCY as
+    --worker-concurrency (MAX_BATCHES for the lockstep runner)."""
+    r = subprocess.run(
+        ["bash", "-c", "source lib/distributed_start.sh 2>/dev/null; type start_worker"],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    assert r.returncode == 0, r.stderr
+    body = r.stdout
+    assert 'API_WORKER_ROLE:-worker' in body, "role must default to today's serial worker"
+    assert "lockstep-worker" in body, "lockstep role must be selectable on API VMs"
+    assert "invalid API_WORKER_ROLE" in body, "unknown roles must fail closed"
+    assert 'API_WORKER_CONCURRENCY:-1' in body, "concurrency must default to 1 (serial parity)"
+    # The remote command uses the forwarded role/concurrency, not a hardcoded
+    # role (the \$ is the heredoc escape as stored in the function body).
+    assert '--distributed-role "\\$API_ROLE"' in body
+    assert '--worker-concurrency "\\$API_CONC"' in body
