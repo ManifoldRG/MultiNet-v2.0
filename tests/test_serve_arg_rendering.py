@@ -1,0 +1,88 @@
+"""Bash tests for the phase-parameterized `vllm serve` arg rendering (Qwen two-tier).
+
+lib/vllm_serve_args.sh::vllm_serve_args renders the served-vLLM argument string
+from three env knobs. With the env UNSET it must reproduce today's exact
+hard-coded arg string (phase 1); with the phase-2 env it must switch the KV knobs.
+See docs/qwen-two-tier-rerun-design.md.
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+
+# Today's hard-coded phase-1 arg string (lib/distributed_start.sh gpu branch +
+# run_qwen_backfill.sh, verbatim, modulo ordering which is irrelevant to vllm).
+PHASE1 = ("--port 8000 --gpu-memory-utilization 0.9 --max-model-len 16384 "
+          "--max-num-seqs 64 --dtype bfloat16 --trust-remote-code")
+
+# Every shell script this task touches — must stay syntactically valid.
+TOUCHED = [
+    "lib/vllm_serve_args.sh",
+    "lib/distributed_start.sh",
+    "run_qwen_backfill.sh",
+    "launch_qwen_smoke.sh",
+    "sweep_run.sh",
+]
+
+
+def _render(env: dict | None = None) -> str:
+    e = os.environ.copy()
+    for k in ("QWEN_MAX_MODEL_LEN", "QWEN_MAX_NUM_SEQS", "QWEN_GPU_MEMORY_UTILIZATION"):
+        e.pop(k, None)
+    if env:
+        e.update(env)
+    r = subprocess.run(
+        ["bash", "-c", "source lib/vllm_serve_args.sh; vllm_serve_args"],
+        capture_output=True, text=True, cwd=REPO, env=e,
+    )
+    assert r.returncode == 0, r.stderr
+    return r.stdout.strip()
+
+
+def test_unset_env_reproduces_todays_exact_string():
+    assert _render() == PHASE1
+
+
+def test_phase2_env_switches_kv_knobs():
+    out = _render({"QWEN_MAX_MODEL_LEN": "96000", "QWEN_MAX_NUM_SEQS": "3"})
+    assert "--max-model-len 96000" in out
+    assert "--max-num-seqs 3" in out
+    # the non-phase knobs are untouched
+    assert "--dtype bfloat16" in out
+    assert "--trust-remote-code" in out
+    assert "--gpu-memory-utilization 0.9" in out
+
+
+def test_gpu_memory_utilization_knob():
+    out = _render({"QWEN_GPU_MEMORY_UTILIZATION": "0.75"})
+    assert "--gpu-memory-utilization 0.75" in out
+
+
+def test_touched_scripts_pass_bash_n():
+    for rel in TOUCHED:
+        r = subprocess.run(["bash", "-n", rel], capture_output=True, text=True, cwd=REPO)
+        assert r.returncode == 0, f"{rel}: {r.stderr}"
+
+
+def test_reload_and_subcommand_wiring_present():
+    """reload_gpu_worker exists and stops before it relaunches; sweep exposes the
+    subcommand and gates it on BATCH_CAP."""
+    r = subprocess.run(
+        ["bash", "-c", "source lib/distributed_start.sh 2>/dev/null; type reload_gpu_worker"],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    assert r.returncode == 0, r.stderr
+    # stop_gpu_worker must be invoked before start_worker in the reload body.
+    body = r.stdout
+    assert "stop_gpu_worker" in body and "start_worker" in body
+    assert body.index("stop_gpu_worker") < body.index("start_worker")
+
+    # sweep subcommand dispatch present.
+    disp = subprocess.run(
+        ["bash", "-c", "grep -n 'reload-qwen-phase2' sweep_run.sh"],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    assert disp.returncode == 0 and "reload-qwen-phase2" in disp.stdout
