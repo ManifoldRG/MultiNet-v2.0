@@ -4,16 +4,13 @@
 transcripts, "what would have happened had the progress-stall watchdog
 (``interface/runner.py``'s ``_progress_signature`` + K-streak rule) been
 active during these runs?" It never re-runs an episode — it walks each
-episode's recorded ``state_after`` snapshots in order and approximates the
+episode's recorded ``state_after`` snapshots in order and reproduces the
 runner's counting rule (seed ``seen_signatures`` with the initial state's
 signature; a signature already seen increments a streak counter, a novel one
 resets it to 0; the watchdog "fires" the first time the streak reaches ``K``).
 
-Two known omissions: (1) the runner gates its watchdog check on
-``not terminated and not truncated`` (skips the stall count on terminal/
-truncated steps), and (2) the replay walks all ``kind == "step"`` records
-with a ``state_after``, whereas the runner does not count pre-backend
-unparseable-action records toward the streak.
+Like the runner, replay excludes actions rejected before ``backend.step`` and
+does not count a terminal or truncated primitive toward the stall streak.
 
 This is a decision aid for picking a calibration table across candidate K
 values — NOT a universal-safety assertion that any given K is safe to
@@ -29,23 +26,36 @@ from gridworld.backends.base import GridState
 from interface.runner import _progress_signature
 
 
-def _step_states(episode: dict[str, Any]) -> list[GridState]:
-    """Ordered per-step ``state_after`` snapshots as ``GridState`` objects.
+def _executed_step_records(
+    episode: dict[str, Any],
+) -> list[tuple[dict[str, Any], GridState]]:
+    """Ordered executed-backend records and their ``state_after`` snapshots.
 
     Mirrors ``pipeline/episode_metrics.py``'s ``_step_records`` pattern:
     only ``kind == "step"`` transcript records carry a ``state_after``
     snapshot (the dict shape produced by ``interface/episode_log.py``'s
     ``state_snapshot`` — a superset of ``GridState.to_dict()``, which
-    ``GridState.from_dict`` reads back losslessly).
+    ``GridState.from_dict`` reads back losslessly). ``event_type == "INVALID"``
+    is the runner's pre-backend rejection record and is not an executed
+    primitive, so it is excluded from both streak and step-savings counts.
     """
-    states = []
+    records = []
     for record in episode.get("transcript", []):
         if not isinstance(record, dict) or record.get("kind") != "step":
             continue
+        if record.get("event_type") == "INVALID":
+            continue
         state_after = record.get("state_after")
         if isinstance(state_after, dict):
-            states.append(GridState.from_dict(state_after))
-    return states
+            records.append((record, GridState.from_dict(state_after)))
+    return records
+
+
+def _terminal_record(record: dict[str, Any], state: GridState) -> bool:
+    """Whether the live runner skips watchdog counting for this primitive."""
+    terminated = record.get("terminated", state.terminated)
+    truncated = record.get("truncated", state.truncated)
+    return bool(terminated or truncated)
 
 
 def replay_stall(episodes: list[dict[str, Any]], K: int) -> dict[str, int]:
@@ -72,6 +82,9 @@ def replay_stall(episodes: list[dict[str, Any]], K: int) -> dict[str, int]:
           watchdog would have fired (i.e. the steps early termination would
           have saved).
     """
+    if isinstance(K, bool) or not isinstance(K, int) or K <= 0:
+        raise ValueError(f"K must be a positive non-bool integer, got {K!r}")
+
     eventual_wins_killed = 0
     failures_caught = 0
     failed_primitive_steps_saved = 0
@@ -85,8 +98,12 @@ def replay_stall(episodes: list[dict[str, Any]], K: int) -> dict[str, int]:
         stall_count = 0
         kill_index = None
 
-        step_states = _step_states(episode)
-        for index, state in enumerate(step_states, start=1):
+        step_records = _executed_step_records(episode)
+        for index, (record, state) in enumerate(step_records, start=1):
+            # Backend terminal signals take precedence over the watchdog in the
+            # live runner. The episode ends here without incrementing the streak.
+            if _terminal_record(record, state):
+                break
             sig = _progress_signature(state)
             if sig in seen_signatures:
                 stall_count += 1
@@ -104,7 +121,7 @@ def replay_stall(episodes: list[dict[str, Any]], K: int) -> dict[str, int]:
             eventual_wins_killed += 1
         else:
             failures_caught += 1
-            failed_primitive_steps_saved += len(step_states) - kill_index
+            failed_primitive_steps_saved += len(step_records) - kill_index
 
     return {
         "eventual_wins_killed": eventual_wins_killed,

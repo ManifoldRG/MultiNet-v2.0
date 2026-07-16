@@ -117,17 +117,52 @@ def _model_group(model_key: str, model_cfg: dict[str, Any]) -> str:
 
 
 def _unit_id(job_id: str, payload: dict[str, Any]) -> str:
+    """Stable identity for one fully resolved distributed unit.
+
+    ``job_id`` supplies the durable job namespace; ``inputs_hash`` carries the
+    complete output-affecting identity (episode production plus scoring inputs),
+    while ``model_key`` keeps two explicitly declared plan slots distinct even
+    if they resolve to the same runtime model recipe. A caller may therefore
+    reuse an explicit durable job ID without causing completed work from an
+    older resolved config to be mistaken for current work.
+    """
     digest = stable_hash(
         {
             "job_id": job_id,
             "model_key": payload["model_key"],
-            "model_id": payload["model_id"],
-            "task_id": payload["task_id"],
-            "seed": payload["seed"],
-            "prompt_variant": payload["prompt_variant"],
+            "inputs_hash": payload["inputs_hash"],
         }
     )
     return f"unit_{digest[:16]}"
+
+
+def _unit_inputs_hash(
+    *,
+    episode_inputs_hash: str,
+    task_row: dict[str, Any],
+    canonical_paths: dict[str, Any],
+    scored_static: dict[str, Any],
+    scorer_config: ScorerConfig,
+    difficulty_max_static_score: float,
+) -> str:
+    """Hash every output-affecting input of a distributed Stage-3/4 unit.
+
+    ``episode_inputs_hash`` is the canonical local-pipeline recipe used by
+    ``run_inputs.json``. The remaining fields cover Stage 4 and aggregate-row
+    production, which are also part of a verified unit archive and must not be
+    silently reused after their inputs change.
+    """
+    return stable_hash(
+        {
+            "schema_version": 1,
+            "episode_inputs_hash": episode_inputs_hash,
+            "task_row": task_row,
+            "canonical_paths_hash": stable_hash(canonical_paths),
+            "scored_static_hash": stable_hash(scored_static),
+            "scorer_config": scorer_config.to_dict(),
+            "difficulty_max_static_score": difficulty_max_static_score,
+        }
+    )
 
 
 # Unit statuses that represent completed, paid-for work: preserved across a
@@ -275,6 +310,12 @@ def prepare_job(
                 continue
             source = pipeline._resolve_source(row, manifest_path)
             source_payload = json.loads(source.read_text(encoding="utf-8"))
+            canonical_paths = _read_json(
+                artifacts_root / "tasks" / task_id / "canonical_paths.json"
+            )
+            runtime_spec = pipeline._runtime_capped_spec(
+                pipeline.task_spec_from_payload(source_payload), canonical_paths
+            )
             for seed in seeds:
                 for variant in prompt_variants:
                     run_rel = (
@@ -310,6 +351,25 @@ def prepare_job(
                         "worker_tags": _as_list(model_cfg.get("worker_tags")),
                         "max_in_flight": model_cfg.get("max_in_flight"),
                     }
+                    episode_inputs_hash = pipeline._expected_run_hash(
+                        runtime_spec,
+                        model_id,
+                        int(seed),
+                        "minigrid",
+                        condition_set=conditions,
+                        prompt_variant=variant,
+                        experiment_config=variant_configs[variant],
+                        model_config=model_cfg,
+                    )
+                    unit["episode_inputs_hash"] = episode_inputs_hash
+                    unit["inputs_hash"] = _unit_inputs_hash(
+                        episode_inputs_hash=episode_inputs_hash,
+                        task_row=dict(row),
+                        canonical_paths=canonical_paths,
+                        scored_static=static_by_task[task_id],
+                        scorer_config=config,
+                        difficulty_max_static_score=difficulty_max,
+                    )
                     unit["unit_id"] = _unit_id(job_id, unit)
                     units.append(unit)
 
@@ -795,6 +855,7 @@ class CoordinatorStore:
             tmp.mkdir(parents=True, exist_ok=True)
             try:
                 tar.extractall(tmp)
+                json_payloads: dict[str, Any] = {}
                 for name in expected:
                     fpath = tmp / name
                     if not fpath.exists():
@@ -804,9 +865,25 @@ class CoordinatorStore:
                     # is retried instead.
                     if name.endswith(".json"):
                         try:
-                            json.loads(fpath.read_text(encoding="utf-8"))
+                            json_payloads[name] = json.loads(
+                                fpath.read_text(encoding="utf-8")
+                            )
                         except (ValueError, OSError) as exc:
                             raise ValueError(f"Extracted {name} is not valid JSON: {exc}") from exc
+                expected_episode_hash = unit.get("episode_inputs_hash")
+                if expected_episode_hash is not None:
+                    sidecar = json_payloads.get("run_inputs.json")
+                    actual_episode_hash = (
+                        sidecar.get("inputs_hash")
+                        if isinstance(sidecar, dict)
+                        else None
+                    )
+                    if actual_episode_hash != expected_episode_hash:
+                        raise ValueError(
+                            f"Archive for {unit['unit_id']} has run_inputs.json "
+                            "inputs_hash mismatch: "
+                            f"expected {expected_episode_hash}, got {actual_episode_hash}"
+                        )
                 if dest.exists():
                     shutil.rmtree(dest)
                 dest.parent.mkdir(parents=True, exist_ok=True)

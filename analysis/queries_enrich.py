@@ -5,8 +5,10 @@ as :func:`analysis.data.load_queries`.
 
 The prompt's final user block reliably carries ``You are at (x, y) facing DIR`` for every
 config except ``obs_image_only`` (text-blind — image only). A ``Recent history`` block lists
-``(pos) facing DIR -> ACTION -> OUTCOME`` lines whose most-recent entry is the outcome of the
-immediately-preceding query's action; we attribute it back one step (dedup-safe).
+prior positions followed by ``FINAL_OUTPUT: ACTION`` and ``Feedback: OUTCOME`` lines
+(older corpora use the legacy ``(pos) facing DIR -> ACTION -> OUTCOME`` arrow form). Its
+most-recent entry is the outcome of the immediately preceding query's action; we attribute
+it back one step (dedup-safe).
 """
 from __future__ import annotations
 import json
@@ -18,8 +20,19 @@ import pandas as pd
 from analysis.data import load_queries
 
 _POS = re.compile(r"You are at \((\d+),\s*(\d+)\) facing (\w+)")
-# most-recent history line: "(x, y) facing DIR -> ACTION -> OUTCOME ..."
-_HIST = re.compile(r"\((\d+),\s*(\d+)\) facing (\w+)\s*->\s*([A-Z_]+)\s*->\s*([A-Za-z_]+)")
+# One history item is deliberately shaped like a model response so the prompt
+# reinforces the same delimiter required for the next action.
+_HIST = re.compile(
+    r"Position after:\s*\((\d+),\s*(\d+)\),\s*facing\s+(\w+)\s*\n"
+    r"FINAL_OUTPUT:\s*([A-Z_]+)\s*\n"
+    r"Feedback:\s*([A-Za-z_]+)"
+)
+# Corpora collected before the FINAL_OUTPUT-shaped template (all runs through the
+# 2026-07 kimictx sweep) embed the old arrow form; without this fallback their
+# enrichment silently degrades to prev_action/prev_outcome = None.
+_HIST_LEGACY = re.compile(
+    r"\((\d+),\s*(\d+)\) facing (\w+)\s*->\s*([A-Z_]+)\s*->\s*([A-Za-z_]+)"
+)
 _TOGGLE_REJECT = re.compile(r"cannot be toggled directly|Gates cannot be toggled", re.I)
 
 
@@ -51,7 +64,7 @@ def _parse_query(path: str) -> dict:
     if pm:
         out["pos_x"], out["pos_y"], out["facing"] = int(pm[-1][0]), int(pm[-1][1]), pm[-1][2]
     # last history line = outcome of the previous action
-    hs = _HIST.findall(txt)
+    hs = _HIST.findall(txt) or _HIST_LEGACY.findall(txt)
     if hs:
         out["prev_action"], out["prev_outcome"] = hs[-1][3], hs[-1][4].upper()
     u = d.get("usage") or {}

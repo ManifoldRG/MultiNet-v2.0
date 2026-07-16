@@ -1,3 +1,5 @@
+import numpy as np
+
 from gridworld.task_spec import TaskSpecification
 from gridworld.backends.base import GridState
 from gridworld.backends.minigrid_backend import MiniGridBackend
@@ -9,12 +11,25 @@ class ScriptedAgent:
     def __init__(self, actions):
         self._a = list(actions)
         self._i = 0
+        self.calls = 0
         self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
 
     def __call__(self, messages):
+        self.calls += 1
         a = self._a[self._i] if self._i < len(self._a) else "DONE"
         self._i += 1
         return f"FINAL_OUTPUT: {a}"
+
+
+class OneReplyAgent:
+    def __init__(self, reply):
+        self.reply = reply
+        self.calls = 0
+        self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
+
+    def __call__(self, messages):
+        self.calls += 1
+        return self.reply
 
 
 def _reach_spec():
@@ -59,11 +74,15 @@ def _hazard_spec():
     })
 
 
-def _run(spec, actions, **cfg):
+def _run_agent(spec, agent, **cfg):
     backend = MiniGridBackend(render_mode="rgb_array")
     backend.configure(spec)
     runner = build_runner(ExperimentConfig(**cfg), backend, spec)
-    return runner.run(ScriptedAgent(actions), verbose=False)
+    return runner.run(agent, verbose=False)
+
+
+def _run(spec, actions, **cfg):
+    return _run_agent(spec, ScriptedAgent(actions), **cfg)
 
 
 def test_reach_position_done_still_succeeds():
@@ -85,7 +104,11 @@ def test_goal_reached_from_non_done_event_still_succeeds():
     # switch goal and terminates with reward>0/goal_reached=True while
     # event_type is "TOGGLED" — success must come from
     # `terminated and state.goal_reached`, not from event_type == "DONE".
-    res = _run(_activate_switch_spec(), ["MOVE_FORWARD", "TOGGLE"])
+    res = _run(
+        _activate_switch_spec(),
+        ["MOVE_FORWARD", "TOGGLE"],
+        progress_stall_k=1,
+    )
     assert res["success"] is True
     assert res["end_reason"] == "success"
 
@@ -96,7 +119,11 @@ def test_backend_termination_without_goal_is_terminated_failure():
     # lava hazard. event_type is "MOVED" here, not DONE/BLOCKED/WRONG_DONE/
     # INVALID, so this must be caught by the `if terminated:` fallback that
     # sets end_reason = "terminated_failure", not the success OR-branch.
-    res = _run(_hazard_spec(), ["TURN_RIGHT", "MOVE_FORWARD"])
+    res = _run(
+        _hazard_spec(),
+        ["TURN_RIGHT", "MOVE_FORWARD"],
+        progress_stall_k=2,
+    )
     assert res["success"] is False
     assert res["end_reason"] == "terminated_failure"
 
@@ -125,6 +152,33 @@ def test_signature_changes_on_each_mechanism_axis():
     assert _progress_signature(_state(active_switches={"s1"})) != base
     assert _progress_signature(_state(open_gates={"g1"})) != base
     assert _progress_signature(_state(block_positions={"b1": (2, 2)})) != base
+
+
+def test_signature_distinguishes_same_color_keys_by_collected_id():
+    first = _state(agent_carrying="red", collected_keys={"key_1"})
+    second = _state(agent_carrying="red", collected_keys={"key_2"})
+
+    assert _progress_signature(first) != _progress_signature(second)
+
+
+def test_signature_normalizes_live_backend_numpy_positions():
+    numpy_state = _state(
+        agent_position=np.array([1, 1]),
+        block_positions={"b1": np.array([2, 2])},
+        observability_mode="view_cone",
+        explored_cells={(1, 1), (1, 2)},
+    )
+    tuple_state = _state(
+        agent_position=(1, 1),
+        block_positions={"b1": (2, 2)},
+        observability_mode="view_cone",
+        explored_cells={(1, 1), (1, 2)},
+    )
+
+    signature = _progress_signature(numpy_state)
+
+    assert signature == _progress_signature(tuple_state)
+    _ = hash(signature)
 
 
 def _oscillate_spec():
@@ -156,12 +210,30 @@ def test_oscillator_stalls_at_exactly_k():
 def test_k_none_does_not_stall():
     actions = ["TURN_LEFT"] * 300  # spins forever
     res = _run(_oscillate_spec(), actions, progress_stall_k=None)
-    assert res["end_reason"] != "stalled"
+    assert res["end_reason"] == "truncated"
+    assert res["steps_used"] == 200
 
 
 def test_turn_only_stalls_when_enabled():
     res = _run(_oscillate_spec(), ["TURN_LEFT"] * 300, progress_stall_k=20)
     assert res["end_reason"] == "stalled"
+    assert res["steps_used"] == 20
+
+
+def test_parse_failures_do_not_advance_stall_streak():
+    agent = ScriptedAgent(["NOT_AN_ACTION", "STILL_NOT_AN_ACTION", "TURN_LEFT"])
+
+    res = _run_agent(
+        _oscillate_spec(),
+        agent,
+        progress_stall_k=1,
+        max_parse_retries=5,
+    )
+
+    assert res["end_reason"] == "stalled"
+    assert res["steps_used"] == 1
+    assert res["query_count"] == 3
+    assert agent.calls == 3
 
 
 def test_survive_steps_rejects_watchdog():
@@ -171,8 +243,11 @@ def test_survive_steps_rejects_watchdog():
         "mechanisms": {}, "goal": {"type": "survive_steps"}, "max_steps": 50,
     })
     import pytest
+
+    agent = ScriptedAgent(["TURN_LEFT"] * 5)
     with pytest.raises(ValueError):
-        _run(spec, ["TURN_LEFT"] * 5, progress_stall_k=20)
+        _run_agent(spec, agent, progress_stall_k=20)
+    assert agent.calls == 0
 
 
 def test_explored_cells_only_counts_under_partial_observation():
@@ -182,3 +257,187 @@ def test_explored_cells_only_counts_under_partial_observation():
     fog = _state(observability_mode="fog_of_war", explored_cells={(9, 9)})
     fog2 = _state(observability_mode="fog_of_war", explored_cells={(9, 9), (8, 8)})
     assert _progress_signature(fog) != _progress_signature(fog2)   # counts under fog
+
+
+def test_key_pickup_gives_more_than_k_backtrack_budget():
+    # Walk K+1 cells east to a key, pick it up, then retrace those same cells.
+    # The collected-key/carrying regime makes every backtrack position novel,
+    # so the watchdog must not kill this eventually successful policy.
+    k = 3
+    spec = TaskSpecification.from_dict({
+        "task_id": "key_backtrack",
+        "seed": 0,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [k + 4, 3],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [1, 1],
+        },
+        "mechanisms": {
+            "keys": [{"id": "k1", "position": [k + 2, 1], "color": "red"}],
+        },
+        "goal": {"type": "reach_position", "target": [1, 1]},
+        "max_steps": 40,
+    })
+    actions = (
+        ["MOVE_FORWARD"] * (k + 1)
+        + ["PICKUP", "TURN_LEFT", "TURN_LEFT"]
+        + ["MOVE_FORWARD"] * (k + 1)
+    )
+
+    res = _run(spec, actions, progress_stall_k=k)
+
+    assert res["success"] is True
+    assert res["end_reason"] == "success"
+    assert res["steps_used"] > k
+    assert "k1" in res["final_state"]["collected_keys"]
+
+
+def test_push_block_progress_and_terminal_success_precede_watchdog():
+    spec = TaskSpecification.from_dict({
+        "task_id": "block_progress",
+        "seed": 0,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [6, 3],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [4, 1],
+        },
+        "mechanisms": {
+            "blocks": [{"id": "b1", "position": [2, 1], "color": "grey"}],
+        },
+        "goal": {
+            "type": "push_block_to",
+            "target_ids": ["b1"],
+            "target_positions": [[4, 1]],
+        },
+        "max_steps": 20,
+    })
+
+    res = _run(spec, ["MOVE_FORWARD", "MOVE_FORWARD"], progress_stall_k=1)
+
+    assert res["success"] is True
+    assert res["end_reason"] == "success"
+    assert res["final_state"]["block_positions"]["b1"] == [4, 1]
+
+
+def test_collect_all_terminal_success_precedes_watchdog():
+    spec = TaskSpecification.from_dict({
+        "task_id": "collect_all_terminal",
+        "seed": 0,
+        "difficulty_tier": 1,
+        "maze": {
+            "dimensions": [4, 4],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [2, 2],
+        },
+        "mechanisms": {
+            "keys": [{"id": "k1", "position": [1, 1], "color": "red"}],
+        },
+        "goal": {"type": "collect_all", "target_ids": ["k1"]},
+        "max_steps": 10,
+    })
+
+    res = _run(spec, ["PICKUP"], progress_stall_k=1)
+
+    assert res["success"] is True
+    assert res["end_reason"] == "success"
+    assert res["steps_used"] == 1
+
+
+def test_backend_truncation_precedes_simultaneous_k_threshold():
+    spec = TaskSpecification.from_dict({
+        "task_id": "truncate_at_k",
+        "seed": 0,
+        "difficulty_tier": 1,
+        "maze": {
+            "dimensions": [5, 5],
+            "walls": [],
+            "start": [1, 1],
+            "goal": [3, 3],
+        },
+        "mechanisms": {},
+        "goal": {"type": "reach_position", "target": [3, 3]},
+        "max_steps": 1,
+    })
+
+    res = _run(spec, ["TURN_LEFT"], progress_stall_k=1)
+
+    assert res["success"] is False
+    assert res["end_reason"] == "truncated"
+    assert res["steps_used"] == 1
+
+
+def test_partial_observation_exploration_is_progress_until_reveals_stop():
+    spec = TaskSpecification.from_dict({
+        "task_id": "partial_turn_exploration",
+        "seed": 0,
+        "difficulty_tier": 2,
+        "maze": {
+            "dimensions": [9, 9],
+            "walls": [],
+            "start": [4, 4],
+            "goal": [7, 7],
+        },
+        "mechanisms": {},
+        "rules": {"observability": "view_cone", "view_size": 5},
+        "goal": {"type": "reach_position", "target": [7, 7]},
+        "max_steps": 20,
+    })
+
+    res = _run(spec, ["TURN_LEFT"] * 10, progress_stall_k=1)
+
+    assert res["end_reason"] == "stalled"
+    # More than one turn survived K=1 because each new view expanded explored_cells.
+    assert res["steps_used"] > 1
+    explored_sizes = [
+        len(rec["state_after"]["explored_cells"])
+        for rec in res["transcript"]
+        if rec.get("kind") == "step"
+    ]
+    assert max(explored_sizes) > explored_sizes[0]
+    assert explored_sizes[-1] == explored_sizes[-2]
+
+
+def test_stall_discards_remaining_subgoal_queue_without_requerying():
+    agent = OneReplyAgent(
+        "SUB_GOAL: spin then move\n"
+        "FINAL_OUTPUT: TURN_LEFT, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD"
+    )
+
+    res = _run_agent(
+        _oscillate_spec(),
+        agent,
+        progress_stall_k=2,
+        querying="subgoal",
+    )
+
+    steps = [rec for rec in res["transcript"] if rec.get("kind") == "step"]
+    assert res["end_reason"] == "stalled"
+    assert [rec["action"] for rec in steps] == ["TURN_LEFT", "TURN_LEFT"]
+    assert agent.calls == 1
+    assert res["query_count"] == 1
+
+
+def test_stall_discards_remaining_cardinal_primitives_without_requerying():
+    # Facing EAST, MOVE_WEST expands to TURN_RIGHT, TURN_RIGHT, MOVE_FORWARD.
+    # K=1 fires on the first turn, so neither later primitive may execute.
+    agent = OneReplyAgent("FINAL_OUTPUT: MOVE_WEST")
+
+    res = _run_agent(
+        _oscillate_spec(),
+        agent,
+        progress_stall_k=1,
+        action_space="cardinal",
+    )
+
+    steps = [rec for rec in res["transcript"] if rec.get("kind") == "step"]
+    assert res["end_reason"] == "stalled"
+    assert [rec["action"] for rec in steps] == ["TURN_RIGHT"]
+    assert steps[0]["cardinal_action"] == "MOVE_WEST"
+    assert res["final_state"]["agent_position"] == [1, 1]
+    assert agent.calls == 1
+    assert res["query_count"] == 1

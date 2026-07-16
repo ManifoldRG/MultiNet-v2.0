@@ -195,6 +195,20 @@ def build_metrics(
     }
 
 
+def _end_reason_flags(end_reason: Any) -> tuple[bool, bool]:
+    """Map the runner's ``end_reason`` vocabulary to (terminated, truncated).
+
+    Single source for both the aggregate jsonl row and the scorer-enriched run;
+    the two must never disagree. ``stalled`` (watchdog) counts as truncated,
+    ``terminated_failure`` (backend ended without the goal) as terminated;
+    ``max_steps``/``parse_failed``/``exhausted`` are neither.
+    """
+    return (
+        end_reason in ("success", "terminated_failure"),
+        end_reason in ("truncated", "stalled"),
+    )
+
+
 def build_run_row(
     episode: dict[str, Any],
     canonical_paths: dict[str, Any],
@@ -227,6 +241,7 @@ def build_run_row(
         optimality_ratio = 1.0 if steps == 0 else 0.0
     else:
         optimality_ratio = optimal_steps / max(steps, optimal_steps)
+    terminated, truncated = _end_reason_flags(end_reason)
     return {
         "task_id": manifest_row.get("task_id") or episode.get("task_spec", {}).get("task_id"),
         "experiment": manifest_row.get("experiment"),
@@ -237,8 +252,8 @@ def build_run_row(
         "seed": seed,
         "success": success,
         "end_reason": end_reason,
-        "terminated": end_reason in ("success", "terminated_failure"),
-        "truncated": end_reason in ("truncated", "stalled"),
+        "terminated": terminated,
+        "truncated": truncated,
         "reward": _episode_reward(episode),
         "steps": steps,
         "optimal_steps": optimal_steps,
@@ -274,8 +289,7 @@ def enrich_run_for_scoring(
     run["agent_or_model"] = agent_or_model
     run["model_id"] = agent_or_model
     run["seed"] = seed
-    run["terminated"] = episode.get("end_reason") in ("success", "terminated_failure")
-    run["truncated"] = episode.get("end_reason") in ("truncated", "stalled")
+    run["terminated"], run["truncated"] = _end_reason_flags(episode.get("end_reason"))
     # episode_log nests reward under final_state; the scorer only reads a
     # top-level ``reward``, so lift it (keeps run_score.json reward in sync
     # with the episode_runs.jsonl row).

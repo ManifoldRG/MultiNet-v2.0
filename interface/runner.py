@@ -25,7 +25,6 @@ from interface.observation import (
     history_content_blocks,
     history_text,
     leading_summary_blocks,
-    recent_history_steps,
 )
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
@@ -49,18 +48,25 @@ def _progress_signature(state) -> tuple:
     spinning is not progress; explored_cells counts only under partial
     observation, where a turn can reveal genuinely new cells."""
     explored = (
-        frozenset(state.explored_cells)
+        frozenset(tuple(int(coord) for coord in cell) for cell in state.explored_cells)
         if getattr(state, "observability_mode", "full") != "full"
         else frozenset()
     )
+    blocks = frozenset(
+        (
+            block_id,
+            tuple(int(coord) for coord in position),
+        )
+        for block_id, position in state.block_positions.items()
+    )
     return (
-        state.agent_position,
+        tuple(int(coord) for coord in state.agent_position),
         state.agent_carrying,
         frozenset(state.collected_keys),
         frozenset(state.open_doors),
         frozenset(state.active_switches),
         frozenset(state.open_gates),
-        frozenset(state.block_positions.items()),
+        blocks,
         explored,
     )
 
@@ -311,11 +317,31 @@ class ExperimentRunner:
                 t_llm = time.perf_counter()
                 model_text = agent(agent_messages)
                 llm_s = time.perf_counter() - t_llm
+                action_queue = self.querying.parse_actions(model_text)
                 if chat_history != "stateless":
-                    messages.append({"role": "assistant", "content": model_text})
+                    # Keep successful action history in the same canonical form
+                    # required for the next reply. In particular, do not let a
+                    # legacy parser fallback such as ``ACTION: TURN_LEFT`` teach
+                    # that delimiter back to the model on later rolling turns.
+                    if action_queue:
+                        subgoal = (
+                            f"SUB_GOAL: {self.querying.current_subgoal}\n"
+                            if self.querying.kind == "subgoal"
+                            and self.querying.current_subgoal
+                            else ""
+                        )
+                        history_reply = (
+                            f"{subgoal}FINAL_OUTPUT: {', '.join(action_queue)}"
+                        )
+                    else:
+                        # The verbatim response remains in the query artifact,
+                        # but retaining a rejected ``ACTION: ...`` turn in the
+                        # model's chat context would reinforce the exact legacy
+                        # delimiter this normalization is intended to remove.
+                        history_reply = "The previous response did not contain a valid action."
+                    messages.append({"role": "assistant", "content": history_reply})
                     if chat_history == "rolling":
                         _trim_rolling_chat(messages, max(1, self.config.chat_turns_max))
-                action_queue = self.querying.parse_actions(model_text)
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
                         "LLM query #%d finished: task_id=%s observation=%s elapsed=%.2fs reply_chars=%d actions_parsed=%d",
@@ -334,18 +360,25 @@ class ExperimentRunner:
                         self.config.observation,
                         model_text,
                     )
+                # ``messages`` is extended with the current assistant reply
+                # above in multi-turn modes. Persist the actual request, not a
+                # live list that now also contains the response it elicited.
+                logged_agent_messages = copy.deepcopy(agent_messages)
+                if chat_history != "stateless" and logged_agent_messages:
+                    if logged_agent_messages[-1].get("role") == "assistant":
+                        logged_agent_messages.pop()
                 query_record = {
                     "kind": "query",
                     "query_index": query_count,
                     "env_step_count": state.step_count,
-                    "agent_messages": copy.deepcopy(agent_messages),
+                    "agent_messages": logged_agent_messages,
                     "assistant_reply": model_text,
                     "parsed_actions": list(action_queue),
                     "parse_ok": bool(action_queue),
                     "has_image": has_image,
                     "llm_latency_s": llm_s,
                     "chat_history_mode": chat_history,
-                    "agent_message_count": len(agent_messages),
+                    "agent_message_count": len(logged_agent_messages),
                     "actions_remaining_before_step": len(action_queue),
                 }
                 usage = getattr(agent, "last_usage", None)

@@ -12,6 +12,8 @@ LOGIC, not any claim that a particular K is "safe".
 
 from __future__ import annotations
 
+import pytest
+
 from analysis.stall_replay import replay_stall
 
 
@@ -23,8 +25,8 @@ def _state(pos, *, direction=0):
     return {"agent_position": list(pos), "agent_direction": direction}
 
 
-def _step(pos):
-    return {"kind": "step", "state_after": _state(pos)}
+def _step(pos, **record_fields):
+    return {"kind": "step", "state_after": _state(pos), **record_fields}
 
 
 def _eventual_win_episode():
@@ -98,4 +100,54 @@ def test_replay_stall_no_stall_when_streak_never_reached():
         "eventual_wins_killed": 0,
         "failures_caught": 0,
         "failed_primitive_steps_saved": 0,
+    }
+
+
+@pytest.mark.parametrize("bad_k", [True, False, 0, -1, 2.5, "3"])
+def test_replay_stall_rejects_non_positive_or_non_integer_k(bad_k):
+    with pytest.raises(ValueError, match="positive non-bool integer"):
+        replay_stall(_corpus(), K=bad_k)
+
+
+def test_terminal_or_truncated_step_does_not_reach_k():
+    # The third repeat would reach K=3 if counted, but it is the backend cap
+    # step. Live runner precedence returns truncated and never fires watchdog.
+    episode = {
+        "success": False,
+        "initial_state": _state((0, 0)),
+        "transcript": [
+            _step((0, 1)),
+            _step((0, 1)),
+            _step((0, 1)),
+            _step((0, 1), truncated=True),
+        ],
+    }
+
+    assert replay_stall([episode], K=3) == {
+        "eventual_wins_killed": 0,
+        "failures_caught": 0,
+        "failed_primitive_steps_saved": 0,
+    }
+
+
+def test_invalid_pre_backend_records_do_not_affect_streak_or_step_savings():
+    invalid = _step((0, 1), event_type="INVALID", backend_info=None)
+    episode = {
+        "success": False,
+        "initial_state": _state((0, 0)),
+        "transcript": [
+            _step((0, 1)),       # novel executed primitive
+            invalid,             # not passed to backend
+            _step((0, 1)),       # repeat 1
+            invalid,
+            _step((0, 1)),       # repeat 2 -> K
+            invalid,
+            _step((0, 2)),       # one executed primitive would be saved
+        ],
+    }
+
+    assert replay_stall([episode], K=2) == {
+        "eventual_wins_killed": 0,
+        "failures_caught": 1,
+        "failed_primitive_steps_saved": 1,
     }

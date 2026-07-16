@@ -837,6 +837,8 @@ def test_distributed_units_carry_resolved_experiment_config(tmp_path):
     assert plan["units"], "expected units"
     for u in plan["units"]:
         assert u["experiment_config"]["progress_stall_k"] == 20
+        assert u["episode_inputs_hash"]
+        assert u["inputs_hash"]
 
 
 def _dummy_run_archive(files: dict[str, str] | None = None) -> bytes:
@@ -918,7 +920,10 @@ def _valid_unit_archive(unit) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name in EXPECTED_RUN_FILES:
-            data = json.dumps({"unit_id": unit["unit_id"], "file": name}).encode("utf-8")
+            payload = {"unit_id": unit["unit_id"], "file": name}
+            if name == "run_inputs.json":
+                payload["inputs_hash"] = unit["episode_inputs_hash"]
+            data = json.dumps(payload).encode("utf-8")
             info = tarfile.TarInfo(name=name)
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
@@ -1596,7 +1601,7 @@ def test_distributed_upload_validates_and_extracts_archive(tmp_path):
     worker_id = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
     unit = store.assign(worker_id)["unit"]
 
-    result = store.upload(worker_id, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(worker_id, unit["unit_id"], _valid_unit_archive(unit))
 
     assert result["status"] == "verified"
     run_dir = artifacts / unit["run_dir"]
@@ -1638,7 +1643,7 @@ def test_distributed_upload_mirrors_verified_run_to_bucket(tmp_path, monkeypatch
     calls = []
     monkeypatch.setattr(dist, "mirror_to_bucket", lambda src, dest, **kw: calls.append((str(src), dest)))
 
-    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(wid, unit["unit_id"], _valid_unit_archive(unit))
 
     assert result["status"] == "verified"
     assert len(calls) == 1
@@ -1662,7 +1667,7 @@ def test_distributed_upload_records_pending_when_mirror_fails(tmp_path, monkeypa
 
     # A failed mirror must not lose the (paid) verified run: the upload still
     # succeeds and the result is flagged for a later re-push.
-    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(wid, unit["unit_id"], _valid_unit_archive(unit))
     assert result["status"] == "verified"
     us = store.load_state()["units"][unit["unit_id"]]
     assert us["status"] == "verified"
@@ -1679,7 +1684,7 @@ def test_distributed_upload_without_storage_does_not_mirror(tmp_path, monkeypatc
         lambda *a, **k: pytest.fail("mirror_to_bucket must not run without storage"),
     )
 
-    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(wid, unit["unit_id"], _valid_unit_archive(unit))
     assert result["status"] == "verified"
     us = store.load_state()["units"][unit["unit_id"]]
     assert "gcs_uri" not in us and "gcs_pending" not in us
@@ -1750,6 +1755,20 @@ def test_distributed_upload_rejects_truncated_json(tmp_path):
     with pytest.raises(ValueError, match="not valid JSON"):
         store.upload(wid, unit["unit_id"], bad)
     # A failed verification must not leave a half-extracted run dir.
+    assert not (artifacts / unit["run_dir"] / "episode.json").exists()
+
+
+def test_distributed_upload_rejects_wrong_episode_inputs_hash(tmp_path):
+    artifacts, store, wid, unit = _stub_unit_store(tmp_path)
+    bad = _dummy_run_archive({
+        "episode.json": "{}",
+        "run_inputs.json": json.dumps({"inputs_hash": "wrong-inputs"}),
+        "run_score.json": "{}",
+    })
+
+    with pytest.raises(ValueError, match="inputs_hash mismatch"):
+        store.upload(wid, unit["unit_id"], bad)
+
     assert not (artifacts / unit["run_dir"] / "episode.json").exists()
 
 
@@ -2045,6 +2064,107 @@ def test_distributed_prepare_preserves_progress_on_rerun(tmp_path):
 
     reread = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
     assert reread["units"][unit_id]["status"] == "verified"
+
+
+def test_explicit_job_id_does_not_preserve_units_after_resolved_config_changes(tmp_path):
+    """A durable job name is a namespace, not permission to reuse stale work.
+
+    The fully resolved experiment config participates in the canonical episode
+    hash and therefore in unit identity. Re-preparing the same explicit job ID
+    with a different watchdog K must replace the completed unit with fresh
+    pending work.
+    """
+    from scripts.distributed_run_pipeline import prepare_job, state_path
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = tmp_path / "run_config.json"
+    artifacts = tmp_path / "artifacts"
+
+    def write_config(k):
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "experiment_config": {"progress_stall_k": k},
+                    "models": {
+                        "a": {
+                            "provider": "qwen",
+                            "model": "m",
+                            "group": "g",
+                            "tasks": [task],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    common = dict(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        job_id="durable-watchdog-job",
+    )
+
+    write_config(20)
+    first_plan = prepare_job(**common)
+    first_id = first_plan["units"][0]["unit_id"]
+    state = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+    state["units"][first_id]["status"] = "verified"
+    state_path(artifacts).write_text(json.dumps(state), encoding="utf-8")
+
+    write_config(30)
+    second_plan = prepare_job(**common)
+    second_id = second_plan["units"][0]["unit_id"]
+    reread = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+
+    assert second_id != first_id
+    assert first_id not in reread["units"]
+    assert reread["units"][second_id]["status"] == "pending"
+
+
+def test_distributed_unit_inputs_hash_covers_complete_episode_and_scoring_recipe():
+    from scripts.distributed_run_pipeline import _unit_inputs_hash
+
+    scorer_config = load_scorer_config()
+    common = {
+        "episode_inputs_hash": "episode-a",
+        "task_row": {"task_id": "t", "condition": "a"},
+        "canonical_paths": {"inputs_hash": "canonical-input", "route": [1, 2]},
+        "scored_static": {"inputs_hash": "static-input", "static_score": 10.0},
+        "scorer_config": scorer_config,
+        "difficulty_max_static_score": 100.0,
+    }
+    baseline = _unit_inputs_hash(**common)
+
+    changes = [
+        {**common, "episode_inputs_hash": "episode-b"},
+        {**common, "task_row": {"task_id": "t", "condition": "b"}},
+        {
+            **common,
+            # The complete artifact is hashed, not only its embedded input hash.
+            "canonical_paths": {
+                "inputs_hash": "canonical-input",
+                "route": [1, 3],
+            },
+        },
+        {
+            **common,
+            "scored_static": {
+                "inputs_hash": "static-input",
+                "static_score": 11.0,
+            },
+        },
+        {**common, "difficulty_max_static_score": 101.0},
+    ]
+    changed_scorer = load_scorer_config()
+    changed_scorer.baseline_tokens += 1
+    changes.append({**common, "scorer_config": changed_scorer})
+
+    assert all(_unit_inputs_hash(**changed) != baseline for changed in changes)
 
 
 def test_distributed_api_client_continues_past_failures_and_reports_them(tmp_path):
