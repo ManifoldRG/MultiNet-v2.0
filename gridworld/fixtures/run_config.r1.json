@@ -1,5 +1,5 @@
 {
-  "description": "R1 fixed-cell run: minimal prompt, image-only, egocentric, zero-shot, text_summary_and_last3 (stateless), progress_stall_k=30. Single condition (no sweep). Swap manifest to run a different candidate set.",
+  "description": "R1 fixed-cell run on balanced_03 (50 mazes): minimal prompt, image_only, egocentric, zero_shot, text_summary_and_last3 (chat_history=stateless), progress_stall_k=30. Thinking ON all 3 models, uniform 64k cap, Claude xhigh. Single condition (no sweep).",
   "manifest": "gridworld/fixtures/manifest.r1_balanced_03.json",
   "_manifest_alternatives": [
     "gridworld/fixtures/manifest.r1_balanced_03.json",
@@ -8,7 +8,7 @@
     "gridworld/fixtures/manifest.r1_pairwise_01.json"
   ],
   "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
-  "_note_model_params": "Thinking ON for ALL 3 models; uniform max_tokens=16384 (equal-cap invariant satisfied). Claude: effort=high + adaptive thinking. Kimi: temperature MUST be 1.0 when thinking on (Moonshot mode-forces it; agent pins 1.0 regardless, config kept in sync). Qwen: temperature 0.6 for thinking mode (greedy temp=0.0 risks repetition/degeneration in Qwen thinking). Qwen max_model_len raised to 32768 so the 16384 output cap leaves room for the image_only+last3 prompt (max_model_len = prompt+generation). PENDING PRE-LAUNCH SMOKE: (a) 16384 is not an Anthropic-published high-effort figure (~64k is their xhigh/max number) — confirm Opus high-effort thinking is not truncated on hard image-only mazes; (b) Kimi thinking-on can truncate before FINAL_OUTPUT on large budgets — confirm it emits the answer line at 16384.",
+  "_note_model_params": "Thinking ON for all 3; uniform max_tokens=64000 for fairness (Anthropic ~64k xhigh/max starting budget for Opus 4.8). Claude effort=xhigh + adaptive thinking. Kimi temp=1.0 (Moonshot mode-forces when thinking on). Qwen temp=0.6 (greedy degenerates in thinking); max_model_len=96000 to fit 64k gen + prompt. Timeouts raised (Claude/Kimi 600s, Qwen 900s) for slow deep-thinking generations. WATCH: (a) Qwen 64k on A100 = large KV cache; a runaway 64k decode takes many minutes and will cut 26-parallel throughput/wall-clock (consider lowering max_in_flight); (b) cost/latency scale with the runaway-tail fraction at 64k, which harder R1 mazes push up (no pilot); (c) budget ~$435 central 1-seed (Claude+Kimi API, Qwen local), range $200-1025 driven by unknown image_only+thinking queries/episode.",
   "experiment_config": {
     "prompting": "minimal",
     "observation": "image_only",
@@ -24,9 +24,9 @@
       "provider": "qwen_vllm_api",
       "model": "Qwen/Qwen3.6-27B",
       "temperature": 0.6,
-      "max_tokens": 16384,
+      "max_tokens": 64000,
       "enable_thinking": true,
-      "max_model_len": 32768,
+      "max_model_len": 96000,
       "gpu_memory_utilization": 0.9,
       "tensor_parallel_size": 1,
       "dtype": "auto",
@@ -42,14 +42,14 @@
         "all"
       ],
       "base_url": "http://127.0.0.1:8000/v1",
-      "timeout": 300
+      "timeout": 900
     },
     "kimi_k26": {
       "provider": "kimi",
       "model": "kimi-k2.6",
       "temperature": 1.0,
-      "max_tokens": 16384,
-      "timeout": 180,
+      "max_tokens": 64000,
+      "timeout": 600,
       "group": "kimi-api",
       "worker_count": 1,
       "max_in_flight": 1,
@@ -61,15 +61,15 @@
     "claude_opus": {
       "provider": "claude",
       "model": "claude-opus-4-8",
-      "max_tokens": 16384,
-      "timeout": 180,
+      "max_tokens": 64000,
+      "timeout": 600,
       "group": "claude-api",
       "max_in_flight": 1,
       "tasks": [
         "all"
       ],
       "enable_thinking": true,
-      "effort": "high"
+      "effort": "xhigh"
     }
   }
 }
