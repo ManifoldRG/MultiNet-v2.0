@@ -130,7 +130,15 @@ Each **round** (one tick):
    entire batch, then apply each reply (parse → queue actions → local drain).
 4. **Report progress to the coordinator after every round** (per-maze heartbeat
    — see Coordinator integration) — richer than today's on-completion-only
-   reporting; keeps unit staleness at bay during long batches.
+   reporting. **Caveat (corrected):** heartbeats fire only *between* rounds, so a
+   round that runs longer than `stale_after_seconds` emits none while it is in
+   flight. Per-round heartbeats keep progress *visible*; they do NOT by
+   themselves keep long rounds from going stale. A single batch round can run the
+   full `batch_deadline_s` (2 h), so the coordinator must be started with
+   `--stale-after-seconds` ≥ `batch_deadline_s + batch_cancel_grace_s` (+ slack;
+   e.g. 9000), and there must be **exactly one lockstep worker per API model
+   group** — otherwise a stale unit is re-assigned to the other worker and
+   double-paid.
 5. Terminated mazes (solved / failed / stall-K) drop out; **refill from the
    coordinator up to `MAX_BATCHES`**. The batch stays full until the unit pool
    drains, then the tail shrinks.
@@ -153,8 +161,11 @@ Each **round** (one tick):
   driver. The lockstep worker must heartbeat **every held unit_id** each round
   (with its generation count as `progress`) — today heartbeating lives inside
   per-unit threads (`:1219-1223`) and the concurrent loop never does it for a
-  shared working set. Without this, idle-looking units go stale at
-  `stale_after_seconds=300` and get double-assigned.
+  shared working set. This makes between-round progress visible, but it does NOT
+  cover a single round that runs longer than `stale_after_seconds` (no heartbeat
+  flows mid-round) — raise `--stale-after-seconds` above the worst-case round
+  and run one lockstep worker per group (see round-loop step 4) so a mid-round
+  stale bounce cannot double-assign.
 - Refill: on maze completion the worker requests a replacement unit
   (`assign`), keeping the working set at `MAX_BATCHES` until the coordinator's
   pool is empty. The existing thread-per-episode refill loop

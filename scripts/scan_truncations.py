@@ -25,7 +25,11 @@ Usage::
         --artifacts-root .runs/<run>/qwen_phase1 \
         --source-manifest gridworld/fixtures/manifest.r1_balanced_03.json \
         --out gridworld/fixtures/manifest.r1_qwen_phase2.json \
-        [--cap 8000] [--model qwen36_27b_vllm]
+        [--cap 8000] [--model Qwen_Qwen3.6-27B]
+
+``--model`` is the SANITIZED ``<model>`` run-dir segment
+(``_sanitize(model_cfg["model"])`` from run_pipeline), NOT the run-config key
+(``qwen36_27b_vllm``). A ``--model`` that matches zero run dirs exits non-zero.
 """
 
 from __future__ import annotations
@@ -345,6 +349,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     results = scan_runs(Path(args.artifacts_root), cap=args.cap, model=args.model)
+
+    # Fail closed on a zero-match --model filter. The run-dir <model> segment is
+    # the SANITIZED model id (e.g. 'Qwen_Qwen3.6-27B'), not the run-config key
+    # (e.g. 'qwen36_27b_vllm'); a filter typo silently scans 0 runs, flags
+    # nothing, and would emit an empty phase-2 rerun manifest — shipping
+    # truncated episodes as final data. Never let a mis-typed filter look "clean".
+    if args.model is not None and not results:
+        print(
+            f"ERROR: --model {args.model!r} matched ZERO run dirs under "
+            f"{args.artifacts_root}/runs. The <model> path segment is the "
+            "sanitized model id (e.g. 'Qwen_Qwen3.6-27B'), not the run-config "
+            "key. Refusing to emit an empty rerun manifest from an empty scan.",
+            file=sys.stderr,
+        )
+        return 2
+
     print_summary(results)
 
     if args.out:

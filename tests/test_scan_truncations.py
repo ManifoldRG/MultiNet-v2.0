@@ -183,12 +183,36 @@ def test_scan_explicit_cap_overrides_run_inputs(tmp_path):
     assert results[0]["flagged"] is True
 
 
+# The run-dir <model> path segment is the SANITIZED model id (from
+# scripts.run_pipeline._sanitize(model_cfg["model"])), NOT the run-config key.
+# For R1's qwen block ("model": "Qwen/Qwen3.6-27B") that segment is:
+_QWEN_SEGMENT = "Qwen_Qwen3.6-27B"
+
+
 def test_scan_model_filter_ignores_other_models(tmp_path):
-    _write_run(tmp_path, "task_a", "qwen36_27b_vllm", queries=[_query(8000)], cap=8000)
+    # Use the real production segment (not the run-config key 'qwen36_27b_vllm'),
+    # so this test would catch a scanner that compares against the wrong name.
+    _write_run(tmp_path, "task_a", _QWEN_SEGMENT, queries=[_query(8000)], cap=8000)
     _write_run(tmp_path, "task_b", "claude-opus-4-8", queries=[_query(8000)], cap=8000)
-    results = scan_runs(tmp_path, model="qwen36_27b_vllm")
+    results = scan_runs(tmp_path, model=_QWEN_SEGMENT)
     task_ids = {r["task_id"] for r in results}
     assert task_ids == {"task_a"}
+
+
+def test_cli_fails_closed_when_model_filter_matches_zero_runs(tmp_path, capsys):
+    """A --model that matches no run dir (e.g. the run-config key instead of the
+    sanitized segment) must exit nonzero and NOT write a manifest."""
+    _write_run(tmp_path, "task_a", _QWEN_SEGMENT, queries=[_query(8000)], cap=8000)
+    out = tmp_path / "phase2.json"
+    rc = main([
+        "--artifacts-root", str(tmp_path),
+        "--source-manifest", str(tmp_path / "src.json"),  # never read (guard fires first)
+        "--out", str(out),
+        "--model", "qwen36_27b_vllm",  # the wrong (run-config key) name -> 0 matches
+    ])
+    assert rc == 2
+    assert not out.exists()
+    assert "matched ZERO run dirs" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #

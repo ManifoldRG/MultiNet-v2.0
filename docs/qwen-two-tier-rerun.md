@@ -96,6 +96,16 @@ with the phase-1 defaults from `lib/vllm_serve_args.sh` (env unset), blocking on
 Claude/Kimi at 64k. **Do not export any `QWEN_*` serve env for phase 1** — the
 worker reproduces the phase-1 serve string verbatim when the knobs are unset.
 
+> **Lockstep API groups (Claude/Kimi):** start the coordinator
+> (`coordinator-serve`) with `--stale-after-seconds 9000` (≥ `batch_deadline_s`
+> + `batch_cancel_grace_s` + slack; R1 default 7200 + 300), and run **exactly
+> one** `lockstep-worker` per API model group. The lockstep worker only
+> heartbeats between rounds, and one batch round can run for the full 2 h
+> deadline with no heartbeat, so the default `stale_after_seconds=300` would
+> flip every held unit stale mid-round; with two workers per group a stale unit
+> is re-assigned to the other worker → double-run → double-pay. See
+> [`docs/r1-run-preparation.md`](r1-run-preparation.md) §Launch sequence step 5.
+
 **(b) Local / single-VM path.** Start the phase-1 server yourself first, wait for
 it to answer `/v1/models`, then run the client. The serve line is the exact
 phase-1 default string rendered by `lib/vllm_serve_args.sh` (env unset):
@@ -134,10 +144,15 @@ python -m scripts.scan_truncations \
   --artifacts-root  .runs/$RUN/qwen_phase1 \
   --source-manifest gridworld/fixtures/manifest.r1_balanced_03.json \
   --out             gridworld/fixtures/manifest.r1_qwen_phase2.json \
-  --model qwen36_27b_vllm
+  --model Qwen_Qwen3.6-27B
 ```
 
-Fail-closed: the scanner exits non-zero if any run's cap is unresolvable, unless
+`--model` is the **sanitized `<model>` run-dir segment**, not the run-config key
+`qwen36_27b_vllm`. For R1's qwen block (`"model": "Qwen/Qwen3.6-27B"`) that
+segment is `Qwen_Qwen3.6-27B` (run `python -c "from scripts.run_pipeline import
+_sanitize; print(_sanitize('Qwen/Qwen3.6-27B'))"` to confirm). Fail-closed: the
+scanner exits non-zero if `--model` matches ZERO run dirs (a typo must never
+emit an empty rerun manifest), and also if any run's cap is unresolvable, unless
 you pass `--allow-unresolved` (it is a money-deciding tool). Runnable live as
 phase-1 episodes complete, or post-hoc on the finished root — functionally
 equivalent, because the reload forces a phase boundary regardless. If nothing

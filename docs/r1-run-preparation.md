@@ -158,6 +158,19 @@ validated. Remaining steps are operator-run (paid).
    the A100 fleet (serve env unset = phase-1 defaults). Cost-safety env vars
    are required-no-default; STOP VMs, never delete; pull artifacts before
    spindown.
+   - **Coordinator staleness for lockstep groups:** start `coordinator-serve`
+     with `--stale-after-seconds 9000` (must be ≥ `batch_deadline_s` +
+     `batch_cancel_grace_s` + slack; R1 default 7200 + 300). The lockstep
+     worker only heartbeats between rounds (`on_round`), and a single batch
+     round can run for the whole 2 h deadline with no heartbeat — the default
+     `stale_after_seconds=300` would flip every held unit stale mid-round.
+   - **Exactly ONE lockstep worker per API model group.** With one worker,
+     a stale bounce is harmless (the coordinator re-hands the same worker's
+     units and refill dedups them, costing only an `attempts` increment). With
+     two workers on a group, a stale unit is re-assigned to the *other* worker
+     → double-run → double-pay. Size `MAX_RUN_DURATION` / `BATCH_CAP` to the
+     same worst-case round (`batch_deadline_s` + `batch_cancel_grace_s`) × the
+     multi-round tail (see step 4).
 6. **Scan → phase 2 → merge:** exact commands in `docs/qwen-two-tier-rerun.md`
    (scanner is fail-closed on unresolvable caps; `reload-qwen-phase2` requires
    `BATCH_CAP`; merge is fail-closed on missing flagged tasks and stamps
