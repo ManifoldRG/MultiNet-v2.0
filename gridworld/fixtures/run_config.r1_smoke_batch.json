@@ -1,0 +1,44 @@
+{
+  "description": "R1 batch-API validation smoke: Claude Opus 4.8 (xhigh) + Kimi k2.6 over the 5-maze smoke manifest through the Batch API lockstep runner. Clones run_config.r1's experiment_config + model blocks verbatim (minimal/image_only/text_summary_and_last3/stateless/zero_shot/egocentric, step_by_step, progress_stall_k=30, thinking ON, uniform 64k cap, Claude effort=xhigh, Kimi temp=1.0) but raises max_in_flight to 8 (>= max_batches) so the lockstep worker's working set is never starved. No Qwen (local vLLM continuous-batches server-side and rides its own path). Drives scripts/run_batch_smoke.py; NOT a scored panel.",
+  "manifest": "gridworld/fixtures/manifest.r1_smoke_batch.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 1.0,
+      "max_tokens": 64000,
+      "timeout": 600,
+      "group": "kimi-api",
+      "worker_count": 1,
+      "max_in_flight": 8,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": true
+    },
+    "claude_opus": {
+      "provider": "claude",
+      "model": "claude-opus-4-8",
+      "max_tokens": 64000,
+      "timeout": 600,
+      "group": "claude-api",
+      "max_in_flight": 8,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": true,
+      "effort": "xhigh"
+    }
+  }
+}
