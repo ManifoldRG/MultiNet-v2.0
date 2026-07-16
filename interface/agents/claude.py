@@ -12,6 +12,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from interface.agents.anthropic_batch import run_message_batch
 from interface.agents.http_retry import call_with_retry
 from interface.agents.reply import Reply, detect_token_truncated
 from interface.agents.runner_messages import (
@@ -273,6 +274,9 @@ class ClaudeAnthropicConfig:
     enable_prompt_cache: bool = True
     enable_thinking: bool = False
     effort: Optional[str] = None
+    # Message Batches API polling knobs (used only by generate_batch).
+    batch_poll_interval_s: float = 30.0
+    batch_deadline_s: float = 7200.0
 
 
 @dataclass
@@ -309,6 +313,66 @@ class ClaudeAnthropicAgent:
             enable_thinking=self.config.enable_thinking,
             effort=self.config.effort,
         )
+
+    def _params_for(self, messages: List[dict]) -> Dict[str, object]:
+        """The exact request body `generate` would send for these messages.
+
+        Shared with `generate` via `_build_request_body` so batched bodies can
+        never drift from sync bodies.
+        """
+        system, turns = _to_anthropic_turns(messages)
+        if self.config.enable_prompt_cache:
+            system, turns = _apply_prompt_cache(system, turns)
+        return _build_request_body(
+            model=self.config.model,
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature,
+            system=system,
+            messages=turns,
+            enable_thinking=self.config.enable_thinking,
+            effort=self.config.effort,
+        )
+
+    def _reply_from_result(self, result: Optional[dict]) -> Reply:
+        """Turn one batch `result` object into a Reply.
+
+        Absent ids (missing after a deadline cancel) map to ``batch_expired``;
+        non-succeeded results (errored/canceled/expired) become empty stubs with
+        ``batch_<type>``. Succeeded messages parse exactly like the sync path.
+        """
+        if result is None:
+            return Reply(text="", stop_reason="batch_expired")
+        result_type = result.get("type")
+        if result_type != "succeeded":
+            return Reply(text="", stop_reason=f"batch_{result_type}")
+        message = result.get("message", {})
+        text, usage, thinking = _parse_response(message)
+        stop_reason = message.get("stop_reason")
+        return Reply(
+            text=text,
+            usage=usage,
+            thinking=thinking,
+            stop_reason=stop_reason,
+            token_truncated=detect_token_truncated(stop_reason, usage, self.config.max_tokens),
+        )
+
+    def generate_batch(self, batch: List[List[dict]]) -> List[Reply]:
+        """Run every message list through the Message Batches API, in input order.
+
+        Does not touch ``last_usage``/``last_thinking`` — batch calls carry their
+        result in the returned ``Reply`` so N calls can be in flight at once.
+        """
+        requests = [
+            {"custom_id": f"i{i}", "params": self._params_for(messages)}
+            for i, messages in enumerate(batch)
+        ]
+        results = run_message_batch(
+            requests,
+            api_key=self.api_key,
+            poll_interval_s=self.config.batch_poll_interval_s,
+            deadline_s=self.config.batch_deadline_s,
+        )
+        return [self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))]
 
     def __call__(self, messages: List[dict]) -> str:
         reply = self.generate(messages)
