@@ -79,13 +79,19 @@ def _drive(
     checkpoint_after=None,
     checkpoint_path=None,
     resume_builder=None,
+    stats=None,
 ):
     """Hand-drive a stepper to completion.
 
     If ``checkpoint_after`` is set, at the query boundary reached after that
     many replies have been applied, save a checkpoint and swap in a resumed
-    stepper (built from ``resume_builder``) before continuing.
+    stepper (built from ``resume_builder``) before continuing. ``stats`` (a
+    dict, if given) records how many saves/resumes actually happened so tests
+    can prove the checkpoint path was exercised, not silently skipped.
     """
+    if stats is not None:
+        stats.setdefault("saves", 0)
+        stats.setdefault("resumes", 0)
     stepper = EpisodeStepper(runner)
     stepper.start()
     applied = 0
@@ -94,7 +100,11 @@ def _drive(
             # We are at a clean query boundary (buffers drained). Persist and
             # resume onto a completely fresh backend/runner.
             save_checkpoint(checkpoint_path, stepper)
+            if stats is not None:
+                stats["saves"] += 1
             stepper = resume_builder(checkpoint_path)
+            if stats is not None:
+                stats["resumes"] += 1
             checkpoint_after = None  # only once
             continue
         stepper.apply_reply(_reply(replies[applied]))
@@ -110,14 +120,17 @@ def test_resume_matches_uninterrupted_run(tmp_path):
 
     # Save after two applied queries, resume on a fresh backend, finish.
     ckpt = tmp_path / "checkpoint.json"
+    stats = {}
     resumed = _drive(
         _build_runner(_CORRIDOR_SPEC),
         _CORRIDOR_REPLIES,
         checkpoint_after=2,
         checkpoint_path=ckpt,
         resume_builder=lambda p: resume_stepper(p, runner=_build_runner(_CORRIDOR_SPEC)),
+        stats=stats,
     )
 
+    assert stats == {"saves": 1, "resumes": 1}  # the interruption really happened
     assert resumed["success"] is True
     assert _scrub(resumed) == _scrub(baseline)
 
@@ -129,6 +142,7 @@ def test_resume_multistep_query_expansion(tmp_path):
     assert baseline["success"] is True
 
     ckpt = tmp_path / "checkpoint.json"
+    stats = {}
     resumed = _drive(
         _build_runner(_CARDINAL_SPEC, action_space="cardinal"),
         _CARDINAL_REPLIES,
@@ -137,7 +151,9 @@ def test_resume_multistep_query_expansion(tmp_path):
         resume_builder=lambda p: resume_stepper(
             p, runner=_build_runner(_CARDINAL_SPEC, action_space="cardinal")
         ),
+        stats=stats,
     )
+    assert stats == {"saves": 1, "resumes": 1}
     assert resumed["success"] is True
     assert _scrub(resumed) == _scrub(baseline)
 
@@ -147,13 +163,16 @@ def test_resume_at_first_query_boundary(tmp_path):
     # replay — must still resume to an identical finish.
     baseline = _drive(_build_runner(_CORRIDOR_SPEC), _CORRIDOR_REPLIES)
     ckpt = tmp_path / "checkpoint.json"
+    stats = {}
     resumed = _drive(
         _build_runner(_CORRIDOR_SPEC),
         _CORRIDOR_REPLIES,
         checkpoint_after=0,
         checkpoint_path=ckpt,
         resume_builder=lambda p: resume_stepper(p, runner=_build_runner(_CORRIDOR_SPEC)),
+        stats=stats,
     )
+    assert stats == {"saves": 1, "resumes": 1}
     assert resumed["success"] is True
     assert _scrub(resumed) == _scrub(baseline)
 
@@ -165,13 +184,16 @@ def test_resume_r1_like_config(tmp_path):
     cfg = dict(observation="image_only", context_window="text_summary_and_last3")
     baseline = _drive(_build_runner(_CORRIDOR_SPEC, **cfg), _CORRIDOR_REPLIES)
     ckpt = tmp_path / "checkpoint.json"
+    stats = {}
     resumed = _drive(
         _build_runner(_CORRIDOR_SPEC, **cfg),
         _CORRIDOR_REPLIES,
         checkpoint_after=2,
         checkpoint_path=ckpt,
         resume_builder=lambda p: resume_stepper(p, runner=_build_runner(_CORRIDOR_SPEC, **cfg)),
+        stats=stats,
     )
+    assert stats == {"saves": 1, "resumes": 1}
     assert resumed["success"] is True
     assert _scrub(resumed) == _scrub(baseline)
 
@@ -186,13 +208,21 @@ def test_resume_rebuilds_stall_state(tmp_path):
     baseline = _drive(_build_runner(spec, **cfg), replies)
     assert baseline["end_reason"] == "stalled"
     ckpt = tmp_path / "checkpoint.json"
+    stats = {}
+    # checkpoint_after=1: the first TURN_LEFT has already accrued stall_count=1,
+    # so the resumed stepper must rebuild that from replay for the second
+    # TURN_LEFT to trip the stall. (checkpoint_after=2 would never be reached —
+    # with stall_k=2 the episode ends inside that drain.)
     resumed = _drive(
         _build_runner(spec, **cfg),
         replies,
-        checkpoint_after=2,
+        checkpoint_after=1,
         checkpoint_path=ckpt,
         resume_builder=lambda p: resume_stepper(p, runner=_build_runner(spec, **cfg)),
+        stats=stats,
     )
+    # Makes vacuity impossible: the save/resume really happened.
+    assert stats == {"saves": 1, "resumes": 1}
     assert resumed["end_reason"] == "stalled"
     assert _scrub(resumed) == _scrub(baseline)
 

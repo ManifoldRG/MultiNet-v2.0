@@ -78,7 +78,10 @@ def save_checkpoint(path: str | Path, stepper: EpisodeStepper) -> None:
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-    os.replace(tmp, path)  # atomic on POSIX; no torn checkpoint on crash
+    # os.replace is atomic against process crash (no torn checkpoint); it is
+    # NOT fsync'd, so power loss can still lose the write — out of scope of the
+    # threat model (a lost checkpoint just re-runs the episode).
+    os.replace(tmp, path)
 
 
 def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
@@ -198,6 +201,10 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
     stepper.action_queue_index = 0
     stepper.step_index = len(step_records)
     stepper.parse_failures = data["parse_failures"]
+    # Rederived from the last step record. At a parse-failure boundary this can
+    # transiently differ for non-step_by_step querying modes (subgoal's
+    # should_query consults failures); no effect for R1/step_by_step, where
+    # should_query ignores it and the next query resets it to 0.
     stepper.consecutive_failures = (
         step_records[-1]["consecutive_failures_after"] if step_records else 0
     )
