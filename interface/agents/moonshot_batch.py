@@ -23,6 +23,7 @@ error-missing ids (`batch_errored`). Every HTTP call goes through
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.error
 import urllib.request
@@ -30,6 +31,8 @@ import uuid
 from typing import Dict, List, Optional
 
 from interface.agents.http_retry import call_with_retry
+
+logger = logging.getLogger(__name__)
 
 # Terminal statuses. `completed` is success; `failed`/`expired`/`cancelled` are
 # terminal-fail (partial output may still exist and is salvaged).
@@ -243,15 +246,23 @@ def run_moonshot_batch(
     if not _is_terminal(batch):
         # Deadline hit: cancel, then give the batch a grace window to settle to a
         # terminal status — its finished items are already billed and salvaged.
-        batch = _http_json(
-            cancel_url,
-            api_key=api_key,
-            method="POST",
-            data=b"",
-            content_type="application/json",
-            timeout=timeout,
-            max_attempts=max_attempts,
-        )
+        # The cancel POST can 4xx if the batch reached a terminal state between the
+        # last poll and here; that race is benign, so log and fall through to the
+        # grace poll + salvage, which handle every terminal state.
+        try:
+            batch = _http_json(
+                cancel_url,
+                api_key=api_key,
+                method="POST",
+                data=b"",
+                content_type="application/json",
+                timeout=timeout,
+                max_attempts=max_attempts,
+            )
+        except Exception as exc:  # noqa: BLE001 - the batch may already have ended
+            logger.warning(
+                "Moonshot batch cancel failed (batch may have already ended): %s", exc
+            )
         batch = _poll_until_terminal(
             batch,
             status_url,

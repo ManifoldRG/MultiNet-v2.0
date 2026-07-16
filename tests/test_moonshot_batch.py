@@ -11,7 +11,9 @@ missing ids (errors landed in the error_file, not read) become `batch_errored`.
 """
 from __future__ import annotations
 
+import io
 import json
+import urllib.error
 from typing import List, Optional
 
 import interface.agents.moonshot_batch as batch_mod
@@ -243,6 +245,44 @@ def test_deadline_cancels_and_raises_with_partial(monkeypatch):
         assert set(exc.results) == {"i0"}
         assert exc.results["i0"]["choices"][0]["message"]["content"] == "finished before cancel"
     assert responder.count("POST", "/cancel") == 1
+
+
+class _CancelRaisesURLopen(_ScriptedURLopen):
+    """Like the base, but the deadline cancel POST 4xxs (the batch reached a
+    terminal state between the last poll and the cancel — a benign race). The
+    client must swallow it and still fall through to the grace poll + salvage."""
+
+    def __call__(self, req, timeout=None):
+        method = req.get_method()
+        url = req.full_url
+        if method == "POST" and url == f"{BASE}/batches/{self.batch_id}/cancel":
+            self.calls.append((method, url))
+            self.canceled = True
+            self._status_i = 0
+            raise urllib.error.HTTPError(
+                url, 400, "already ended", {}, io.BytesIO(b"batch already ended")
+            )
+        return super().__call__(req, timeout=timeout)
+
+
+def test_cancel_on_ended_race_still_salvages(monkeypatch):
+    """Cancel POST raises (batch ended mid-flight) -> grace poll still salvages
+    the finished item into the raised MoonshotBatchDeadline."""
+    responder = _CancelRaisesURLopen(
+        status_sequence=["in_progress"],  # never terminal before the deadline
+        post_cancel_status_sequence=["cancelled"],
+        results_jsonl=_jsonl(_line("i0", "finished before cancel")),
+    )
+    _patch(monkeypatch, responder)
+    try:
+        run_moonshot_batch(
+            _lines(2), api_key="k", poll_interval_s=0.001, deadline_s=0.02, cancel_grace_s=5.0
+        )
+        assert False, "expected MoonshotBatchDeadline"
+    except MoonshotBatchDeadline as exc:
+        assert set(exc.results) == {"i0"}  # salvaged despite the cancel 4xx
+        assert exc.results["i0"]["choices"][0]["message"]["content"] == "finished before cancel"
+    assert responder.count("POST", "/cancel") == 1  # cancel was attempted
 
 
 def test_deadline_grace_expiry_raises_empty(monkeypatch):

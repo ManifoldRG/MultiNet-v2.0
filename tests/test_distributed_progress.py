@@ -108,6 +108,42 @@ def test_counting_agent_increments_and_delegates():
     assert pc.count == 2
 
 
+def test_counting_agent_counts_generate():
+    """ExperimentRunner.run prefers agent.generate(messages); the wrapper must
+    count those calls too or per-unit progress heartbeats freeze at 0."""
+    from scripts.distributed_run_pipeline import ProgressCounter, _CountingAgent
+
+    class Reply:
+        def __init__(self, text):
+            self.text = text
+
+    class Inner:
+        def generate(self, messages):
+            return Reply("ok")
+
+    pc = ProgressCounter()
+    agent = _CountingAgent(Inner(), pc)
+    assert hasattr(agent, "generate")          # inner has generate -> wrapper does
+    r = agent.generate([{"role": "user"}])
+    assert r.text == "ok"
+    assert pc.count == 1
+    agent.generate([{"role": "user"}])
+    assert pc.count == 2
+
+
+def test_counting_agent_no_generate_when_inner_lacks_it():
+    """A legacy __call__-only double must NOT sprout a generate attribute, so the
+    runner's ``hasattr(agent, "generate")`` check still routes it to __call__."""
+    from scripts.distributed_run_pipeline import ProgressCounter, _CountingAgent
+
+    class Inner:
+        def __call__(self, messages):
+            return "ok"
+
+    agent = _CountingAgent(Inner(), ProgressCounter())
+    assert not hasattr(agent, "generate")
+
+
 def test_counting_agent_setattr_reaches_inner():
     """The runner resets ``last_usage`` on the agent before each call and reads it
     back after. The wrapper must forward both the write and the read to the inner

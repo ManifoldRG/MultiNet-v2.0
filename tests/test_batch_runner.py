@@ -460,6 +460,45 @@ def test_serial_equivalence_e2e():
         assert _scrub(batched[uid]["transcript"]) == _scrub(serial[uid]["transcript"])
 
 
+class RaiseOnRoundBatchAgent:
+    """Wraps a batch agent and raises on the Nth ``generate_batch`` call, to
+    model a batch client that throws (e.g. a cancel-on-ended 4xx that escaped
+    its salvage, or a hard HTTP error)."""
+
+    def __init__(self, inner, *, raise_on_call):
+        self._inner = inner
+        self._calls = 0
+        self._raise_on_call = raise_on_call
+
+    def generate_batch(self, batch):
+        self._calls += 1
+        if self._calls == self._raise_on_call:
+            raise RuntimeError("batch tick blew up")
+        return self._inner.generate_batch(batch)
+
+
+def test_batch_exception_errors_round_but_keeps_prior_results():
+    """A raised generate_batch marks that round's in-flight units as errors via
+    the per-unit path; already-completed results survive and run() returns."""
+    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [2, 1]))   # "3 by 6", 1 move
+    bad = _make_unit("BAD", _spec("bad", [7, 3], [1, 1], [3, 1]))      # "3 by 7", 2 moves
+    inner = ScriptedBatchAgent(
+        {"3 by 6": ["MOVE_FORWARD"], "3 by 7": ["MOVE_FORWARD", "MOVE_FORWARD"]}
+    )
+    # Round 1: both submit (call #1, normal). Round 2: GOOD has finished and is
+    # finalized before the batch; only BAD submits (call #2) -> raise.
+    agent = RaiseOnRoundBatchAgent(inner, raise_on_call=2)
+
+    runner = LockstepBatchRunner(agent, max_batches=2)
+    for u in (good, bad):
+        runner.add(u)
+    results = runner.run()
+
+    assert results["GOOD"]["success"] is True          # prior result survived
+    assert "error" in results["BAD"]                    # round unit errored, not crashed
+    assert "batch tick blew up" in results["BAD"]["error"]
+
+
 # --------------------------------------------------------------------------- #
 # Guardrails
 # --------------------------------------------------------------------------- #

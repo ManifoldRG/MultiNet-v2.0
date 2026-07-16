@@ -152,24 +152,37 @@ class LockstepBatchRunner:
             working = still_active
 
             if batch_units:
-                replies = self._call_batch(batch_messages)
-                if len(replies) != len(batch_units):
-                    raise RuntimeError(
-                        "generate_batch returned "
-                        f"{len(replies)} replies for {len(batch_units)} prompts "
-                        "(must be input-order, one per prompt)"
-                    )
-                errored_ids: set[int] = set()
-                for unit, reply in zip(batch_units, replies):
-                    try:
-                        unit.stepper.apply_reply(reply)
-                    except Exception as exc:  # noqa: BLE001 - isolate one bad episode
+                try:
+                    replies = self._call_batch(batch_messages)
+                except Exception as exc:  # noqa: BLE001 - a raised batch tick must not
+                    # discard the whole round. A batch client can still raise (e.g. a
+                    # cancel-on-ended 4xx that escaped its salvage, or a hard HTTP
+                    # error): mark every unit that was in flight THIS round as an
+                    # error result via the normal per-unit path, so previously
+                    # completed results survive and run() returns instead of the
+                    # worker crashing and dropping self._results.
+                    for unit in batch_units:
                         self._record_error(unit, exc)
-                        errored_ids.add(id(unit))
-                if errored_ids:
-                    # Identity-based drop; value-remove on a mutable dataclass is
-                    # fragile (two units could compare equal).
-                    working = [u for u in working if id(u) not in errored_ids]
+                    replies = None
+                    working = []
+                if replies is not None:
+                    if len(replies) != len(batch_units):
+                        raise RuntimeError(
+                            "generate_batch returned "
+                            f"{len(replies)} replies for {len(batch_units)} prompts "
+                            "(must be input-order, one per prompt)"
+                        )
+                    errored_ids: set[int] = set()
+                    for unit, reply in zip(batch_units, replies):
+                        try:
+                            unit.stepper.apply_reply(reply)
+                        except Exception as exc:  # noqa: BLE001 - isolate one bad episode
+                            self._record_error(unit, exc)
+                            errored_ids.add(id(unit))
+                    if errored_ids:
+                        # Identity-based drop; value-remove on a mutable dataclass is
+                        # fragile (two units could compare equal).
+                        working = [u for u in working if id(u) not in errored_ids]
 
             # Heartbeat on EVERY round that had active units at the top (we only
             # get here past the `not working` break), including a silent round

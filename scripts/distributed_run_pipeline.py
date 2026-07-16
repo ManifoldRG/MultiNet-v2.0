@@ -1111,7 +1111,22 @@ class _CountingAgent:
         # lookup before __init__ finishes cannot recurse forever.
         if name in ("_inner", "_counter"):
             raise AttributeError(name)
-        return getattr(self._inner, name)
+        attr = getattr(self._inner, name)
+        if name == "generate" and callable(attr):
+            # ExperimentRunner.run now prefers ``agent.generate(messages)`` over
+            # ``__call__`` (interface/runner.py). Delegating generate straight to
+            # the inner agent would bypass the counter, freezing per-unit progress
+            # heartbeats at 0 and tripping supervise_run.sh's stall detector on a
+            # healthy long run. Count generate the same as __call__. Returning the
+            # wrapper only when the inner actually HAS generate preserves the
+            # runner's ``hasattr(agent, "generate")`` legacy-double check.
+            def _counting_generate(*args: Any, **kwargs: Any) -> Any:
+                result = attr(*args, **kwargs)
+                self._counter.count += 1
+                return result
+
+            return _counting_generate
+        return attr
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name in ("_inner", "_counter"):

@@ -17,12 +17,15 @@ goes through `http_retry.call_with_retry`, matching the sync agent.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.error
 import urllib.request
 from typing import Dict, List, Optional
 
 from interface.agents.http_retry import call_with_retry
+
+logger = logging.getLogger(__name__)
 
 _ANTHROPIC_VERSION = "2023-06-01"
 
@@ -136,7 +139,15 @@ def run_message_batch(
     if batch.get("processing_status") != "ended":
         # Deadline hit: cancel, then give the batch a grace window to settle to
         # "ended" — its finished items are already billed and must be salvaged.
-        batch = _request_json(cancel_url, api_key=api_key, method="POST")
+        # The cancel POST can 4xx if the batch reached a terminal state between the
+        # last poll and here; that race is benign, so log and fall through to the
+        # grace poll, which handles every terminal state and salvages results.
+        try:
+            batch = _request_json(cancel_url, api_key=api_key, method="POST")
+        except Exception as exc:  # noqa: BLE001 - the batch may already have ended
+            logger.warning(
+                "Anthropic batch cancel failed (batch may have already ended): %s", exc
+            )
         batch = _poll_until_ended(
             batch,
             status_url,
