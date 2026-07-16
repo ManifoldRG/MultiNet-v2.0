@@ -152,12 +152,17 @@ validated. Remaining steps are operator-run (paid).
    (default 5 min)**, times a multi-round tail. **Decision gate:** proceed /
    adjust caps / Kimi thinking-off fallback if its 64k truncation rate is
    still pathological.
-5. **Full run, phase 1:** Claude + Kimi through the lockstep batch worker
-   (`--distributed-role lockstep-worker --worker-concurrency 50`; the model
-   groups' `max_in_flight` is already 64 ≥ MAX_BATCHES); Qwen wide at 8k on
-   the A100 fleet (serve env unset = phase-1 defaults). Cost-safety env vars
-   are required-no-default; STOP VMs, never delete; pull artifacts before
-   spindown.
+5. **Full run, phase 1:** Claude + Kimi through the lockstep batch worker —
+   fleet-launched by exporting `API_WORKER_ROLE=lockstep-worker
+   API_WORKER_CONCURRENCY=50` before starting the API workers
+   (`lib/distributed_start.sh::start_worker`; defaults unchanged = old serial
+   role), or manually via `--distributed-role lockstep-worker
+   --worker-concurrency 50`. Exactly ONE lockstep worker per API model group;
+   coordinator serves with `--stale-after-seconds 9000` (default 300 is wrong
+   for batch rounds); the model groups' `max_in_flight` is already 64 ≥
+   MAX_BATCHES. Qwen runs wide at 8k on the A100 fleet (serve env unset =
+   phase-1 defaults). Cost-safety env vars are required-no-default; STOP VMs,
+   never delete; pull artifacts before spindown.
    - **Coordinator staleness for lockstep groups:** start `coordinator-serve`
      with `--stale-after-seconds 9000` (must be ≥ `batch_deadline_s` +
      `batch_cancel_grace_s` + slack; R1 default 7200 + 300). The lockstep
