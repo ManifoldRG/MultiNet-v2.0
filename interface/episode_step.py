@@ -69,7 +69,10 @@ class EpisodeStepper:
         self._finished = False
 
     def start(self) -> None:
-        self._runner.last_rgb, state, reset_info = self.backend.reset(seed=self.task_spec.seed)
+        # Persist the exact seed the backend was reset with so a checkpoint can
+        # replay the episode deterministically from the same starting maze.
+        self.seed = self.task_spec.seed
+        self._runner.last_rgb, state, reset_info = self.backend.reset(seed=self.seed)
         self.querying.reset()
 
         # Build the initial system prompt (may include the initial maze for
