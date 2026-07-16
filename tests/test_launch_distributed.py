@@ -358,6 +358,7 @@ def test_sync_ships_and_verifies_submodule_content(tmp_path):
     gcloudstub = tmp_path / "gcloud"
     gcloudstub.write_text(
         '#!/usr/bin/env bash\n'
+        'cat > /dev/null\n'  # drain stdin so the piped git-archive never SIGPIPEs
         'cmd=""; prev=""\n'
         'for a in "$@"; do [[ "$prev" == "--command" ]] && cmd="$a"; prev="$a"; done\n'
         'echo "$cmd" >> "$GCLOG"\n'
@@ -399,6 +400,7 @@ def test_sync_aborts_when_submodule_missing_on_vm(tmp_path):
     gcloudstub = tmp_path / "gcloud"
     gcloudstub.write_text(
         '#!/usr/bin/env bash\n'
+        'cat > /dev/null\n'  # drain stdin so the piped git-archive never SIGPIPEs
         'cmd=""; prev=""\n'
         'for a in "$@"; do [[ "$prev" == "--command" ]] && cmd="$a"; prev="$a"; done\n'
         'case "$cmd" in\n'

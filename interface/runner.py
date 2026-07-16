@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import copy
 import logging
-import time
 from pathlib import Path
 from typing import Callable, List
 
@@ -14,12 +12,9 @@ from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 
 from interface import action_space as action_space_mod
-from interface.actions_map import nlu_action_to_int
 from interface.agents.reply import Reply
 from interface.config import ExperimentConfig
-from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
-from interface.feedback import format_step_feedback
 from interface.observation import (
     current_image_blocks,
     current_observation_text,
@@ -36,7 +31,6 @@ from interface.prompt_strategies import (
 from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text
-from prompting_experiments.prompt_templates import feedback as feedback_templates
 from prompting_experiments.prompt_templates import querying as querying_templates
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
