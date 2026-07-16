@@ -110,35 +110,62 @@ Each item: the trap, and where the mitigation lives.
 14. **Cosmetic:** the balanced_03 walkthrough PNG for `S4/10x10_dense_1` still
     renders the pre-fix goal position. Re-render + re-package when convenient;
     does not affect runs (runtime reads `goal.target` via `resolved_goal()`).
+15. **Kimi transcripts now include thinking traces.** The Reply-based agents
+    capture Kimi's `reasoning_content` (previously discarded), so paid Kimi
+    runs record `thinking` on every query record — intended (it's how
+    truncation-vs-runaway is diagnosed) but transcript/artifact size grows
+    accordingly.
+16. **Order-dependent test flake:**
+    `tests/test_launch_distributed.py::test_sync_ships_and_verifies_submodule_content`
+    failed once in full-suite order (passes in isolation and in most full
+    runs). Not caused by the feature work; diagnose before treating a red
+    full-suite as a launch blocker.
 
 ## Launch sequence (in order; nothing runs before its predecessor)
 
-1. **Implement** both designs (batch lockstep runner + two-tier) with tests
-   green; fix `run_config.r1.json` (phase-1 qwen block, `max_in_flight` ≥ 50
-   for Claude/Kimi, `allow_unequal_max_tokens: true`); author
-   `manifest.r1_smoke_batch.json` (5 mazes — table in the batch-runner spec) +
-   smoke run config; `scripts/validate_fixtures.py` on new manifests.
-2. **Commit everything** (working tree clean; submodule pointer pushed).
-   `pytest` green at the committed sha.
-3. **Validation smoke** (5 mazes, Claude + Kimi via `generate_batch`, Qwen
-   phase-1 path if a GPU VM is up; ~$5–25): verifies custom_id mapping, ragged
-   termination, checkpoint/resume, price delta; **measures queries/episode,
-   output/query, per-round latency, and Kimi/Claude truncation rates at 64k**.
+Steps 1–2 are **DONE** (2026-07-16, commits `d1196a6..00757f3` on
+`feature/early_terminate`): both designs implemented with per-task review
+(batch lockstep runner incl. Anthropic/Moonshot batch clients, `EpisodeStepper`
+extraction, query-boundary checkpoint/resume, `lockstep-worker` coordinator
+role; two-tier serve-arg env knobs + `reload-qwen-phase2`, truncation scanner,
+phase provenance, later-pass-wins merge, both run configs, operator runbook
+`docs/qwen-two-tier-rerun.md`); full suite green (1006+ tests); smoke fixtures
+validated. Remaining steps are operator-run (paid).
+
+1. ~~Implement~~ **DONE.** Fixtures: `manifest.r1_smoke_batch.json` +
+   `run_config.r1_smoke_batch.json`; validate any edited manifest with
+   `python -m scripts.validate_fixtures --manifest <path>` (must be invoked
+   with `-m`; bare-path invocation lacks sys.path).
+2. ~~Commit everything~~ **DONE** (submodule pointer at the S4-fixed sha).
+3. **Validation smoke** (5 mazes, Claude + Kimi via `generate_batch`, plus a
+   serial sync control; ~$5–25):
+   `SMOKE_BUDGET_ACK=1 python -m scripts.run_batch_smoke --models claude_opus,kimi_k26 --max-batches 5 --control-episodes 1 --max-usd 25 --artifacts-root .runs/r1_smoke_batch`
+   (use `--dry-run` first). Verifies custom_id mapping, ragged termination,
+   checkpoint/resume, price delta; **measures queries/episode, output/query,
+   per-round batch latency, and Kimi/Claude truncation rates at 64k** into
+   `smoke_report.json`. Also the first live confirmation of the Moonshot batch
+   wire shapes (implemented from docs, unverified against the live endpoint).
 4. **Re-budget from smoke numbers** (prior central ~$435 sync → ~$229 with
    batch discounts; smoke collapses the $200–1025 range). Set
-   `MAX_RUN_DURATION` / `BATCH_CAP` from measured round latency. **Decision
-   gate:** proceed / adjust caps / Kimi thinking-off fallback if its 64k
-   truncation rate is still pathological.
+   `MAX_RUN_DURATION` / `BATCH_CAP` from measured round latency — count the
+   full worst-case round: `round_deadline_s` (default 2h) **+ cancel grace
+   (default 5 min)**, times a multi-round tail. **Decision gate:** proceed /
+   adjust caps / Kimi thinking-off fallback if its 64k truncation rate is
+   still pathological.
 5. **Full run, phase 1:** Claude + Kimi through the lockstep batch worker
-   (MAX_BATCHES=50); Qwen wide at 8k on the A100 fleet. Cost-safety env vars
+   (`--distributed-role lockstep-worker --worker-concurrency 50`; the model
+   groups' `max_in_flight` is already 64 ≥ MAX_BATCHES); Qwen wide at 8k on
+   the A100 fleet (serve env unset = phase-1 defaults). Cost-safety env vars
    are required-no-default; STOP VMs, never delete; pull artifacts before
    spindown.
-6. **Scan → phase 2:** `scripts/scan_truncations.py` emits the rerun manifest;
-   reload fleet (`stop_gpu_worker` → phase-2 serve args); run
-   `run_config.r1.qwen_phase2.json`; merge later-pass-wins.
+6. **Scan → phase 2 → merge:** exact commands in `docs/qwen-two-tier-rerun.md`
+   (scanner is fail-closed on unresolvable caps; `reload-qwen-phase2` requires
+   `BATCH_CAP`; merge is fail-closed on missing flagged tasks and stamps
+   `pass`/`truncated_at_ceiling` on merged copies only).
 7. **Finalize + analysis:** merged `episode_runs.jsonl`, `run_score.json`,
    budget/actuals reconciliation, `truncated_at_ceiling` cases reported
-   explicitly.
+   explicitly. Analysis note: rows now carry additive `pass`/`max_tokens`
+   columns; query records carry additive `stop_reason`/`token_truncated`.
 
 ## Budget (to be replaced by smoke-measured numbers)
 
