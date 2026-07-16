@@ -238,6 +238,12 @@ _NON_RUNTIME_MODEL_KEYS = {
     # transport / model-loading (do not affect outputs)
     "timeout",
     "max_attempts",
+    # batch-API round deadline + cancel grace: wall-clock scheduling knobs on the
+    # Claude/Kimi batch clients; they bound how long a round waits, never what the
+    # model emits, so they must stay OUT of the episode/unit hash.
+    "batch_deadline_s",
+    "batch_cancel_grace_s",
+    "batch_poll_interval_s",
     "device_map",
     "local_files_only",
     "max_memory",
@@ -1004,6 +1010,10 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
         if "effort" in model_cfg:
             cfg.effort = str(model_cfg["effort"])
+        if "batch_deadline_s" in model_cfg:
+            cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
+        if "batch_cancel_grace_s" in model_cfg:
+            cfg.batch_cancel_grace_s = float(model_cfg["batch_cancel_grace_s"])
         return ClaudeAnthropicAgent(config=cfg), model or cfg.model
     if provider == "kimi":
         from interface.agents import KimiK26Agent, KimiK26Config
@@ -1019,6 +1029,10 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "batch_deadline_s" in model_cfg:
+            cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
+        if "batch_cancel_grace_s" in model_cfg:
+            cfg.batch_cancel_grace_s = float(model_cfg["batch_cancel_grace_s"])
         return KimiK26Agent(config=cfg), model or cfg.model
     if provider == "qwen":
         from interface.agents import Qwen35VLAgent, Qwen35VLConfig

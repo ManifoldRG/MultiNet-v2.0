@@ -177,3 +177,44 @@ def test_phase2_max_attempts_is_plumbed_into_agent():
     assert agent.config.max_attempts == 2
     assert agent.config.timeout == 2400
     assert agent.config.max_tokens == 64000
+
+
+# --------------------------------------------------------------------------- #
+# Batch-deadline plumbing (I4) — optional run-config keys reach the agent config
+# and NEVER enter the episode/unit hash.
+# --------------------------------------------------------------------------- #
+def test_batch_deadline_fields_plumbed_into_claude_and_kimi(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("MOONSHOT_API_KEY", "test-key")
+    claude_cfg = {
+        "provider": "claude", "model": "claude-opus-4-8", "max_tokens": 64000,
+        "batch_deadline_s": 5400, "batch_cancel_grace_s": 120,
+    }
+    agent, _ = _build_agent_from_spec("claude_opus", claude_cfg)
+    assert agent.config.batch_deadline_s == 5400.0
+    assert agent.config.batch_cancel_grace_s == 120.0
+
+    kimi_cfg = {
+        "provider": "kimi", "model": "kimi-k2.6", "max_tokens": 64000,
+        "batch_deadline_s": 5400, "batch_cancel_grace_s": 120,
+    }
+    agent, _ = _build_agent_from_spec("kimi_k26", kimi_cfg)
+    assert agent.config.batch_deadline_s == 5400.0
+    assert agent.config.batch_cancel_grace_s == 120.0
+
+
+def test_batch_deadline_fields_are_hash_invariant():
+    """The batch scheduling knobs must be stripped by _runtime_model_config (the
+    seam _expected_run_hash / unit-id derivation hash), or tuning a deadline
+    would re-run every already-paid unit."""
+    from scripts.run_pipeline import _runtime_model_config
+
+    base = {
+        "provider": "claude", "model": "claude-opus-4-8", "max_tokens": 64000,
+        "enable_thinking": True, "effort": "xhigh",
+    }
+    with_batch = {
+        **base, "batch_deadline_s": 5400, "batch_cancel_grace_s": 120,
+        "batch_poll_interval_s": 15,
+    }
+    assert _runtime_model_config(base) == _runtime_model_config(with_batch)

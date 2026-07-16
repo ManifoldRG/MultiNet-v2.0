@@ -68,7 +68,12 @@ def _build_request_body(
     if not _omits_sampling_params(model):
         body["temperature"] = temperature
     if enable_thinking:
-        body["thinking"] = {"type": "adaptive"}
+        # display="summarized" makes thinking text loggable — Opus 4.8 defaults
+        # to "omitted", which would leave Reply.thinking empty for the whole paid
+        # run (billing is identical either way). Per
+        # docs/batch-api-lockstep-runner-design.md. Shared by the sync and batch
+        # paths (both build the body here), so they can never drift.
+        body["thinking"] = {"type": "adaptive", "display": "summarized"}
     if effort:
         output_config = body.setdefault("output_config", {})
         assert isinstance(output_config, dict)

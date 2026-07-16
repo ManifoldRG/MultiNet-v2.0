@@ -326,7 +326,13 @@ def _run_model(
     from interface.episode_log import flush_episode_log
     from scripts import distributed_run_pipeline as drp
 
-    model_cfg = plan["models"][model_key]
+    # Copy so the round-deadline injection never mutates the shared plan. The
+    # batch clients read their round deadline from the CONFIG (batch_deadline_s),
+    # not a generate_batch kwarg, so --round-deadline-s only reaches the real
+    # Claude/Kimi agents through this field (it stays out of the unit hash — see
+    # _NON_RUNTIME_MODEL_KEYS).
+    model_cfg = dict(plan["models"][model_key])
+    model_cfg["batch_deadline_s"] = round_deadline_s
     provider = _provider_of(model_cfg)
 
     # Build a stepper per maze; keep prep so we can flush episode.json.
