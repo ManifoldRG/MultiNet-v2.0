@@ -243,6 +243,25 @@ reload_gpu_worker() {  # $1 vm  $2 coord_ip
   local vm="$1" coord_ip="$2"
   stop_gpu_worker "$vm" \
     || { echo "[reload_gpu_worker] $vm: GPU did not free — NOT relaunching (would OOM)" >&2; return 1; }
+  # RACE FIX (fail-closed): gpu_teardown only guarantees the GPU is FREE; the `vllm
+  # serve` PARENT can linger a beat after its EngineCore dies. start_worker's reuse
+  # guard matches `pgrep -f 'vllm serve'`, so a lingering parent would make it SKIP the
+  # relaunch → the ~25-min readiness loop times out → aborted reload. Make the guard's
+  # precondition true BY CONSTRUCTION: kill any leftover parent and bounded-wait for it
+  # to clear before start_worker. Fed via stdin (bash -s), so the remote shell's own
+  # command line is just "bash -s" and pgrep -f 'vllm serve' cannot self-match. Same
+  # ssh plumbing as stop_gpu_worker. If it never clears, fail closed (no relaunch).
+  gcloud compute ssh "$vm" --zone "$ZONE" --command "bash -s" <<'REMOTE' \
+    || { echo "[reload_gpu_worker] $vm: lingering 'vllm serve' did not clear — NOT relaunching" >&2; return 1; }
+set -uo pipefail
+pkill -f 'vllm serve' 2>/dev/null || true   # may already be gone — ignore failure
+for _ in $(seq 1 30); do                    # up to ~60s, poll every 2s
+  pgrep -f 'vllm serve' >/dev/null 2>&1 || exit 0
+  sleep 2
+done
+echo "'vllm serve' parent still present after ~60s" >&2
+exit 1
+REMOTE
   QWEN_MAX_MODEL_LEN=96000 QWEN_MAX_NUM_SEQS="${QWEN_PHASE2_MAX_NUM_SEQS:-3}" \
     start_worker "$vm" "$coord_ip"
 }

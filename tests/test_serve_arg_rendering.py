@@ -75,10 +75,15 @@ def test_reload_and_subcommand_wiring_present():
         capture_output=True, text=True, cwd=REPO,
     )
     assert r.returncode == 0, r.stderr
-    # stop_gpu_worker must be invoked before start_worker in the reload body.
+    # Reload ordering: stop_gpu_worker → pkill+bounded-wait (race fix) → start_worker.
     body = r.stdout
     assert "stop_gpu_worker" in body and "start_worker" in body
-    assert body.index("stop_gpu_worker") < body.index("start_worker")
+    assert "pkill -f 'vllm serve'" in body, "reload must kill a lingering serve parent"
+    assert "pgrep -f 'vllm serve'" in body, "reload must bounded-wait for the parent to clear"
+    i_stop = body.index("stop_gpu_worker")
+    i_kill = body.index("pkill -f 'vllm serve'")
+    i_start = body.index("start_worker")
+    assert i_stop < i_kill < i_start, "pkill+wait must sit between stop and relaunch"
 
     # sweep subcommand dispatch present.
     disp = subprocess.run(
