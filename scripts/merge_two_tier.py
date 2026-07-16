@@ -108,14 +108,27 @@ def _model_config(run_dir: Path) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Ceiling truncation
 # --------------------------------------------------------------------------- #
-def _truncated_at_ceiling(episode: dict[str, Any], model_config: dict[str, Any]) -> bool:
-    """Whether a phase-2 episode STILL hit the (64k) ceiling. Cap comes from the
-    run's ``model_config.max_tokens``; when unresolvable, fall back to the
-    cap-independent provider stamps so an explicit ``length`` still flags."""
+def _ceiling_status(
+    episode: dict[str, Any], model_config: dict[str, Any]
+) -> tuple[Optional[bool], bool]:
+    """Whether a phase-2 episode STILL hit the (64k) ceiling, and whether that was
+    decidable.
+
+    Returns ``(ceiling, resolved)``:
+    - cap resolvable from ``model_config.max_tokens`` → ``(episode_is_truncated,
+      True)``;
+    - cap unresolvable but an explicit provider stamp (``stop_reason`` /
+      ``token_truncated``) decides it → ``(True, True)``;
+    - cap unresolvable AND no explicit stamp → ``(None, False)`` — undecidable.
+      The caller fails closed (matching the scanner's ``cap_unresolved`` policy)
+      rather than silently recording ``truncated_at_ceiling=False``.
+    """
     cap = model_config.get("max_tokens")
     if isinstance(cap, int):
-        return episode_is_truncated(episode, cap)
-    return episode_has_cap_independent_truncation(episode)
+        return episode_is_truncated(episode, cap), True
+    if episode_has_cap_independent_truncation(episode):
+        return True, True
+    return None, False
 
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +187,7 @@ def merge_phase_roots(
     out_root: Path,
     *,
     expected_rerun_manifest: Optional[Path] = None,
+    allow_unresolved_cap: bool = False,
 ) -> dict[str, Any]:
     """Later-pass-wins merge of two phase artifacts roots.
 
@@ -187,10 +201,16 @@ def merge_phase_roots(
     - any task_id listed in ``expected_rerun_manifest`` but absent from phase 2
       → :class:`MergeError` listing the missing ids;
     - any phase-2 unit key absent from phase 1 (phase 2 must be a subset)
-      → :class:`MergeError` listing the offending task_ids.
+      → :class:`MergeError` listing the offending task_ids;
+    - any phase-2 winner whose ceiling cap is unresolvable AND that carries no
+      explicit truncation stamp → :class:`MergeError` listing the offending run
+      dirs (matches the scanner's ``cap_unresolved`` policy). Pass
+      ``allow_unresolved_cap=True`` to instead record those task_ids under
+      ``cap_unresolved`` in the summary and stderr-WARN.
 
     Returns (and writes to ``out_root/two_tier_merge.json``) the summary
-    ``{"total", "from_phase2", "truncated_at_ceiling": [task_ids]}``.
+    ``{"total", "from_phase2", "truncated_at_ceiling": [task_ids],
+    "cap_unresolved": [task_ids]}``.
     """
     phase1_root = Path(phase1_root)
     phase2_root = Path(phase2_root)
@@ -220,11 +240,36 @@ def merge_phase_roots(
                 f"{', '.join(missing)}"
             )
 
+    # Pre-pass: resolve each phase-2 winner's ceiling status BEFORE writing any
+    # output, so an undecidable cap fails closed with no partial merged root.
+    phase2_status: dict[tuple, tuple[dict[str, Any], Optional[bool]]] = {}
+    unresolved: list[tuple[str, str]] = []  # (task_id, run_dir)
+    for key, row in p2_rows.items():
+        src_dir = _run_dir_for_row(phase2_root, row)
+        model_config = _model_config(src_dir)
+        episode = json.loads((src_dir / "episode.json").read_text(encoding="utf-8"))
+        ceiling, resolved = _ceiling_status(episode, model_config)
+        phase2_status[key] = (model_config, ceiling)
+        if not resolved:
+            unresolved.append((row.get("task_id"), str(src_dir)))
+
+    if unresolved and not allow_unresolved_cap:
+        listing = "\n".join(f"  cap_unresolved: {d}" for _, d in unresolved)
+        raise MergeError(
+            "phase-2 winner(s) hit no resolvable ceiling cap "
+            "(run_inputs.json model_config.max_tokens missing/invalid) and carry "
+            "no explicit truncation stamp, so truncated_at_ceiling cannot be "
+            "judged. Fail-closed (a money/interpretability-deciding flag must not "
+            "silently default to False). Pass --allow-unresolved-cap to record "
+            f"them under cap_unresolved instead:\n{listing}"
+        )
+
     out_root.mkdir(parents=True, exist_ok=True)
 
     merged_rows: list[dict[str, Any]] = []
     from_phase2 = 0
     ceiling_task_ids: list[str] = []
+    cap_unresolved_ids: list[str] = []
 
     for key in sorted(p1_rows, key=lambda k: tuple("" if v is None else str(v) for v in k)):
         if key in p2_rows:
@@ -239,17 +284,26 @@ def merge_phase_roots(
         dst_dir = _run_dir_for_row(out_root, row)
         _copy_run_dir(src_dir, dst_dir)
 
-        model_config = _model_config(src_dir)
+        model_config: dict[str, Any] = {}
         ceiling: Optional[bool] = None
         row["pass"] = pass_num
         if pass_num == 2:
-            episode = json.loads((src_dir / "episode.json").read_text(encoding="utf-8"))
-            ceiling = _truncated_at_ceiling(episode, model_config)
-            row["truncated_at_ceiling"] = ceiling
+            model_config, ceiling = phase2_status[key]
+            if ceiling is None:
+                # Undecidable ceiling (allow_unresolved_cap): leave
+                # truncated_at_ceiling ABSENT (unknown, not False) and surface it.
+                cap_unresolved_ids.append(row["task_id"])
+                print(
+                    f"WARNING: cap_unresolved phase-2 winner (ceiling unknown): "
+                    f"{src_dir}",
+                    file=sys.stderr,
+                )
+            else:
+                row["truncated_at_ceiling"] = ceiling
+                if ceiling:
+                    ceiling_task_ids.append(row["task_id"])
             if row.get("max_tokens") is None and "max_tokens" in model_config:
                 row["max_tokens"] = model_config["max_tokens"]
-            if ceiling:
-                ceiling_task_ids.append(row["task_id"])
 
         _stamp_episode_copy(
             dst_dir, pass_num=pass_num, model_config=model_config, ceiling=ceiling
@@ -264,6 +318,7 @@ def merge_phase_roots(
         "total": len(merged_rows),
         "from_phase2": from_phase2,
         "truncated_at_ceiling": sorted(set(ceiling_task_ids)),
+        "cap_unresolved": sorted(set(cap_unresolved_ids)),
     }
     (out_root / "two_tier_merge.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
@@ -288,6 +343,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Phase-2 rerun manifest: every task_id it lists MUST appear in "
         "phase 2 (fail-closed).",
     )
+    parser.add_argument(
+        "--allow-unresolved-cap",
+        action="store_true",
+        help="Do NOT fail closed when a phase-2 winner's ceiling cap is "
+        "unresolvable and unstamped; record such task_ids under cap_unresolved "
+        "in the summary and stderr-WARN instead.",
+    )
     args = parser.parse_args(argv)
 
     summary = merge_phase_roots(
@@ -297,12 +359,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         expected_rerun_manifest=(
             Path(args.expected_rerun_manifest) if args.expected_rerun_manifest else None
         ),
+        allow_unresolved_cap=args.allow_unresolved_cap,
     )
     print(json.dumps(summary, indent=2))
     print(
         f"\nMerged {summary['total']} unit(s); {summary['from_phase2']} from "
         f"phase 2; {len(summary['truncated_at_ceiling'])} still truncated at the "
-        f"ceiling -> {args.out}/episode_runs.jsonl"
+        f"ceiling; {len(summary['cap_unresolved'])} cap_unresolved "
+        f"-> {args.out}/episode_runs.jsonl"
     )
     return 0
 

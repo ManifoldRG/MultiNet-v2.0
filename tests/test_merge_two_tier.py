@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.merge_two_tier import main, merge_phase_roots
+from scripts.merge_two_tier import MergeError, main, merge_phase_roots
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,8 +30,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 # --------------------------------------------------------------------------- #
 # Fixture builders: synthetic phase artifacts roots
 # --------------------------------------------------------------------------- #
-def _query(output_tokens: int) -> dict:
-    return {
+def _query(output_tokens: int, *, stop_reason=None) -> dict:
+    rec: dict = {
         "kind": "query",
         "query_index": 0,
         "assistant_reply": "FINAL_OUTPUT: forward",
@@ -42,15 +42,18 @@ def _query(output_tokens: int) -> dict:
             "total_tokens": 100 + output_tokens,
         },
     }
+    if stop_reason is not None:
+        rec["stop_reason"] = stop_reason
+    return rec
 
 
-def _episode(output_tokens: int) -> dict:
+def _episode(output_tokens: int, *, stop_reason=None) -> dict:
     return {
         "success": True,
         "end_reason": "success",
         "steps_used": 3,
         "final_state": {"reward": 1.0},
-        "transcript": [{"kind": "reset"}, _query(output_tokens)],
+        "transcript": [{"kind": "reset"}, _query(output_tokens, stop_reason=stop_reason)],
     }
 
 
@@ -100,9 +103,12 @@ def _write_phase_root(root: Path, units: list[dict]) -> None:
         )
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "episode.json").write_text(
-            json.dumps(_episode(u["output_tokens"])), encoding="utf-8"
+            json.dumps(_episode(u["output_tokens"], stop_reason=u.get("stop_reason"))),
+            encoding="utf-8",
         )
-        model_config: dict = {"max_tokens": u["max_tokens"]}
+        model_config: dict = {}
+        if u.get("max_tokens") is not None:
+            model_config["max_tokens"] = u["max_tokens"]
         if u.get("max_model_len") is not None:
             model_config["max_model_len"] = u["max_model_len"]
         (run_dir / "run_inputs.json").write_text(
@@ -125,11 +131,12 @@ def _write_phase_root(root: Path, units: list[dict]) -> None:
 
 def _unit(task_id: str, *, model="qwen36_27b_vllm", seed=0, condition="c0",
           variant="egocentric", output_tokens=142, max_tokens=8000,
-          max_model_len=None) -> dict:
+          max_model_len=None, stop_reason=None) -> dict:
     return {
         "task_id": task_id, "model": model, "seed": seed, "condition": condition,
         "variant": variant, "output_tokens": output_tokens,
         "max_tokens": max_tokens, "max_model_len": max_model_len,
+        "stop_reason": stop_reason,
     }
 
 
@@ -300,6 +307,105 @@ def test_phase2_task_not_in_phase1_is_fatal(tmp_path):
     with pytest.raises(Exception) as exc:
         merge_phase_roots(p1, p2, out)
     assert "ghost" in str(exc.value)
+
+
+# --------------------------------------------------------------------------- #
+# Fail-closed: phase-2 winner with an unresolvable ceiling cap
+# --------------------------------------------------------------------------- #
+def test_phase2_unresolvable_cap_no_stamp_is_fatal(tmp_path):
+    # A phase-2 winner that genuinely hit 64k output tokens but whose
+    # run_inputs.json has no model_config.max_tokens AND no explicit provider
+    # stamp cannot be judged. Fail closed (matches the scanner's policy) rather
+    # than silently recording truncated_at_ceiling=False.
+    p1 = tmp_path / "phase1"
+    p2 = tmp_path / "phase2"
+    out = tmp_path / "merged"
+    _write_phase_root(p1, [_unit("t0"), _unit("t1")])
+    _write_phase_root(p2, [_unit("t1", output_tokens=64000, max_tokens=None,
+                                 max_model_len=96000)])
+
+    with pytest.raises(MergeError) as exc:
+        merge_phase_roots(p1, p2, out)
+    assert "t1" in str(exc.value)
+
+
+def test_phase2_unresolvable_cap_allowed_records_in_summary(tmp_path):
+    p1 = tmp_path / "phase1"
+    p2 = tmp_path / "phase2"
+    out = tmp_path / "merged"
+    _write_phase_root(p1, [_unit("t0"), _unit("t1")])
+    _write_phase_root(p2, [_unit("t1", output_tokens=64000, max_tokens=None,
+                                 max_model_len=96000)])
+
+    summary = merge_phase_roots(p1, p2, out, allow_unresolved_cap=True)
+
+    assert summary["cap_unresolved"] == ["t1"]
+    # Undecidable -> NOT claimed as a ceiling truncation.
+    assert summary["truncated_at_ceiling"] == []
+    rows = {r["task_id"]: r for r in _read_jsonl(out / "episode_runs.jsonl")}
+    assert "truncated_at_ceiling" not in rows["t1"]  # unknown, not False
+    assert rows["t1"]["pass"] == 2  # provenance still stamped
+    ep = json.loads(
+        (out / "runs/t1/minigrid/qwen36_27b_vllm/seed_0/egocentric/episode.json").read_text()
+    )
+    assert ep["pass"] == 2
+    assert "truncated_at_ceiling" not in ep
+    # Written summary matches the returned one.
+    assert json.loads((out / "two_tier_merge.json").read_text()) == summary
+
+
+def test_phase2_unresolvable_cap_but_stamped_still_flags(tmp_path):
+    # Cap unresolvable, but an explicit stop_reason="length" decides it: this is
+    # a genuine ceiling truncation, NOT a cap_unresolved case.
+    p1 = tmp_path / "phase1"
+    p2 = tmp_path / "phase2"
+    out = tmp_path / "merged"
+    _write_phase_root(p1, [_unit("t0"), _unit("t1")])
+    _write_phase_root(p2, [_unit("t1", output_tokens=50, max_tokens=None,
+                                 stop_reason="length", max_model_len=96000)])
+
+    summary = merge_phase_roots(p1, p2, out)
+
+    assert summary["truncated_at_ceiling"] == ["t1"]
+    assert summary["cap_unresolved"] == []
+    rows = {r["task_id"]: r for r in _read_jsonl(out / "episode_runs.jsonl")}
+    assert rows["t1"]["truncated_at_ceiling"] is True
+
+
+# --------------------------------------------------------------------------- #
+# Multi-model production shape: qwen-only phase-2 among Claude/Kimi/Qwen
+# --------------------------------------------------------------------------- #
+def test_multi_model_qwen_only_rerun_passes_others_through(tmp_path):
+    p1 = tmp_path / "phase1"
+    p2 = tmp_path / "phase2"
+    out = tmp_path / "merged"
+    # phase 1: two tasks x three models (Claude/Kimi @64k, Qwen @8k).
+    p1_units = []
+    for task in ("t0", "t1"):
+        p1_units.append(_unit(task, model="claude-opus-4-8", max_tokens=64000))
+        p1_units.append(_unit(task, model="kimi-k2-6", max_tokens=64000))
+        p1_units.append(_unit(task, model="qwen36_27b_vllm", max_tokens=8000))
+    _write_phase_root(p1, p1_units)
+    # phase 2: qwen-only rerun of a single task.
+    _write_phase_root(p2, [_unit("t0", model="qwen36_27b_vllm",
+                                 output_tokens=5000, max_tokens=64000,
+                                 max_model_len=96000)])
+
+    summary = merge_phase_roots(p1, p2, out)
+
+    rows = _read_jsonl(out / "episode_runs.jsonl")
+    assert len(rows) == 6  # subset guard does not fire on the qwen-only rerun
+    assert summary["from_phase2"] == 1
+    by_key = {(r["task_id"], r["agent_or_model"]): r["pass"] for r in rows}
+    assert by_key[("t0", "qwen36_27b_vllm")] == 2  # qwen winner
+    assert by_key[("t0", "claude-opus-4-8")] == 1  # passed through
+    assert by_key[("t0", "kimi-k2-6")] == 1
+    assert by_key[("t1", "qwen36_27b_vllm")] == 1
+    # Claude/Kimi run dirs copied through.
+    for model in ("claude-opus-4-8", "kimi-k2-6"):
+        rd = out / "runs/t0/minigrid" / model / "seed_0/egocentric"
+        assert (rd / "episode.json").exists()
+        assert json.loads((rd / "episode.json").read_text())["pass"] == 1
 
 
 # --------------------------------------------------------------------------- #
