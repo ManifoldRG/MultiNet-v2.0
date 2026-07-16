@@ -62,28 +62,55 @@ each phase that these are untouched:
 
 The phase change carries its own hash difference (the `max_tokens` cap); nothing
 else about scoring may move. The `phase`/`pass` provenance fields are additive
-and deliberately *excluded* from the hash (`build_run_provenance` in
+and deliberately *excluded* from the hash (`_phase_episode_provenance` in
 `scripts/run_pipeline.py`), so labeling a phase never churns a cached episode.
 
 ---
 
 ## End-to-end command sequence
 
-Set a namespace once:
+Set the namespace once, from a single value, so the artifacts path and the
+fleet id can never diverge:
 
 ```bash
-export RUN=r1-YYYYMMDD          # artifacts namespace (== $SWEEP_ID on the fleet)
+export RUN=r1-YYYYMMDD          # artifacts namespace (.runs/$RUN/…)
+export SWEEP_ID="$RUN"          # fleet id (reload-qwen-phase2 RUN_ID default); same value
 ```
 
 ### 1. Phase 1 — run all mazes wide at 8k
 
 Serve env **unset** = phase-1 defaults (16384 / 64 / 0.9). Qwen episodes land
-under a phase-labeled artifacts root `.runs/$RUN/qwen_phase1/`. On the shared
-A100 fleet this is the standard R1 launch (see
-[`docs/r1-run-preparation.md`](r1-run-preparation.md) §Launch sequence step 5),
-which also carries Claude/Kimi at 64k. The Qwen leg, run directly:
+under a phase-labeled artifacts root `.runs/$RUN/qwen_phase1/`. `run_pipeline`
+is a *client* — it does not start a model server, and the Qwen block points at
+`http://127.0.0.1:8000/v1`, so a `vllm serve` must already be healthy before it
+runs. Pick the path that matches your setup; each is complete on its own.
+
+**(a) Fleet path (normal).** Phase 1 is the standard R1 distributed launch: the
+coordinator/worker driver (`sweep_run.sh provision`, then `next-batch` for the
+following batches — see
+[`docs/r1-run-preparation.md`](r1-run-preparation.md) §Launch sequence step 5 and
+[`docs/sequential_sweep_runbook.md`](sequential_sweep_runbook.md)) SSHes each
+A100 VM and `start_worker` (`lib/distributed_start.sh`) launches `vllm serve`
+with the phase-1 defaults from `lib/vllm_serve_args.sh` (env unset), blocking on
+`/v1/models` readiness before any episode is dispatched. This same launch carries
+Claude/Kimi at 64k. **Do not export any `QWEN_*` serve env for phase 1** — the
+worker reproduces the phase-1 serve string verbatim when the knobs are unset.
+
+**(b) Local / single-VM path.** Start the phase-1 server yourself first, wait for
+it to answer `/v1/models`, then run the client. The serve line is the exact
+phase-1 default string rendered by `lib/vllm_serve_args.sh` (env unset):
 
 ```bash
+# 1. Launch the phase-1 vLLM server (background). Serve args == vllm_serve_args() defaults.
+source lib/vllm_serve_args.sh
+vllm serve Qwen/Qwen3.6-27B --served-model-name Qwen/Qwen3.6-27B $(vllm_serve_args) &
+#   expands to: --port 8000 --gpu-memory-utilization 0.9 --max-model-len 16384 \
+#               --max-num-seqs 64 --dtype bfloat16 --trust-remote-code
+
+# 2. Wait until the server is healthy (must return 200 before step 3).
+until curl -fsS http://127.0.0.1:8000/v1/models >/dev/null; do sleep 5; done
+
+# 3. Run the phase-1 client against the healthy server.
 python -m scripts.run_pipeline \
   --run-config gridworld/fixtures/run_config.r1.json \
   --manifest   gridworld/fixtures/manifest.r1_balanced_03.json \
@@ -91,8 +118,7 @@ python -m scripts.run_pipeline \
 ```
 
 The config's `phase` block (`{"pass": 1, "label": "phase1"}`) stamps `pass` and
-the caps onto every `episode.json`. **Do not export any `QWEN_*` serve env for
-phase 1.**
+the caps onto every `episode.json`.
 
 ### 2. Scan — emit the phase-2 rerun manifest
 
@@ -214,6 +240,8 @@ for `scripts.scan_truncations`, `scripts.merge_two_tier`, and
 requires `BATCH_CAP` + `RUN_CONFIG`, health-checks `/v1/models`);
 `lib/vllm_serve_args.sh` renders the serve line from `QWEN_MAX_MODEL_LEN` /
 `QWEN_MAX_NUM_SEQS` / `QWEN_GPU_MEMORY_UTILIZATION` (defaults 16384 / 64 / 0.9);
-the scan default `--out` and the phase-2 config's `manifest` key both equal
-`gridworld/fixtures/manifest.r1_qwen_phase2.json`; `SCORER_VERSION` (`scorer/config.py`)
+the `--out` value this runbook passes to the scan and the phase-2 config's
+`manifest` key both equal `gridworld/fixtures/manifest.r1_qwen_phase2.json`
+(`--out` has no argparse default — omitting it makes the scan a summary-only dry
+run that writes no manifest); `SCORER_VERSION` (`scorer/config.py`)
 and `PIPELINE_VERSION` (`scripts/run_pipeline.py`) exist as named.
