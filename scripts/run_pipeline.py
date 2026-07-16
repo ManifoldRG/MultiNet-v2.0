@@ -331,6 +331,35 @@ def _expected_run_hash(
     )
 
 
+def _phase_episode_provenance(
+    phase: Optional[dict[str, Any]], model_config: Optional[dict[str, Any]]
+) -> dict[str, Any]:
+    """Additive phase/caps provenance for episode.json + the run row (Task B3).
+
+    Returns ``{}`` when the run-config declares no top-level ``phase`` block, so
+    non-two-tier runs are unchanged and ``build_run_row`` falls back to
+    ``pass=1``. When a phase is declared, records the two-tier ``pass``, the
+    ``phase_label``, and the output caps (``max_tokens`` / ``max_model_len``) the
+    unit ran under, taken from the model config.
+
+    This is *provenance*, not a generation input: it NEVER enters
+    ``_expected_run_hash`` / the distributed unit hashes (the cap change already
+    differentiates the phases in the hash), so re-labeling a phase never churns
+    a cached episode or an already-paid unit.
+    """
+    if not phase:
+        return {}
+    provenance: dict[str, Any] = {"pass": int(phase.get("pass", 1))}
+    label = phase.get("label")
+    if label is not None:
+        provenance["phase_label"] = str(label)
+    model_config = model_config or {}
+    for cap_key in ("max_tokens", "max_model_len"):
+        if model_config.get(cap_key) is not None:
+            provenance[cap_key] = model_config[cap_key]
+    return provenance
+
+
 def _canonical_optimal_steps(canonical_paths: dict[str, Any]) -> Optional[int]:
     bfs = canonical_paths.get("bfs")
     if isinstance(bfs, dict) and bfs.get("optimal_steps") is not None:
@@ -450,6 +479,7 @@ def _run_one_model(
     conditions: Optional[str],
     prompt_variant: Optional[str] = None,
     base_overrides: Optional[dict] = None,
+    phase: Optional[dict[str, Any]] = None,
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
     condition_configs = _condition_configs(
@@ -483,6 +513,7 @@ def _run_one_model(
                     conditions=conditions,
                     base_overrides=base_overrides,
                     model_config=model_config,
+                    phase=phase,
                     force=force,
                 )
                 if result is None:
@@ -657,6 +688,7 @@ def _run_one_unit(
     experiment_config: Any | None = None,
     conditions: Optional[str] = None,
     base_overrides: Optional[dict] = None,
+    phase: Optional[dict[str, Any]] = None,
     force: bool = False,
 ) -> Optional[tuple[dict[str, Any], Optional[float]]]:
     """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
@@ -704,8 +736,11 @@ def _run_one_unit(
             seed,
             prep.run_dir,
             max_steps=prep.runtime_spec.max_steps,
+            provenance=_phase_episode_provenance(phase, model_config),
         )
-        prep.write_run_inputs()
+        # ``phase`` rides in the run_inputs extras (additive; written AFTER the
+        # inputs_hash is computed, so it is recorded but excluded from the hash).
+        prep.write_run_inputs(extras={"phase": phase} if phase else None)
 
     return prep.score_episode(episode)
 
@@ -831,6 +866,12 @@ def run_from_config(
         # Fail fast on unknown keys / invalid values before any paid model call.
         ExperimentConfig.from_dict({**ExperimentConfig().to_dict(), **exp_overlay})
 
+    # Optional top-level two-tier phase block (Task B3): {"pass": int,
+    # "label": str}. Pure provenance — stamped onto artifacts, excluded from
+    # every input hash (see ``_phase_episode_provenance`` and the distributed
+    # ``job_digest`` phase-strip).
+    phase = run_config.get("phase")
+
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
     union: dict[str, dict[str, Any]] = {}
@@ -871,6 +912,7 @@ def run_from_config(
             conditions=conditions,
             prompt_variant=prompt_variant,
             base_overrides=exp_overlay,
+            phase=phase,
             force=force,
         )
         all_run_rows.extend(rr)

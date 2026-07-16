@@ -250,6 +250,12 @@ def build_run_row(
         "backend": backend,
         "agent_or_model": agent_or_model,
         "seed": seed,
+        # Phase provenance (Task B3): which two-tier pass produced this row and
+        # the output cap it ran under. Additive; ``pass`` defaults to 1 when the
+        # episode carries no phase stamp (non-two-tier runs), ``max_tokens`` to
+        # None. Never part of any input hash.
+        "pass": int(episode.get("pass", 1)),
+        "max_tokens": episode.get("max_tokens"),
         "success": success,
         "end_reason": end_reason,
         "terminated": terminated,

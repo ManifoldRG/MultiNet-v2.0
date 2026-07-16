@@ -292,7 +292,12 @@ def prepare_job(
     if job_id is None:
         job_digest = stable_hash(
             {
-                "run_config": run_config,
+                # Strip the top-level ``phase`` provenance block (Task B3) before
+                # hashing: it labels the two-tier pass but is NOT a generation
+                # input, so a re-labeled phase must not churn job_id/unit_id and
+                # orphan already-paid units. The cap change (max_tokens) already
+                # differentiates the phases via each unit's episode_inputs_hash.
+                "run_config": {k: v for k, v in run_config.items() if k != "phase"},
                 "manifest_path": str(manifest_path),
                 "seeds": [int(s) for s in seeds],
                 "conditions": conditions,
