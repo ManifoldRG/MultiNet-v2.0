@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from interface.agents.http_retry import call_with_retry
+from interface.agents.reply import Reply, detect_token_truncated
 from interface.agents.runner_messages import (
     ContentPart,
     parse_runner_content,
@@ -197,7 +198,7 @@ def _post_messages(
     max_attempts: int = 5,
     enable_thinking: bool = False,
     effort: Optional[str] = None,
-) -> Tuple[str, Optional[Dict[str, int]], Optional[str]]:
+) -> Reply:
     body = _build_request_body(
         model=model,
         max_tokens=max_tokens,
@@ -251,7 +252,15 @@ def _post_messages(
             time.perf_counter() - t0,
         )
 
-    return _parse_response(payload)
+    text, usage, thinking = _parse_response(payload)
+    stop_reason = payload.get("stop_reason")
+    return Reply(
+        text=text,
+        usage=usage,
+        thinking=thinking,
+        stop_reason=stop_reason,
+        token_truncated=detect_token_truncated(stop_reason, usage, max_tokens),
+    )
 
 
 @dataclass
@@ -284,11 +293,11 @@ class ClaudeAnthropicAgent:
             )
         self.api_key = key
 
-    def __call__(self, messages: List[dict]) -> str:
+    def generate(self, messages: List[dict]) -> Reply:
         system, turns = _to_anthropic_turns(messages)
         if self.config.enable_prompt_cache:
             system, turns = _apply_prompt_cache(system, turns)
-        text, self.last_usage, self.last_thinking = _post_messages(
+        return _post_messages(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -300,4 +309,9 @@ class ClaudeAnthropicAgent:
             enable_thinking=self.config.enable_thinking,
             effort=self.config.effort,
         )
-        return text
+
+    def __call__(self, messages: List[dict]) -> str:
+        reply = self.generate(messages)
+        self.last_usage = reply.usage
+        self.last_thinking = reply.thinking
+        return reply.text

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from interface.agents.http_retry import call_with_retry
+from interface.agents.reply import Reply, detect_token_truncated
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ def _post_chat_completions(
     timeout: Optional[float],
     enable_thinking: bool,
     max_attempts: int = 5,
-) -> tuple[str, Optional[Dict[str, int]]]:
+) -> Reply:
     body: Dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
@@ -114,7 +115,20 @@ def _post_chat_completions(
     choice = (payload.get("choices") or [{}])[0]
     message = choice.get("message") or {}
     text = str(message.get("content") or "").strip()
-    return text, normalize_token_usage(payload.get("usage"))
+    usage = normalize_token_usage(payload.get("usage"))
+    stop_reason = choice.get("finish_reason")
+    # Moonshot returns the thinking trace out-of-band in `reasoning_content`
+    # (the OpenAI schema has no such field); capture it — the pipeline otherwise
+    # discards it.
+    reasoning = message.get("reasoning_content")
+    thinking = str(reasoning).strip() or None if reasoning else None
+    return Reply(
+        text=text,
+        usage=usage,
+        thinking=thinking,
+        stop_reason=stop_reason,
+        token_truncated=detect_token_truncated(stop_reason, usage, max_tokens),
+    )
 
 
 @dataclass
@@ -134,6 +148,7 @@ class KimiK26Agent:
     config: KimiK26Config = field(default_factory=KimiK26Config)
     api_key: Optional[str] = None
     last_usage: Optional[Dict[str, int]] = field(default=None, init=False)
+    last_thinking: Optional[str] = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         key = (self.api_key or os.environ.get("MOONSHOT_API_KEY") or "").strip()
@@ -144,8 +159,8 @@ class KimiK26Agent:
             )
         self.api_key = key
 
-    def __call__(self, messages: List[dict]) -> str:
-        text, self.last_usage = _post_chat_completions(
+    def generate(self, messages: List[dict]) -> Reply:
+        return _post_chat_completions(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -155,4 +170,9 @@ class KimiK26Agent:
             enable_thinking=self.config.enable_thinking,
             max_attempts=self.config.max_attempts,
         )
-        return text
+
+    def __call__(self, messages: List[dict]) -> str:
+        reply = self.generate(messages)
+        self.last_usage = reply.usage
+        self.last_thinking = reply.thinking
+        return reply.text
