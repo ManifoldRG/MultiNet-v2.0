@@ -156,8 +156,11 @@ def test_ragged_termination():
     assert _steps(results["R"]) == scripts["7 by 6"]
 
     # Working set only shrinks; later rounds are strictly smaller than the first.
+    # (A trailing 0 is the silent all-finished heartbeat round.)
     assert round_sizes[0] == 3
-    assert round_sizes[-1] == 1
+    assert round_sizes[-1] == 0            # final silent heartbeat
+    assert max(round_sizes) == 3
+    assert [n for n in round_sizes if n > 0][-1] == 1   # last live round is R alone
     assert all(b <= a for a, b in zip(round_sizes, round_sizes[1:]))
     # generate_batch saw shrinking batches too.
     assert agent.batch_sizes[0] == 3
@@ -269,11 +272,71 @@ def test_on_round_called_with_active_units():
         runner.add(u)
     runner.run()
 
-    # One callback per round that dispatched a batch; membership reflects who is
-    # still live after replies are applied (A drops out once it has finished).
+    # One callback per round that had active units at the top; membership
+    # reflects who is still live after replies are applied (A drops out once it
+    # has finished). The final all-finished round is a SILENT round (no batch
+    # submitted) but still fires a heartbeat with the now-empty active set.
     assert calls[0] == ["A", "B"]
-    assert calls[-1] == ["B"]
-    assert all(u == "B" for u in calls[-1])
+    assert ["B"] in calls               # B outlives A
+    assert calls[-1] == []              # silent final round still heartbeats
+
+
+def test_on_round_fires_on_silent_round():
+    # A single unit that finishes: round 1 dispatches a batch, round 2 has the
+    # unit active at the top but its next_query returns None (goal reached) so no
+    # batch is submitted. on_round must still fire that round (empty active set).
+    u = _make_unit("U", _spec("u", [4, 3], [1, 1], [2, 1]))   # 1 query then done
+    agent = ScriptedBatchAgent({"3 by 4": ["MOVE_FORWARD"]})
+
+    calls = []
+    runner = LockstepBatchRunner(
+        agent, max_batches=1,
+        on_round=lambda active: calls.append([x.unit_id for x in active]),
+    )
+    runner.add(u)
+    results = runner.run()
+
+    assert results["U"]["success"] is True
+    # Two rounds fired a heartbeat: the batch round, then the silent finish round.
+    assert calls == [["U"], []]
+
+
+# --------------------------------------------------------------------------- #
+# Checkpoint-write failure is isolated to the failing unit
+# --------------------------------------------------------------------------- #
+def test_checkpoint_write_failure_isolated_per_unit(tmp_path, monkeypatch):
+    import interface.batch_runner as br
+
+    good_ckpt = tmp_path / "good.json"
+    bad_ckpt = tmp_path / "bad.json"
+    real_save = br.save_checkpoint
+
+    def flaky_save(path, stepper):
+        # Simulate a disk-full / OSError on one unit's checkpoint write only.
+        if str(path) == str(bad_ckpt):
+            raise OSError("disk full")
+        return real_save(path, stepper)
+
+    monkeypatch.setattr(br, "save_checkpoint", flaky_save)
+
+    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [4, 1]),   # "3 by 6"
+                      checkpoint_path=good_ckpt)
+    bad = _make_unit("BAD", _spec("bad", [7, 3], [1, 1], [5, 1]),      # "3 by 7"
+                     checkpoint_path=bad_ckpt)
+    agent = ScriptedBatchAgent({
+        "3 by 6": ["MOVE_FORWARD"] * 3,
+        "3 by 7": ["MOVE_FORWARD"] * 4,
+    })
+
+    runner = LockstepBatchRunner(agent, max_batches=2)
+    for u in (good, bad):
+        runner.add(u)
+    results = runner.run()
+
+    # The unit whose checkpoint write failed is recorded as an error and dropped;
+    # the batch is NOT aborted and the sibling completes normally.
+    assert results["BAD"] == {"error": "disk full"}
+    assert results["GOOD"]["success"] is True
 
 
 # --------------------------------------------------------------------------- #

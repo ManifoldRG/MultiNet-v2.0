@@ -131,40 +131,51 @@ class LockstepBatchRunner:
                 try:
                     self._ensure_started(unit)
                     messages = unit.stepper.next_query()
+                    if messages is None:
+                        self._finish(unit)
+                        continue
+                    # Query boundary: both stepper buffers are empty right now,
+                    # which is the ONLY point save_checkpoint accepts (after
+                    # apply_reply the parsed actions sit undrained and it would
+                    # refuse). The write stays INSIDE the guard so a failed
+                    # checkpoint (OSError disk-full, etc.) errors only this unit
+                    # and never aborts the in-flight batch.
+                    if unit.checkpoint_path is not None:
+                        save_checkpoint(unit.checkpoint_path, unit.stepper)
                 except Exception as exc:  # noqa: BLE001 - isolate one bad episode
                     self._record_error(unit, exc)
                     continue
-                if messages is None:
-                    self._finish(unit)
-                    continue
-                # Query boundary: both stepper buffers are empty right now, which
-                # is the ONLY point save_checkpoint accepts. (After apply_reply
-                # the parsed actions sit undrained and it would refuse.)
-                if unit.checkpoint_path is not None:
-                    save_checkpoint(unit.checkpoint_path, unit.stepper)
                 batch_units.append(unit)
                 batch_messages.append(messages)
                 still_active.append(unit)
 
             working = still_active
-            if not batch_units:
-                # Everyone finished this pass; loop to refill (or exit).
-                continue
 
-            replies = self._call_batch(batch_messages)
-            if len(replies) != len(batch_units):
-                raise RuntimeError(
-                    "generate_batch returned "
-                    f"{len(replies)} replies for {len(batch_units)} prompts "
-                    "(must be input-order, one per prompt)"
-                )
-            for unit, reply in zip(batch_units, replies):
-                try:
-                    unit.stepper.apply_reply(reply)
-                except Exception as exc:  # noqa: BLE001 - isolate one bad episode
-                    self._record_error(unit, exc)
-                    working.remove(unit)
+            if batch_units:
+                replies = self._call_batch(batch_messages)
+                if len(replies) != len(batch_units):
+                    raise RuntimeError(
+                        "generate_batch returned "
+                        f"{len(replies)} replies for {len(batch_units)} prompts "
+                        "(must be input-order, one per prompt)"
+                    )
+                errored_ids: set[int] = set()
+                for unit, reply in zip(batch_units, replies):
+                    try:
+                        unit.stepper.apply_reply(reply)
+                    except Exception as exc:  # noqa: BLE001 - isolate one bad episode
+                        self._record_error(unit, exc)
+                        errored_ids.add(id(unit))
+                if errored_ids:
+                    # Identity-based drop; value-remove on a mutable dataclass is
+                    # fragile (two units could compare equal).
+                    working = [u for u in working if id(u) not in errored_ids]
 
+            # Heartbeat on EVERY round that had active units at the top (we only
+            # get here past the `not working` break), including a silent round
+            # where all units finished and no batch was submitted. The
+            # coordinator worker keys its liveness cadence off this callback, so
+            # it must fire every round or units risk being marked stale.
             if self._on_round is not None:
                 self._on_round(list(working))
 
