@@ -8,6 +8,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
@@ -104,6 +105,8 @@ class QwenVLLMAPIConfig:
     enable_thinking: bool | None = False
     extra_body: dict[str, Any] = field(default_factory=dict)
     max_attempts: int = 3
+    # Max concurrent HTTP requests when fanning out a batch; None → min(len, 16).
+    batch_fanout: Optional[int] = None
 
 
 @dataclass
@@ -135,6 +138,34 @@ class QwenVLLMAPIAgent:
             extra_body=self.config.extra_body,
             max_attempts=self.config.max_attempts,
         )
+
+    def generate_batch(self, batch: List[List[dict]]) -> List[Reply]:
+        """Fan a batch of message lists out over concurrent HTTP requests.
+
+        The vLLM server continuous-batches concurrent requests server-side, so a
+        thread pool (one thread blocked per in-flight request) is enough to keep
+        the engine saturated. Results are returned in input order regardless of
+        completion order. A per-item failure (after ``generate``'s internal
+        retries) becomes ``Reply(text="", stop_reason="batch_errored")`` so one
+        bad item never sinks the whole batch. ``last_usage`` is left untouched —
+        only ``__call__`` writes that side-channel.
+        """
+        if not batch:
+            return []
+        max_workers = min(len(batch), self.config.batch_fanout or 16)
+
+        def _one(messages: List[dict]) -> Reply:
+            try:
+                return self.generate(messages)
+            except Exception:  # noqa: BLE001 - isolate per-item failures
+                logger.exception("generate_batch item failed after retries")
+                return Reply(text="", stop_reason="batch_errored")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            # Submit in input order; collect via the futures list (not
+            # as_completed) so ordering is structural, not timing-dependent.
+            futures = [pool.submit(_one, messages) for messages in batch]
+            return [future.result() for future in futures]
 
     def __call__(self, messages: List[dict]) -> str:
         reply = self.generate(messages)
