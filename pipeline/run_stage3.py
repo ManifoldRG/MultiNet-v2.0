@@ -32,6 +32,28 @@ def _spec_with_seed(spec: TaskSpecification, seed: int) -> TaskSpecification:
     return dataclasses.replace(spec, seed=seed)
 
 
+def build_episode_runner(
+    task_source: str | Path,
+    config: ExperimentConfig,
+    seed: int,
+    *,
+    max_steps: int | None = None,
+):
+    """Build a configured ``ExperimentRunner`` for one task (no episode run yet).
+
+    Shared by the serial ``run_episode`` (below) and the batch-API lockstep worker,
+    which drives the runner through an ``EpisodeStepper`` instead of ``runner.run``.
+    Keeping the backend/spec/seed/max_steps wiring in one place ensures both paths
+    build an identical runner.
+    """
+    backend, spec = load_task(task_source)
+    spec = _spec_with_seed(spec, seed)
+    if max_steps is not None and spec.max_steps != max_steps:
+        spec = dataclasses.replace(spec, max_steps=int(max_steps))
+    backend.configure(spec)
+    return build_runner(config, backend, spec)
+
+
 def run_episode(
     task_source: str | Path,
     config: ExperimentConfig,
@@ -46,13 +68,7 @@ def run_episode(
     Returns the in-memory episode dict (the JSON-safe payload written to
     ``out_dir/episode.json``), so callers can derive metrics without re-reading.
     """
-    backend, spec = load_task(task_source)
-    spec = _spec_with_seed(spec, seed)
-    if max_steps is not None and spec.max_steps != max_steps:
-        spec = dataclasses.replace(spec, max_steps=int(max_steps))
-    backend.configure(spec)
-
-    runner = build_runner(config, backend, spec)
+    runner = build_episode_runner(task_source, config, seed, max_steps=max_steps)
     result = runner.run(agent, verbose=False, maze_path=str(task_source))
 
     out_dir = Path(out_dir)

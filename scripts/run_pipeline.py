@@ -496,6 +496,151 @@ def _run_one_model(
     return run_rows, composites
 
 
+@dataclasses.dataclass
+class _PreparedUnitRun:
+    """Everything needed to run + score ONE task/model/seed/prompt-variant unit,
+    without having driven the model yet.
+
+    ``_prepare_unit_run`` factors this out of ``_run_one_unit`` so the distributed
+    lockstep-batch worker (which drives the episode through an ``EpisodeStepper``
+    rather than ``run_episode``) writes byte-identical ``run_inputs.json`` /
+    ``run_score.json`` through the SAME code — in particular the same
+    ``inputs_hash`` that upload verification requires.
+    """
+
+    run_dir: Path
+    source: Path
+    runtime_spec: Any
+    experiment_config: Any
+    expected_hash: str
+    episode_path: Path
+    sidecar_path: Path
+    # write_run_inputs(extras=None): write run_inputs.json. ``extras`` is additive
+    # provenance ONLY (e.g. pricing_tier) and never enters ``inputs_hash``.
+    write_run_inputs: Callable[..., None]
+    # score_episode(episode) -> (run_row, composite): write run_score.json + row.
+    score_episode: Callable[[dict[str, Any]], tuple[dict[str, Any], Optional[float]]]
+
+
+def _prepare_unit_run(
+    row: dict[str, Any],
+    model_name: str,
+    *,
+    model_config: Optional[dict[str, Any]] = None,
+    manifest_path: Path,
+    artifacts_root: Path,
+    scored_static: dict[str, Any],
+    difficulty_max: float,
+    config: ScorerConfig,
+    seed: int,
+    prompt_variant: str,
+    experiment_config: Any,
+    conditions: Optional[str] = None,
+) -> _PreparedUnitRun:
+    """Resolve the run dir, inputs hash, and the run_inputs/run_score writers for
+    one unit. Pure setup — no model call, no scoring happens here.
+
+    ``experiment_config`` must be already resolved (the callers that could pass
+    ``None`` do so before this point). Verbatim-moved from ``_run_one_unit`` so
+    the on-disk artifacts and hashes are unchanged.
+    """
+    task_id = row["task_id"]
+    source = _resolve_source(row, manifest_path)
+    spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
+    canonical = json.loads(
+        (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
+    )
+    runtime_spec = _runtime_capped_spec(spec, canonical)
+    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant)
+    episode_path = run_dir / "episode.json"
+    sidecar_path = run_dir / "run_inputs.json"
+    run_score_path = run_dir / "run_score.json"
+
+    # ``condition`` is the task-intrinsic axis (test-3 mechanism order, carried
+    # by the manifest); ``prompt_variant`` is the orthogonal prompt axis from
+    # --conditions.
+    manifest_row = dict(row)
+
+    expected_hash = _expected_run_hash(
+        runtime_spec,
+        model_name,
+        seed,
+        "minigrid",
+        condition_set=conditions,
+        prompt_variant=prompt_variant,
+        experiment_config=experiment_config,
+        model_config=model_config,
+    )
+
+    def write_run_inputs(extras: Optional[dict[str, Any]] = None) -> None:
+        payload = {
+            "inputs_hash": expected_hash,
+            "producer_version": PIPELINE_VERSION,
+            "task_id": task_id,
+            "model_id": model_name,
+            "model_config": _jsonable(model_config or {}),
+            "runtime_model_config": _runtime_model_config(model_config),
+            "seed": seed,
+            "backend": "minigrid",
+            "condition": prompt_variant,
+            "condition_set": conditions,
+            "prompt_variant": prompt_variant,
+            "experiment_config": _experiment_config_payload(experiment_config),
+            "runtime_max_steps_cap": {
+                "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
+                "optimal_steps": _canonical_optimal_steps(canonical),
+                "original_max_steps": spec.max_steps,
+                "effective_max_steps": runtime_spec.max_steps,
+            },
+        }
+        if extras:
+            # Additive provenance only. ``inputs_hash`` is computed above from
+            # ``_expected_run_hash`` (which never sees this sidecar payload), so
+            # these keys are recorded but excluded from the hashed material.
+            payload.update(extras)
+        _write_json_atomic(sidecar_path, payload)
+
+    def score_episode(
+        episode: dict[str, Any],
+    ) -> tuple[dict[str, Any], Optional[float]]:
+        metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
+        enriched = episode_metrics.enrich_run_for_scoring(
+            episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
+        )
+        run_score = compute_runtime_score(
+            enriched,
+            static_score=scored_static,
+            canonical_paths=canonical,
+            config=config,
+            difficulty_max_static_score=difficulty_max,
+        ).to_dict()
+        run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
+
+        run_row = episode_metrics.build_run_row(
+            episode,
+            canonical,
+            manifest_row,
+            agent_or_model=model_name,
+            seed=seed,
+            raw_output_ref=str(episode_path.relative_to(artifacts_root)),
+            metrics=metrics,
+            prompt_variant=prompt_variant,
+        )
+        return run_row, run_score.get("composite")
+
+    return _PreparedUnitRun(
+        run_dir=run_dir,
+        source=Path(source),
+        runtime_spec=runtime_spec,
+        experiment_config=experiment_config,
+        expected_hash=expected_hash,
+        episode_path=episode_path,
+        sidecar_path=sidecar_path,
+        write_run_inputs=write_run_inputs,
+        score_episode=score_episode,
+    )
+
+
 def _run_one_unit(
     row: dict[str, Any],
     agent: Agent,
@@ -530,95 +675,39 @@ def _run_one_unit(
             raise ValueError(f"Expected one config for prompt variant {prompt_variant!r}.")
         _, experiment_config = configs[0]
 
-    source = _resolve_source(row, manifest_path)
-    spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
-    canonical = json.loads(
-        (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
-    )
-    runtime_spec = _runtime_capped_spec(spec, canonical)
-    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant)
-    episode_path = run_dir / "episode.json"
-    sidecar_path = run_dir / "run_inputs.json"
-    run_score_path = run_dir / "run_score.json"
-
-    # ``condition`` is the task-intrinsic axis (test-3 mechanism order, carried
-    # by the manifest); ``prompt_variant`` is the orthogonal prompt axis from
-    # --conditions.
-    manifest_row = dict(row)
-
-    expected_hash = _expected_run_hash(
-        runtime_spec,
+    prep = _prepare_unit_run(
+        row,
         model_name,
-        seed,
-        "minigrid",
-        condition_set=conditions,
+        model_config=model_config,
+        manifest_path=manifest_path,
+        artifacts_root=artifacts_root,
+        scored_static=scored_static,
+        difficulty_max=difficulty_max,
+        config=config,
+        seed=seed,
         prompt_variant=prompt_variant,
         experiment_config=experiment_config,
-        model_config=model_config,
+        conditions=conditions,
     )
+
     episode = None
-    if not force and episode_path.exists() and sidecar_path.exists():
-        sidecar = _load_json_object_if_valid(sidecar_path)
-        if sidecar is not None and sidecar.get("inputs_hash") == expected_hash:
-            episode = _load_json_object_if_valid(episode_path)
+    if not force and prep.episode_path.exists() and prep.sidecar_path.exists():
+        sidecar = _load_json_object_if_valid(prep.sidecar_path)
+        if sidecar is not None and sidecar.get("inputs_hash") == prep.expected_hash:
+            episode = _load_json_object_if_valid(prep.episode_path)
 
     if episode is None:
         episode = run_episode(
-            source,
-            experiment_config,
+            prep.source,
+            prep.experiment_config,
             agent,
             seed,
-            run_dir,
-            max_steps=runtime_spec.max_steps,
+            prep.run_dir,
+            max_steps=prep.runtime_spec.max_steps,
         )
-        _write_json_atomic(
-            sidecar_path,
-            {
-                "inputs_hash": expected_hash,
-                "producer_version": PIPELINE_VERSION,
-                "task_id": task_id,
-                "model_id": model_name,
-                "model_config": _jsonable(model_config or {}),
-                "runtime_model_config": _runtime_model_config(model_config),
-                "seed": seed,
-                "backend": "minigrid",
-                "condition": prompt_variant,
-                "condition_set": conditions,
-                "prompt_variant": prompt_variant,
-                "experiment_config": _experiment_config_payload(experiment_config),
-                "runtime_max_steps_cap": {
-                    "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
-                    "optimal_steps": _canonical_optimal_steps(canonical),
-                    "original_max_steps": spec.max_steps,
-                    "effective_max_steps": runtime_spec.max_steps,
-                },
-            },
-        )
+        prep.write_run_inputs()
 
-    metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
-    enriched = episode_metrics.enrich_run_for_scoring(
-        episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
-    )
-    run_score = compute_runtime_score(
-        enriched,
-        static_score=scored_static,
-        canonical_paths=canonical,
-        config=config,
-        difficulty_max_static_score=difficulty_max,
-    ).to_dict()
-    run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
-
-    run_row = episode_metrics.build_run_row(
-        episode,
-        canonical,
-        manifest_row,
-        agent_or_model=model_name,
-        seed=seed,
-        raw_output_ref=str(episode_path.relative_to(artifacts_root)),
-        metrics=metrics,
-        prompt_variant=prompt_variant,
-    )
-    return run_row, run_score.get("composite")
+    return prep.score_episode(episode)
 
 
 def _write_aggregate(
@@ -990,6 +1079,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             "coordinator-prepare",
             "coordinator-serve",
             "worker",
+            "lockstep-worker",
             "coordinator-run-api-client",
             "coordinator-finalize",
         ],

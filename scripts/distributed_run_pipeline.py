@@ -1429,6 +1429,236 @@ def run_coordinator_api_client(
     }
 
 
+def _upload_archive(client: Any, worker_id: str, unit_id: str, archive_path: Path) -> dict[str, Any]:
+    """Upload a run archive, bridging the two transports.
+
+    ``CoordinatorStore.upload`` (in-process / on the coordinator VM) takes archive
+    *bytes*; ``CoordinatorClient.upload`` (HTTP) takes the archive *path* and reads
+    the bytes itself. Mirror ``run_coordinator_api_client`` vs ``_process_assigned_unit``,
+    which already split this way, so one worker function serves both."""
+    if isinstance(client, CoordinatorStore):
+        return client.upload(worker_id, unit_id, Path(archive_path).read_bytes())
+    return client.upload(worker_id, unit_id, archive_path)
+
+
+def run_lockstep_worker(
+    *,
+    artifacts_root: str | Path,
+    capabilities: dict[str, Any],
+    max_batches: int,
+    coordinator_url: Optional[str] = None,
+    worker_state_path: Optional[str | Path] = None,
+    agent_factory: Optional[AgentFactory] = None,
+    client: Optional[Any] = None,
+    round_deadline_s: float = 7200.0,
+) -> dict[str, Any]:
+    """Drive the batch-API lockstep runner as a distributed worker role.
+
+    One lockstep worker serves exactly ONE model group (its ``model_key`` is
+    pinned to the first assigned unit's; a mismatching assignment is failed back).
+    It builds a single ``LockstepBatchRunner`` over that group's agent and keeps
+    the working set (<= ``max_batches``) topped up by ``client.assign`` refills.
+
+    Per round the ``on_round`` hook heartbeats every still-active unit
+    (progress = the unit's stepper ``query_count``) AND finalizes any unit that
+    completed that round: a normal result is written (episode.json /
+    run_inputs.json /run_score.json) through the same scoring path as
+    ``run_assigned_unit`` and uploaded; an ``{"error": ...}`` result is
+    ``client.fail``ed. Finalizing mid-run (not after ``run()``) frees the
+    coordinator's per-worker concurrency slot so refill hands out fresh work,
+    keeping the batch saturated.
+
+    ``worker_concurrency`` in ``capabilities`` MUST equal ``max_batches`` so the
+    coordinator's assign never re-hands an already-held unit as new work.
+    """
+    from interface.batch_runner import LockstepBatchRunner, LockstepUnit
+    from interface.config import ExperimentConfig
+    from interface.episode_checkpoint import resume_stepper
+    from interface.episode_log import flush_episode_log
+    from interface.episode_step import EpisodeStepper
+    from pipeline.run_stage3 import build_episode_runner
+
+    artifacts_root = Path(artifacts_root)
+    client = client or CoordinatorClient(coordinator_url)
+    max_batches = max(int(max_batches), 1)
+    capabilities = {**capabilities, "worker_concurrency": max_batches}
+    factory = agent_factory or pipeline._build_agent_from_spec
+
+    # Restore/register a stable worker id (so re-assigned units stay ours).
+    state_file = Path(worker_state_path) if worker_state_path else None
+    local_state = _load_worker_state(state_file) if state_file else {}
+    registration = client.register(
+        {
+            "worker_id": local_state.get("worker_id"),
+            "hostname": socket.gethostname(),
+            "capabilities": capabilities,
+        }
+    )
+    worker_id = registration["worker_id"]
+    if state_file is not None:
+        local_state["worker_id"] = worker_id
+        _write_json_atomic(state_file, local_state)
+
+    handed_out: dict[str, dict[str, Any]] = {}   # unit_id -> assign payload
+    lockstep_units: dict[str, Any] = {}          # unit_id -> LockstepUnit
+    preps: dict[str, Any] = {}                    # unit_id -> _PreparedUnitRun
+    finalized: set[str] = set()
+    completed: list[str] = []
+    failed: list[str] = []
+    group_model_key: dict[str, Optional[str]] = {"key": None}
+    agent_box: dict[str, Any] = {}
+    runner_box: dict[str, Any] = {}
+
+    def _build_unit(unit: dict[str, Any]):
+        unit_id = unit["unit_id"]
+        model_key = unit["model_key"]
+        if group_model_key["key"] is None:
+            group_model_key["key"] = model_key
+            agent_box["agent"], _ = factory(model_key, unit["model_config"])
+        elif model_key != group_model_key["key"]:
+            # One lockstep worker serves exactly one model group/key. A unit of a
+            # different key would need a different agent, so fail it back to the
+            # coordinator (a group filter should make this unreachable).
+            _safe_fail(
+                client, worker_id, unit_id,
+                f"lockstep worker pinned to model_key {group_model_key['key']!r}; "
+                f"refused {model_key!r}",
+            )
+            return None
+
+        row = materialize_worker_inputs(unit, artifacts_root)
+        prep = pipeline._prepare_unit_run(
+            row,
+            unit["model_id"],
+            model_config=unit["model_config"],
+            manifest_path=artifacts_root / DISTRIBUTED_DIR / "worker_manifest.json",
+            artifacts_root=artifacts_root,
+            scored_static=unit["task_artifacts"]["scored_static"],
+            difficulty_max=float(unit["difficulty_max_static_score"]),
+            config=ScorerConfig.from_dict(unit["scorer_config"]),
+            seed=int(unit["seed"]),
+            prompt_variant=str(unit["prompt_variant"]),
+            experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
+            conditions=unit.get("condition_set"),
+        )
+        # The run dir must exist before the runner writes its per-round checkpoint.
+        prep.run_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_path = prep.run_dir / "checkpoint.json"
+        runner = build_episode_runner(
+            prep.source, prep.experiment_config, int(unit["seed"]),
+            max_steps=prep.runtime_spec.max_steps,
+        )
+        if checkpoint_path.exists():
+            # Crash resume: rebuild the stepper at the query boundary the previous
+            # attempt checkpointed instead of re-running from scratch.
+            stepper = resume_stepper(checkpoint_path, runner=runner)
+            stepper.maze_path = str(prep.source)
+        else:
+            stepper = EpisodeStepper(runner, maze_path=str(prep.source))
+        lsu = LockstepUnit(unit_id, stepper, checkpoint_path=checkpoint_path)
+        handed_out[unit_id] = unit
+        lockstep_units[unit_id] = lsu
+        preps[unit_id] = prep
+        finalized.discard(unit_id)  # allow a re-assigned (retried) unit to re-run
+        return lsu
+
+    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> None:
+        unit = handed_out[unit_id]
+        try:
+            if isinstance(result, dict) and "error" in result:
+                _safe_fail(client, worker_id, unit_id, str(result["error"]))
+                failed.append(unit_id)
+                return
+            prep = preps[unit_id]
+            flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
+            prep.write_run_inputs(extras={"pricing_tier": "batch"})
+            episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))
+            prep.score_episode(episode)                      # run_score.json
+            archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
+            _upload_archive(client, worker_id, unit_id, archive_path)
+            completed.append(unit_id)
+        except Exception as exc:  # noqa: BLE001 - one bad unit must not kill the batch
+            logger.warning("lockstep worker %s: finalize unit %s failed: %s", worker_id, unit_id, exc)
+            _safe_fail(
+                client, worker_id, unit_id,
+                "".join(traceback.format_exception_only(type(exc), exc)).strip(),
+            )
+            failed.append(unit_id)
+
+    def refill():
+        try:
+            unit = client.assign(worker_id, capabilities).get("unit")
+        except Exception as exc:
+            logger.warning("lockstep worker %s: assign failed: %s", worker_id, exc)
+            return None
+        if not unit:
+            return None
+        unit_id = unit["unit_id"]
+        # A unit id we still hold active (not yet finalized) is the coordinator's
+        # concurrency-cap re-return, not new work — don't add it twice.
+        if unit_id in handed_out and unit_id not in finalized:
+            return None
+        return _build_unit(unit)
+
+    def on_round(active) -> None:
+        active_ids = {u.unit_id for u in active}
+        for u in active:
+            _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0))
+        # Finalize units that dropped out of the working set this round. Their
+        # results are already in the runner's results map (populated before this
+        # hook fires), including the ``{"error": ...}`` shape for failed steppers.
+        results = getattr(runner_box.get("runner"), "_results", {})
+        for unit_id in list(handed_out):
+            if unit_id in active_ids or unit_id in finalized:
+                continue
+            result = results.get(unit_id)
+            if result is None:
+                continue
+            finalized.add(unit_id)
+            _finalize_unit(unit_id, result)
+
+    first_unit = None
+    try:
+        first_unit = client.assign(worker_id, capabilities).get("unit")
+    except Exception as exc:
+        logger.warning("lockstep worker %s: initial assign failed: %s", worker_id, exc)
+    if not first_unit:
+        return {"worker_id": worker_id, "model_key": None, "completed": 0, "failed": []}
+
+    first_lsu = _build_unit(first_unit)
+    if first_lsu is None:
+        return {"worker_id": worker_id, "model_key": group_model_key["key"], "completed": 0, "failed": failed}
+
+    runner = LockstepBatchRunner(
+        agent_box["agent"],
+        max_batches=max_batches,
+        round_deadline_s=round_deadline_s,
+        refill=refill,
+        on_round=on_round,
+    )
+    runner_box["runner"] = runner
+    runner.add(first_lsu)
+    runner.run()
+
+    return {
+        "worker_id": worker_id,
+        "model_key": group_model_key["key"],
+        "completed": len(completed),
+        "failed": failed,
+    }
+
+
+def _safe_fail(client: Any, worker_id: str, unit_id: str, reason: str) -> bool:
+    """``client.fail`` swallowing transport errors so a coordinator blip cannot
+    abort the in-flight batch (the unit will go stale and be re-handed anyway)."""
+    try:
+        client.fail(worker_id, unit_id, reason)
+        return True
+    except Exception as exc:
+        logger.warning("Fail report failed for unit %s: %s", unit_id, exc)
+        return False
+
+
 def _validate_final_run_files(unit: dict[str, Any], artifacts_root: Path) -> list[str]:
     run_dir = artifacts_root / unit["run_dir"]
     return [
@@ -1612,6 +1842,32 @@ def dispatch_distributed_role(args: Any) -> None:
             concurrency=int(getattr(args, "worker_concurrency", 1) or 1),
         )
         print(f"Worker {'completed one unit' if completed else 'found no unit'}.")
+        return
+    if role == "lockstep-worker":
+        if not args.coordinator_url:
+            raise SystemExit("--coordinator-url is required for lockstep-worker.")
+        state_file = args.worker_state or str(
+            Path(args.artifacts_root) / DISTRIBUTED_DIR / "lockstep_worker_state.json"
+        )
+        # worker_concurrency == MAX_BATCHES for the lockstep runner's working set.
+        max_batches = int(getattr(args, "worker_concurrency", 1) or 1)
+        capabilities = {
+            "model_group": args.model_group,
+            "hardware_profile": args.hardware_profile,
+            "worker_tags": args.worker_tag or [],
+            "worker_concurrency": max_batches,
+        }
+        result = run_lockstep_worker(
+            coordinator_url=args.coordinator_url,
+            artifacts_root=args.artifacts_root,
+            capabilities=capabilities,
+            max_batches=max_batches,
+            worker_state_path=state_file,
+        )
+        print(
+            f"Lockstep worker completed {result['completed']} unit(s) "
+            f"({len(result['failed'])} failed) for group={args.model_group}."
+        )
         return
     if role == "coordinator-run-api-client":
         result = run_coordinator_api_client(
