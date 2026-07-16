@@ -21,6 +21,7 @@ from scripts.run_pipeline import load_manifest
 from scripts.scan_truncations import (
     effective_cap,
     episode_is_truncated,
+    main,
     scan_runs,
     write_rerun_manifest,
 )
@@ -60,15 +61,33 @@ def _episode(queries: list[dict], steps: list[dict] | None = None) -> dict:
     return {"success": True, "transcript": transcript}
 
 
+_OMIT = object()  # sentinel: write run_inputs.json but omit model_config.max_tokens
+
+
 def _write_run(root: Path, task_id: str, model: str, *, queries: list[dict],
-               steps: list[dict] | None = None, cap: int | None = 8000,
+               steps: list[dict] | None = None, cap=8000,
                seed: int = 0, variant: str = "egocentric") -> Path:
+    """Write one run dir.
+
+    ``cap`` semantics:
+    - int  -> run_inputs.json with model_config.max_tokens = cap
+    - None -> NO run_inputs.json file at all (missing sidecar)
+    - _OMIT -> run_inputs.json present but WITHOUT model_config.max_tokens
+    """
     run_dir = root / "runs" / task_id / "minigrid" / model / f"seed_{seed}" / variant
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "episode.json").write_text(
         json.dumps(_episode(queries, steps)), encoding="utf-8"
     )
-    if cap is not None:
+    if cap is None:
+        pass  # no sidecar
+    elif cap is _OMIT:
+        (run_dir / "run_inputs.json").write_text(
+            json.dumps({"task_id": task_id, "model_id": model,
+                        "model_config": {"temperature": 0.6}}),
+            encoding="utf-8",
+        )
+    else:
         (run_dir / "run_inputs.json").write_text(
             json.dumps({"task_id": task_id, "model_id": model,
                         "model_config": {"max_tokens": cap}}),
@@ -170,6 +189,91 @@ def test_scan_model_filter_ignores_other_models(tmp_path):
     results = scan_runs(tmp_path, model="qwen36_27b_vllm")
     task_ids = {r["task_id"] for r in results}
     assert task_ids == {"task_a"}
+
+
+# --------------------------------------------------------------------------- #
+# Unresolved-cap surface (fail-closed for a money-deciding tool)
+# --------------------------------------------------------------------------- #
+def test_missing_run_inputs_no_signal_is_cap_unresolved(tmp_path):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(142)], cap=None)  # no run_inputs.json
+    results = scan_runs(tmp_path)
+    assert results[0]["status"] == "cap_unresolved"
+    assert results[0]["flagged"] is False
+
+
+def test_run_inputs_without_max_tokens_is_cap_unresolved(tmp_path):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(142)], cap=_OMIT)  # run_inputs present, no max_tokens
+    results = scan_runs(tmp_path)
+    assert results[0]["status"] == "cap_unresolved"
+    assert results[0]["flagged"] is False
+
+
+def test_cap_unresolved_but_stop_reason_length_still_flags(tmp_path):
+    # Cap-independent signals must survive an unreadable/absent sidecar.
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(50, stop_reason="length")], cap=None)
+    results = scan_runs(tmp_path)
+    assert results[0]["flagged"] is True
+    assert results[0]["status"] == "flagged"
+
+
+def test_cap_unresolved_but_token_truncated_still_flags(tmp_path):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(50, token_truncated=True)], cap=_OMIT)
+    results = scan_runs(tmp_path)
+    assert results[0]["flagged"] is True
+    assert results[0]["status"] == "flagged"
+
+
+def test_explicit_cap_resolves_missing_sidecar(tmp_path):
+    # An explicit --cap makes the cap resolvable even with no run_inputs.json.
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(9000)], cap=None)
+    results = scan_runs(tmp_path, cap=8000)
+    assert results[0]["status"] == "flagged"
+    assert results[0]["flagged"] is True
+
+
+def test_queries_missing_usage_counted(tmp_path):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(0, with_usage=False), _query(142)], cap=8000)
+    results = scan_runs(tmp_path)
+    assert results[0]["queries_missing_usage"] == 1
+
+
+def test_cli_fails_closed_on_cap_unresolved(tmp_path, capsys):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(142)], cap=None)
+    code = main([
+        "--artifacts-root", str(tmp_path),
+        "--source-manifest", str(_SOURCE_MANIFEST),
+    ])
+    assert code != 0
+    err = capsys.readouterr().err
+    assert "cap_unresolved" in err or "WARNING" in err
+
+
+def test_cli_allow_unresolved_exits_zero(tmp_path):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(142)], cap=None)
+    code = main([
+        "--artifacts-root", str(tmp_path),
+        "--source-manifest", str(_SOURCE_MANIFEST),
+        "--allow-unresolved",
+    ])
+    assert code == 0
+
+
+def test_cli_exits_zero_when_all_caps_resolved(tmp_path):
+    _write_run(tmp_path, "task_x", "qwen36_27b_vllm",
+               queries=[_query(142)], cap=8000)
+    code = main([
+        "--artifacts-root", str(tmp_path),
+        "--source-manifest", str(_SOURCE_MANIFEST),
+    ])
+    assert code == 0
 
 
 def test_effective_cap_uniform_and_mixed(tmp_path):

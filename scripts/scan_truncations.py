@@ -69,16 +69,27 @@ def _query_output_tokens(record: dict[str, Any]) -> Optional[int]:
     return value if isinstance(value, int) else None
 
 
-def _query_is_truncated(record: dict[str, Any], cap: int) -> bool:
-    # Explicit provider metadata wins (present only on Reply-based agents).
+def _query_cap_independent_truncated(record: dict[str, Any]) -> bool:
+    """Truncation signals that need NO cap: explicit provider metadata stamped
+    by the Reply-based agents. These must fire even when the cap is unresolvable
+    (missing/unreadable ``run_inputs.json``)."""
     if record.get("token_truncated") is True:
         return True
-    stop_reason = record.get("stop_reason")
-    if stop_reason in _TRUNCATING_STOP_REASONS:
+    return record.get("stop_reason") in _TRUNCATING_STOP_REASONS
+
+
+def _query_is_truncated(record: dict[str, Any], cap: int) -> bool:
+    if _query_cap_independent_truncated(record):
         return True
     # Cap-compare fallback (the only signal legacy agents leave behind).
     output_tokens = _query_output_tokens(record)
     return output_tokens is not None and output_tokens >= cap
+
+
+def episode_has_cap_independent_truncation(episode: dict[str, Any]) -> bool:
+    """True iff any query record carries an explicit truncation stamp
+    (``token_truncated`` / ``stop_reason``) — decidable without a cap."""
+    return any(_query_cap_independent_truncated(r) for r in _query_records(episode))
 
 
 def episode_is_truncated(episode: dict[str, Any], cap: int) -> bool:
@@ -90,6 +101,14 @@ def episode_is_truncated(episode: dict[str, Any], cap: int) -> bool:
     is deliberately ignored.
     """
     return any(_query_is_truncated(r, cap) for r in _query_records(episode))
+
+
+def episode_queries_missing_usage(episode: dict[str, Any]) -> int:
+    """Count query records with no usable ``usage.output_tokens`` — silently
+    skipped by the cap-compare fallback; surfaced for operator visibility."""
+    return sum(
+        1 for r in _query_records(episode) if _query_output_tokens(r) is None
+    )
 
 
 def episode_max_output_tokens(episode: dict[str, Any]) -> int:
@@ -161,17 +180,28 @@ def scan_runs(
         run_dir = episode_path.parent
         episode = json.loads(episode_path.read_text(encoding="utf-8"))
         resolved_cap = _resolve_cap(run_dir, cap)
-        flagged = (
-            resolved_cap is not None
-            and episode_is_truncated(episode, resolved_cap)
-        )
+
+        # Cap-independent signals (explicit provider stamps) always decide, even
+        # when the cap is unresolvable — a length-stamped query flags regardless.
+        if resolved_cap is not None:
+            flagged = episode_is_truncated(episode, resolved_cap)
+            status = "flagged" if flagged else "ok"
+        elif episode_has_cap_independent_truncation(episode):
+            flagged, status = True, "flagged"
+        else:
+            # Cap unresolved AND no explicit stamp: cannot judge the cap-compare
+            # signal. Fail-closed — surfaced as its own status, never silently ok.
+            flagged, status = False, "cap_unresolved"
+
         results.append(
             {
                 "task_id": _task_id(run_dir, episode),
                 "run_dir": str(run_dir),
                 "max_output_tokens": episode_max_output_tokens(episode),
                 "flagged": bool(flagged),
+                "status": status,
                 "cap": resolved_cap,
+                "queries_missing_usage": episode_queries_missing_usage(episode),
             }
         )
     return results
@@ -240,28 +270,46 @@ def write_rerun_manifest(
 # Summary + CLI
 # --------------------------------------------------------------------------- #
 def _summary_rows(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Collapse per-run results to one row per task_id (any-run-flagged)."""
+    """Collapse per-run results to one row per task_id.
+
+    ``flagged`` is any-run-flagged. ``cap_unresolved`` is set when a task has a
+    cap_unresolved run that never got overridden by a flag (a task flagged on one
+    seed but cap_unresolved on another is still flagged, not silently dropped)."""
     by_task: dict[str, dict[str, Any]] = {}
     for r in results:
         agg = by_task.setdefault(
             r["task_id"], {"task_id": r["task_id"], "flagged": False,
-                           "max_output_tokens": 0, "run_count": 0}
+                           "cap_unresolved": False, "max_output_tokens": 0,
+                           "run_count": 0}
         )
         agg["flagged"] = agg["flagged"] or r["flagged"]
+        agg["cap_unresolved"] = (
+            agg["cap_unresolved"] or r.get("status") == "cap_unresolved"
+        )
         agg["max_output_tokens"] = max(agg["max_output_tokens"], r["max_output_tokens"])
         agg["run_count"] += 1
     return sorted(by_task.values(), key=lambda a: a["task_id"])
 
 
+def _status_label(row: dict[str, Any]) -> str:
+    if row["flagged"]:
+        return "FLAG"
+    if row["cap_unresolved"]:
+        return "?CAP"
+    return "-"
+
+
 def print_summary(results: list[dict[str, Any]]) -> None:
     rows = _summary_rows(results)
     flagged_tasks = sum(1 for r in rows if r["flagged"])
+    unresolved_runs = sum(1 for r in results if r.get("status") == "cap_unresolved")
+    missing_usage = sum(r.get("queries_missing_usage", 0) for r in results)
     header = f"{'task_id':<52} {'flag':>5} {'max_out':>8} {'runs':>5}"
     print(header)
     print("-" * len(header))
     for r in rows:
         print(
-            f"{r['task_id']:<52} {'FLAG' if r['flagged'] else '-':>5} "
+            f"{r['task_id']:<52} {_status_label(r):>5} "
             f"{r['max_output_tokens']:>8} {r['run_count']:>5}"
         )
     print("-" * len(header))
@@ -270,9 +318,13 @@ def print_summary(results: list[dict[str, Any]]) -> None:
         f"not-flagged: {len(rows) - flagged_tasks}  "
         f"(runs scanned: {len(results)})"
     )
+    print(
+        f"cap_unresolved runs: {unresolved_runs}   "
+        f"query records with no usable usage: {missing_usage}"
+    )
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Scan phase-1 episodes for token-cap truncation and emit a "
         "phase-2 rerun manifest (two-tier Qwen rerun)."
@@ -287,6 +339,9 @@ def main(argv: Optional[list[str]] = None) -> None:
                         "each run_inputs.json model_config.max_tokens).")
     parser.add_argument("--model", default=None,
                         help="Filter run dirs by <model> path segment.")
+    parser.add_argument("--allow-unresolved", action="store_true",
+                        help="Exit 0 even when some runs have an unresolvable "
+                        "cap (default: fail closed — this is a money-deciding tool).")
     args = parser.parse_args(argv)
 
     results = scan_runs(Path(args.artifacts_root), cap=args.cap, model=args.model)
@@ -299,10 +354,23 @@ def main(argv: Optional[list[str]] = None) -> None:
             flagged, Path(args.source_manifest), Path(args.out),
             cap=cap_for_provenance,
         )
+        print(f"\nWrote {len(manifest['tasks'])} flagged task(s) -> {args.out}")
+
+    unresolved = [r for r in results if r.get("status") == "cap_unresolved"]
+    if unresolved:
         print(
-            f"\nWrote {len(manifest['tasks'])} flagged task(s) -> {args.out}"
+            f"WARNING: {len(unresolved)} run(s) had an unresolvable token cap "
+            "(missing/invalid run_inputs.json model_config.max_tokens and no "
+            "explicit truncation stamp); these could NOT be judged and are NOT "
+            "in the rerun manifest. Pass --cap or --allow-unresolved.",
+            file=sys.stderr,
         )
+        for r in unresolved:
+            print(f"  cap_unresolved: {r['run_dir']}", file=sys.stderr)
+        if not args.allow_unresolved:
+            return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
