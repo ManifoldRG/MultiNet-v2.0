@@ -66,8 +66,10 @@ class _ScriptedURLopen:
     """Scripted urlopen keyed on (method, url), readable and network-free.
 
     `status_sequence` drives successive GETs on the batch object (the last value
-    repeats). A "ended" status attaches `results_url`. Cancel returns a batch
-    whose `results_url` is `cancel_results_url` (None by default -> no partials).
+    repeats). Cancel returns "canceling" with `results_url: null` — the real
+    API's immediate cancel response — and flips subsequent status GETs onto
+    `post_cancel_status_sequence` (defaults to repeating "canceling" forever).
+    An "ended" status attaches `results_url`.
     """
 
     RESULTS_URL = "https://api.anthropic.com/v1/messages/batches/batch_1/results"
@@ -76,16 +78,23 @@ class _ScriptedURLopen:
         self,
         *,
         status_sequence: List[str],
+        post_cancel_status_sequence: Optional[List[str]] = None,
         results_jsonl: Optional[str] = None,
-        cancel_results_url: Optional[str] = None,
         batch_id: str = "batch_1",
     ):
         self.status_sequence = list(status_sequence)
+        self.post_cancel_status_sequence = list(post_cancel_status_sequence or ["canceling"])
         self.results_jsonl = results_jsonl
-        self.cancel_results_url = cancel_results_url
         self.batch_id = batch_id
         self.calls: List[tuple] = []
+        self.canceled = False
         self._status_i = 0
+
+    def _next_status(self) -> str:
+        seq = self.post_cancel_status_sequence if self.canceled else self.status_sequence
+        i = min(self._status_i, len(seq) - 1)
+        self._status_i += 1
+        return seq[i]
 
     def __call__(self, req, timeout=None):
         method = req.get_method()
@@ -94,17 +103,13 @@ class _ScriptedURLopen:
         if method == "POST" and url.endswith("/v1/messages/batches"):
             return _json_resp({"id": self.batch_id, "processing_status": "in_progress"})
         if method == "POST" and url.endswith(f"/batches/{self.batch_id}/cancel"):
+            self.canceled = True
+            self._status_i = 0
             return _json_resp(
-                {
-                    "id": self.batch_id,
-                    "processing_status": "canceling",
-                    "results_url": self.cancel_results_url,
-                }
+                {"id": self.batch_id, "processing_status": "canceling", "results_url": None}
             )
         if method == "GET" and url.endswith(f"/batches/{self.batch_id}"):
-            i = min(self._status_i, len(self.status_sequence) - 1)
-            self._status_i += 1
-            status = self.status_sequence[i]
+            status = self._next_status()
             body = {"id": self.batch_id, "processing_status": status}
             if status == "ended":
                 body["results_url"] = self.RESULTS_URL
@@ -147,16 +152,54 @@ def test_results_map_by_custom_id_out_of_order(monkeypatch):
 
 
 def test_deadline_cancels_and_returns_partial(monkeypatch):
-    responder = _ScriptedURLopen(status_sequence=["in_progress"])  # never ends
+    """Deadline -> cancel -> grace poll to "ended" -> finished items salvaged."""
+    responder = _ScriptedURLopen(
+        status_sequence=["in_progress"],  # never ends before the deadline
+        post_cancel_status_sequence=["canceling", "ended"],
+        results_jsonl=_jsonl(_succeeded("i0", "finished before cancel")),
+    )
+    _patch(monkeypatch, responder)
+    results = run_message_batch(
+        [{"custom_id": "i0", "params": {}}, {"custom_id": "i1", "params": {}}],
+        api_key="k",
+        poll_interval_s=0.001,
+        deadline_s=0.02,
+        cancel_grace_s=5.0,
+    )
+    assert responder.count("POST", "/cancel") == 1
+    assert set(results) == {"i0"}  # i1 never finished; simply absent
+    assert results["i0"]["message"]["content"][-1]["text"] == "finished before cancel"
+
+
+def test_deadline_grace_expiry_returns_empty(monkeypatch):
+    """Batch never reaches "ended" within cancel_grace_s -> {} (no results_url)."""
+    responder = _ScriptedURLopen(status_sequence=["in_progress"])  # cancel -> "canceling" forever
     _patch(monkeypatch, responder)
     results = run_message_batch(
         [{"custom_id": "i0", "params": {}}],
         api_key="k",
         poll_interval_s=0.001,
         deadline_s=0.02,
+        cancel_grace_s=0.02,
     )
     assert results == {}
     assert responder.count("POST", "/cancel") == 1
+
+
+def test_malformed_results_line_is_skipped(monkeypatch):
+    """One bad JSONL line (no custom_id) must not KeyError away the whole batch."""
+    responder = _ScriptedURLopen(
+        status_sequence=["ended"],
+        results_jsonl=_jsonl(
+            _succeeded("i0", "good"),
+            {"result": {"type": "succeeded"}},  # malformed: custom_id absent
+            _succeeded("i1", "also good"),
+        ),
+    )
+    _patch(monkeypatch, responder)
+    requests = [{"custom_id": f"i{i}", "params": {}} for i in range(2)]
+    results = run_message_batch(requests, api_key="k", poll_interval_s=0, deadline_s=100)
+    assert set(results) == {"i0", "i1"}
 
 
 # --- agent: generate_batch --------------------------------------------------
@@ -213,19 +256,41 @@ def test_errored_item_becomes_stub_reply(monkeypatch):
     assert replies[1] == Reply(text="", stop_reason="batch_errored")
 
 
-def test_deadline_missing_ids_become_batch_expired(monkeypatch):
-    responder = _ScriptedURLopen(status_sequence=["in_progress"])  # never ends
-    _patch(monkeypatch, responder)
-    agent = ClaudeAnthropicAgent(
+def _deadline_agent():
+    return ClaudeAnthropicAgent(
         ClaudeAnthropicConfig(
             model="claude-opus-4-8",
             max_tokens=64000,
             batch_poll_interval_s=0.001,
             batch_deadline_s=0.02,
+            batch_cancel_grace_s=0.02,
         ),
         api_key="secret",
     )
-    replies = agent.generate_batch(
+
+
+def test_deadline_salvages_finished_and_expires_missing(monkeypatch):
+    """After a deadline cancel, finished items become real Replies and ids
+    absent from the salvaged results become batch_expired stubs."""
+    responder = _ScriptedURLopen(
+        status_sequence=["in_progress"],
+        post_cancel_status_sequence=["ended"],
+        results_jsonl=_jsonl(_succeeded("i0", "FINAL_OUTPUT: A")),
+    )
+    _patch(monkeypatch, responder)
+    replies = _deadline_agent().generate_batch(
+        [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]]
+    )
+    assert responder.count("POST", "/cancel") == 1
+    assert replies[0].text == "FINAL_OUTPUT: A"
+    assert replies[0].stop_reason == "end_turn"
+    assert replies[1] == Reply(text="", stop_reason="batch_expired")
+
+
+def test_deadline_missing_ids_become_batch_expired(monkeypatch):
+    responder = _ScriptedURLopen(status_sequence=["in_progress"])  # never ends
+    _patch(monkeypatch, responder)
+    replies = _deadline_agent().generate_batch(
         [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]]
     )
     assert responder.count("POST", "/cancel") == 1

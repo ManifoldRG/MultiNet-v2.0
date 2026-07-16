@@ -6,9 +6,12 @@ then streams the JSONL results and maps them back by `custom_id`. Batch results
 arrive in ARBITRARY order, so the caller keys on `custom_id` — never position.
 
 A poll deadline (wall-clock, `time.monotonic`) bounds the wait: on expiry we
-`POST .../cancel` and return whatever finished-item results the batch already
-exposes via `results_url` (none, if it is still null — then `{}`). Every HTTP
-call goes through `http_retry.call_with_retry`, matching the sync agent.
+`POST .../cancel`, then keep polling for a short grace period (`cancel_grace_s`)
+until the batch reaches `"ended"` — a freshly-canceled batch sits in
+`"canceling"` with `results_url` null, and giving up immediately would discard
+every finished (already billed) item. If the batch still is not ended after the
+grace period, whatever we have is returned (possibly `{}`). Every HTTP call
+goes through `http_retry.call_with_retry`, matching the sync agent.
 """
 
 from __future__ import annotations
@@ -71,8 +74,28 @@ def _parse_results_jsonl(text: str) -> Dict[str, dict]:
         if not line:
             continue
         record = json.loads(line)
-        out[record["custom_id"]] = record.get("result", {})
+        custom_id = record.get("custom_id")
+        if custom_id is None:
+            continue  # one malformed line must not discard the whole batch
+        out[custom_id] = record.get("result", {})
     return out
+
+
+def _poll_until_ended(
+    batch: dict,
+    status_url: str,
+    *,
+    api_key: str,
+    poll_interval_s: float,
+    deadline: float,
+) -> dict:
+    """Poll the batch object until `processing_status == "ended"` or the
+    monotonic `deadline` passes; returns the most recent batch object either
+    way."""
+    while batch.get("processing_status") != "ended" and time.monotonic() < deadline:
+        time.sleep(poll_interval_s)
+        batch = _request_json(status_url, api_key=api_key, method="GET")
+    return batch
 
 
 def run_message_batch(
@@ -81,14 +104,16 @@ def run_message_batch(
     api_key: str,
     poll_interval_s: float = 30.0,
     deadline_s: float = 7200.0,
+    cancel_grace_s: float = 300.0,
     base_url: str = "https://api.anthropic.com",
 ) -> Dict[str, dict]:
     """Create a message batch, poll to completion, return `{custom_id: result}`.
 
     `requests` is `[{"custom_id": str, "params": <full /v1/messages body>}]`.
-    On deadline expiry the batch is canceled and only already-finished item
-    results are returned (missing `custom_id`s are simply absent). If no results
-    are exposed yet (`results_url` null), returns `{}`.
+    On deadline expiry the batch is canceled, then polled for up to
+    `cancel_grace_s` more until it reaches `"ended"` so already-finished (billed)
+    item results are salvaged; missing `custom_id`s are simply absent. If it
+    never ends within the grace period (`results_url` still null), returns `{}`.
     """
     base = base_url.rstrip("/")
     created = _request_json(
@@ -101,14 +126,24 @@ def run_message_batch(
     status_url = f"{base}/v1/messages/batches/{batch_id}"
     cancel_url = f"{status_url}/cancel"
 
-    deadline = time.monotonic() + deadline_s
-    batch = created
-    while batch.get("processing_status") != "ended":
-        if time.monotonic() >= deadline:
-            batch = _request_json(cancel_url, api_key=api_key, method="POST")
-            break
-        time.sleep(poll_interval_s)
-        batch = _request_json(status_url, api_key=api_key, method="GET")
+    batch = _poll_until_ended(
+        created,
+        status_url,
+        api_key=api_key,
+        poll_interval_s=poll_interval_s,
+        deadline=time.monotonic() + deadline_s,
+    )
+    if batch.get("processing_status") != "ended":
+        # Deadline hit: cancel, then give the batch a grace window to settle to
+        # "ended" — its finished items are already billed and must be salvaged.
+        batch = _request_json(cancel_url, api_key=api_key, method="POST")
+        batch = _poll_until_ended(
+            batch,
+            status_url,
+            api_key=api_key,
+            poll_interval_s=poll_interval_s,
+            deadline=time.monotonic() + cancel_grace_s,
+        )
 
     results_url = batch.get("results_url")
     if not results_url:

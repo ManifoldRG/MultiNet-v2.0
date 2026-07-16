@@ -277,6 +277,7 @@ class ClaudeAnthropicConfig:
     # Message Batches API polling knobs (used only by generate_batch).
     batch_poll_interval_s: float = 30.0
     batch_deadline_s: float = 7200.0
+    batch_cancel_grace_s: float = 300.0
 
 
 @dataclass
@@ -371,6 +372,7 @@ class ClaudeAnthropicAgent:
             api_key=self.api_key,
             poll_interval_s=self.config.batch_poll_interval_s,
             deadline_s=self.config.batch_deadline_s,
+            cancel_grace_s=self.config.batch_cancel_grace_s,
         )
         return [self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))]
 
