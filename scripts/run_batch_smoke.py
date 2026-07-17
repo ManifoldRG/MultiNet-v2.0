@@ -326,12 +326,20 @@ def _run_model(
     from interface.episode_log import flush_episode_log
     from scripts import distributed_run_pipeline as drp
 
-    # Copy so the round-deadline injection never mutates the shared plan. The
-    # batch clients read their round deadline from the CONFIG (batch_deadline_s),
-    # not a generate_batch kwarg, so --round-deadline-s only reaches the real
+    # Runtime model params (enable_thinking, effort, temperature, timeout, ...)
+    # live on the UNIT's model_config — NOT plan["models"][model_key], which
+    # prepare_job reduces to a routing/topology view (model_group, worker_count,
+    # hardware_profile) with the runtime params stripped. The real lockstep
+    # worker builds its agent from unit["model_config"]
+    # (distributed_run_pipeline.py::run_lockstep_worker), so the smoke must too;
+    # otherwise the batch leg silently runs thinking-OFF (enable_thinking=False)
+    # while the sync control (also unit["model_config"]) runs thinking-ON.
+    # Copy so the round-deadline injection never mutates shared state. The batch
+    # clients read their round deadline from the CONFIG (batch_deadline_s), not a
+    # generate_batch kwarg, so --round-deadline-s only reaches the real
     # Claude/Kimi agents through this field (it stays out of the unit hash — see
     # _NON_RUNTIME_MODEL_KEYS).
-    model_cfg = dict(plan["models"][model_key])
+    model_cfg = dict(store._unit_payload(plan, unit_rows[0])["model_config"])
     model_cfg["batch_deadline_s"] = round_deadline_s
     provider = _provider_of(model_cfg)
 
