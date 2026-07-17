@@ -97,11 +97,12 @@ Each item: the trap, and where the mitigation lives.
     verification rejects archives whose `run_inputs.json` `inputs_hash` ≠ the
     unit's `episode_inputs_hash` (new check on this branch). The lockstep worker
     goes through the same `run_inputs` writer as `pipeline._run_one_unit`.
-12. **last3 prompt comparability.** The reworked last3 history
-    (`FINAL_OUTPUT:` + Position-after/Feedback shape) means R1's
-    `text_summary_and_last3` data is **not prompt-comparable** with
-    previously-collected last3 corpora (incl. the kimictx run). Deliberate.
-    Never pool old and new last3 arms silently in analysis.
+12. **last3 + text-summary prompt comparability.** The reworked last3 history
+    (`FINAL_OUTPUT:` + Position-after/Feedback shape) AND the new persistent
+    start-pose anchor in the text summary (`"You started at (r, c) facing DIR."`,
+    added 2026-07-17 to ground image_only) mean R1's `text_summary_and_last3`
+    data is **not prompt-comparable** with previously-collected corpora (incl.
+    the kimictx run). Deliberate. Never pool old and new arms silently in analysis.
 13. **Panel interpretation caveats** (from the balanced_03 SUMMARY, restated so
     they survive into analysis): mechanism comparisons begin at 26 actions (no
     shorter mechanism fixtures exist); the single D3 maze's BFS estimate may be
@@ -185,14 +186,23 @@ validated. Remaining steps are operator-run (paid).
    explicitly. Analysis note: rows now carry additive `pass`/`max_tokens`
    columns; query records carry additive `stop_reason`/`token_truncated`.
 
-## Budget (to be replaced by smoke-measured numbers)
+## Budget (smoke-measured, 2026-07-17)
 
-Central estimate, 50 mazes × 1 seed, thinking-on, 64k caps: sync pricing
-~\$435 (Claude ~\$329, Kimi ~\$107, Qwen \$0/token). With batch pricing
-(Claude ×0.5, Kimi ×0.6): **~\$229 central**; range scales with the same
-unknown (queries/episode under image_only + thinking) the smoke pins down.
-Cost lever ranking: output cap runaway tail > batch discount > prompt caching
-(input is minor at xhigh).
+The pre-smoke central estimate (~\$229 batch across all 3 models) assumed higher
+queries/episode than reality: under image_only the episodes **stall at ~30–80
+steps** (stall-K=30), well below a solve, so Claude comes in far cheaper than the
+old \$165 line. Smoke-measured (Claude, 50 mazes × 1 seed):
+
+| Model | R1 batch | R1 sync | Basis |
+|---|--:|--:|---|
+| **Claude Opus 4.8** | **~\$23.4** | ~\$46.8 | measured: 49.8 q/episode × 50, mean 574 out-tok/step (`smoke_report.json`) |
+| **Kimi k2.6** | ~\$50–100 (uncertain) | ~\$85–170 | single-round datapoint only: ~16.5k reasoning tok/step — measure with a Kimi smoke before trusting |
+| **Qwen** | \$0/token | \$0/token | local vLLM |
+
+Full tables + provenance: `analysis/r1_smoke_batch_findings.md`. `token_truncated`
+was 0/249 for Claude at 64k. Cost lever ranking unchanged: output cap runaway
+tail > batch discount > prompt caching (input minor at xhigh). **Kimi is the cost
+*and* wall-clock long pole** (heavy per-step thinking + Moonshot's ~17 min/round).
 
 ## Lessons learned from the batch smoke (2026-07-17)
 

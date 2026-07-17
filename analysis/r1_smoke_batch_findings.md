@@ -159,6 +159,26 @@ minimal outcome feedback to the image_only last3/current step (e.g. surface
 but moves image_only toward image_text. Not a scorer/runtime bug; a
 condition-design choice.
 
+## 9. Start-pose grounding — behavioral test (negative)
+
+Added a persistent `"You started at (r, c) facing DIR."` anchor to the text
+summary (commit `fb2df4d`) and re-ran the worst fast-stall maze (M6, which
+reached only 3 positions in v2) through the sync path with the anchor live:
+
+| | end | queries | distinct pos | MOVED | BLOCKED |
+|---|---|--:|--:|--:|--:|
+| v2 (no anchor, batch) | stalled | ~35 | 3 | 2 | 32 |
+| start-pose (sync) | stalled | 35 | **3** | 2 | 32 |
+
+**Identical outcome.** Distinct positions stuck at 3 from q10 on while BLOCKED
+climbed — 2 moves, then a wall hammered to stall-K. Knowing the start cell does
+not help when the model still gets no signal a move was BLOCKED. (One earlier
+crashed trajectory navigated 60+ queries, so there is real run-to-run variance;
+the clean run reproduced the v2 stall exactly.) **The anchor is a low-risk
+grounding aid, kept, but it is not a fix for the image_only fast-stall** — that
+is feedback-blindness, which is by-design for image_only (§8). A single maze ×
+few trajectories is noisy; do not over-read either direction.
+
 ## Provenance / caveats
 
 - **Config-source bug (fixed):** the smoke driver built its batch agent from the
