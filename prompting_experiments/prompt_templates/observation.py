@@ -7,6 +7,7 @@ RECENT_HISTORY_STEP = (
     "Feedback: {feedback}"
 )
 
+TEXT_SUMMARY_START = "You started at ({row}, {col}) facing {facing}."
 TEXT_SUMMARY_BLOCK_HEADER = "Activity summary:"
 TEXT_SUMMARY_FIRST_EVENT = "first you {event}"
 TEXT_SUMMARY_THEN_EVENT = "then you {event}"

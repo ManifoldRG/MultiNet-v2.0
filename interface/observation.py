@@ -133,6 +133,34 @@ def _last3_history_text(
     return "\n".join(lines)
 
 
+def _agent_start_pose(
+    transcript: list[dict[str, Any]],
+) -> tuple[int, int, str] | None:
+    """(row, col, facing) of the agent's starting cell, in prompt coordinates.
+
+    Read from the transcript's ``reset`` record (``state.position_row_col`` +
+    ``state.facing``); falls back to the first step's before-pose. Returns None
+    if neither is available (older/partial transcripts) so the caller can omit
+    the grounding line rather than crash.
+    """
+    for rec in transcript:
+        if rec.get("kind") == "reset":
+            st = rec.get("state") or {}
+            rc = st.get("position_row_col")
+            facing = st.get("facing")
+            if rc and facing:
+                return int(rc[0]), int(rc[1]), str(facing)
+            break
+    for rec in transcript:
+        if rec.get("kind") == "step":
+            pb = rec.get("position_before")
+            fb = rec.get("facing_before")
+            if pb and fb:
+                return int(pb[0]), int(pb[1]), str(fb)
+            break
+    return None
+
+
 def text_summary_history(
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
@@ -142,6 +170,11 @@ def text_summary_history(
     The trail is essential: an events-only summary carried zero spatial
     information from the first pickup onward, exactly when a keyed maze turns
     back into a navigation problem (29/45 sweep episodes).
+
+    The summary is prefixed with a persistent start-pose line ("You started at
+    (r, c) facing DIR.") so the model has a fixed coordinate anchor to reason
+    the trail against — important under image_only, where the observation gives
+    no textual position and the model otherwise loses track of where it began.
     """
     steps = history_steps(transcript)
     mechanism_events = _extract_mechanism_events(steps, task_spec)
@@ -161,10 +194,23 @@ def text_summary_history(
                     observation_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col)
                 )
 
+    start = _agent_start_pose(transcript)
+    start_line = (
+        observation_templates.TEXT_SUMMARY_START.format(
+            row=start[0], col=start[1], facing=start[2]
+        )
+        if start
+        else None
+    )
+
     if not parts:
-        return observation_templates.TEXT_SUMMARY_EMPTY
-    summary = _format_summary_chain(parts)
-    return f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
+        body = observation_templates.TEXT_SUMMARY_EMPTY
+    else:
+        body = (
+            f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n"
+            f"{_format_summary_chain(parts)}"
+        )
+    return f"{start_line}\n{body}" if start_line else body
 
 
 def _extract_mechanism_events(
