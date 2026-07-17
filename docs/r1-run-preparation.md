@@ -193,3 +193,63 @@ Central estimate, 50 mazes × 1 seed, thinking-on, 64k caps: sync pricing
 unknown (queries/episode under image_only + thinking) the smoke pins down.
 Cost lever ranking: output cap runaway tail > batch discount > prompt caching
 (input is minor at xhigh).
+
+## Lessons learned from the batch smoke (2026-07-17)
+
+The 5-maze Claude batch smoke (`analysis/r1_smoke_batch_findings.md` has the full
+tables) surfaced several things that will bite the live R1 launch if not checked.
+
+### Smoke result summary (Claude, image_only, thinking-on, batch)
+- All 5 mazes **stalled** (0 solved) at exactly `stall_gap = 30` → stall-K=30 is
+  the terminator. Queries/episode 32–83 (mean 49.8). `token_truncated = 0`.
+- Per-step tokens: output mean **574** / median 252 / max 21426; input mean 886.
+- **Cost:** batch $2.34 vs sync-equiv $4.68 (**50% discount confirmed**). Official
+  projection: **Claude batch ~$23.4 / sync ~$46.8** for 50 mazes × 1 seed.
+- **Latency:** Anthropic batch **median 6–7 min/round** (max 31); Moonshot batch
+  **median 17 min/round** (max 67) — Kimi-via-Moonshot is the wall-clock long pole.
+
+### Pre-launch checks (do these on the LIVE coordinator run, early)
+1. **Confirm thinking is actually ON** — the #1 trap. The smoke driver built its
+   batch agent from the stripped `plan["models"][key]` (no `enable_thinking`/
+   `effort`) and silently ran **thinking-OFF** (uniform ~24-token outputs, all
+   stalled). The real `run_lockstep_worker` uses `unit["model_config"]` and is
+   correct, **but verify it live**: within the first 1–2 rounds, pull a query
+   record's `usage.output_tokens`. **~24 tokens = thinking-OFF (STOP, investigate);
+   hundreds–thousands = thinking-ON.** Also check `thinking` non-empty on Claude
+   (display=summarized) and `reasoning_content` on Kimi.
+2. **Check token use early** to catch runaway before it burns budget — median is
+   ~250–570 out-tok/step for Claude; Kimi thinks *heavily* (~16.5k tok for one
+   step in the confirmation). A first-round spot check bounds the projection.
+3. **Qwen is slow to start — don't panic.** Qwen's first solve takes **~15–20 min**
+   (vLLM load + first decode on the served A100 path); an early "no progress" is
+   startup, not a hang (see the qwen-fp8 smoke-stall note). Check after ~20 min.
+
+### If the batch coordinator breaks
+- **At launch (first ~hour, no real work done):** kill the job, fix the bug,
+  relaunch clean. Cheap — nothing to salvage.
+- **After ~an hour (real batches in flight / episodes on workers):** **monkeypatch
+  live** rather than restart. Completed episodes live on the workers as
+  `episode.json`; a coordinator restart risks mid-flight batches and re-pays. The
+  lockstep worker checkpoints per round (`checkpoint.json` in the run dir) and the
+  Anthropic/Moonshot batch history is queryable directly (`GET /v1/messages/batches`
+  / `GET /v1/batches`) to inspect in-flight state without touching the process.
+
+### Known behaviors / gotchas
+- **Two config sources:** `plan["models"]` is a routing/topology view (stripped of
+  runtime params); `unit["model_config"]` carries `enable_thinking`/`effort`/
+  `temperature`. Always build agents from the unit config (the smoke fix + the
+  worker both do).
+- **image_only gives NO action-outcome feedback by design** ("PNGs + inventory/
+  action labels, no text history"). The model can't tell a move was BLOCKED, so it
+  repeats it until stall-K — this is the fast-stall mechanism, not a bug. The
+  text-summary now carries a persistent **"You started at (r,c) facing DIR."**
+  anchor to partially ground it.
+- **Temperature:** Claude Opus 4.8 **rejects** `temperature`/`top_p`/`top_k` (400) —
+  never send it; it samples via adaptive thinking. Kimi is mode-forced to 1.0.
+  Qwen raised 0.6 → 1.0 to match Kimi (0.6 was Kimi's *non-thinking* value).
+- **Batch API honors thinking** for both providers (verified by direct sync-vs-batch
+  A/Bs: Anthropic text+image; Moonshot single round, no 64k truncation) — but this
+  is a per-run-path property, so item (1) above still applies to the live coordinator.
+- **Smoke ≠ worker on checkpoints:** the smoke driver runs the lockstep runner
+  WITHOUT a checkpoint path (episodes flush only at leg end); the real worker
+  checkpoints per round. Don't infer worker resume behavior from smoke disk state.
