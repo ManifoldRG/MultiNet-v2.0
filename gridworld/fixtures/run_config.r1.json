@@ -26,7 +26,7 @@
     "qwen36_27b_vllm": {
       "provider": "qwen_vllm_api",
       "model": "Qwen/Qwen3.6-27B",
-      "temperature": 0.6,
+      "temperature": 1.0,
       "max_tokens": 8000,
       "enable_thinking": true,
       "_note_serve_args": "served vLLM args come from QWEN_MAX_MODEL_LEN/QWEN_MAX_NUM_SEQS env at launch (lib/vllm_serve_args.sh); run-config server keys are inert on the served path",
