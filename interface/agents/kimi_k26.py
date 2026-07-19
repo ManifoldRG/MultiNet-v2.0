@@ -213,6 +213,12 @@ class KimiK26Agent:
     def generate_batch(self, batch: List[List[dict]]) -> List[Reply]:
         """Run every message list through the Moonshot Batch API, in input order.
 
+        KIMI_BATCH_TRANSPORT=sync switches the transport to bounded-concurrency
+        sync chat completions (full price, no Batch API dependency) while
+        keeping the lockstep round contract: one Reply per input, in order,
+        per-item failures isolated as ``sync_error`` stubs. KIMI_SYNC_FANOUT
+        bounds the thread pool (default 15).
+
         Bodies are built by the same `_build_body` as sync (with sampling params
         omitted per the batch spec) and succeeded bodies parse through the same
         `_reply_from_completion`. Does not touch ``last_usage``/``last_thinking``
@@ -221,6 +227,22 @@ class KimiK26Agent:
         the untouched error_file) become ``batch_errored`` stubs; ids missing
         after a poll-deadline cancel become ``batch_expired``.
         """
+        if os.environ.get("KIMI_BATCH_TRANSPORT", "batch") == "sync":
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _one(messages: List[dict]) -> Reply:
+                try:
+                    return self.generate(messages)
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "kimi sync-transport item failed", exc_info=True
+                    )
+                    return Reply(text="", stop_reason="sync_error")
+
+            fanout = int(os.environ.get("KIMI_SYNC_FANOUT", "15"))
+            with ThreadPoolExecutor(max_workers=max(1, fanout)) as pool:
+                return list(pool.map(_one, batch))
+
         lines = [
             {
                 "custom_id": f"i{i}",
