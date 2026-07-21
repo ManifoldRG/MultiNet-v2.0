@@ -134,6 +134,13 @@ def _post_chat_completions(
         method="POST",
     )
     effective_timeout = timeout or 180.0
+    # KIMI_TIMEOUT_OVERRIDE (seconds) raises the per-call socket timeout without
+    # touching model_config (hash-safe). Added 2026-07-21: Moonshot infra during
+    # their new-model launch returns legitimate sub-64k responses slower than the
+    # 600s config timeout, so a deep-thinking episode times out on a valid reply.
+    _to = os.environ.get("KIMI_TIMEOUT_OVERRIDE")
+    if _to:
+        effective_timeout = max(effective_timeout, float(_to))
     t0 = time.perf_counter()
 
     def _do_request():
