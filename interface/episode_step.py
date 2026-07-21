@@ -46,6 +46,17 @@ from prompting_experiments.prompt_templates import feedback as feedback_template
 
 logger = logging.getLogger(__name__)
 
+# Reply.stop_reason values that mean the transport/provider failed to deliver a
+# response, NOT that the model produced an unparseable move. These must not
+# consume the per-episode parse-retry budget (they'd terminate a valid episode
+# on provider flakiness). Set by the batch/sync agents (moonshot_batch, the
+# sync-transport path) and by provider overload responses. Token-cap truncation
+# is intentionally NOT here — exhausting the output budget is a real model
+# outcome the run enforces.
+_INFRA_STOP_REASONS = frozenset(
+    {"sync_error", "batch_expired", "batch_errored", "engine_overloaded"}
+)
+
 
 class EpisodeStepper:
     """Drives one episode; the loop body moved here verbatim from the runner."""
@@ -437,6 +448,26 @@ class EpisodeStepper:
         # if not, we'll count it as a parse failure and give feedback,
         # but still allow retries until max_parse_retries is reached
         if not self.action_queue:
+            # Infrastructure failures (transport/provider unavailability) are NOT
+            # the model failing to produce a valid move — the model never got to
+            # answer. Don't spend its parse-retry budget on them; retry on the
+            # next round instead of terminating the episode. Token-cap truncation
+            # (finish_reason=length / token_truncated) is deliberately EXCLUDED
+            # here: overrunning the 64k budget IS a real, enforced model outcome.
+            if reply.stop_reason in _INFRA_STOP_REASONS and not reply.token_truncated:
+                logger.warning(
+                    "LLM query #%d: task_id=%s infrastructure failure "
+                    "(stop_reason=%s); NOT counting toward parse-retry budget %d/%d",
+                    self.query_count,
+                    self.task_spec.task_id,
+                    reply.stop_reason,
+                    self.parse_failures,
+                    self.config.max_parse_retries,
+                )
+                self.last_feedback = feedback_templates.PARSE_FAILURE_FEEDBACK.format(
+                    actions_hint=self.actions_hint
+                )
+                return
             self.parse_failures += 1
             logger.warning(
                 "LLM query #%d: task_id=%s observation=%s no valid actions parsed; parse failure %d/%d",
