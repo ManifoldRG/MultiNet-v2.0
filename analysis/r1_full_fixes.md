@@ -599,6 +599,26 @@ total cost — the real lever for the next run, not token discounts.**
   but does not fully block them — models that track door state mentally can still
   solve. Mechanism results are depressed-but-real, not noise. Strengthens the case
   a fixed-renderer re-run would raise solve rates.
+- **BROADER THAN DOORS — it's a general dynamic-mechanism render gap (07-21
+  deeper check):** `Switch.render()` (custom_env.py:101) draws a fixed-color
+  circle with NO branch on `is_active` → **switch on/off renders identically
+  (code-confirmed)**. `Gate` extends `Door` (custom_env.py:119), and doors
+  render identically open/closed (empirically confirmed above) → **gates almost
+  certainly don't render open/closed either.** So image_only hides the runtime
+  state of doors AND switches AND (by inheritance) gates — the agent sees only
+  the INITIAL mechanism glyphs, never their post-interaction state. This makes
+  the confound systemic across the whole mechanism taxonomy, not just doors.
+- **Only 1 row in the final 150 is infra-asterisked:** kimi
+  `r1_M6_14x14_dense_kr_sg_kb_1` (`end_reason=parse_failed`, the Moonshot-outage
+  termination). All resumed/salvaged episodes completed with legit end_reasons
+  (46 stalled / truncations / solves per model). Final solves = 6 (Claude 4:
+  S4 nav + M1_8x8_kr_0/kr_1 + M1_10x10_kr_1; Kimi 1: M5_8x8_kr_kb; Qwen 1: S4
+  nav) — scorer-authoritative (my mid-run "Claude 3" predated a late finisher).
+- **Repro note for the post-mortem:** a bare `load_task_from_file(spec).reset()`
+  showed only Wall+Goal in the grid (mechanisms not placed via that path) — use
+  the runtime's full build path to reproduce the render bug, or drive an actual
+  episode. Pixel-forensics method that proved it: crop the mechanism cell
+  (cell_px = frame_w // grid_w) from a pre- vs post-interaction frame and diff.
 - **Post-mortem actions:** (1) fix the renderer to draw open doors distinctly
   (MiniGrid convention: hollow/outline for open). (2) re-examine whether other
   dynamic state (gates open/closed, switch on/off) is rendered — likely the same
