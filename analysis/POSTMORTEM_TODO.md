@@ -78,6 +78,15 @@ blocking-ness for the next run.
       preserves manifest order (ascending), so the biggest mazes queued LAST —
       anti-LPT worst-case tail. LPT-order units or emit the rerun manifest
       descending. (Order is hash-free — safe to change.)
+- [ ] **Finalize/publish must include the `runs/` raw subtree** — the R1
+      finalize committed only the aggregate jsonls + docs; the `runs/` per-episode
+      tree that every `raw_output_ref` points at never landed (all 150 refs
+      dangling, caught post-hoc). Publish must copy `runs/` too AND verify each
+      `raw_output_ref` resolves before declaring a run published. The aggregate
+      looking complete masked the gap. (Fixed for R1 in results commit
+      `6d5334b09`, assembled from the outcome-matched canonical sources —
+      `claude_pulled` / `kimi_final` / `qwen_merged`; note NOT the stale
+      `kimi_pulled_final`.)
 
 ## 🟢 P3 — analysis follow-ups
 
