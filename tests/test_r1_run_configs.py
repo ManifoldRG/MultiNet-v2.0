@@ -80,6 +80,16 @@ def test_phase1_qwen_wide_cheap_cap():
     assert qwen["max_in_flight"] == 64
 
 
+def test_kimi_deep_thinking_timeout_above_600s():
+    # R1 shipped kimi timeout=600 and needed the KIMI_TIMEOUT_OVERRIDE=2400 env
+    # stopgap mid-run; the proper value is folded into run_config here so the
+    # env hack can stay removed. A 64k deep-thinking leg must not use <=600s.
+    rc = load_run_config(_PHASE1)
+    kimi = rc["models"]["kimi_k26"]
+    assert kimi["max_tokens"] == 64000
+    assert kimi["timeout"] > 600
+
+
 def test_phase1_api_rows_meet_lockstep_min_in_flight():
     rc = load_run_config(_PHASE1)
     for name in ("kimi_k26", "claude_opus"):

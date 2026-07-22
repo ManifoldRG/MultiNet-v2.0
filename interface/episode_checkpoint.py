@@ -148,7 +148,7 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
         except ValueError:
             # An unconvertible token was a no-op step in the original loop (no
             # backend.step, position unchanged); mirror that and verify.
-            if rec["position_after"] != rec["position_before"]:
+            if rec["position_after_row_col"] != rec["position_before_row_col"]:
                 raise ValueError(
                     "corrupted checkpoint: unconvertible action "
                     f"{action!r} recorded a position change"
@@ -161,12 +161,12 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
         )
         rec["_decision_frame_rgb"] = decision_rgb
         rec["_post_step_rgb"] = stepper._runner.last_rgb
-        if list(agent_row_col(state)) != rec["position_after"]:
+        if list(agent_row_col(state)) != rec["position_after_row_col"]:
             raise ValueError(
                 "corrupted or stale checkpoint: replayed step "
                 f"{rec.get('step_index')} ({action!r}) landed at "
                 f"{list(agent_row_col(state))} but record has "
-                f"{rec['position_after']}"
+                f"{rec['position_after_row_col']}"
             )
         if _json_safe(state_snapshot(state)) != rec["state_after"]:
             raise ValueError(

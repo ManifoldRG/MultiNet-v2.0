@@ -47,7 +47,7 @@ def _move(row: int, col: int) -> dict:
     return {
         "kind": "step",
         "event_type": "MOVED",
-        "position_after": [row, col],
+        "position_after_row_col": [row, col],
         "state_before": {},
         "state_after": {},
     }
@@ -57,7 +57,7 @@ def _pickup(key_id: str = "kR") -> dict:
     return {
         "kind": "step",
         "event_type": "PICKUP",
-        "position_after": [1, 3],
+        "position_after_row_col": [1, 3],
         "state_before": {"collected_keys": []},
         "state_after": {"collected_keys": [key_id], "agent_carrying": key_id},
     }
@@ -132,9 +132,9 @@ def test_start_pose_falls_back_to_first_step_before_pose():
     step = {
         "kind": "step",
         "event_type": "MOVED",
-        "position_before": [4, 5],
+        "position_before_row_col": [4, 5],
         "facing_before": "WEST",
-        "position_after": [4, 6],
+        "position_after_row_col": [4, 6],
         "state_before": {},
         "state_after": {},
     }

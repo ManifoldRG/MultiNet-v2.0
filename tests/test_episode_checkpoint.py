@@ -290,7 +290,7 @@ def test_stale_checkpoint_divergence_raises(tmp_path):
     data = json.loads(ckpt.read_text())
     for rec in data["transcript"]:
         if rec.get("kind") == "step":
-            rec["position_after"] = [99, 99]  # corrupt the recorded outcome
+            rec["position_after_row_col"] = [99, 99]  # corrupt the recorded outcome
     ckpt.write_text(json.dumps(data), encoding="utf-8")
 
     with pytest.raises(ValueError):

@@ -45,7 +45,7 @@
       "model": "kimi-k2.6",
       "temperature": 1.0,
       "max_tokens": 64000,
-      "timeout": 600,
+      "timeout": 2400,
       "group": "kimi-api",
       "worker_count": 1,
       "max_in_flight": 64,

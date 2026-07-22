@@ -289,7 +289,7 @@ def test_text_last3_prompt_includes_recent_history_text():
         {
             "kind": "step",
             "event_type": "VALID",
-            "position_after": (1, 2),
+            "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
             "prompt_feedback": "MOVED",
@@ -319,7 +319,7 @@ def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
         {
             "kind": "step",
             "event_type": "TURNED",
-            "position_after": (1, 2),
+            "position_after_row_col": (1, 2),
             "facing_after": "WEST",
             "action": "TURN_RIGHT",
             "cardinal_action": "MOVE_WEST",
@@ -341,7 +341,7 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
         {
             "kind": "step",
             "event_type": "MOVED",
-            "position_after": (1, 2),
+            "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
             "prompt_feedback": "MOVED",
@@ -366,7 +366,7 @@ def test_image_only_text_summary_and_last3_includes_summary_text_and_last3_image
         {
             "kind": "step",
             "event_type": "MOVED",
-            "position_after": (1, 2),
+            "position_after_row_col": (1, 2),
             "action": "MOVE_FORWARD",
             "state_before": {"inventory": []},
             "_decision_frame_rgb": frame,
@@ -394,7 +394,7 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
         {
             "kind": "step",
             "event_type": "MOVED",
-            "position_after": (1, 2),
+            "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
             "prompt_feedback": "MOVED",

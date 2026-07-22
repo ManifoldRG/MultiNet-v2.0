@@ -133,14 +133,12 @@ def _post_chat_completions(
         },
         method="POST",
     )
+    # Per-call socket timeout comes only from KimiK26Config (set via run_config's
+    # model_config["timeout"]). Deep-thinking (64k) runs must configure a value
+    # well above 600s — Moonshot returns legitimate sub-64k replies slowly. The
+    # R1 KIMI_TIMEOUT_OVERRIDE env stopgap (2026-07-21) was removed post-campaign
+    # (2026-07-22) in favour of the run_config default; see analysis/R1_TEARDOWN.md.
     effective_timeout = timeout or 180.0
-    # KIMI_TIMEOUT_OVERRIDE (seconds) raises the per-call socket timeout without
-    # touching model_config (hash-safe). Added 2026-07-21: Moonshot infra during
-    # their new-model launch returns legitimate sub-64k responses slower than the
-    # 600s config timeout, so a deep-thinking episode times out on a valid reply.
-    _to = os.environ.get("KIMI_TIMEOUT_OVERRIDE")
-    if _to:
-        effective_timeout = max(effective_timeout, float(_to))
     t0 = time.perf_counter()
 
     def _do_request():

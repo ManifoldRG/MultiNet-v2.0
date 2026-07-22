@@ -120,7 +120,7 @@ def _last3_history_text(
 
     lines = [observation_templates.RECENT_HISTORY_HEADER]
     for rec in recs:
-        row, col = rec["position_after"]
+        row, col = rec["position_after_row_col"]
         lines.append(
             observation_templates.RECENT_HISTORY_STEP.format(
                 row=int(row),
@@ -153,7 +153,7 @@ def _agent_start_pose(
             break
     for rec in transcript:
         if rec.get("kind") == "step":
-            pb = rec.get("position_before")
+            pb = rec.get("position_before_row_col")
             fb = rec.get("facing_before")
             if pb and fb:
                 return int(pb[0]), int(pb[1]), str(fb)
@@ -310,11 +310,11 @@ def _format_summary_chain(events: list[str]) -> str:
 def _pick_waypoints(steps: list[dict[str, Any]], count: int) -> list[tuple[int, int]]:
     n = len(steps)
     if n <= count:
-        return [tuple(rec["position_after"]) for rec in steps]  # type: ignore[return-value]
+        return [tuple(rec["position_after_row_col"]) for rec in steps]  # type: ignore[return-value]
     indices = [round(i * (n - 1) / (count - 1)) for i in range(count)]
     seen: list[tuple[int, int]] = []
     for i in indices:
-        pos: tuple[int, int] = tuple(steps[i]["position_after"])  # type: ignore[assignment]
+        pos: tuple[int, int] = tuple(steps[i]["position_after_row_col"])  # type: ignore[assignment]
         if pos not in seen:
             seen.append(pos)
     return seen
