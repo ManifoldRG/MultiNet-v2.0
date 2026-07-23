@@ -282,6 +282,66 @@ ablation under-estimated reasoning length by ~2 orders of magnitude.
 
 ---
 
+## 6a. Qwen phase-2 wall-clock attribution (why ~50h, not the 24–36h projection)
+
+Per-VM phase-2 wall-clock (GCP ledger): qwen-0 **41.8h**, qwen-2 **43.6h**,
+qwen-1 **51.3h**. Total work = 48.0M output tokens at an effective **26.6
+tok/s/stream** (median query ~610 s for ~16.4k output tokens).
+
+**Throughput floor.** Perfectly packed on the fleet's real **12 streams (3 GPU ×
+4)**: 48.0M ÷ (12 × 26.6) ≈ **41.7h floor**. On the *designed* 15 streams (3 × 5)
+it would have been **~33.4h**. Two VMs (qwen-0/2) finished at ~42–44h —
+**96–100% utilization, right at the floor**. Only qwen-1 ran to 51h (~81%). So
+the run was **throughput-efficient**; the excess is one VM's tail, not systemic
+slowness.
+
+**Attribution of the ~42h floor and the qwen-1 tail:**
+
+1. **4 streams/GPU, not the designed 5 (≈ +8h vs a 33h ideal).** At
+   `max_model_len=72000` the A100-80 KV cache fits only **3.98** concurrent
+   streams (§9), so `max_num_seqs=5` was oversubscribed — and oversubscription
+   risks vLLM preemption/recompute, so 5 was likely counter-productive anyway.
+   This is the factor you already had; it sets the ~42h floor, not the tail.
+
+2. **The tail is un-parallelizable long episodes — the dominant "besides
+   streams" factor.** An episode is strictly sequential (query → action → next
+   query); it cannot be spread across streams. A handful of episodes ran to the
+   **hard 3×-optimal env ceiling**:
+   - `r1_M2_10x10_corridor_sg_1` — **132 queries ≈ 20.7h serial** (opt 44 →
+     `max_steps=132`, `end_reason=truncated`).
+   - `r1_M5_10x10_dense_kr_kb_1` — 129 q ≈ 20.6h; `r1_M1_10x10_corridor_kr_1` —
+     105 q ≈ 16.6h.
+   Near the end, when only these remain, they run **one-per-stream while the
+   other GPUs idle** — a single ~20h episode floors the fleet tail regardless of
+   stream count, and they landed disproportionately on qwen-1.
+
+3. **The caps were ON and did NOT prevent this — the progress rule was gamed by
+   wandering.** R1 ran with `progress_stall_k=30` (stall counter resets on a
+   newly-visited tile) **and** the global `max_steps = 3× optimal` env ceiling.
+   The monster episodes never tripped stall-K: full 64k thinking kept them
+   discovering new tiles (non-goal-directed exploration), resetting the counter,
+   so they ran all the way to the **hard 3×-optimal ceiling** (132 steps for an
+   opt-44 maze). This is the P3 "can the progress-aware stall rule be gamed by
+   wandering?" question — **answered YES by this data.** Episode length ran min
+   30 / median 57 / **max 132** queries vs the 24–36h projection built on
+   phase-1's 8k-*truncated* lengths (median 46.5).
+
+4. **`max_in_flight=6` throttle window (§10).** Early phase-2 ran at 6/12 streams
+   until caught and atomically fixed; a few hours lost. The "~60h" figure in the
+   run notes is literally §10's projection of what *would* have happened had that
+   throttle not been caught — actual was 42–51h.
+
+**Corrected lever.** The fix is **not** "add a step cap" — R1 already had both a
+progress-aware stall cap and a 3×-optimal env ceiling, and the runtime above is
+*with* them. The wander-length (not maze size) predicted cost: `M2_10x10_sg_1`
+(opt 44) ran 20.7h while the true opt-106 mazes ran 10–14h — so LPT-ordering by
+optimal_steps would not have fixed the tail either. The real levers are (a) make
+the progress signal robust to non-convergent wandering (e.g. gate stall-K resets
+on *distance-to-goal* progress, not mere new-tile discovery) and/or (b) tighten
+the per-tile exploration budget below the flat 3×-optimal, so one wandering
+64k-thinking episode cannot own a 20h+ tail. This is exactly the per-tile
+step-cap redesign already queued for the next iteration.
+
 ## 7. One-time operational hacks — cleanup
 
 ### 7.1 `KIMI_TIMEOUT_OVERRIDE` env — REMOVED
@@ -395,8 +455,11 @@ keep** (§7.2).
 
 **P3 — analysis follow-ups**
 - Qwen "explores 2–4× longer, solves no more" — token/latency data in §5;
-  behavioural characterisation deferred (use `env_step_count`, not `query_count`).
-- Progress-aware stall gaming — deferred (feeds per-tile step-cap redesign).
+  this exploration is also the phase-2 wall-clock driver (§6a).
+- Progress-aware stall gaming — **CONFIRMED gameable by wandering** (§6a): Qwen
+  monster episodes reset `stall_k=30` on new-tile discovery and ran to the hard
+  3×-optimal env ceiling (132 steps) without converging. Feeds the per-tile
+  step-cap redesign (gate resets on distance-to-goal progress).
 - Claude thinking depth vs xhigh — **code/config CONFIRMED correct** (§4); the
   *why-shallow* behavioural study is the remaining open question.
 - Outage timeline + full cost reconciliation — partial in §5 (Kimi wall-clock,
