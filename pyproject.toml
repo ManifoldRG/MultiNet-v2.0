@@ -52,7 +52,10 @@ multinet-run-pipeline = "scripts.run_pipeline:main"
 # default prepend import-mode that shadows our modules and breaks whole-suite
 # collection (`ImportError: cannot import name 'solve' from BFS_solver`), so a
 # bare `pytest` run aborts having run zero tests. Keep ogbench out of collection.
-addopts = "--ignore=ogbench"
+# Multinet-v2-results is the sibling data repo (often checked out nested here);
+# it now hosts the moved analysis package + its tests, which import `analysis.*`
+# and must not be collected from this repo.
+addopts = "--ignore=ogbench --ignore=Multinet-v2-results"
 
 [tool.setuptools]
 include-package-data = true
