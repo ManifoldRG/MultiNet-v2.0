@@ -73,6 +73,14 @@ python play_task.py mazes/exp_maze_jsons/S1/8x8_empty_room_0.json --record
 # at the leaf directory that directly contains the task JSONs)
 python play_task.py --tasks-dir mazes/exp_maze_jsons/S1
 
+# Browse a manifest task catalog with [ / ] instead of a directory -- rows can
+# point at files in different folders (e.g. test3's corridor pairs live under
+# gridworld/fixtures/test3/, not mazes/). The info panel shows each row's
+# experiment/condition/expected_mechanisms, mirroring the task selection
+# scripts/run_pipeline.py uses for real runs.
+python play_task.py --manifest gridworld/fixtures/manifest.json --experiment test1
+python play_task.py --manifest gridworld/fixtures/manifest.json --experiment test3
+
 # Play under the same information constraints as the model in text-only
 # mode with a text_summary of prior activity instead of raw history
 python play_task.py mazes/validation_10/V06_chain_ks.json \
@@ -96,7 +104,7 @@ receive given the current settings.
 | X | Drop item (human-only -- not in the model's action space) |
 | Backspace | Wait (no-op) |
 | R | Reset current task |
-| [ / ] | Previous / next task in the current directory |
+| [ / ] | Previous / next task in the current directory / manifest |
 | Tab | Toggle settings overlay (observation, context window, action space, ...) |
 | M | Toggle full-screen view of the exact model-facing text |
 | Q | Quit |

@@ -22,6 +22,12 @@ Usage:
     # at the leaf directory that directly contains the task JSONs):
     python play_task.py --tasks-dir mazes/exp_maze_jsons/S1
 
+    # Browse a manifest task catalog with [ / ] instead of a directory -- rows
+    # can point at files in different folders, and the info panel shows each
+    # row's experiment/condition/expected_mechanisms (mirrors the task
+    # selection scripts/run_pipeline.py uses for real runs):
+    python play_task.py --manifest gridworld/fixtures/manifest.json --experiment test1
+
 Controls:
     Arrow Up / W        : Move forward (egocentric) / North (cardinal)
     Arrow Down / S       : South (cardinal action space only)
@@ -32,7 +38,7 @@ Controls:
     X                   : Drop item (human-only -- not in the model's action space)
     Backspace           : Wait / done (no-op)
     R                   : Reset current task
-    [ / ]               : Previous / next task in the current directory
+    [ / ]               : Previous / next task in the current directory / manifest
     Tab                 : Toggle the settings overlay (cycle observation/context/etc.)
     M                   : Toggle a full-screen view of the exact model-facing text
     Q                   : Quit
@@ -81,6 +87,16 @@ from interface.observation import (
     text_summary_history,
 )
 from interface.renderer import render_initial_maze_text
+
+# Reuse the same manifest-catalog resolution logic real eval runs use, so
+# browsing a manifest here (task rows whose ``source`` files can live in any
+# folder) always matches what scripts/run_pipeline.py would actually run.
+from scripts.run_pipeline import (
+    _EXPERIMENT_KEYWORDS,
+    _resolve_source,
+    load_manifest,
+    resolve_task_rows,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -138,6 +154,39 @@ def discover_tasks_in_dir(directory: Path) -> list[Path]:
     return sorted(directory.glob("*.json"))
 
 
+def load_manifest_tasks(
+    manifest_path: Path, experiment: Optional[str]
+) -> list[tuple[Path, dict]]:
+    """Resolve a manifest catalog to an ordered ``(resolved_path, row)`` list.
+
+    Mirrors the task selection ``scripts/run_pipeline.py`` uses for real runs:
+    a manifest row's ``source`` can live in any folder, so browsing a manifest
+    (instead of one flat directory) lets [ / ] step through exactly the task
+    set a given experiment actually runs, in manifest order. Rows whose
+    ``source`` file can't be found are skipped with a warning rather than
+    aborting the whole browse list; rows that resolve to a path already seen
+    (e.g. the same maze re-used under a different condition) are skipped too,
+    since [ / ] navigates files, not per-row metadata.
+    """
+    catalog = load_manifest(manifest_path)
+    entries = [experiment] if experiment else ["all"]
+    rows = resolve_task_rows(entries, catalog, manifest_path)
+
+    resolved: list[tuple[Path, dict]] = []
+    seen: set[Path] = set()
+    for row in rows:
+        try:
+            path = _resolve_source(row, manifest_path)
+        except FileNotFoundError as exc:
+            print(f"Warning: skipping manifest row {row.get('task_id')!r}: {exc}")
+            continue
+        if path in seen:
+            continue
+        seen.add(path)
+        resolved.append((path, row))
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Interactive player
 # ---------------------------------------------------------------------------
@@ -150,10 +199,12 @@ class MiniGridPlayer:
 
     def __init__(
         self,
-        task_path: str,
+        task_path: Optional[str],
         record: bool = False,
         config: Optional[ExperimentConfig] = None,
         tasks_dir: Optional[str] = None,
+        manifest: Optional[str] = None,
+        experiment: Optional[str] = None,
     ):
         self.base_dir = _SCRIPT_DIR
         self.record = record
@@ -166,6 +217,29 @@ class MiniGridPlayer:
         self.task_spec: Optional[TaskSpecification] = None
         self.task_list: list[Path] = []
         self.task_index: int = 0
+
+        # Manifest mode: [ / ] steps through a curated task catalog (rows can
+        # point at files scattered across many folders) instead of one flat
+        # directory. self.manifest_row_by_path supplies the metadata shown in
+        # the info panel; self.task_list holds the resolved paths in manifest
+        # order and is left alone by _load_task's directory rediscovery.
+        self.manifest_mode = manifest is not None
+        self.manifest_experiment = experiment
+        self.manifest_row_by_path: dict[Path, dict] = {}
+        if self.manifest_mode:
+            manifest_resolved = self._resolve_path(manifest)
+            manifest_tasks = load_manifest_tasks(manifest_resolved, experiment)
+            if not manifest_tasks:
+                print(f"Warning: manifest {manifest_resolved} resolved no tasks; falling back to directory browsing.")
+                self.manifest_mode = False
+            else:
+                self.task_list = [p for p, _row in manifest_tasks]
+                self.manifest_row_by_path = {p: row for p, row in manifest_tasks}
+                if task_path is None:
+                    task_path = str(self.task_list[0])
+
+        if task_path is None:
+            task_path = "mazes/validation_10/V01_empty_room.json"
 
         # Backend for environment logic
         self.backend = MiniGridBackend(render_mode="rgb_array")
@@ -239,10 +313,17 @@ class MiniGridPlayer:
         self.task_path = resolved
         self.task_spec = TaskSpecification.from_json(str(resolved))
 
-        tasks_dir = self.tasks_dir_override or resolved.parent
-        self.task_list = discover_tasks_in_dir(tasks_dir)
-        if resolved not in self.task_list:
-            self.task_list = sorted(set(self.task_list) | {resolved})
+        if self.manifest_mode:
+            # self.task_list is the manifest's resolved order; leave it alone
+            # so [ / ] keeps stepping through the curated catalog rather than
+            # whatever else happens to sit in this file's directory.
+            if resolved not in self.task_list:
+                self.task_list = sorted(set(self.task_list) | {resolved})
+        else:
+            tasks_dir = self.tasks_dir_override or resolved.parent
+            self.task_list = discover_tasks_in_dir(tasks_dir)
+            if resolved not in self.task_list:
+                self.task_list = sorted(set(self.task_list) | {resolved})
         try:
             self.task_index = self.task_list.index(resolved)
         except ValueError:
@@ -478,9 +559,11 @@ class MiniGridPlayer:
         filename = f"trajectory_{task_id}_{timestamp}.json"
         output_path = self.base_dir / filename
 
+        manifest_row = self.manifest_row_by_path.get(self.task_path) if self.manifest_mode else None
         data = {
             "task_id": task_id,
             "task_file": str(self.task_path) if self.task_path else None,
+            "manifest_row": manifest_row,
             "config": self.config.to_dict(),
             "total_steps": self.step_index,
             "total_reward": self.total_reward,
@@ -715,11 +798,39 @@ class MiniGridPlayer:
         pygame.draw.line(self.screen, COLOR_SEPARATOR, (x, y), (panel_x + INFO_PANEL_WIDTH - 12, y))
         y += 8
 
+        # -- Manifest row (task catalog metadata for the current maze) --
+        manifest_row = self.manifest_row_by_path.get(self.task_path) if self.manifest_mode else None
+        if manifest_row:
+            y = self._draw_text("MANIFEST", x, y, self.font_main, COLOR_TEXT_HIGHLIGHT)
+            y += 2
+            y = self._draw_text(
+                f"experiment: {manifest_row.get('experiment', '?')}   condition: {manifest_row.get('condition', '?')}",
+                x, y, self.font_small, COLOR_TEXT,
+            )
+            if manifest_row.get("variant"):
+                y = self._draw_text(f"variant: {manifest_row['variant']}", x, y, self.font_small, COLOR_TEXT)
+            mechanisms = manifest_row.get("expected_mechanisms") or []
+            if mechanisms:
+                y = self._draw_text(
+                    f"expected mechanisms: {', '.join(mechanisms)}", x, y, self.font_small, COLOR_TEXT_WARNING
+                )
+            if manifest_row.get("notes"):
+                y = self._draw_wrapped_text(
+                    manifest_row["notes"], x, y, self.font_small, COLOR_TEXT_DIM, content_width
+                )
+            y += 4
+            pygame.draw.line(self.screen, COLOR_SEPARATOR, (x, y), (panel_x + INFO_PANEL_WIDTH - 12, y))
+            y += 8
+
         # -- Task navigation --
         if self.task_list:
-            nav_dir = (self.tasks_dir_override or (self.task_path.parent if self.task_path else Path(".")))
+            if self.manifest_mode:
+                label = f"manifest ({self.manifest_experiment or 'all'})"
+            else:
+                nav_dir = (self.tasks_dir_override or (self.task_path.parent if self.task_path else Path(".")))
+                label = f"{nav_dir.name}/"
             y = self._draw_text(
-                f"Task {self.task_index + 1}/{len(self.task_list)} in {nav_dir.name}/",
+                f"Task {self.task_index + 1}/{len(self.task_list)} in {label}",
                 x, y, self.font_small, COLOR_TEXT_DIM,
             )
             y += 4
@@ -983,8 +1094,9 @@ def main():
     parser.add_argument(
         "task_file",
         nargs="?",
-        default="mazes/validation_10/V01_empty_room.json",
-        help="Path to a task JSON file (default: a small validation_10 maze)",
+        default=None,
+        help="Path to a task JSON file (default: a small validation_10 maze, or the first "
+        "task in --manifest if that's given)",
     )
     parser.add_argument(
         "--record",
@@ -996,7 +1108,26 @@ def main():
         type=str,
         default=None,
         help="Directory to browse with [ / ] instead of the task file's parent directory "
-        "(non-recursive: only *.json files directly inside it)",
+        "(non-recursive: only *.json files directly inside it). Mutually exclusive with "
+        "--manifest.",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=str,
+        default=None,
+        help="Browse a task-catalog manifest (e.g. gridworld/fixtures/manifest.json) with "
+        "[ / ] instead of a directory -- resolves each row's 'source' file across folders "
+        "and shows its catalog metadata (experiment/condition/expected_mechanisms) in the "
+        "info panel, mirroring scripts/run_pipeline.py's task selection for real runs. "
+        "Mutually exclusive with --tasks-dir.",
+    )
+    parser.add_argument(
+        "--experiment",
+        type=str,
+        choices=sorted(_EXPERIMENT_KEYWORDS),
+        default=None,
+        help="Filter --manifest to one experiment keyword (default: 'all'). Ignored without "
+        "--manifest.",
     )
     parser.add_argument(
         "--observation",
@@ -1030,6 +1161,9 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.manifest and args.tasks_dir:
+        parser.error("--manifest and --tasks-dir are mutually exclusive.")
+
     config = ExperimentConfig(
         observation=args.observation,
         context_window=args.context_window,
@@ -1043,6 +1177,8 @@ def main():
         record=args.record,
         config=config,
         tasks_dir=args.tasks_dir,
+        manifest=args.manifest,
+        experiment=args.experiment,
     )
     player.run()
 
