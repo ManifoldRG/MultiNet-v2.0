@@ -52,35 +52,54 @@ Expected output: `16/16 tasks beatable`
 
 ---
 
-## 3. Play Tasks Interactively (Pygame)
+## 3. Play Tasks Interactively (Pygame) — Playable Human Demo
 
-Play any task with keyboard controls:
+Play any task with keyboard controls. This player is hooked into the same
+`interface/` code the LLM pipeline uses to build observations, so you can
+mirror exactly what a model would see (e.g. image-only, text-only, or with a
+`text_summary` of prior activity) via `ExperimentConfig`-style flags:
 
 ```bash
-# Default (tier1 simple maze)
+# Default (small validation_10 maze, image-only view -- today's plain grid)
 python play_task.py
 
 # Specific task file
-python play_task.py gridworld/tasks/tier3/gates_switches_002.json
+python play_task.py mazes/validation_10/V04_single_key.json
 
 # With trajectory recording
-python play_task.py gridworld/tasks/tier5/teleporter_004.json --record
+python play_task.py mazes/exp_maze_jsons/S1/8x8_empty_room_0.json --record
+
+# Browse a whole directory of task files with [ / ] (non-recursive: point
+# at the leaf directory that directly contains the task JSONs)
+python play_task.py --tasks-dir mazes/exp_maze_jsons/S1
+
+# Play under the same information constraints as the model in text-only
+# mode with a text_summary of prior activity instead of raw history
+python play_task.py mazes/validation_10/V06_chain_ks.json \
+    --observation text_only --context-window text_summary
+
+# Play with the model's cardinal (absolute N/S/E/W) action space instead of
+# egocentric turn/forward controls
+python play_task.py mazes/validation_10/V01_empty_room.json --action-space cardinal
 ```
+
+Settings can also be toggled live in-app via the `Tab` overlay, without
+restarting. Press `M` at any time to see the exact text the model would
+receive given the current settings.
 
 **Controls:**
 | Key | Action |
 |-----|--------|
-| Up / W | Move forward |
-| Left / A | Turn left |
-| Right / D | Turn right |
+| Up/Down/Left/Right, W/A/S/D | Move forward/turn (egocentric) or N/S/W/E (cardinal action space) |
 | Space | Pick up item |
-| X | Drop item |
-| T / E | Toggle (doors, switches) |
+| T / E | Toggle (doors, switches) / Interact (cardinal) |
+| X | Drop item (human-only -- not in the model's action space) |
 | Backspace | Wait (no-op) |
 | R | Reset current task |
-| 1-5 | Switch to tier N |
-| [ / ] | Previous / next task in tier |
-| Q / Escape | Quit |
+| [ / ] | Previous / next task in the current directory |
+| Tab | Toggle settings overlay (observation, context window, action space, ...) |
+| M | Toggle full-screen view of the exact model-facing text |
+| Q | Quit |
 
 ---
 
