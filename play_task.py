@@ -310,6 +310,8 @@ class MiniGridPlayer:
             print(f"Error: task file not found: {resolved}")
             return
 
+        self._checkpoint_trajectory()
+
         self.task_path = resolved
         self.task_spec = TaskSpecification.from_json(str(resolved))
 
@@ -335,9 +337,6 @@ class MiniGridPlayer:
         """Reset the environment from the current task spec."""
         if self.task_spec is None:
             return
-
-        if self.record and self.transcript:
-            self._save_trajectory()
 
         self.backend.configure(self.task_spec)
         _obs, self.state, _info = self.backend.reset(seed=self.task_spec.seed)
@@ -548,6 +547,15 @@ class MiniGridPlayer:
     # ------------------------------------------------------------------
     # Recording / trajectory saving
     # ------------------------------------------------------------------
+
+    def _checkpoint_trajectory(self) -> None:
+        """Save the in-progress transcript if --record is on, using whatever
+        task_path/task_spec/manifest row are *currently* set. Callers must
+        invoke this before mutating those fields (e.g. before switching to a
+        new task in _load_task) so the saved task_id/task_file/manifest_row
+        match the transcript's actual task, not the one being loaded next."""
+        if self.record and self.transcript:
+            self._save_trajectory()
 
     def _save_trajectory(self) -> None:
         """Save the recorded transcript to a JSON file."""
@@ -993,6 +1001,7 @@ class MiniGridPlayer:
                         running = False
                         break
                     elif result == "reset":
+                        self._checkpoint_trajectory()
                         self._reset_env()
 
                 elif event.type == pygame.MOUSEWHEEL:
@@ -1008,8 +1017,7 @@ class MiniGridPlayer:
             pygame.display.flip()
             self.clock.tick(FPS)
 
-        if self.record and self.transcript:
-            self._save_trajectory()
+        self._checkpoint_trajectory()
 
         self.backend.close()
         pygame.quit()
