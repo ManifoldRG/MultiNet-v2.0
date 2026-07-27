@@ -625,9 +625,21 @@ class CustomMiniGridEnv(MiniGridEnv):
             return obs, reward, terminated, truncated, info
 
         # Default behavior
+        held_before = self.carrying
         obs, reward, terminated, truncated, info = super().step(action)
         if action == self.actions.forward:
             self._update_hold_switches()
+
+        # DROP is handled by MiniGridEnv.step (it places the carried object in the
+        # forward cell when that cell is empty), but the base class knows nothing
+        # about our key bookkeeping. A dropped key is back on the grid, so it is no
+        # longer "collected" — leaving the id in the set makes the observation layer
+        # skip it (interface/coords.key_at_cell, interface/renderer._mechanism_lines)
+        # and the key becomes invisible while physically present.
+        if action == self.actions.drop and self.carrying is None and held_before is not None:
+            key_id = getattr(held_before, "key_id", None)
+            if key_id is not None:
+                self.collected_keys.discard(key_id)
 
         # Tick teleporter cooldowns
         for tp in self.teleporters.values():

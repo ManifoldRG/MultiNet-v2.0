@@ -131,6 +131,11 @@ class GridState:
     open_gates: set[str] = field(default_factory=set)  # IDs of open gates
     block_positions: dict[str, tuple[int, int]] = field(default_factory=dict)  # block_id -> position
     teleporter_cooldowns: dict[str, int] = field(default_factory=dict)  # teleporter_id -> cooldown
+    # key_id -> current grid position, for keys lying on the ground. A key that is
+    # held (or consumed by a door) has no entry. Keys can move: DROP puts one back
+    # on the grid in front of the agent, so the task spec's static position is not
+    # authoritative once an episode is under way.
+    key_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     # Goal state
     goal_reached: bool = False

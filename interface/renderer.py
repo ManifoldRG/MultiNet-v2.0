@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from interface.coords import (
+    _live_key_position,
     agent_facing,
     agent_row_col,
     goal_row_col,
@@ -63,7 +64,8 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
     for key in task_spec.mechanisms.keys:
         if key.id in collected:
             continue
-        row, col = to_row_col(key.position)
+        # Live position, not the spec's: a dropped key moves (see coords._live_key_position)
+        row, col = to_row_col(_live_key_position(key, state) if state else key.position)
         parts.append(
             observation_templates.KEY_LINE.format(color=key.color, row=row, col=col)
         )
