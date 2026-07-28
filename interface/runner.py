@@ -54,6 +54,17 @@ def _progress_signature(state) -> tuple:
         )
         for block_id, position in state.block_positions.items()
     )
+    # Keys move: DROP puts a held key back on the grid, so a retrace over
+    # previously visited cells with the key elsewhere is genuine progress.
+    # Without DROP the key layout is a pure function of collected_keys, so
+    # this axis never splits states a DROP-free episode saw as equal.
+    keys = frozenset(
+        (
+            key_id,
+            tuple(int(coord) for coord in position),
+        )
+        for key_id, position in (getattr(state, "key_positions", None) or {}).items()
+    )
     return (
         tuple(int(coord) for coord in state.agent_position),
         state.agent_carrying,
@@ -62,6 +73,7 @@ def _progress_signature(state) -> tuple:
         frozenset(state.active_switches),
         frozenset(state.open_gates),
         blocks,
+        keys,
         explored,
     )
 
