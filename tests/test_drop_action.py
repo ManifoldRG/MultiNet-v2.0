@@ -307,3 +307,60 @@ class TestDropTextSummary:
             "picked up the red key",
             "dropped the red key",
         ]
+
+
+class TestPlannerIgnoresDrop:
+    """DROP is deliberately absent from the BFS and greedy planners.
+
+    Carrying a key does exactly two things: it blocks further PICKUP, and it
+    opens a matching door. Dropping spends an action to restore the former while
+    losing the latter, and the former is only worth restoring while holding a key
+    you did not need -- which neither an optimal nor a greedy solver ever picks
+    up. So DROP is never on either planner's path.
+
+    Modelling it would force key positions into PlannerState, multiplying the
+    state space by cells**keys (R1's largest maze: 4,696 states -> ~1e9) and
+    making BFS difficulty scoring infeasible. The planners stay complete for the
+    optimum, which is what optimal_steps and beatability are defined over.
+
+    These tests exist to fail loudly if someone adds a DROP edge without reading
+    docs/superpowers/specs/2026-07-28-drop-action-design.md.
+    """
+
+    def test_planner_emits_no_drop_actions(self):
+        from gridworld.baselines import plan_bfs_path
+
+        path = plan_bfs_path(_spec())
+
+        assert path.success
+        assert int(MiniGridActions.DROP) not in path.actions
+
+    def test_no_fixture_maze_needs_a_drop_to_solve(self):
+        """Exposing DROP must not shift any difficulty number."""
+        import glob
+        import json
+
+        from gridworld.baselines import plan_bfs_path
+
+        checked = 0
+        for path in sorted(glob.glob("mazes/**/*.json", recursive=True)):
+            with open(path) as fh:
+                try:
+                    raw = json.load(fh)
+                except json.JSONDecodeError:
+                    continue
+            if not isinstance(raw, dict) or "maze" not in raw:
+                continue
+            try:
+                spec = TaskSpecification.from_dict(raw)
+                ok, _ = spec.validate()
+            except Exception:
+                continue
+            if not ok:
+                continue
+            plan = plan_bfs_path(spec)
+            if plan.success:
+                assert int(MiniGridActions.DROP) not in plan.actions, path
+                checked += 1
+
+        assert checked > 20, f"only {checked} fixture mazes exercised"
