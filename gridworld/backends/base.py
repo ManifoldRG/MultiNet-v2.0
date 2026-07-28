@@ -162,6 +162,7 @@ class GridState:
             "open_gates": list(self.open_gates),
             "block_positions": {k: list(v) for k, v in self.block_positions.items()},
             "teleporter_cooldowns": self.teleporter_cooldowns,
+            "key_positions": {k: list(v) for k, v in self.key_positions.items()},
             "goal_reached": self.goal_reached,
             "observability_mode": self.observability_mode,
             "visible_cells": [list(c) for c in self.visible_cells],
@@ -186,6 +187,8 @@ class GridState:
             open_gates=set(d.get("open_gates", [])),
             block_positions={k: tuple(v) for k, v in d.get("block_positions", {}).items()},
             teleporter_cooldowns=d.get("teleporter_cooldowns", {}),
+            # Absent in pre-DROP snapshots; keys then sat at their spec cells.
+            key_positions={k: tuple(v) for k, v in d.get("key_positions", {}).items()},
             goal_reached=d.get("goal_reached", False),
             observability_mode=d.get("observability_mode", "full"),
             visible_cells={tuple(c) for c in d.get("visible_cells", [])},

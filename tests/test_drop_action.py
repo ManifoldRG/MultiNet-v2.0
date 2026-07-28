@@ -219,6 +219,39 @@ class TestDroppedKeyIsObservable:
         assert "(1,2)" in text.replace(" ", ""), "listed at its current cell"
 
 
+class TestKeyPositionsSerialization:
+    """episode.json state snapshots must record where a dropped key sits."""
+
+    def test_to_dict_round_trips_a_moved_key(self):
+        from gridworld.backends.base import GridState
+
+        state = GridState(
+            agent_position=(3, 1),
+            agent_direction=0,
+            key_positions={"kR": (3, 1)},
+        )
+
+        d = state.to_dict()
+        assert d["key_positions"] == {"kR": [3, 1]}, (
+            "post-hoc analysis needs drop locations in the snapshot"
+        )
+
+        restored = GridState.from_dict(d)
+        assert restored.key_positions == {"kR": (3, 1)}
+
+    def test_from_dict_defaults_key_positions_on_legacy_snapshots(self):
+        from gridworld.backends.base import GridState
+
+        legacy = {
+            "agent_position": [1, 1],
+            "agent_direction": 0,
+            "collected_keys": ["kR"],
+        }
+
+        restored = GridState.from_dict(legacy)
+        assert restored.key_positions == {}
+
+
 class TestDropAppearsWherePickupDoes:
     def test_mechanism_rules_explain_drop(self):
         from prompting_experiments.prompt_templates import system
