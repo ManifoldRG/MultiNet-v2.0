@@ -208,6 +208,30 @@ class TestDroppedKeyIsObservable:
         # re-drop somewhere the spec position cannot explain.
         assert coords.key_at_cell(spec, state, 1, 2) == "red"
 
+    def test_dropped_key_is_observed_at_a_non_spec_cell(self, backend):
+        """The observation must follow the live key, not the spec position.
+
+        The two tests above drop at the key's spec cell, so they would pass
+        even if the observation layer ignored state.key_positions. Here the
+        drop lands somewhere the spec cannot explain.
+        """
+        _pick_up_the_key(backend)                     # agent at (2,1) holding kR
+        backend.env.step(MiniGridActions.MOVE_FORWARD)  # to (3,1)
+        backend.env.step(MiniGridActions.DROP)          # key now at (3,1)
+        state = backend.get_state()
+        spec = _spec()
+
+        # (x,y)=(3,1) -> (row,col)=(1,3); the spec cell (x,y)=(2,1) -> (1,2)
+        assert coords.key_at_cell(spec, state, 1, 3) == "red"
+        assert coords.key_at_cell(spec, state, 1, 2) is None, (
+            "the key's spec cell is empty after the drop moved it"
+        )
+
+        text = render_user_observation_text(spec, state)
+        compact = text.replace(" ", "")
+        assert "red key" in text.lower()
+        assert "(1,3)" in compact, "listed at its current cell"
+
     def test_text_observation_lists_the_dropped_key(self, backend):
         _pick_up_the_key(backend)
         backend.env.step(MiniGridActions.DROP)
