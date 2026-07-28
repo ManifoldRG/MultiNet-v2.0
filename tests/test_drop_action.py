@@ -173,6 +173,14 @@ class TestDropIsInTheModelFacingVocabulary:
 
         assert parse_final_output("I will put down the key") == ["DROP"]
         assert parse_final_output("drop key") == ["DROP"]
+        # both vocabularies accept the same DROP phrasings ("release" included)
+        from interface.action_space import synonyms, valid_actions
+
+        assert parse_final_output(
+            "release the key",
+            valid_actions=valid_actions("cardinal"),
+            synonyms=synonyms("cardinal"),
+        ) == ["DROP"]
         # the FINAL_OUTPUT path takes exact tokens only, for DROP as for PICKUP
         assert parse_final_output("FINAL_OUTPUT: put down") is None
         assert parse_final_output("FINAL_OUTPUT: pick up") is None
@@ -350,6 +358,37 @@ class TestDropTextSummary:
 
         assert [text for _, text in events] == ["dropped the red key"]
 
+    def test_drop_summary_resolves_color_from_the_collected_diff(self):
+        """The dropped key is the one that leaves collected_keys — the color
+        must not depend on agent_carrying surviving into the record."""
+        from interface.observation import _extract_mechanism_events
+
+        steps = [{
+            "kind": "step",
+            "event_type": "DROP",
+            "state_before": {"agent_carrying": None, "collected_keys": ["kR"]},
+            "state_after": {"agent_carrying": None, "collected_keys": []},
+        }]
+
+        events = _extract_mechanism_events(steps, _spec())
+
+        assert [text for _, text in events] == ["dropped the red key"]
+
+    def test_drop_summary_without_key_details_stays_sensible(self):
+        """Never render 'dropped the a key' when the color is unknowable."""
+        from interface.observation import _extract_mechanism_events
+
+        steps = [{
+            "kind": "step",
+            "event_type": "DROP",
+            "state_before": {},
+            "state_after": {},
+        }]
+
+        events = _extract_mechanism_events(steps, _spec())
+
+        assert [text for _, text in events] == ["dropped the key"]
+
     def test_pickup_then_drop_reads_in_order(self):
         from interface.observation import _extract_mechanism_events
 
@@ -390,8 +429,8 @@ class TestPlannerIgnoresDrop:
     making BFS difficulty scoring infeasible. The planners stay complete for the
     optimum, which is what optimal_steps and beatability are defined over.
 
-    These tests exist to fail loudly if someone adds a DROP edge without reading
-    docs/superpowers/specs/2026-07-28-drop-action-design.md.
+    These tests exist to fail loudly if someone adds a DROP edge without first
+    solving that state-space blowup (or accepting the difficulty-scoring cost).
     """
 
     def test_planner_emits_no_drop_actions(self):
@@ -404,13 +443,13 @@ class TestPlannerIgnoresDrop:
 
     def test_no_fixture_maze_needs_a_drop_to_solve(self):
         """Exposing DROP must not shift any difficulty number."""
-        import glob
         import json
 
         from gridworld.baselines import plan_bfs_path
 
+        mazes_root = Path(__file__).resolve().parent.parent / "mazes"
         checked = 0
-        for path in sorted(glob.glob("mazes/**/*.json", recursive=True)):
+        for path in sorted(mazes_root.rglob("*.json")):
             with open(path) as fh:
                 try:
                     raw = json.load(fh)

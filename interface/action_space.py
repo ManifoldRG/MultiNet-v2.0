@@ -1,9 +1,9 @@
 """Action-space vocabularies and cardinal→egocentric translation.
 
 The runtime backend only understands the egocentric MiniGrid primitives
-(``TURN_LEFT/TURN_RIGHT/MOVE_FORWARD/PICKUP/TOGGLE/DONE``). The *cardinal*
+(``TURN_LEFT/TURN_RIGHT/MOVE_FORWARD/PICKUP/DROP/TOGGLE/DONE``). The *cardinal*
 action space is a model-facing interface only: the model emits absolute moves
-(``MOVE_NORTH`` …) plus ``PICKUP``/``INTERACT``/``DONE``, and the runner
+(``MOVE_NORTH`` …) plus ``PICKUP``/``DROP``/``INTERACT``/``DONE``, and the runner
 expands each cardinal move into the minimal sequence of egocentric primitives
 for the agent's current facing. Each emitted primitive costs one environment
 step, so the two action spaces are directly comparable on step economy.
@@ -56,6 +56,7 @@ _CARDINAL_SYNONYMS: dict[str, str] = {
     "drop": "DROP",
     "drop key": "DROP",
     "put down": "DROP",
+    "release": "DROP",
     "interact": "INTERACT",
     "done": "DONE",
     "finished": "DONE",
