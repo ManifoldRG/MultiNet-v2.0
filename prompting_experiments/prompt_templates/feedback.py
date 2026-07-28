@@ -22,7 +22,10 @@ PICKED_UP_KEY = "Picked up {key_color} key."
 NOTHING_TO_PICK_UP = "Nothing to pick up here."
 DROPPED_KEY = "Dropped {key_color} key at {position}."
 NOTHING_TO_DROP = "DROP had no effect. You are not carrying anything."
-DROP_BLOCKED = "DROP had no effect. Your current cell already contains something."
+DROP_BLOCKED = (
+    "DROP had no effect: your current cell already contains something. "
+    "MOVE_FORWARD to an empty cell, then DROP there."
+)
 TOGGLED_STATE_CHANGED = "Toggled switch or gate state changed."
 TOGGLE_HOLD_SWITCH_HINT = (
     "TOGGLE had no effect. MOVE_FORWARD onto the switch at {position} "

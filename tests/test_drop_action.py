@@ -111,6 +111,14 @@ class TestDropPlacesKeyInAgentCell:
         assert backend.env.carrying is None
         assert backend.env.step_count == before + 1
 
+    def test_blocked_drop_message_says_how_to_recover(self):
+        """The blocking case that matters is standing on the key you want while
+        holding the wrong one. The agent must be told to step off first."""
+        from prompting_experiments.prompt_templates import feedback
+
+        assert "MOVE_FORWARD" in feedback.DROP_BLOCKED
+        assert "empty cell" in feedback.DROP_BLOCKED
+
     def test_drop_onto_an_occupied_cell_is_rejected(self):
         """Standing on a switch, the cell is taken; the key stays in hand."""
         b = MiniGridBackend(render_mode="rgb_array")
