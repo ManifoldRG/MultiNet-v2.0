@@ -245,8 +245,8 @@ class MiniGridBackend(AbstractGridBackend):
                         open_doors.add(door_spec.id)
         collected_keys = set(getattr(self.env, "collected_keys", set()))
         # Live key positions, scanned from the grid rather than taken from the task
-        # spec: DROP moves a key to the cell in front of the agent, so the spec
-        # position is stale from the first drop onward.
+        # spec: DROP places a key in the agent's own cell, so the spec position is
+        # stale from the first drop onward.
         key_positions: dict[str, tuple[int, int]] = {}
         for x in range(self.env.width):
             for y in range(self.env.height):

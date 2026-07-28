@@ -133,8 +133,8 @@ class GridState:
     teleporter_cooldowns: dict[str, int] = field(default_factory=dict)  # teleporter_id -> cooldown
     # key_id -> current grid position, for keys lying on the ground. A key that is
     # held (or consumed by a door) has no entry. Keys can move: DROP puts one back
-    # on the grid in front of the agent, so the task spec's static position is not
-    # authoritative once an episode is under way.
+    # on the grid in the agent's own cell, so the task spec's static position is
+    # not authoritative once an episode is under way.
     key_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     # Goal state

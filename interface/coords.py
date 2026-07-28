@@ -68,10 +68,10 @@ def forward_cell(state: GridState) -> tuple[int, int]:
 def _live_key_position(key, state: GridState):
     """Where a key actually is now.
 
-    Keys move: DROP puts a held key back on the grid in front of the agent, so the
-    task spec's position is only correct until the first drop. `state.key_positions`
-    is scanned from the live grid; fall back to the spec position for states built
-    before that field existed.
+    Keys move: DROP puts a held key back on the grid in the agent's own cell, so
+    the task spec's position is only correct until the first drop.
+    `state.key_positions` is scanned from the live grid; fall back to the spec
+    position for states built before that field existed.
     """
     pos = (state.key_positions or {}).get(key.id)
     if pos is None:

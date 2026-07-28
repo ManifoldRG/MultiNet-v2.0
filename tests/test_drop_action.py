@@ -1,10 +1,12 @@
 """Tests for the DROP action's state bookkeeping.
 
-DROP physically works (custom_env falls through to MiniGridEnv.step, which places
-the carried object in the front cell), but the env's own `collected_keys` set is
-never updated, and the observation layer renders keys from the task spec's static
-position while skipping anything in `collected_keys`. The result is a dropped key
-that exists on the grid but is invisible to the agent and still reported as held.
+DROP places the held key in the agent's OWN cell (not the front cell — the
+same-cell convention mirrors same-cell PICKUP), removes it from
+`collected_keys`, and the observation layer renders it from the live
+`state.key_positions` rather than the task spec's static position. Before this
+was implemented, DROP fell through to MiniGridEnv.step's front-cell placement
+with no bookkeeping, leaving a dropped key on the grid that was invisible to
+the agent and still reported as held; these tests pin the fixed behavior.
 """
 
 import sys
