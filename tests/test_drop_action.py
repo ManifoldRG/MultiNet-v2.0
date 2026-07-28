@@ -237,3 +237,32 @@ class TestDropAppearsWherePickupDoes:
         sys_prompt = VerbosePromptStrategy(actions_hint("egocentric")).build_system_prompt()
 
         assert "DROP:" in sys_prompt
+
+
+class TestDropFeedback:
+    def test_successful_drop_reports_a_drop_event(self, backend):
+        from interface.feedback import infer_step_outcome
+
+        _pick_up_the_key(backend)
+        prev = backend.get_state()
+        backend.env.step(MiniGridActions.DROP)
+        curr = backend.get_state()
+
+        event, message = infer_step_outcome("DROP", prev, curr, 0.0, False, _spec())
+
+        assert event == "DROP"
+        assert "red" in message.lower()
+        # dropped in the agent's own cell (x,y)=(2,1) -> (row,col)=(1,2)
+        assert "(1,2)" in message.replace(" ", "")
+
+    def test_drop_with_empty_hands_reports_nothing(self, backend):
+        from interface.feedback import infer_step_outcome
+
+        prev = backend.get_state()
+        backend.env.step(MiniGridActions.DROP)
+        curr = backend.get_state()
+
+        event, message = infer_step_outcome("DROP", prev, curr, 0.0, False, _spec())
+
+        assert event == "NOTHING"
+        assert "not carrying" in message.lower()
