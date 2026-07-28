@@ -209,3 +209,31 @@ class TestDroppedKeyIsObservable:
 
         assert "red key" in text.lower(), "a dropped key must reappear in the text observation"
         assert "(1,2)" in text.replace(" ", ""), "listed at its current cell"
+
+
+class TestDropAppearsWherePickupDoes:
+    def test_mechanism_rules_explain_drop(self):
+        from prompting_experiments.prompt_templates import system
+
+        assert "PICKUP:" in system.MECHANISM_RULES       # guard the premise
+        assert "DROP:" in system.MECHANISM_RULES
+        assert "one key at a time" in system.MECHANISM_RULES
+
+    def test_minimal_prompt_lists_drop_without_explaining_it(self):
+        """minimal emits no MECHANISM_RULES — DROP appears exactly as PICKUP does."""
+        from interface.action_space import actions_hint
+        from interface.prompt_strategies import MinimalPromptStrategy
+
+        sys_prompt = MinimalPromptStrategy(actions_hint("egocentric")).build_system_prompt()
+
+        assert "DROP" in sys_prompt
+        assert "PICKUP" in sys_prompt
+        assert "DROP:" not in sys_prompt
+
+    def test_verbose_prompt_explains_drop(self):
+        from interface.action_space import actions_hint
+        from interface.prompt_strategies import VerbosePromptStrategy
+
+        sys_prompt = VerbosePromptStrategy(actions_hint("egocentric")).build_system_prompt()
+
+        assert "DROP:" in sys_prompt
