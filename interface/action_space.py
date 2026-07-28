@@ -24,6 +24,7 @@ CARDINAL_ACTIONS: tuple[str, ...] = (
     "MOVE_EAST",
     "MOVE_WEST",
     "PICKUP",
+    "DROP",
     "INTERACT",
     "DONE",
 )
@@ -52,6 +53,9 @@ _CARDINAL_SYNONYMS: dict[str, str] = {
     "west": "MOVE_WEST",
     "pick up": "PICKUP",
     "pickup": "PICKUP",
+    "drop": "DROP",
+    "drop key": "DROP",
+    "put down": "DROP",
     "interact": "INTERACT",
     "done": "DONE",
     "finished": "DONE",

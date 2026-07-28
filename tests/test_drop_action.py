@@ -135,28 +135,43 @@ class TestDropPlacesKeyInAgentCell:
         assert "kR" in b.env.collected_keys
 
 
-class TestDropIsNotInTheModelFacingVocabulary:
-    """DROP works in the env but is deliberately not offered to models.
+class TestDropIsInTheModelFacingVocabulary:
+    """DROP is offered wherever PICKUP is, and nowhere else.
 
-    Recorded here so the consequence is explicit rather than accidental: because
-    PICKUP requires empty hands and models cannot DROP, picking up a decoy key is
-    unrecoverable for an agent. That is a live design question for the D-condition
-    mazes (wrong-key decoys), not an env bug. If DROP is ever added to the action
-    space, these assertions should be updated deliberately — the env-side tests
-    above already cover the mechanics.
+    Inverted deliberately from the pre-fix assertions: exposing DROP is what
+    makes a wrong-key pickup recoverable, and the exclusion was previously
+    pinned here precisely so this flip could not happen by accident.
     """
 
-    def test_drop_is_absent_from_both_action_spaces(self):
-        from interface.action_space import valid_actions
+    def test_drop_is_offered_in_both_action_spaces(self):
+        from interface.action_space import actions_hint, valid_actions
 
-        assert "DROP" not in valid_actions("egocentric")
-        assert "DROP" not in valid_actions("cardinal")
+        assert "DROP" in valid_actions("egocentric")
+        assert "DROP" in valid_actions("cardinal")
+        assert "DROP" in actions_hint("egocentric")
+        assert "DROP" in actions_hint("cardinal")
 
-    def test_parser_rejects_a_drop_reply(self):
+    def test_parser_accepts_a_drop_reply(self):
         from interface.parser import parse_final_output
 
-        assert parse_final_output("FINAL_OUTPUT: DROP") is None
+        assert parse_final_output("FINAL_OUTPUT: DROP") == ["DROP"]
         assert parse_final_output("FINAL_OUTPUT: PICKUP") == ["PICKUP"]
+
+    def test_drop_synonyms_resolve_on_the_regex_fallback_path(self):
+        """Synonyms apply only when there is no FINAL_OUTPUT line — as for PICKUP."""
+        from interface.parser import parse_final_output
+
+        assert parse_final_output("I will put down the key") == ["DROP"]
+        assert parse_final_output("drop key") == ["DROP"]
+        # the FINAL_OUTPUT path takes exact tokens only, for DROP as for PICKUP
+        assert parse_final_output("FINAL_OUTPUT: put down") is None
+        assert parse_final_output("FINAL_OUTPUT: pick up") is None
+
+    def test_actions_map_resolves_drop(self):
+        from gridworld.actions import MiniGridActions
+        from interface.actions_map import nlu_action_to_int
+
+        assert nlu_action_to_int("DROP") == int(MiniGridActions.DROP)
 
 
 class TestDroppedKeyIsObservable:
