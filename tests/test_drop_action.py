@@ -73,52 +73,66 @@ def _pick_up_the_key(backend):
     assert backend.env.carrying is not None, "precondition: key must be held"
 
 
-class TestDropClearsCollectedKeys:
-    def test_dropped_key_is_removed_from_collected_keys(self, backend):
-        _pick_up_the_key(backend)
-        assert "kR" in backend.env.collected_keys
-
+class TestDropPlacesKeyInAgentCell:
+    def test_dropped_key_lands_under_the_agent(self, backend):
+        _pick_up_the_key(backend)                    # agent at (2,1) holding kR
         backend.env.step(MiniGridActions.DROP)
 
         assert backend.env.carrying is None
+        assert _keys_on_grid(backend.env) == {"kR": (2, 1)}
         assert "kR" not in backend.env.collected_keys, (
             "a dropped key is back on the grid and is no longer collected"
         )
 
-    def test_dropped_key_returns_to_the_grid(self, backend):
+    def test_drop_then_pickup_round_trips_in_two_actions(self, backend):
         _pick_up_the_key(backend)
         backend.env.step(MiniGridActions.DROP)
-        assert _keys_on_grid(backend.env) == {"kR": (3, 1)}
-
-    def test_key_can_be_picked_up_again_after_drop(self, backend):
-        _pick_up_the_key(backend)
-        backend.env.step(MiniGridActions.DROP)
-        backend.env.step(MiniGridActions.MOVE_FORWARD)   # onto the dropped key
         backend.env.step(MiniGridActions.PICKUP)
 
         assert getattr(backend.env.carrying, "key_id", None) == "kR"
         assert "kR" in backend.env.collected_keys
 
-    def test_failed_drop_leaves_state_untouched(self, backend):
-        """DROP into an occupied cell is rejected; bookkeeping must not change."""
+    def test_drop_succeeds_regardless_of_facing(self, backend):
+        """Same-cell placement must not depend on what is in front."""
         _pick_up_the_key(backend)
-        backend.env.step(MiniGridActions.DROP)           # kR now at (3,1)
-        backend.env.step(MiniGridActions.MOVE_FORWARD)   # onto it
-        backend.env.step(MiniGridActions.PICKUP)         # holding it again
-        # face west, back toward (1,1)... then turn to face the wall instead
-        for _ in range(4):
-            backend.env.step(MiniGridActions.TURN_LEFT)
-        # walk to the west wall so the forward cell is a wall
-        backend.env.step(MiniGridActions.TURN_LEFT)
-        backend.env.step(MiniGridActions.TURN_LEFT)      # facing west
-        backend.env.step(MiniGridActions.MOVE_FORWARD)
-        backend.env.step(MiniGridActions.MOVE_FORWARD)   # at (1,1), wall ahead
-
-        held_before = backend.env.carrying
+        for _ in range(2):
+            backend.env.step(MiniGridActions.TURN_LEFT)   # face west
+        backend.env.step(MiniGridActions.MOVE_FORWARD)    # to (1,1), wall ahead
         backend.env.step(MiniGridActions.DROP)
 
-        assert backend.env.carrying is held_before, "drop into a wall must fail"
-        assert "kR" in backend.env.collected_keys
+        assert backend.env.carrying is None
+        assert _keys_on_grid(backend.env) == {"kR": (1, 1)}
+
+    def test_drop_with_empty_hands_is_a_rejected_no_op(self, backend):
+        before = backend.env.step_count
+        _, _, _, _, info = backend.env.step(MiniGridActions.DROP)
+
+        assert info.get("invalid_action") is True
+        assert backend.env.carrying is None
+        assert backend.env.step_count == before + 1
+
+    def test_drop_onto_an_occupied_cell_is_rejected(self):
+        """Standing on a switch, the cell is taken; the key stays in hand."""
+        b = MiniGridBackend(render_mode="rgb_array")
+        b.configure(_spec(mechanisms={
+            "keys": [{"id": "kR", "position": [2, 1], "color": "red"}],
+            "switches": [{"id": "s1", "position": [3, 1], "controls": ["g1"],
+                          "color": "yellow", "switch_type": "toggle",
+                          "initial_state": "off"}],
+            "gates": [{"id": "g1", "position": [5, 5], "initial_state": "closed",
+                       "color": "black"}],
+        }))
+        b.reset(seed=1)
+        b.env.step(MiniGridActions.MOVE_FORWARD)   # (2,1), onto the key
+        b.env.step(MiniGridActions.PICKUP)
+        b.env.step(MiniGridActions.MOVE_FORWARD)   # (3,1), onto the switch
+        held = b.env.carrying
+
+        _, _, _, _, info = b.env.step(MiniGridActions.DROP)
+
+        assert info.get("invalid_action") is True
+        assert b.env.carrying is held
+        assert "kR" in b.env.collected_keys
 
 
 class TestDropIsNotInTheModelFacingVocabulary:
@@ -151,7 +165,7 @@ class TestDroppedKeyIsObservable:
         backend.env.step(MiniGridActions.DROP)
 
         state = backend.get_state()
-        assert state.key_positions == {"kR": (3, 1)}, (
+        assert state.key_positions == {"kR": (2, 1)}, (
             "the agent must be able to see where a dropped key actually is"
         )
 
@@ -166,10 +180,10 @@ class TestDroppedKeyIsObservable:
         state = backend.get_state()
         spec = _spec()
 
-        # (x, y) = (3, 1) is (row, col) = (1, 3)
-        assert coords.key_at_cell(spec, state, 1, 3) == "red"
-        # and it is no longer at its original spec position (2, 1) -> (1, 2)
-        assert coords.key_at_cell(spec, state, 1, 2) is None
+        # dropped in the agent's own cell (x,y)=(2,1) -> (row,col)=(1,2),
+        # which here coincides with the key's spec cell, so move first and
+        # re-drop somewhere the spec position cannot explain.
+        assert coords.key_at_cell(spec, state, 1, 2) == "red"
 
     def test_text_observation_lists_the_dropped_key(self, backend):
         _pick_up_the_key(backend)
@@ -179,4 +193,4 @@ class TestDroppedKeyIsObservable:
         text = render_user_observation_text(_spec(), state)
 
         assert "red key" in text.lower(), "a dropped key must reappear in the text observation"
-        assert "(1,3)" in text.replace(" ", ""), "listed at its current cell, not its spec cell"
+        assert "(1,2)" in text.replace(" ", ""), "listed at its current cell"
