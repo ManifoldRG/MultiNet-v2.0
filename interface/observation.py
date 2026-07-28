@@ -250,6 +250,19 @@ def _extract_mechanism_events(
                 )
             )
 
+        elif event_type == "DROP":
+            # The dropped key's colour is what the agent was holding beforehand;
+            # after the drop it carries nothing.
+            dropped = sb.get("agent_carrying") or sa.get("agent_carrying") or "a"
+            events.append(
+                (
+                    index,
+                    observation_templates.TEXT_SUMMARY_DROP_KEY.format(
+                        key_color=key_colors.get(dropped, dropped)
+                    ),
+                )
+            )
+
         elif event_type == "OPENED":
             before_doors = set(sb.get("open_doors") or [])
             after_doors = set(sa.get("open_doors") or [])

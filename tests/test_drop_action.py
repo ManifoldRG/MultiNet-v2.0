@@ -266,3 +266,44 @@ class TestDropFeedback:
 
         assert event == "NOTHING"
         assert "not carrying" in message.lower()
+
+
+class TestDropTextSummary:
+    def test_drop_appears_in_the_text_summary_history(self):
+        from interface.observation import _extract_mechanism_events
+
+        steps = [{
+            "kind": "step",
+            "event_type": "DROP",
+            "state_before": {"agent_carrying": "red", "collected_keys": ["kR"]},
+            "state_after": {"agent_carrying": None, "collected_keys": []},
+        }]
+
+        events = _extract_mechanism_events(steps, _spec())
+
+        assert [text for _, text in events] == ["dropped the red key"]
+
+    def test_pickup_then_drop_reads_in_order(self):
+        from interface.observation import _extract_mechanism_events
+
+        steps = [
+            {
+                "kind": "step",
+                "event_type": "PICKUP",
+                "state_before": {"agent_carrying": None, "collected_keys": []},
+                "state_after": {"agent_carrying": "red", "collected_keys": ["kR"]},
+            },
+            {
+                "kind": "step",
+                "event_type": "DROP",
+                "state_before": {"agent_carrying": "red", "collected_keys": ["kR"]},
+                "state_after": {"agent_carrying": None, "collected_keys": []},
+            },
+        ]
+
+        events = _extract_mechanism_events(steps, _spec())
+
+        assert [text for _, text in events] == [
+            "picked up the red key",
+            "dropped the red key",
+        ]
