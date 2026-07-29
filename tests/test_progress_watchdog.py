@@ -345,6 +345,34 @@ def test_drop_retrace_is_not_a_stall():
     assert res["steps_used"] == len(actions)
 
 
+def test_pickup_drop_oscillation_still_stalls():
+    # The inverse guarantee of test_drop_retrace_is_not_a_stall: PICKUP/DROP
+    # cycled at one cell yields exactly two distinct signatures (held vs on
+    # the ground), both seen after the first cycle. Signature novelty is
+    # set-membership, so the loop cannot farm resets and the watchdog fires.
+    spec = TaskSpecification.from_dict({
+        "task_id": "drop_oscillation",
+        "seed": 0,
+        "difficulty_tier": 2,
+        "maze": {"dimensions": [8, 4], "walls": [], "start": [1, 1], "goal": [6, 1]},
+        "mechanisms": {
+            "keys": [{"id": "kR", "position": [2, 1], "color": "red"}],
+        },
+        "goal": {"type": "reach_position", "target": [6, 1]},
+        "max_steps": 60,
+    })
+    k = 4
+    actions = ["MOVE_FORWARD"] + ["PICKUP", "DROP"] * (3 * k)
+
+    res = _run(spec, actions, progress_stall_k=k)
+
+    assert res["end_reason"] == "stalled"
+    assert res["success"] is False
+    # dies K steps after the last novel signature (the first full cycle),
+    # far before the scripted oscillation runs out
+    assert res["steps_used"] < len(actions)
+
+
 def test_push_block_progress_and_terminal_success_precede_watchdog():
     spec = TaskSpecification.from_dict({
         "task_id": "block_progress",
