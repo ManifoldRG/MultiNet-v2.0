@@ -97,8 +97,6 @@ from demo.theme import (
     STATUS_MOVES_CRIT,
     STATUS_MOVES_OK,
     STATUS_MOVES_WARN,
-    STATUS_REWARD,
-    STATUS_REWARD_IDLE,
     TASK_HOWTO,
     TOP_BAR_H,
     WALL_GRAY_DST,
@@ -446,9 +444,6 @@ class MiniGridPlayerUI:
     def _draw_key_icon(self, surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple) -> None:
         icons.draw_key_icon(surface, center, size, color)
 
-    def _draw_trophy_icon(self, surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple) -> None:
-        icons.draw_trophy_icon(surface, center, size, color)
-
     def _draw_door_icon(self, surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple) -> None:
         icons.draw_door_icon(surface, center, size, color)
 
@@ -581,7 +576,7 @@ class MiniGridPlayerUI:
         pygame.draw.rect(self.screen, COLOR_HEADER_BG, rect)
         pygame.draw.line(self.screen, COLOR_SEPARATOR, (0, TOP_BAR_H), (WINDOW_WIDTH, TOP_BAR_H))
 
-        title_surf = self.font_title.render("Multinet Benchmark - Human Eval", True, COLOR_TEXT_TITLE)
+        title_surf = self.font_title.render("MultiNet Benchmark - Human Eval", True, COLOR_TEXT_TITLE)
         self.screen.blit(title_surf, (RAIL_MARGIN, 13))
 
         subtitle = "Can you solve what the AI model is solving"
@@ -858,23 +853,23 @@ class MiniGridPlayerUI:
                 ("down", "Move South", "MOVE_SOUTH"),
                 ("left", "Move West", "MOVE_WEST"),
                 ("right", "Move East", "MOVE_EAST"),
-                ("Space", "Pick Up", "PICKUP"),
-                ("X", "Drop", "DROP"),
-                ("T", "Interact", "INTERACT"),
+                ("Space", "Pickup Key", "PICKUP"),
+                ("X", "Drop Key", "DROP"),
+                ("T", "Toggle Switch/ Open Door", "INTERACT"),
                 ("R", "Restart", None),
             ]
         return [
             ("up", "Move Forward", "MOVE_FORWARD"),
             ("left", "Turn Left", "TURN_LEFT"),
             ("right", "Turn Right", "TURN_RIGHT"),
-            ("Space", "Pick Up", "PICKUP"),
-            ("X", "Drop", "DROP"),
-            ("T", "Toggle", "TOGGLE"),
+            ("Space", "Pickup Key", "PICKUP"),
+            ("X", "Drop Key", "DROP"),
+            ("T", "Toggle Switch/ Open Door", "TOGGLE"),
             ("R", "Restart", None),
         ]
 
     def _render_right_rail(self) -> None:
-        """Right rail: live STATUS (moves/facing/inventory/reward, plus any
+        """Right rail: live STATUS (moves/facing/inventory, plus any
         active mechanisms) and a CONTROLS legend -- the model's exact action
         vocabulary shown as icon keycaps, with whichever one was just
         dispatched highlighted (replaces the old always-on action-chip bar)."""
@@ -911,12 +906,6 @@ class MiniGridPlayerUI:
             y = self._draw_status_icon_row(x, y, "Facing", facing_icon, dir_name, STATUS_FACING)
 
             y = self._render_inventory_row(x, y)
-            y += 8
-
-            reward_color = STATUS_REWARD if session.display_reward > 0 else STATUS_REWARD_IDLE
-            y = self._draw_status_icon_row(
-                x, y, "Reward", self._draw_trophy_icon, f"{session.display_reward:.3f}", reward_color,
-            )
         else:
             y = self._draw_text("No environment loaded", x, y, self.font_small, COLOR_TEXT_ERROR)
 
@@ -937,9 +926,17 @@ class MiniGridPlayerUI:
             desc_color = accent if (active or token is not None) else COLOR_TEXT_DIM
             if token is None:
                 desc_color = COLOR_TEXT if active else COLOR_TEXT_DIM
-            desc_surf = self.font_main_bold.render(desc, True, desc_color)
-            self.screen.blit(desc_surf, (x + keycap_w + 12, y + (KEYCAP_SIZE - desc_surf.get_height()) // 2))
-            y += KEYCAP_SIZE + 7
+            desc_max_w = width - keycap_w - 12
+            desc_x = x + keycap_w + 12
+            desc_lines = self._wrap_lines([desc], self.font_main_bold, desc_max_w)
+            line_h = self.font_main_bold.get_height()
+            block_h = line_h * len(desc_lines) + 2 * (len(desc_lines) - 1)
+            desc_y = y + max(0, (KEYCAP_SIZE - block_h) // 2)
+            for line in desc_lines:
+                line_surf = self.font_main_bold.render(line, True, desc_color)
+                self.screen.blit(line_surf, (desc_x, desc_y))
+                desc_y += line_h + 2
+            y += max(KEYCAP_SIZE, block_h) + 7
 
     # ------------------------------------------------------------------
     # Rendering: overlays

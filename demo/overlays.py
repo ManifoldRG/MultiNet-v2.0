@@ -10,6 +10,7 @@ import pygame
 from demo.compare import TaskComparison, r1_task_id
 from demo.theme import (
     ACCENT_AMBER,
+    ACCENT_CYAN,
     ACCENT_GREEN,
     COLOR_BG,
     COLOR_SEPARATOR,
@@ -21,6 +22,7 @@ from demo.theme import (
     GRID_DISPLAY_SIZE,
     LEFT_RAIL_W,
     MAX_DIFFICULTY_TIER,
+    STATUS_MOVES_CRIT,
     TOP_BAR_H,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
@@ -29,6 +31,34 @@ from demo.theme import (
 
 if TYPE_CHECKING:
     from demo.ui import MiniGridPlayerUI
+
+
+def _score_color(pct: int) -> tuple:
+    if pct >= 100:
+        return ACCENT_GREEN
+    if pct >= 80:
+        return ACCENT_CYAN
+    if pct >= 50:
+        return ACCENT_AMBER
+    return STATUS_MOVES_CRIT
+
+
+def _compose_colored_line(
+    font: pygame.font.Font,
+    parts: list[tuple[str, tuple]],
+) -> pygame.Surface:
+    """Render adjacent ``(text, color)`` segments on one horizontal line."""
+    segments = [font.render(text, True, color) for text, color in parts if text]
+    if not segments:
+        return font.render("", True, COLOR_TEXT_SUBTITLE)
+    width = sum(s.get_width() for s in segments)
+    height = max(s.get_height() for s in segments)
+    line = pygame.Surface((width, height), pygame.SRCALPHA)
+    x = 0
+    for segment in segments:
+        line.blit(segment, (x, 0))
+        x += segment.get_width()
+    return line
 
 
 def _wrap_text_surfs(
@@ -80,7 +110,7 @@ def render_start_screen(ui: "MiniGridPlayerUI") -> None:
     cx = WINDOW_WIDTH // 2
     cy = WINDOW_HEIGHT // 2
 
-    title = ui.font_splash_title.render("Multinet", True, COLOR_TEXT_TITLE)
+    title = ui.font_splash_title.render("MultiNet", True, COLOR_TEXT_TITLE)
     ui.screen.blit(title, title.get_rect(center=(cx, cy - 48)))
 
     subtitle = ui.font_splash_sub.render("MiniGrid Demo", True, COLOR_TEXT_SUBTITLE)
@@ -159,16 +189,23 @@ def render_r1_result_overlay(ui: "MiniGridPlayerUI", comparison: TaskComparison)
     items.append((ui.font_main_bold.render(line, True, COLOR_TEXT_TITLE), gap - 2))
 
     if success and human_steps <= optimal:
-        opt_line = f"Optimal (BFS): {optimal} steps  -  you matched it"
-        opt_color = ACCENT_GREEN
+        opt_detail = f"Optimal (BFS): {optimal} steps  -  you matched it"
     elif success:
         over = human_steps - optimal
-        opt_line = f"Optimal (BFS): {optimal} steps  -  you were {over} over"
-        opt_color = ACCENT_AMBER
+        opt_detail = f"Optimal (BFS): {optimal} steps  -  you were {over} over"
     else:
-        opt_line = f"Optimal (BFS): {optimal} steps"
-        opt_color = COLOR_TEXT_SUBTITLE
-    items.append((ui.font_small_bold.render(opt_line, True, opt_color), gap + 4))
+        opt_detail = f"Optimal (BFS): {optimal} steps"
+
+    score_pct = int(round(session.display_reward * 100))
+    score_text = f"  -  Score: {score_pct}%"
+    opt_score_line = _compose_colored_line(
+        ui.font_small_bold,
+        [
+            (opt_detail, COLOR_TEXT_SUBTITLE),
+            (score_text, _score_color(score_pct)),
+        ],
+    )
+    items.append((opt_score_line, gap + 4))
 
     beat_count = sum(
         1 for m in comparison.models

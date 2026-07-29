@@ -26,6 +26,7 @@ from gridworld.task_spec import TaskSpecification
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.backends.base import GridState
 from gridworld.actions import MiniGridActions
+from gridworld.baselines import plan_bfs_path
 
 from interface.config import ExperimentConfig
 from interface import action_space as action_space_mod
@@ -48,6 +49,22 @@ from scripts.run_pipeline import (
     load_manifest,
     resolve_task_rows,
 )
+
+# Power decay on ``optimal/steps``, then scaled linearly to 0 at the step cap.
+# Exponent 1.3: ~2x optimal ≈ 40% when cap is large (softer than pure high powers).
+_EFFICIENCY_DECAY_EXPONENT = 1.3
+
+
+def efficiency_score(steps: int, optimal: int, cap: int) -> float:
+    """Human efficiency score in [0, 1]: 1 at ``optimal`` or better, 0 at ``cap``+."""
+    if steps >= cap:
+        return 0.0
+    if steps <= optimal:
+        return 1.0
+    ratio_score = (optimal / steps) ** _EFFICIENCY_DECAY_EXPONENT
+    cap_scale = 1.0 - (steps - optimal) / (cap - optimal)
+    return ratio_score * cap_scale
+
 
 class ProgressEvent(NamedTuple):
     """One PROGRESS log entry, split into (prefix, object_phrase, suffix) so
@@ -189,10 +206,8 @@ class MiniGridPlaySession:
         self.episode_done = False
         self.episode_success = False
         self.total_reward: float = 0.0
-        # BFS shortest-path length for the loaded task (None if unbeatable /
-        # planner failed). Used for the human-facing display score; does not
-        # change the env's native MiniGrid reward kept in total_reward.
-        self.optimal_steps: Optional[int] = None
+        # BFS shortest-path length for the loaded task.
+        self.optimal_steps: int = 0
         self.last_action_name: str = ""
         self.last_dispatched_token: str = ""
         self.step_index: int = 0
@@ -258,42 +273,21 @@ class MiniGridPlaySession:
 
         self._reset_env()
 
-    def _compute_optimal_steps(self) -> Optional[int]:
-        """BFS shortest-path length for the current task, or None if unknown."""
-        if self.task_spec is None:
-            return None
-        try:
-            from gridworld.baselines import plan_bfs_path
-            planned = plan_bfs_path(self.task_spec)
-        except Exception:
-            return None
-        if planned is None or not planned.success:
-            return None
+    def _compute_optimal_steps(self) -> int:
+        """BFS shortest-path length for the current task."""
+        planned = plan_bfs_path(self.task_spec)
         return len(planned.action_labels)
 
     @property
     def display_reward(self) -> float:
-        """Human-facing score shown in the Status rail / end screen.
-
-        - ``0`` while the episode is in progress, or on failure / timeout
-        - ``1`` if solved in ``optimal_steps`` (BFS) or fewer
-        - otherwise ``optimal_steps / steps`` (decays with every extra step)
-
-        Distinct from ``total_reward``, which mirrors MiniGrid's native
-        ``1 - 0.9 * steps / max_steps`` (with max_steps often 1000, that
-        barely moves) and is what transcripts still record.
-        """
-        if not self.episode_done or not self.episode_success:
+        """Human-facing efficiency score for the end screen (0..1)."""
+        if not self.episode_done:
             return 0.0
-        steps = self.state.step_count if self.state else 0
-        optimal = self.optimal_steps
-        if optimal is None or optimal <= 0:
-            return 1.0
-        if steps <= 0:
-            return 1.0
-        if steps <= optimal:
-            return 1.0
-        return float(optimal) / float(steps)
+        return efficiency_score(
+            self.state.step_count,
+            self.optimal_steps,
+            self.state.max_steps,
+        )
 
     def _reset_env(self) -> None:
         """Reset the environment from the current task spec."""
