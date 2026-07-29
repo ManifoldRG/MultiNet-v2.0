@@ -33,6 +33,7 @@ Usage:
     # row's experiment/condition/expected_mechanisms (mirrors the task
     # selection scripts/run_pipeline.py uses for real runs):
     python play_task.py --manifest gridworld/fixtures/manifest.json --experiment test1
+    python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1
 
 Controls:
     Arrow Up / W        : Move forward (egocentric) / North (cardinal)

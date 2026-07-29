@@ -45,7 +45,7 @@ AgentFactory = Callable[[str, dict[str, Any]], "tuple[Agent, str]"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_MANIFEST = _REPO_ROOT / "gridworld" / "fixtures" / "manifest.json"
-_EXPERIMENT_KEYWORDS = {"test1", "test2", "test3", "all"}
+_EXPERIMENT_KEYWORDS = {"test1", "test2", "test3", "r1", "all"}
 
 
 def _sanitize(name: str) -> str:
@@ -131,7 +131,7 @@ def resolve_task_rows(
 ) -> list[dict[str, Any]]:
     """Resolve run-config task entries to manifest-style rows (metadata attached).
 
-    Each entry may be an experiment keyword (``test1``/``test2``/``test3``/``all``),
+    Each entry may be an experiment keyword (``test1``/``test2``/``test3``/``r1``/``all``),
     a catalog ``task_id``, or a path to a task ``.json``. Paths are matched against
     the catalog (by resolved path) so test-2/test-3 metadata is preserved; an
     unmatched path is synthesized as a plain test-1 task. Duplicate task_ids are
@@ -1168,7 +1168,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         help="Finalize reports from received units even when some work is missing.",
     )
     # Single-model fallback (when --run-config is not supplied):
-    parser.add_argument("--experiment", choices=["test1", "test2", "test3", "all"], default="all")
+    parser.add_argument("--experiment", choices=["test1", "test2", "test3", "r1", "all"], default="all")
     parser.add_argument("--agent", choices=["claude", "kimi", "qwen"], help="Single-model provider.")
     args = parser.parse_args(argv)
 
