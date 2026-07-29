@@ -1,5 +1,5 @@
 {
-  "description": "Fixture manifest for the bare-bones run pipeline (tests 1-3) plus the R1 50-maze eval set (experiment=r1). route_short_cells/route_long_cells on test2 rows are populated by scripts/validate_fixtures.py.",
+  "description": "Fixture manifest for the bare-bones run pipeline (tests 1-3) plus the R1 eval set (experiment=r1; B1 excluded). route_short_cells/route_long_cells on test2 rows are populated by scripts/validate_fixtures.py.",
   "tasks": [
     {
       "task_id": "validation_10_v01_empty_room",
@@ -360,94 +360,6 @@
         "kB"
       ],
       "notes": "Longer single-row corridor, switch-first; matched with key-first."
-    },
-    {
-      "task_id": "r1_B1_10x10_corridor_swg_0",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "10x10_corridor_swg_0",
-      "source": "mazes/exp_maze_jsons/B1/10x10_corridor_swg_0.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=winding; grid=10"
-    },
-    {
-      "task_id": "r1_B1_10x10_corridor_swg_1",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "10x10_corridor_swg_1",
-      "source": "mazes/exp_maze_jsons/B1/10x10_corridor_swg_1.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=winding; grid=10"
-    },
-    {
-      "task_id": "r1_B1_10x10_dense_swg_1",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "10x10_dense_swg_1",
-      "source": "mazes/exp_maze_jsons/B1/10x10_dense_swg_1.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=dense_dead_ends; grid=10"
-    },
-    {
-      "task_id": "r1_B1_14x14_corridor_swg_0",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "14x14_corridor_swg_0",
-      "source": "mazes/exp_maze_jsons/B1/14x14_corridor_swg_0.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=winding; grid=14"
-    },
-    {
-      "task_id": "r1_B1_14x14_dense_swg_0",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "14x14_dense_swg_0",
-      "source": "mazes/exp_maze_jsons/B1/14x14_dense_swg_0.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=dense_dead_ends; grid=14"
-    },
-    {
-      "task_id": "r1_B1_14x14_dense_swg_1",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "14x14_dense_swg_1",
-      "source": "mazes/exp_maze_jsons/B1/14x14_dense_swg_1.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=dense_dead_ends; grid=14"
-    },
-    {
-      "task_id": "r1_B1_8x8_corridor_swg_0",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "8x8_corridor_swg_0",
-      "source": "mazes/exp_maze_jsons/B1/8x8_corridor_swg_0.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=winding; grid=8"
-    },
-    {
-      "task_id": "r1_B1_8x8_corridor_swg_1",
-      "experiment": "r1",
-      "condition": "B",
-      "variant": "8x8_corridor_swg_1",
-      "source": "mazes/exp_maze_jsons/B1/8x8_corridor_swg_1.json",
-      "expected_mechanisms": [],
-      "maze_family": "B",
-      "maze_category": "B1",
-      "notes": "topology=winding; grid=8"
     },
     {
       "task_id": "r1_D1_10x10_dense_wrong_ky_kr_sg_kb_0",
