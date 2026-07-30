@@ -21,6 +21,13 @@ cd "$ROOT"
 OUT="${1:?usage: launch_kimi_rerun.sh <artifacts-root>}"
 ASRUN_SHA=e0542b5
 ASRUN_TREE=/tmp/multinet-r1-asrun
+# The suite maximum R1 was launched with (RUN_NOTES_incidents_and_findings.md:
+# "launched with DIFFICULTY_MAX=3000"). It normalizes difficulty_weight, which
+# feeds the composite, so it MUST match R1 or the rerun rows are not comparable.
+# Cross-checked against the archive: M6 1120.367/0.373456 = 3000.0 exactly, and
+# D2 631.234/0.210411 = 3000.0. The shipped scorer config leaves it unset (and
+# the sweep default of 1000 is below M6's static score, so it would hard-fail).
+DIFFICULTY_MAX=3000
 ARCHIVE="$ROOT/Multinet-v2-results/r1-20260717/runs/r1_M6_14x14_dense_kr_sg_kb_1/minigrid/kimi-k2.6/seed_0/default"
 
 # ---------------------------------------------------------------- gates
@@ -60,6 +67,7 @@ nohup python -m scripts.run_pipeline \
   --run-config gridworld/fixtures/run_config.r1.kimi_rerun_m6.json \
   --manifest gridworld/fixtures/manifest.r1_kimi_rerun.json \
   --seeds 0 --artifacts-root "$OUT/fresh_m6" \
+  --difficulty-max-static-score "$DIFFICULTY_MAX" \
   > "$OUT/logs/arm2_fresh_m6.log" 2>&1 &
 ARM2=$!
 
@@ -68,6 +76,7 @@ nohup python -m scripts.run_pipeline \
   --run-config gridworld/fixtures/run_config.r1.kimi_rerun_d2.json \
   --manifest gridworld/fixtures/manifest.r1_kimi_rerun.json \
   --seeds 0 --artifacts-root "$OUT/fresh_d2" \
+  --difficulty-max-static-score "$DIFFICULTY_MAX" \
   > "$OUT/logs/arm3_fresh_d2.log" 2>&1 &
 ARM3=$!
 
