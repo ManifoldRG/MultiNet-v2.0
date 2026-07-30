@@ -1,8 +1,26 @@
-# R1 Kimi make-up rerun — ready-to-launch package (2026-07-28)
+# R1 Kimi make-up rerun — ready-to-launch package (2026-07-28, rev 2026-07-30)
 
 **Status: PREPARED, NOT LAUNCHED.** Launch is Sean's call after the Moonshot
 balance gate. Everything below is built and validated on branch
-`fix/drop-key-bookkeeping` (DROP feature + review fixes, 1026 tests green).
+`fix/drop-key-bookkeeping` (DROP feature + review fixes, tests green).
+
+## Design: three parallel arms (rev 2026-07-30)
+
+| Arm | Maze | Harness | Purpose |
+|---|---|---|---|
+| 1 | M6 14×14 — **resume from step 143** | **as-run code (no DROP)**, via worktree @ `e0542b5` + `scripts/resume_from_archive.py` | Finish the infra-killed R1 episode under its original condition — corpus-grade completion (with the Kimi snapshot-drift caveat) |
+| 2 | M6 14×14 — fresh from step 1 | DROP-enabled branch | Make-up episode under the new harness; vs arm 1, a read on whether the prompt change (DROP in the vocabulary) shifts behavior on a maze where DROP is functionally irrelevant |
+| 3 | D2 8×8 (wrong-key) — fresh | DROP-enabled branch | The actual DROP test: does Kimi avoid or recover from the decoy-key trap |
+
+Interpretation caveats, stated up front: n = 1 per arm at temperature 1.0,
+so treat outcomes as sanity signals, not tests. Arm 1 is *strictly easier*
+than arm 2 (door already open, red key already collected, 175 of 318 steps
+of budget remaining), so "arm 1 succeeds, arm 2 fails" is over-determined —
+it cannot cleanly be attributed to DROP. M6 contains **no decoy keys**
+(red and blue are both required), so DROP should never rationally fire in
+arms 1–2; if arm 2's transcript shows DROP usage on M6, that itself is a
+finding (prompt-induced action noise). Arm 3 is where DROP can genuinely
+matter.
 
 ## What gets rerun, and why (evidence)
 
@@ -52,7 +70,33 @@ set is complete at these two.
   rerun now samples whatever Moonshot serves today. Record the date in the
   run notes (the k3-launch token-estimate banner may also still apply).
 
-## Launch procedure (when approved)
+## Launch file
+
+One command runs all three arms in parallel (after the balance precheck):
+
+```bash
+MOONSHOT_API_KEY=... scripts/launch_kimi_rerun.sh <artifacts-root>
+```
+
+It gates on: key present → clean committed tree on this branch → a FREE
+deterministic replay-verify of the archived episode (143/143 steps must
+reproduce byte-identically through the `e0542b5` worktree at
+`/tmp/multinet-r1-asrun`; the script creates the worktree if missing). Then
+arm 1 (`scripts/resume_from_archive.py --mode continue`) and arms 2+3
+(`run_pipeline` on the 2-maze fixtures) run as parallel background jobs,
+logs under `<artifacts-root>/logs/`, and a final summary prints
+end_reason/success/steps and any DROP actions per arm.
+
+Resume-arm facts, verified 2026-07-30: replay of all 143 archived steps
+reproduces the archive exactly (final position (row,col)=(8,6), red key
+collected, first door open, stall counter only 2/30, ~175 steps of cap
+left). The outage shows up in-archive as empty replies (3 earlier blips at
+queries 13/15/68 plus the killing streak); the resume clears the trailing
+parse-failure state and re-issues the round. Note: the archive itself lost
+52 late-episode frame PNGs (queries 134–146, never pulled before the
+outage) — the resume records explicit placeholders for those.
+
+## Manual launch procedure (equivalent, if you prefer step-by-step)
 
 ```bash
 # 0) Gate: Moonshot balance precheck (the batch precheck killed the leg
