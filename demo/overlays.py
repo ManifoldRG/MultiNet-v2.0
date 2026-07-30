@@ -147,8 +147,8 @@ def render_r1_result_overlay(ui: "MiniGridPlayerUI", comparison: TaskComparison)
     success = session.episode_success
     optimal = comparison.optimal_steps
     spec = session.task_spec
-    desc = (spec.description or "").strip()
-    tier = spec.difficulty_tier
+    desc = (spec.description or "").strip() if spec else ""
+    tier = spec.difficulty_tier if spec else 0
 
     veil = pygame.Surface((GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE), pygame.SRCALPHA)
     veil.fill((8, 9, 13, 210))
@@ -169,18 +169,20 @@ def render_r1_result_overlay(ui: "MiniGridPlayerUI", comparison: TaskComparison)
     items: list[tuple[pygame.Surface | None, int]] = []
     gap = 18
 
-    headline = "YOU SOLVED IT" if success else "OUT OF STEPS"
+    headline = "YOU SOLVED IT" if success else (
+        "STALLED" if session.end_reason == "stalled" else "OUT OF STEPS"
+    )
     items.append((ui.font_overlay.render(headline, True, accent), gap + 6))
 
     if desc:
-        desc_surfs = _wrap_text_surfs(desc, ui.font_main_bold, COLOR_TEXT, content_w, 2)
+        desc_surfs = _wrap_text_surfs(desc, ui.font_small, COLOR_TEXT, content_w, max_lines=4)
         for i, surf in enumerate(desc_surfs):
             after = gap if i == len(desc_surfs) - 1 else 8
             items.append((surf, after))
 
     if tier:
         diff = f"Maze difficulty: {tier} / {MAX_DIFFICULTY_TIER}"
-        items.append((ui.font_main_bold.render(diff, True, difficulty_color(tier)), gap + 4))
+        items.append((ui.font_small_bold.render(diff, True, difficulty_color(tier)), gap + 4))
 
     if success:
         line = f"Completed in {human_steps} steps"
@@ -199,7 +201,7 @@ def render_r1_result_overlay(ui: "MiniGridPlayerUI", comparison: TaskComparison)
     score_pct = int(round(session.display_reward * 100))
     score_text = f"  -  Score: {score_pct}%"
     opt_score_line = _compose_colored_line(
-        ui.font_small_bold,
+        ui.font_main_bold,
         [
             (opt_detail, COLOR_TEXT_SUBTITLE),
             (score_text, _score_color(score_pct)),
@@ -219,7 +221,7 @@ def render_r1_result_overlay(ui: "MiniGridPlayerUI", comparison: TaskComparison)
         frame, frame_color = "None of the models solved this one.", ACCENT_GREEN
     else:
         frame, frame_color = "How the models did on this maze", COLOR_TEXT_SUBTITLE
-    items.append((ui.font_small_bold.render(frame, True, frame_color), gap))
+    items.append((ui.font_main_bold.render(frame, True, frame_color), gap))
     items.append((None, gap))
 
     name_col_w = 100

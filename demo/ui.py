@@ -97,7 +97,6 @@ from demo.theme import (
     STATUS_MOVES_CRIT,
     STATUS_MOVES_OK,
     STATUS_MOVES_WARN,
-    TASK_HOWTO,
     TOP_BAR_H,
     WALL_GRAY_DST,
     WALL_GRAY_SRC,
@@ -576,10 +575,10 @@ class MiniGridPlayerUI:
         pygame.draw.rect(self.screen, COLOR_HEADER_BG, rect)
         pygame.draw.line(self.screen, COLOR_SEPARATOR, (0, TOP_BAR_H), (WINDOW_WIDTH, TOP_BAR_H))
 
-        title_surf = self.font_title.render("MultiNet Benchmark - Human Eval", True, COLOR_TEXT_TITLE)
+        title_surf = self.font_title.render("MultiNet v2.0 Benchmark", True, COLOR_TEXT_TITLE)
         self.screen.blit(title_surf, (RAIL_MARGIN, 13))
 
-        subtitle = "Can you solve what the AI model is solving"
+        subtitle = "Can you solve what frontier models cannot?"
         subtitle_surf = self.font_subtitle.render(subtitle, True, COLOR_TEXT_SUBTITLE)
         self.screen.blit(subtitle_surf, (RAIL_MARGIN, 13 + title_surf.get_height() + 1))
 
@@ -779,7 +778,9 @@ class MiniGridPlayerUI:
 
         y = self._draw_section_label("Task", x, y, COLOR_TEXT_TITLE)
         y += 10
-        y = self._draw_wrapped_text(TASK_HOWTO, x, y, self.font_small_bold, COLOR_TEXT, width)
+        y = self._draw_wrapped_text(
+            session.task_prompt_text(), x, y, self.font_small_bold, COLOR_TEXT, width
+        )
 
         events = session.event_log
         if events:
@@ -893,9 +894,7 @@ class MiniGridPlayerUI:
             else:
                 moves_color = STATUS_MOVES_OK
             self._draw_progress_bar(x, y, width, 10, fraction, moves_color)
-            y += 10 + 6
-            moves_text = f"{remaining} move{'s' if remaining != 1 else ''} left"
-            y = self._draw_text(moves_text, x, y, self.font_main_bold, moves_color) + 6
+            y += 10 + 8
 
             direction = state.agent_direction
             dir_name = DIRECTION_NAMES.get(direction, "?").split(" (")[0]

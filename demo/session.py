@@ -11,6 +11,7 @@ that knows this is being shown in a window.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sys
 import time
@@ -26,10 +27,9 @@ from gridworld.task_spec import TaskSpecification
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.backends.base import GridState
 from gridworld.actions import MiniGridActions
-from gridworld.baselines import plan_bfs_path
 
+from demo.compare import R1ResultCatalog
 from interface.config import ExperimentConfig
-from interface import action_space as action_space_mod
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
@@ -39,16 +39,19 @@ from interface.observation import (
     history_text,
     text_summary_history,
 )
+from interface import action_space as action_space_mod
+from interface.runner import ProgressStallWatchdog
 from interface.renderer import render_initial_maze_text
 
-# Reuse the same manifest-catalog resolution logic real eval runs use, so
-# browsing a manifest here (task rows whose ``source`` files can live in any
-# folder) always matches what scripts/run_pipeline.py would actually run.
 from scripts.run_pipeline import (
     _resolve_source,
     load_manifest,
     resolve_task_rows,
 )
+
+# Shown in the Task panel and end-screen summary (human-facing, not the model system prompt).
+TASK_INSTRUCTION = "Solve the maze by reaching the goal."
+
 
 # Power decay on ``optimal/steps``, then scaled linearly to 0 at the step cap.
 # Exponent 1.3: ~2x optimal ≈ 40% when cap is large (softer than pure high powers).
@@ -183,6 +186,7 @@ class MiniGridPlaySession:
         self.manifest_mode = manifest is not None
         self.manifest_experiment = experiment
         self.manifest_row_by_path: dict[Path, dict] = {}
+        self._r1_catalog: R1ResultCatalog | None = None
         if self.manifest_mode:
             manifest_resolved = self._resolve_path(manifest)
             manifest_tasks = load_manifest_tasks(manifest_resolved, experiment)
@@ -194,6 +198,7 @@ class MiniGridPlaySession:
                 self.manifest_row_by_path = {p: row for p, row in manifest_tasks}
                 if task_path is None:
                     task_path = str(self.task_list[0])
+                self._r1_catalog = R1ResultCatalog()
 
         if task_path is None:
             task_path = "mazes/exp_maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
@@ -205,8 +210,10 @@ class MiniGridPlaySession:
         self.state: Optional[GridState] = None
         self.episode_done = False
         self.episode_success = False
+        self.end_reason: str = ""
+        self._stall: ProgressStallWatchdog | None = None
         self.total_reward: float = 0.0
-        # BFS shortest-path length for the loaded task.
+        # BFS optimum + R1 step cap from pipeline canonical_paths.
         self.optimal_steps: int = 0
         self.last_action_name: str = ""
         self.last_dispatched_token: str = ""
@@ -249,8 +256,13 @@ class MiniGridPlaySession:
         self._checkpoint_trajectory()
 
         self.task_path = resolved
-        self.task_spec = TaskSpecification.from_json(str(resolved))
-        self.optimal_steps = self._compute_optimal_steps()
+        raw_spec = TaskSpecification.from_json(str(resolved))
+        task_id = self.manifest_row_by_path[resolved]["task_id"]
+        self.optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
+        cap = max(1, self.optimal_steps * 3)
+        self.task_spec = (
+            raw_spec if raw_spec.max_steps <= cap else dataclasses.replace(raw_spec, max_steps=cap)
+        )
 
         if self.task_list_locked:
             if resolved not in self.task_list:
@@ -273,15 +285,12 @@ class MiniGridPlaySession:
 
         self._reset_env()
 
-    def _compute_optimal_steps(self) -> int:
-        """BFS shortest-path length for the current task."""
-        planned = plan_bfs_path(self.task_spec)
-        return len(planned.action_labels)
-
     @property
     def display_reward(self) -> float:
         """Human-facing efficiency score for the end screen (0..1)."""
         if not self.episode_done:
+            return 0.0
+        if self.end_reason == "stalled":
             return 0.0
         return efficiency_score(
             self.state.step_count,
@@ -299,6 +308,9 @@ class MiniGridPlaySession:
 
         self.episode_done = False
         self.episode_success = False
+        self.end_reason = ""
+        k = self.config.progress_stall_k
+        self._stall = ProgressStallWatchdog(k, self.state) if k else None
         self.total_reward = 0.0
         self.last_action_name = ""
         self.last_dispatched_token = ""
@@ -338,6 +350,19 @@ class MiniGridPlaySession:
         else:
             self._step_token(token)
 
+    def _after_step(self, event_type: str, terminated: bool, truncated: bool) -> None:
+        if event_type == "DONE":
+            self.episode_done = True
+            self.episode_success = self.state.goal_reached
+            self.end_reason = "success"
+        elif self._stall and not (terminated or truncated) and self._stall.observe(self.state):
+            self.episode_done = True
+            self.end_reason = "stalled"
+        elif terminated or truncated:
+            self.episode_done = True
+            self.episode_success = self.state.goal_reached
+            self.end_reason = "truncated" if truncated else "success"
+
     def _step_token(self, token: str, cardinal_source: Optional[str] = None) -> None:
         """Execute a single egocentric primitive action."""
         if self.episode_done or self.state is None:
@@ -359,9 +384,7 @@ class MiniGridPlaySession:
             reward, terminated, truncated, info,
         )
 
-        if terminated or truncated:
-            self.episode_done = True
-            self.episode_success = self.state.goal_reached
+        self._after_step(event_type, terminated, truncated)
 
     def _step_drop(self) -> None:
         """Human-only DROP action; not part of the model's action space, so
@@ -390,10 +413,7 @@ class MiniGridPlaySession:
             "DROP", None, prev_state, feedback_text, "DROPPED",
             reward, terminated, truncated, info,
         )
-
-        if terminated or truncated:
-            self.episode_done = True
-            self.episode_success = self.state.goal_reached
+        self._after_step("DROPPED", terminated, truncated)
 
     def _record_step(
         self,
@@ -439,6 +459,9 @@ class MiniGridPlaySession:
     # ------------------------------------------------------------------
     # Model-view text (exactly what interface/ would build for the model)
     # ------------------------------------------------------------------
+
+    def task_prompt_text(self) -> str:
+        return TASK_INSTRUCTION
 
     def _build_model_view_sections(self) -> list[tuple[str, str]]:
         if self.task_spec is None or self.state is None:

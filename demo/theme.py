@@ -106,10 +106,6 @@ DIRECTION_NAMES = {
 KEY_REPEAT_DELAY = 200
 KEY_REPEAT_INTERVAL = 100
 MAX_DIFFICULTY_TIER = 6
-TASK_HOWTO = (
-    "Move the red arrow to the green goal. Avoid walls. "
-    "Colored keys open matching doors, and switches open gates."
-)
 FPS = 30
 
 
