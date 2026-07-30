@@ -1,0 +1,31 @@
+{
+ "description": "arm 3 of the 3-arm rerun: the wrong-key decoy maze (the actual DROP test). Single-task split of run_config.r1.kimi_rerun.json so the two fresh arms run as isolated parallel processes (the local pipeline is sequential and has no per-episode exception isolation: one arm crashing must not strand the other). Identical fixed cell to run_config.r1.json; runs on the DROP-enabled harness \u2014 see docs/r1-kimi-rerun-package.md.",
+ "manifest": "gridworld/fixtures/manifest.r1_kimi_rerun.json",
+ "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+ "experiment_config": {
+  "prompting": "minimal",
+  "observation": "image_only",
+  "context_window": "text_summary_and_last3",
+  "chat_history": "stateless",
+  "in_context_learning": "zero_shot",
+  "action_space": "egocentric",
+  "querying": "step_by_step",
+  "progress_stall_k": 30
+ },
+ "models": {
+  "kimi_k26": {
+   "provider": "kimi",
+   "model": "kimi-k2.6",
+   "temperature": 1.0,
+   "max_tokens": 64000,
+   "timeout": 2400,
+   "group": "kimi-api",
+   "worker_count": 1,
+   "max_in_flight": 1,
+   "tasks": [
+    "r1_D2_8x8_corridor_wrong_ky_inactive_sb_sg_kr_1"
+   ],
+   "enable_thinking": true
+  }
+ }
+}

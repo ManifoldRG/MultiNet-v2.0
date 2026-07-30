@@ -49,7 +49,12 @@ set is complete at these two.
   verbatim from `manifest.r1_balanced_03.json`, provenance in `selection`.
   Validated: `python -m scripts.validate_fixtures --manifest
   gridworld/fixtures/manifest.r1_kimi_rerun.json` → OK.
-- `gridworld/fixtures/run_config.r1.kimi_rerun.json` — Kimi only, identical
+- `gridworld/fixtures/run_config.r1.kimi_rerun_m6.json` /
+  `..._d2.json` — the launch path: one single-task config per fresh arm, so
+  arms 2 and 3 run as isolated parallel processes (see "Launch hardening").
+  `run_config.r1.kimi_rerun.json` — the original both-mazes config, kept for
+  provenance; it runs the two mazes **sequentially** in one process.
+  All three are Kimi only, identical
   fixed cell to R1 (`minimal` / `image_only` / `egocentric` / `zero_shot` /
   `text_summary_and_last3` + `chat_history=stateless`, `progress_stall_k=30`,
   thinking ON, `max_tokens=64000`, temperature 1.0 — Moonshot mode-forces
@@ -86,6 +91,32 @@ arm 1 (`scripts/resume_from_archive.py --mode continue`) and arms 2+3
 (`run_pipeline` on the 2-maze fixtures) run as parallel background jobs,
 logs under `<artifacts-root>/logs/`, and a final summary prints
 end_reason/success/steps and any DROP actions per arm.
+
+## Launch hardening (preflight 2026-07-30)
+
+Three findings from the pre-launch review, all fixed before the paid launch:
+
+1. **No crash isolation, and arm 1 flushes only at the end.**
+   `scripts/run_pipeline.py` has no `except Exception` anywhere, and the
+   resume driver's continue loop called `agent.generate()` unguarded — so one
+   non-retryable HTTP error or a timeout surviving the 5-attempt retry budget
+   would have killed arm 1 **with no artifact written**, discarding every paid
+   query of a ~12h resume. The loop is now
+   `drive_continue_loop()` (extracted, duck-typed, unit-tested from the main
+   checkout), which catches agent errors, rolls the reserved query index back
+   and returns `agent_error:<Type>: <msg>` so `main()` still flushes with
+   `end_reason=resume_interrupted:agent_error:...`.
+2. **Arm 1's socket timeout was 600s.** It comes verbatim from the archive's
+   `run_inputs.json`, but the as-run process ran with the
+   `KIMI_TIMEOUT_OVERRIDE` hack (`9aca849`, removed in `0a9cfec`), so 600 was
+   never the effective as-run patience — and 64k-thinking replies routinely
+   take minutes (the archive's last query: 260s). New `--timeout` flag; the
+   launcher passes `2400`, matching the fresh arms. Client patience only: no
+   effect on sampling or comparability.
+3. **The local pipeline is sequential.** `max_in_flight` is a distributed-only
+   knob, so one process would have run D2 then M6 back-to-back (~28h worst
+   case) with a shared failure domain. Arms 2 and 3 now launch as separate
+   processes with separate artifact roots (`fresh_m6/`, `fresh_d2/`).
 
 Resume-arm facts, verified 2026-07-30: replay of all 143 archived steps
 reproduces the archive exactly (final position (row,col)=(8,6), red key

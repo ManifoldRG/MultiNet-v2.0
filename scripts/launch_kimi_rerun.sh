@@ -6,6 +6,9 @@
 #   Arm 2  M6 fresh from step 1 under the DROP-enabled branch
 #   Arm 3  D2 (wrong-key decoy) fresh under the DROP-enabled branch
 #
+# All three run as independent processes with independent artifact roots, so a
+# crash in one never strands the others.
+#
 # PAID RUN. Gates, in order: Moonshot balance precheck (manual), committed
 # clean tree on fix/drop-key-bookkeeping, free replay-verify pass.
 #
@@ -37,28 +40,42 @@ python scripts/resume_from_archive.py \
   --archive-dir "$ARCHIVE" --repo-root "$ASRUN_TREE" \
   --out-dir "$OUT/arm1_resume_m6_verify" --mode replay-verify
 
-mkdir -p "$OUT"/{arm1_resume_m6,fresh,logs}
+mkdir -p "$OUT"/{arm1_resume_m6,fresh_m6,fresh_d2,logs}
 
 # ---------------------------------------------------------------- arms
 echo "== launching arm 1 (resume M6, as-run harness, no DROP) =="
 nohup python scripts/resume_from_archive.py \
   --archive-dir "$ARCHIVE" --repo-root "$ASRUN_TREE" \
   --out-dir "$OUT/arm1_resume_m6" --mode continue --max-new-queries 200 \
+  --timeout 2400 \
   > "$OUT/logs/arm1_resume.log" 2>&1 &
 ARM1=$!
 
-echo "== launching arms 2+3 (fresh M6 + D2, DROP-enabled harness) =="
+# Arms 2 and 3 run as SEPARATE processes with separate artifact roots: the
+# local pipeline is sequential (max_in_flight is a distributed-only knob) and
+# has no per-episode exception isolation, so one process per maze both halves
+# wall clock and stops a crash in one arm from stranding the other.
+echo "== launching arm 2 (fresh M6, DROP-enabled harness) =="
 nohup python -m scripts.run_pipeline \
-  --run-config gridworld/fixtures/run_config.r1.kimi_rerun.json \
+  --run-config gridworld/fixtures/run_config.r1.kimi_rerun_m6.json \
   --manifest gridworld/fixtures/manifest.r1_kimi_rerun.json \
-  --seeds 0 --artifacts-root "$OUT/fresh" \
-  > "$OUT/logs/arms23_fresh.log" 2>&1 &
-ARM23=$!
+  --seeds 0 --artifacts-root "$OUT/fresh_m6" \
+  > "$OUT/logs/arm2_fresh_m6.log" 2>&1 &
+ARM2=$!
 
-echo "arm1 pid=$ARM1  arms2+3 pid=$ARM23 — waiting..."
+echo "== launching arm 3 (fresh D2 wrong-key, DROP-enabled harness) =="
+nohup python -m scripts.run_pipeline \
+  --run-config gridworld/fixtures/run_config.r1.kimi_rerun_d2.json \
+  --manifest gridworld/fixtures/manifest.r1_kimi_rerun.json \
+  --seeds 0 --artifacts-root "$OUT/fresh_d2" \
+  > "$OUT/logs/arm3_fresh_d2.log" 2>&1 &
+ARM3=$!
+
+echo "arm1 pid=$ARM1  arm2 pid=$ARM2  arm3 pid=$ARM3 — waiting..."
 FAIL=0
-wait "$ARM1"  || { echo "ARM 1 EXITED NONZERO — see logs/arm1_resume.log";  FAIL=1; }
-wait "$ARM23" || { echo "ARMS 2+3 EXITED NONZERO — see logs/arms23_fresh.log"; FAIL=1; }
+wait "$ARM1" || { echo "ARM 1 EXITED NONZERO — see logs/arm1_resume.log";   FAIL=1; }
+wait "$ARM2" || { echo "ARM 2 EXITED NONZERO — see logs/arm2_fresh_m6.log"; FAIL=1; }
+wait "$ARM3" || { echo "ARM 3 EXITED NONZERO — see logs/arm3_fresh_d2.log"; FAIL=1; }
 
 # ---------------------------------------------------------------- summary
 echo "== outcomes =="
@@ -68,9 +85,9 @@ from pathlib import Path
 out = Path(sys.argv[1])
 for label, p in [
     ("arm1 resume M6 (no DROP)", out / "arm1_resume_m6" / "episode.json"),
-    ("arm2 fresh M6 (DROP)", next(iter((out / "fresh").glob(
+    ("arm2 fresh M6 (DROP)", next(iter((out / "fresh_m6").glob(
         "runs/r1_M6*/minigrid/kimi-k2.6/seed_0/*/episode.json")), None)),
-    ("arm3 fresh D2 (DROP)", next(iter((out / "fresh").glob(
+    ("arm3 fresh D2 (DROP)", next(iter((out / "fresh_d2").glob(
         "runs/r1_D2*/minigrid/kimi-k2.6/seed_0/*/episode.json")), None)),
 ]:
     if p and Path(p).is_file():

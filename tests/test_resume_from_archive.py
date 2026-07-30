@@ -12,6 +12,7 @@ import pytest
 from scripts.resume_from_archive import (
     IN_PROGRESS_END_REASON,
     build_checkpoint_payload,
+    drive_continue_loop,
     rehydrate_agent_messages,
     scripted_action_from_spec,
     trailing_parse_failures,
@@ -100,3 +101,91 @@ def test_scripted_action_spec_parsing():
         scripted_action_from_spec("MOVE_FORWARD")
     with pytest.raises(SystemExit):
         scripted_action_from_spec("scripted:")
+
+
+# --------------------------------------------------------------------------
+# drive_continue_loop: duck-typed against the old code's stepper/agent, so it
+# is testable from the main checkout with fakes.
+# --------------------------------------------------------------------------
+
+class _FakeState:
+    step_count = 0
+
+
+class _FakeStepper:
+    """Minimal stand-in: yields `rounds` query rounds, then None."""
+
+    def __init__(self, rounds: int) -> None:
+        self.rounds = rounds
+        self.query_count = 0
+        self.applied: list[object] = []
+        self.action_queue: list[str] = []
+        self.state = _FakeState()
+
+    def next_query(self):
+        if self.query_count >= self.rounds:
+            return None
+        self.query_count += 1  # the real stepper reserves the index here
+        return [{"role": "user", "content": "go"}]
+
+    def apply_reply(self, reply):
+        self.applied.append(reply)
+
+
+class _FakeAgent:
+    def __init__(self, replies=(), raises_on: int | None = None) -> None:
+        self.calls = 0
+        self.raises_on = raises_on
+
+    def generate(self, messages):
+        self.calls += 1
+        if self.raises_on is not None and self.calls == self.raises_on:
+            raise RuntimeError("Moonshot API timed out after 600s")
+        return f"reply-{self.calls}"
+
+
+def test_continue_loop_runs_to_exhaustion_of_the_stepper():
+    stepper, agent = _FakeStepper(rounds=3), _FakeAgent()
+    new_queries, stopped_early = drive_continue_loop(
+        stepper, agent, max_new_queries=10, log=lambda _m: None
+    )
+    assert (new_queries, stopped_early) == (3, None)
+    assert stepper.applied == ["reply-1", "reply-2", "reply-3"]
+    assert stepper.query_count == 3
+
+
+def test_continue_loop_stops_at_the_new_query_cap_and_rolls_the_index_back():
+    stepper, agent = _FakeStepper(rounds=10), _FakeAgent()
+    new_queries, stopped_early = drive_continue_loop(
+        stepper, agent, max_new_queries=2, log=lambda _m: None
+    )
+    assert new_queries == 2
+    assert stopped_early == "max_new_queries(2)"
+    # query_count equals the APPLIED query count: the reserved-but-unused
+    # index is rolled back.
+    assert stepper.query_count == 2
+
+
+def test_continue_loop_flushes_instead_of_crashing_on_an_agent_error():
+    """A transport failure must never discard hours of paid work: the loop
+    reports it as an interruption so main() still writes episode artifacts."""
+    stepper, agent = _FakeStepper(rounds=10), _FakeAgent(raises_on=3)
+    new_queries, stopped_early = drive_continue_loop(
+        stepper, agent, max_new_queries=10, log=lambda _m: None
+    )
+    assert new_queries == 2  # the two that applied cleanly
+    assert stopped_early.startswith("agent_error:RuntimeError: Moonshot API timed out")
+    assert stepper.query_count == 2
+    assert stepper.applied == ["reply-1", "reply-2"]
+
+
+def test_continue_loop_stops_when_a_scripted_agent_reports_exhausted():
+    class _Exhausted(_FakeAgent):
+        exhausted = True
+
+    stepper = _FakeStepper(rounds=5)
+    new_queries, stopped_early = drive_continue_loop(
+        stepper, _Exhausted(), max_new_queries=10, log=lambda _m: None
+    )
+    assert (new_queries, stopped_early) == (0, "scripted_agent_exhausted")
+    assert stepper.query_count == 0

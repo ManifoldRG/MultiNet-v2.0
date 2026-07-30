@@ -121,6 +121,48 @@ def rehydrate_agent_messages(transcript: list[dict], archive_dir: Path) -> int:
     return missing
 
 
+def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, reset_usage=None):
+    """Run live query rounds until the stepper finishes, the cap is hit, or the
+    agent dies. Returns ``(new_queries, stopped_early)``; a non-None
+    ``stopped_early`` becomes a ``resume_interrupted:`` end_reason.
+
+    A transport failure (socket timeout past the retry budget, non-retryable
+    HTTP status) is caught rather than propagated: crashing here would discard
+    every paid query of a multi-hour resume, since artifacts are only flushed
+    after this loop returns.
+
+    Duck-typed on the as-run code's stepper/agent so it stays importable (and
+    testable) from the main checkout.
+    """
+    new_queries = 0
+    stopped_early: str | None = None
+    while (messages := stepper.next_query()) is not None:
+        if getattr(agent, "exhausted", False):
+            stopped_early = "scripted_agent_exhausted"
+        elif new_queries >= max_new_queries:
+            stopped_early = f"max_new_queries({max_new_queries})"
+        if stopped_early:
+            # next_query already reserved this query's index; roll it back so
+            # the artifact's query_count equals the applied-query count (same
+            # convention resume_stepper uses for an in-flight round).
+            stepper.query_count -= 1
+            break
+        if reset_usage is not None:
+            reset_usage(agent)
+        try:
+            reply = agent.generate(messages)
+            stepper.apply_reply(reply)
+        except Exception as exc:  # noqa: BLE001 — never lose paid work
+            stopped_early = f"agent_error:{type(exc).__name__}: {exc}"[:200]
+            log(f"  ABORTING on agent error (artifacts still flushed): {exc}")
+            stepper.query_count -= 1
+            break
+        new_queries += 1
+        log(f"  new query {new_queries}: env_step={stepper.state.step_count} "
+            f"parsed={stepper.action_queue or 'PARSE-FAIL'}")
+    return new_queries, stopped_early
+
+
 def scripted_action_from_spec(spec: str) -> str:
     prefix = "scripted:"
     if not spec.startswith(prefix) or not spec[len(prefix):]:
@@ -179,6 +221,12 @@ def main() -> int:
     ap.add_argument("--mode", required=True, choices=["replay-verify", "continue"])
     ap.add_argument("--max-new-queries", type=int, default=200,
                     help="safety cap on NEW model queries in continue mode")
+    ap.add_argument("--timeout", type=float, default=None,
+                    help="override the archived per-call socket timeout (seconds). "
+                         "Client patience only — no effect on sampling or on "
+                         "comparability with the as-run episode. The archived 600s "
+                         "predates the run_config default for 64k thinking runs "
+                         "(the as-run process had the KIMI_TIMEOUT_OVERRIDE hack).")
     ap.add_argument("--agent", default=None,
                     help="override: scripted:<ACTION> emits that action for 2 "
                          "queries then stops (no API key / spend)")
@@ -287,30 +335,20 @@ def main() -> int:
     else:
         from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
         model_cfg = {**run_inputs["model_config"], **run_inputs["runtime_model_config"]}
+        if args.timeout is not None:
+            print(f"  timeout override: {model_cfg.get('timeout')} -> {args.timeout}s")
+            model_cfg["timeout"] = args.timeout
         allowed = set(KimiK26Config.__dataclass_fields__)
         agent = KimiK26Agent(
             config=KimiK26Config(**{k: v for k, v in model_cfg.items() if k in allowed})
         )
 
-    new_queries = 0
-    stopped_early: str | None = None
-    while (messages := stepper.next_query()) is not None:
-        if getattr(agent, "exhausted", False):
-            stopped_early = "scripted_agent_exhausted"
-        elif new_queries >= args.max_new_queries:
-            stopped_early = f"max_new_queries({args.max_new_queries})"
-        if stopped_early:
-            # next_query already reserved this query's index; roll it back so
-            # the artifact's query_count equals the applied-query count (same
-            # convention resume_stepper uses for an in-flight round).
-            stepper.query_count -= 1
-            break
-        _reset_agent_usage(agent)
-        reply = agent.generate(messages)
-        stepper.apply_reply(reply)
-        new_queries += 1
-        print(f"  new query {new_queries}: env_step={stepper.state.step_count} "
-              f"parsed={stepper.action_queue or 'PARSE-FAIL'}")
+    new_queries, stopped_early = drive_continue_loop(
+        stepper,
+        agent,
+        max_new_queries=args.max_new_queries,
+        reset_usage=_reset_agent_usage,
+    )
 
     result = stepper.result()
     if stopped_early:
