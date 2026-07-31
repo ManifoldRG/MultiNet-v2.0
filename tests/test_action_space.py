@@ -26,7 +26,6 @@ def test_cardinal_vocabulary_is_the_agreed_set():
         "MOVE_EAST",
         "MOVE_WEST",
         "PICKUP",
-        "DROP",
         "INTERACT",
         "DONE",
     )

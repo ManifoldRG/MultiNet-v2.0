@@ -250,28 +250,6 @@ def _extract_mechanism_events(
                 )
             )
 
-        elif event_type == "DROP":
-            # The dropped key is the one that leaves collected_keys (mirror of
-            # the PICKUP diff above); its colour comes from the spec map. Fall
-            # back to the colour held beforehand (agent_carrying is a colour,
-            # not a key id), then to colourless phrasing.
-            before_keys = set(sb.get("collected_keys") or [])
-            after_keys = set(sa.get("collected_keys") or [])
-            gone_keys = before_keys - after_keys
-            if gone_keys:
-                key_id = sorted(gone_keys)[0]
-                key_color = key_colors.get(key_id, sb.get("agent_carrying") or key_id)
-            else:
-                key_color = sb.get("agent_carrying") or sa.get("agent_carrying")
-            events.append(
-                (
-                    index,
-                    observation_templates.TEXT_SUMMARY_DROP_KEY.format(key_color=key_color)
-                    if key_color
-                    else observation_templates.TEXT_SUMMARY_DROP_KEY_UNKNOWN,
-                )
-            )
-
         elif event_type == "OPENED":
             before_doors = set(sb.get("open_doors") or [])
             after_doors = set(sa.get("open_doors") or [])

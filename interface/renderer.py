@@ -14,7 +14,6 @@ from interface.coords import (
     agent_row_col,
     goal_row_col,
     inventory_list,
-    live_key_position,
     maze_rows_cols,
     to_row_col,
     wall_cells,
@@ -64,8 +63,7 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
     for key in task_spec.mechanisms.keys:
         if key.id in collected:
             continue
-        # Live position, not the spec's: a dropped key moves (see coords.live_key_position)
-        row, col = to_row_col(live_key_position(key, state) if state else key.position)
+        row, col = to_row_col(key.position)
         parts.append(
             observation_templates.KEY_LINE.format(color=key.color, row=row, col=col)
         )

@@ -12,7 +12,7 @@ from minigrid.core.world_object import Door as MiniGridDoor
 
 from ..task_spec import TaskSpecification
 from ..task_parser import TaskParser
-from ..custom_env import CustomMiniGridEnv, Gate, Key as CustomKey
+from ..custom_env import CustomMiniGridEnv, Gate
 from .base import AbstractGridBackend, GridState
 
 
@@ -244,17 +244,6 @@ class MiniGridBackend(AbstractGridBackend):
                     if cell.is_open or not cell.is_locked:
                         open_doors.add(door_spec.id)
         collected_keys = set(getattr(self.env, "collected_keys", set()))
-        # Live key positions, scanned from the grid rather than taken from the task
-        # spec: DROP places a key in the agent's own cell, so the spec position is
-        # stale from the first drop onward.
-        key_positions: dict[str, tuple[int, int]] = {}
-        for x in range(self.env.width):
-            for y in range(self.env.height):
-                cell = self.env.grid.get(x, y)
-                if isinstance(cell, CustomKey):
-                    key_id = getattr(cell, "key_id", None)
-                    if key_id is not None:
-                        key_positions[key_id] = (x, y)
         active_switches = set()  # IDs of switches that are currently activated
         open_gates = set()  # IDs of gates that are currently open (passable)
         block_positions = {}  # Maps block_id -> (x, y) position
@@ -316,7 +305,6 @@ class MiniGridBackend(AbstractGridBackend):
             open_gates=open_gates,
             block_positions=block_positions,
             teleporter_cooldowns=teleporter_cooldowns,
-            key_positions=key_positions,
             goal_reached=goal_reached,
             observability_mode=obs_mode,
             visible_cells=visible_cells,

@@ -531,32 +531,6 @@ class CustomMiniGridEnv(MiniGridEnv):
             reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, info)
             return obs, reward, terminated, truncated, info
 
-        # DROP puts the held key in the agent's CURRENT cell, mirroring the
-        # same-cell PICKUP above, so drop and pickup are exact inverses at one
-        # action each. MiniGridEnv.step would drop into the forward cell, which is
-        # both asymmetric with our pickup and fails when the agent faces a wall —
-        # exactly the corner an agent stuck with a decoy key tends to be in. So
-        # DROP is handled here and never delegated to super().
-        if action == self.actions.drop:
-            info = {}
-            if self.carrying is not None and current_cell is None:
-                dropped = self.carrying
-                self.grid.set(*self.agent_pos, dropped)
-                dropped.cur_pos = tuple(self.agent_pos)
-                self.carrying = None
-                key_id = getattr(dropped, "key_id", None)
-                if key_id is not None:
-                    self.collected_keys.discard(key_id)
-            else:
-                info = {"invalid_action": True}
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(
-                0, False, truncated, info
-            )
-            return obs, reward, terminated, truncated, info
-
         # Switches are activated from the agent's current cell, matching the validator.
         if action == self.actions.toggle and isinstance(current_cell, Switch):
             if not current_cell.activate():

@@ -65,24 +65,6 @@ def forward_cell(state: GridState) -> tuple[int, int]:
     return (row + dr, col + dc)
 
 
-def live_key_position(key, state: GridState):
-    """Where a key actually is now.
-
-    Keys move: DROP puts a held key back on the grid in the agent's own cell, so
-    the task spec's position is only correct until the first drop.
-    `state.key_positions` is scanned from the live grid; fall back to the spec
-    position for states built before that field existed.
-    """
-    pos = (state.key_positions or {}).get(key.id)
-    if pos is None:
-        return key.position
-    return Position(x=pos[0], y=pos[1])
-
-
-# Backward-compatible alias for the pre-promotion private name.
-_live_key_position = live_key_position
-
-
 def key_at_cell(
     task_spec: TaskSpecification,
     state: GridState,
@@ -92,7 +74,7 @@ def key_at_cell(
     for key in task_spec.mechanisms.keys:
         if key.id in state.collected_keys:
             continue
-        if to_row_col(live_key_position(key, state)) == (row, col):
+        if to_row_col(key.position) == (row, col):
             return key.color
     return None
 
