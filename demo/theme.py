@@ -6,6 +6,9 @@ import pygame
 from minigrid.core.constants import COLORS as _MINIGRID_COLORS
 
 
+APP_TITLE = "MultiNet v2.0 Benchmark"
+APP_SUBTITLE = "Can you solve what frontier models cannot?"
+
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------

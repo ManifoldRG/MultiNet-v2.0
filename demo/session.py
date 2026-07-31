@@ -28,7 +28,7 @@ from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.backends.base import GridState
 from gridworld.actions import MiniGridActions
 
-from demo.compare import R1ResultCatalog
+from demo.compare import R1ResultCatalog, r1_task_id
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
@@ -186,7 +186,7 @@ class MiniGridPlaySession:
         self.manifest_mode = manifest is not None
         self.manifest_experiment = experiment
         self.manifest_row_by_path: dict[Path, dict] = {}
-        self._r1_catalog: R1ResultCatalog | None = None
+        self._r1_catalog = R1ResultCatalog()
         if self.manifest_mode:
             manifest_resolved = self._resolve_path(manifest)
             manifest_tasks = load_manifest_tasks(manifest_resolved, experiment)
@@ -198,7 +198,6 @@ class MiniGridPlaySession:
                 self.manifest_row_by_path = {p: row for p, row in manifest_tasks}
                 if task_path is None:
                     task_path = str(self.task_list[0])
-                self._r1_catalog = R1ResultCatalog()
 
         if task_path is None:
             task_path = "mazes/exp_maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
@@ -257,7 +256,8 @@ class MiniGridPlaySession:
 
         self.task_path = resolved
         raw_spec = TaskSpecification.from_json(str(resolved))
-        task_id = self.manifest_row_by_path[resolved]["task_id"]
+        manifest_row = self.manifest_row_by_path.get(resolved)
+        task_id = manifest_row["task_id"] if manifest_row else r1_task_id(resolved)
         self.optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
         cap = max(1, self.optimal_steps * 3)
         self.task_spec = (

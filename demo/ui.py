@@ -54,6 +54,8 @@ from demo.theme import (
     ACCENT_BLUE,
     ACCENT_GREEN,
     ACCENT_PURPLE,
+    APP_SUBTITLE,
+    APP_TITLE,
     BOTTOM_HINT_H,
     BUTTON_RADIUS,
     CARD_GAP,
@@ -129,6 +131,8 @@ class MiniGridPlayerUI:
         self.show_start_screen = True
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
+        self.settings_editable = False
+        self.show_moves_bar = False
         self.model_view_scroll = 0
         self.text_only_scroll = 0
 
@@ -575,11 +579,10 @@ class MiniGridPlayerUI:
         pygame.draw.rect(self.screen, COLOR_HEADER_BG, rect)
         pygame.draw.line(self.screen, COLOR_SEPARATOR, (0, TOP_BAR_H), (WINDOW_WIDTH, TOP_BAR_H))
 
-        title_surf = self.font_title.render("MultiNet v2.0 Benchmark", True, COLOR_TEXT_TITLE)
+        title_surf = self.font_title.render(APP_TITLE, True, COLOR_TEXT_TITLE)
         self.screen.blit(title_surf, (RAIL_MARGIN, 13))
 
-        subtitle = "Can you solve what frontier models cannot?"
-        subtitle_surf = self.font_subtitle.render(subtitle, True, COLOR_TEXT_SUBTITLE)
+        subtitle_surf = self.font_subtitle.render(APP_SUBTITLE, True, COLOR_TEXT_SUBTITLE)
         self.screen.blit(subtitle_surf, (RAIL_MARGIN, 13 + title_surf.get_height() + 1))
 
         # Right-aligned cluster, built leftward from the window edge:
@@ -884,17 +887,18 @@ class MiniGridPlayerUI:
 
         state = session.state
         if state:
-            y = self._draw_status_label(x, y, "Moves")
-            remaining = max(0, state.max_steps - state.step_count)
-            fraction = remaining / state.max_steps if state.max_steps else 0.0
-            if fraction < 0.3:
-                moves_color = STATUS_MOVES_CRIT
-            elif fraction < 0.5:
-                moves_color = STATUS_MOVES_WARN
-            else:
-                moves_color = STATUS_MOVES_OK
-            self._draw_progress_bar(x, y, width, 10, fraction, moves_color)
-            y += 10 + 8
+            if self.show_moves_bar:
+                y = self._draw_status_label(x, y, "Moves")
+                remaining = max(0, state.max_steps - state.step_count)
+                fraction = remaining / state.max_steps if state.max_steps else 0.0
+                if fraction < 0.3:
+                    moves_color = STATUS_MOVES_CRIT
+                elif fraction < 0.5:
+                    moves_color = STATUS_MOVES_WARN
+                else:
+                    moves_color = STATUS_MOVES_OK
+                self._draw_progress_bar(x, y, width, 10, fraction, moves_color)
+                y += 10 + 8
 
             direction = state.agent_direction
             dir_name = DIRECTION_NAMES.get(direction, "?").split(" (")[0]
@@ -967,9 +971,18 @@ class MiniGridPlayerUI:
     def _content_settings(self, surface: pygame.Surface, x: int, y: int, width: int) -> int:
         session = self.session
         y = self._draw_text("SETTINGS", x, y, self.font_title, COLOR_TEXT_TITLE, surface=surface)
+        if self.settings_editable:
+            settings_help = (
+                "These change what a human sees/controls, mirroring interface.config.ExperimentConfig. "
+                "Press a number to cycle a value."
+            )
+        else:
+            settings_help = (
+                "Frozen for R1 parity (matches interface.config.ExperimentConfig). "
+                "Tab / Esc to close."
+            )
         y = self._draw_wrapped_text(
-            "These change what a human sees/controls, mirroring interface.config.ExperimentConfig. "
-            "Press a number to cycle a value.",
+            settings_help,
             x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
         )
         y += 10
@@ -978,12 +991,13 @@ class MiniGridPlayerUI:
             _cw, ch = self._draw_chip(f"[{key_char}]", x, y, self.font_small, (20, 20, 24), (*ACCENT_BLUE, 255), surface=surface)
             self._draw_text(f"{attr} = {value}", x + _cw + 10, y + 2, self.font_main, COLOR_TEXT, surface=surface)
             y += ch + 4
-        y += 8
-        y = self._draw_wrapped_text(
-            "These only change what is displayed/hinted -- the running episode and its step "
-            "count are unaffected. Tab / Esc to close.",
-            x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
-        )
+        if self.settings_editable:
+            y += 8
+            y = self._draw_wrapped_text(
+                "These only change what is displayed/hinted -- the running episode and its step "
+                "count are unaffected. Tab / Esc to close.",
+                x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
+            )
 
         manifest_row = session.manifest_row_by_path.get(session.task_path) if session.manifest_mode else None
         if manifest_row:
@@ -1185,7 +1199,7 @@ class MiniGridPlayerUI:
             self.show_settings_overlay = False
             return None
 
-        if self.show_settings_overlay:
+        if self.show_settings_overlay and self.settings_editable:
             for key_char, _attr, _choices in SETTINGS_AXES:
                 if key == getattr(pygame, f"K_{key_char}", None):
                     session._cycle_setting(key_char)

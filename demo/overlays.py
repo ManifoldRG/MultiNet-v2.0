@@ -12,6 +12,8 @@ from demo.theme import (
     ACCENT_AMBER,
     ACCENT_CYAN,
     ACCENT_GREEN,
+    APP_SUBTITLE,
+    APP_TITLE,
     COLOR_BG,
     COLOR_SEPARATOR,
     COLOR_TEXT,
@@ -110,10 +112,10 @@ def render_start_screen(ui: "MiniGridPlayerUI") -> None:
     cx = WINDOW_WIDTH // 2
     cy = WINDOW_HEIGHT // 2
 
-    title = ui.font_splash_title.render("MultiNet", True, COLOR_TEXT_TITLE)
+    title = ui.font_splash_title.render(APP_TITLE, True, COLOR_TEXT_TITLE)
     ui.screen.blit(title, title.get_rect(center=(cx, cy - 48)))
 
-    subtitle = ui.font_splash_sub.render("MiniGrid Demo", True, COLOR_TEXT_SUBTITLE)
+    subtitle = ui.font_splash_sub.render(APP_SUBTITLE, True, COLOR_TEXT_SUBTITLE)
     ui.screen.blit(subtitle, subtitle.get_rect(center=(cx, cy + 8)))
 
     pulse = (math.sin(pygame.time.get_ticks() / 420.0) + 1.0) * 0.5
