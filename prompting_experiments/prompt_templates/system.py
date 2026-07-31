@@ -10,6 +10,8 @@ MECHANISM_LIST = (
 MECHANISM_RULES = (
     "RULES (domain logic):\n"
     "  - PICKUP: pick up a key while standing in the same cell.\n"
+    "  - DROP: put down the key you are carrying, leaving it in your current cell.\n"
+    "    You carry one key at a time, so DROP before picking up a different key.\n"
     "  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n"
     "    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n"
     "  - Switches: TOGGLE while standing on them. "

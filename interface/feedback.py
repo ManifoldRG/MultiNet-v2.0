@@ -94,6 +94,16 @@ def infer_step_outcome(
             return "PICKUP", feedback_templates.PICKED_UP_KEY.format(key_color=carried)
         return "NOTHING", feedback_templates.NOTHING_TO_PICK_UP
 
+    if action == "DROP":
+        if prev.agent_carrying and not curr.agent_carrying:
+            return "DROP", feedback_templates.DROPPED_KEY.format(
+                key_color=prev.agent_carrying,
+                position=curr_pos,
+            )
+        if not prev.agent_carrying:
+            return "NOTHING", feedback_templates.NOTHING_TO_DROP
+        return "NOTHING", feedback_templates.DROP_BLOCKED
+
     if action == "TOGGLE":
         if (
             prev.active_switches != curr.active_switches
@@ -160,6 +170,8 @@ def format_step_feedback(
         return feedback_templates.SUCCESS_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "PICKUP":
         return feedback_templates.PICKUP_FEEDBACK.format(action=action, message=event_message), event_type
+    if event_type == "DROP":
+        return feedback_templates.DROP_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "NOTHING":
         return feedback_templates.NOTHING_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
     if event_type == "OPENED":

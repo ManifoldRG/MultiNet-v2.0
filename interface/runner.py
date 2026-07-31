@@ -54,6 +54,17 @@ def _progress_signature(state) -> tuple:
         )
         for block_id, position in state.block_positions.items()
     )
+    # Keys move: DROP puts a held key back on the grid, so a retrace over
+    # previously visited cells with the key elsewhere is genuine progress.
+    # Without DROP the key layout is a pure function of collected_keys, so
+    # this axis never splits states a DROP-free episode saw as equal.
+    keys = frozenset(
+        (
+            key_id,
+            tuple(int(coord) for coord in position),
+        )
+        for key_id, position in (getattr(state, "key_positions", None) or {}).items()
+    )
     return (
         tuple(int(coord) for coord in state.agent_position),
         state.agent_carrying,
@@ -62,6 +73,7 @@ def _progress_signature(state) -> tuple:
         frozenset(state.active_switches),
         frozenset(state.open_gates),
         blocks,
+        keys,
         explored,
     )
 
@@ -209,22 +221,42 @@ class ExperimentRunner:
 
         stepper = EpisodeStepper(self, verbose=verbose, maze_path=maze_path)
         stepper.start()
+        agent_error: str | None = None
         while (messages := stepper.next_query()) is not None:
             _reset_agent_usage(agent)
-            if hasattr(agent, "generate"):
-                reply = agent.generate(messages)
-            else:
-                # Legacy test doubles: ``__call__(messages) -> str`` plus the
-                # ``last_usage``/``last_thinking`` side-channels. Shim them into a
-                # Reply so the stepper sees one uniform result type.
-                text = agent(messages)
-                reply = Reply(
-                    text=text,
-                    usage=getattr(agent, "last_usage", None),
-                    thinking=getattr(agent, "last_thinking", None),
-                )
-            stepper.apply_reply(reply)
-        return stepper.result()
+            try:
+                if hasattr(agent, "generate"):
+                    reply = agent.generate(messages)
+                else:
+                    # Legacy test doubles: ``__call__(messages) -> str`` plus the
+                    # ``last_usage``/``last_thinking`` side-channels. Shim them into a
+                    # Reply so the stepper sees one uniform result type.
+                    text = agent(messages)
+                    reply = Reply(
+                        text=text,
+                        usage=getattr(agent, "last_usage", None),
+                        thinking=getattr(agent, "last_thinking", None),
+                    )
+                stepper.apply_reply(reply)
+            except Exception as exc:  # noqa: BLE001 — never lose paid work
+                # Episode artifacts are only written after this method returns
+                # and callers (run_pipeline) have no per-episode isolation, so a
+                # dead transport used to discard the whole episode. End it here
+                # instead: the partial transcript survives and the end_reason
+                # says plainly that this is an infra outcome, not a model one.
+                # KeyboardInterrupt/SystemExit are BaseException and still
+                # propagate — Ctrl-C must stay an interrupt.
+                agent_error = f"agent_error:{type(exc).__name__}: {exc}"[:200]
+                logger.error("episode aborted by agent error: %s", exc)
+                # next_query already reserved this round's index; roll it back so
+                # query_count equals the applied-query count.
+                stepper.query_count -= 1
+                break
+        result = stepper.result()
+        if agent_error is not None:
+            result["end_reason"] = agent_error
+            result["success"] = False
+        return result
 
     def _one_shot_blocks(self, obs) -> list[dict]:
         """The one-shot ICL example blocks (example image + solution), or []."""

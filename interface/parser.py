@@ -6,6 +6,7 @@ ACTION_ORDER = (
     "TURN_RIGHT",
     "MOVE_FORWARD",
     "PICKUP",
+    "DROP",
     "TOGGLE",
     "DONE",
 )
@@ -22,6 +23,10 @@ _SYNONYMS = {
     "forward": "MOVE_FORWARD",
     "pick up": "PICKUP",
     "pickup": "PICKUP",
+    "drop": "DROP",
+    "drop key": "DROP",
+    "put down": "DROP",
+    "release": "DROP",
     "toggle": "TOGGLE",
     "done": "DONE",
     "finished": "DONE",
