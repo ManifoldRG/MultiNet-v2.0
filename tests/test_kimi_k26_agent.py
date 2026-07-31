@@ -72,29 +72,6 @@ def test_kimi_agent_posts_moonshot_chat_completion(monkeypatch):
     assert seen["body"]["thinking"] == {"type": "disabled"}
 
 
-def test_kimi_timeout_override_env_is_not_consulted(monkeypatch):
-    """The R1 KIMI_TIMEOUT_OVERRIDE stopgap was removed post-campaign; the
-    per-call timeout must come only from KimiK26Config (set via run_config),
-    never from an ambient env var."""
-    seen = {}
-
-    def fake_urlopen(req, timeout):
-        seen["timeout"] = timeout
-        return _FakeResponse(
-            {"choices": [{"message": {"content": "FINAL_OUTPUT: DONE"}}],
-             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
-        )
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    monkeypatch.setenv("KIMI_TIMEOUT_OVERRIDE", "9999")
-    agent = KimiK26Agent(
-        KimiK26Config(model="kimi-k2.6", max_tokens=8, timeout=5),
-        api_key="secret",
-    )
-    agent([{"role": "user", "content": "hi"}])
-    assert seen["timeout"] == 5, "env override leaked into the socket timeout"
-
-
 def test_kimi_temperature_pinned_by_thinking_mode(monkeypatch):
     """Moonshot 400s unless temperature is exactly the value it allows for the
     mode: 1.0 with thinking on, 0.6 with thinking off. The agent pins it per mode

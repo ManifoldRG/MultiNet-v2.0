@@ -106,7 +106,7 @@ def _has_step_history(user_text: str, observation: str) -> bool:
     if observation == "image_text":
         return "Recent steps" in user_text
     if observation == "image_only":
-        return "Recent steps" in user_text or "FINAL_OUTPUT:" in user_text
+        return "Recent steps" in user_text or "Action:" in user_text
     return False
 
 

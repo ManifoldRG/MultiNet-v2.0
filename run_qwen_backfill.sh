@@ -14,7 +14,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"                                   # repo root
 source "${QWEN_VENV:-.venv-qwen-vllm}/bin/activate"
-source lib/vllm_serve_args.sh                          # vllm_serve_args(): two-tier serve args
 
 OUT=artifacts/qwen_backfill; GEN="$OUT/_gen"; mkdir -p "$GEN"
 BASE_RC=gridworld/fixtures/run_config.conditional_baseline_thinking_claude_kimi_qwen.json
@@ -47,11 +46,10 @@ PY
 echo "[2/3] ensuring vLLM (Qwen/Qwen3.6-27B) is serving on :8000"
 if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
   echo "      launching vLLM (~14 min to load; log: $OUT/vllm.log)"
-  # TWO-TIER PHASE-TRANSITION POINT: serve args from vllm_serve_args() (phase-1
-  # defaults reproduce today's line; QWEN_MAX_MODEL_LEN=96000 etc. -> phase 2).
   nohup env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
-    vllm serve Qwen/Qwen3.6-27B --served-model-name Qwen/Qwen3.6-27B $(vllm_serve_args) \
-      > "$OUT/vllm.log" 2>&1 &
+    vllm serve Qwen/Qwen3.6-27B --port 8000 --served-model-name Qwen/Qwen3.6-27B \
+      --gpu-memory-utilization 0.9 --max-model-len 16384 --max-num-seqs 64 \
+      --dtype bfloat16 --trust-remote-code > "$OUT/vllm.log" 2>&1 &
   for _ in $(seq 1 180); do curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && break; sleep 10; done
 fi
 curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1 || { echo "vLLM never became ready — see $OUT/vllm.log"; exit 1; }

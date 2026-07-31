@@ -98,18 +98,6 @@ def leading_summary_blocks(
     return [{"type": "text", "text": summary}]
 
 
-def _history_record_action(rec: dict[str, Any]) -> str:
-    """The action to attribute to a history step in the model's own vocabulary.
-
-    Cardinal runs expand one model action into primitives; each step record
-    keeps the primitive in ``action`` and the model's emission in
-    ``cardinal_action`` (None for egocentric runs). History renders under the
-    ``FINAL_OUTPUT:`` delimiter, so it must show an action the model is
-    actually allowed to output.
-    """
-    return rec.get("cardinal_action") or rec["action"]
-
-
 def _last3_history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
@@ -120,45 +108,17 @@ def _last3_history_text(
 
     lines = [observation_templates.RECENT_HISTORY_HEADER]
     for rec in recs:
-        row, col = rec["position_after_row_col"]
+        row, col = rec["position_after"]
         lines.append(
             observation_templates.RECENT_HISTORY_STEP.format(
                 row=int(row),
                 col=int(col),
                 facing=rec["facing_after"],
-                action=_history_record_action(rec),
+                action=rec["action"],
                 feedback=rec["prompt_feedback"],
             )
         )
     return "\n".join(lines)
-
-
-def _agent_start_pose(
-    transcript: list[dict[str, Any]],
-) -> tuple[int, int, str] | None:
-    """(row, col, facing) of the agent's starting cell, in prompt coordinates.
-
-    Read from the transcript's ``reset`` record (``state.position_row_col`` +
-    ``state.facing``); falls back to the first step's before-pose. Returns None
-    if neither is available (older/partial transcripts) so the caller can omit
-    the grounding line rather than crash.
-    """
-    for rec in transcript:
-        if rec.get("kind") == "reset":
-            st = rec.get("state") or {}
-            rc = st.get("position_row_col")
-            facing = st.get("facing")
-            if rc and facing:
-                return int(rc[0]), int(rc[1]), str(facing)
-            break
-    for rec in transcript:
-        if rec.get("kind") == "step":
-            pb = rec.get("position_before_row_col")
-            fb = rec.get("facing_before")
-            if pb and fb:
-                return int(pb[0]), int(pb[1]), str(fb)
-            break
-    return None
 
 
 def text_summary_history(
@@ -170,11 +130,6 @@ def text_summary_history(
     The trail is essential: an events-only summary carried zero spatial
     information from the first pickup onward, exactly when a keyed maze turns
     back into a navigation problem (29/45 sweep episodes).
-
-    The summary is prefixed with a persistent start-pose line ("You started at
-    (r, c) facing DIR.") so the model has a fixed coordinate anchor to reason
-    the trail against — important under image_only, where the observation gives
-    no textual position and the model otherwise loses track of where it began.
     """
     steps = history_steps(transcript)
     mechanism_events = _extract_mechanism_events(steps, task_spec)
@@ -194,23 +149,10 @@ def text_summary_history(
                     observation_templates.TEXT_SUMMARY_NAV_TO.format(row=row, col=col)
                 )
 
-    start = _agent_start_pose(transcript)
-    start_line = (
-        observation_templates.TEXT_SUMMARY_START.format(
-            row=start[0], col=start[1], facing=start[2]
-        )
-        if start
-        else None
-    )
-
     if not parts:
-        body = observation_templates.TEXT_SUMMARY_EMPTY
-    else:
-        body = (
-            f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n"
-            f"{_format_summary_chain(parts)}"
-        )
-    return f"{start_line}\n{body}" if start_line else body
+        return observation_templates.TEXT_SUMMARY_EMPTY
+    summary = _format_summary_chain(parts)
+    return f"{observation_templates.TEXT_SUMMARY_BLOCK_HEADER}\n{summary}"
 
 
 def _extract_mechanism_events(
@@ -310,11 +252,11 @@ def _format_summary_chain(events: list[str]) -> str:
 def _pick_waypoints(steps: list[dict[str, Any]], count: int) -> list[tuple[int, int]]:
     n = len(steps)
     if n <= count:
-        return [tuple(rec["position_after_row_col"]) for rec in steps]  # type: ignore[return-value]
+        return [tuple(rec["position_after"]) for rec in steps]  # type: ignore[return-value]
     indices = [round(i * (n - 1) / (count - 1)) for i in range(count)]
     seen: list[tuple[int, int]] = []
     for i in indices:
-        pos: tuple[int, int] = tuple(steps[i]["position_after_row_col"])  # type: ignore[assignment]
+        pos: tuple[int, int] = tuple(steps[i]["position_after"])  # type: ignore[assignment]
         if pos not in seen:
             seen.append(pos)
     return seen
@@ -341,12 +283,11 @@ def history_content_blocks(
         text = (
             user_templates.LAST3_USER_PROMPT["image_only_step"].format(
                 inventory=inventory,
-                action=_history_record_action(rec),
+                action=rec["action"],
             )
             if observation == "image_only"
             else user_templates.LAST3_USER_PROMPT["image_text_step"].format(
-                inventory=inventory,
-                action=_history_record_action(rec),
+                inventory=inventory
             )
         )
         blocks.append({"type": "text", "text": text})

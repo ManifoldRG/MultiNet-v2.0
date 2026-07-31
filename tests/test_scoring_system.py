@@ -336,12 +336,12 @@ def test_runtime_score_prefers_interface_state_after_over_row_col_position_after
             },
             {
                 "kind": "step",
-                "position_after_row_col": [1, 2],
+                "position_after": [1, 2],
                 "state_after": {"agent_position": [2, 1]},
             },
             {
                 "kind": "step",
-                "position_after_row_col": [1, 3],
+                "position_after": [1, 3],
                 "state_after": {"agent_position": [3, 1]},
             },
         ],

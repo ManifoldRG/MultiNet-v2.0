@@ -119,7 +119,7 @@ def _extract_run_positions(run: dict[str, Any]) -> list[tuple[int, int]]:
         else:
             pos = _state_position(item.get("state_after"))
             if pos is None:
-                raw = item.get("position_after_row_col")
+                raw = item.get("position_after")
                 pos = (int(raw[0]), int(raw[1])) if isinstance(raw, list) and len(raw) >= 2 else None
         if pos is not None:
             positions.append(pos)

@@ -1,25 +1,6 @@
-import importlib
 import json
 from pathlib import Path
 from scripts import sweep_state as ss
-
-
-def test_kimictx_topo_selects_three_context_window_kimi_batches(monkeypatch):
-    monkeypatch.setenv("SWEEP_TOPO", "kimictx")
-    mod = importlib.reload(ss)
-    try:
-        ns = [b["n"] for b in mod.BATCHES]
-        assert ns == [0, 1, 2, 3]                        # smoke + 3 variants only
-        assert mod.BATCHES[0]["name"] == "smoke"
-        assert "smoke_kimi3" in mod.BATCHES[0]["run_config"]
-        variants = [b["prompt_variant"] for b in mod.BATCHES[1:]]
-        assert variants == ["last3", "text_summary", "text_summary_and_last3"]
-        for b in mod.BATCHES[1:]:
-            assert b["conditions"] == "Context window"
-            assert "conditional_context_window_kimi" in b["run_config"]
-    finally:
-        monkeypatch.delenv("SWEEP_TOPO", raising=False)
-        importlib.reload(ss)                             # restore default 11-batch family
 
 
 def test_batches_cover_ten_plus_smoke():

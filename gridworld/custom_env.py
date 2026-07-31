@@ -101,19 +101,11 @@ class Switch(Ball):
     def render(self, img):
         color = SWITCH_RENDER_COLORS.get(self.visual_color, SWITCH_RENDER_COLORS["grey"])
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), color)
-        # Draw the on/off state so image_only observations can perceive it: an
-        # active switch gets a bright white core, an inactive one a hollow
-        # (dark) core. Without this branch on/off rendered pixel-identical
-        # (R1 render investigation, 2026-07-22).
-        core = np.array([255, 255, 255]) if self.is_active else np.array([30, 30, 30])
-        fill_coords(img, point_in_circle(0.5, 0.5, 0.13), core)
 
     def encode(self):
         obj_type, color_idx, state = super().encode()
-        # Low bit preserves the custom (non-MiniGrid) color flag; the +2 makes
-        # the encoded tuple differ on activation so the MiniGrid tile cache
-        # (keyed on encode()) refreshes when is_active flips.
-        state = (1 if self.visual_color not in MINIGRID_COLORS else 0) + (2 if self.is_active else 0)
+        if self.visual_color not in MINIGRID_COLORS:
+            state = 1
         return (obj_type, color_idx, state)
 
 

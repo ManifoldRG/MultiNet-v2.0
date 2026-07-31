@@ -47,9 +47,7 @@ def test_sonnet_46_and_opus_46_keep_temperature():
 
 def test_thinking_and_effort_are_added_when_requested():
     body = _body("claude-opus-4-8", enable_thinking=True, effort="low")
-    # display="summarized" so Opus 4.8's thinking text is loggable (defaults to
-    # omitted otherwise, silently dropping every thinking trace).
-    assert body["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert body["thinking"] == {"type": "adaptive"}
     assert body["output_config"]["effort"] == "low"
     # still no temperature for the Opus family, even with thinking on
     assert "temperature" not in body

@@ -32,28 +32,6 @@ class RecordingAgent:
         return f"FINAL_OUTPUT: {action}"
 
 
-class LegacyDelimiterAgent:
-    """First reply is accepted by the legacy synonym fallback."""
-
-    def __init__(self):
-        self.calls = 0
-        self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
-
-    def __call__(self, messages):
-        self.calls += 1
-        if self.calls == 1:
-            return "ACTION: turn left"
-        return "FINAL_OUTPUT: TURN_LEFT"
-
-
-class RejectedDelimiterAgent(LegacyDelimiterAgent):
-    def __call__(self, messages):
-        self.calls += 1
-        if self.calls == 1:
-            return "ACTION: teleport"
-        return "FINAL_OUTPUT: TURN_LEFT"
-
-
 SPEC = {
     "task_id": "history_dedup",
     "seed": 0,
@@ -110,44 +88,3 @@ def test_stateless_still_embeds_last3_history():
     )
     late_call_texts = "\n".join(_texts(agent.calls[-1]))
     assert RECENT_HISTORY_HEADER in late_call_texts
-
-
-def test_rolling_chat_normalizes_accepted_legacy_action_delimiter():
-    result = _run(
-        LegacyDelimiterAgent(),
-        observation="text_only",
-        context_window="current",
-        chat_history="rolling",
-        in_context_learning="zero_shot",
-        progress_stall_k=2,
-    )
-    queries = [rec for rec in result["transcript"] if rec.get("kind") == "query"]
-    prior_assistant = [
-        message["content"]
-        for message in queries[1]["agent_messages"]
-        if message.get("role") == "assistant"
-    ]
-
-    assert prior_assistant == ["FINAL_OUTPUT: TURN_LEFT"]
-    assert "ACTION:" not in prior_assistant[0]
-
-
-def test_rolling_chat_does_not_retain_rejected_legacy_delimiter():
-    result = _run(
-        RejectedDelimiterAgent(),
-        observation="text_only",
-        context_window="current",
-        chat_history="rolling",
-        in_context_learning="zero_shot",
-        progress_stall_k=1,
-    )
-    queries = [rec for rec in result["transcript"] if rec.get("kind") == "query"]
-    prior_assistant = [
-        message["content"]
-        for message in queries[1]["agent_messages"]
-        if message.get("role") == "assistant"
-    ]
-
-    assert prior_assistant == [
-        "The previous response did not contain a valid action."
-    ]

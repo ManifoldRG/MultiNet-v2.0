@@ -168,13 +168,6 @@ mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
 if ! curl -fsS "http://127.0.0.1:$QWEN_PORT/v1/models" >/dev/null 2>&1; then
   eager_arg=()
   if [[ "${ENFORCE_EAGER,,}" == "true" ]]; then eager_arg=(--enforce-eager); fi
-  # TWO-TIER PHASE-TRANSITION POINT. This smoke launcher already parameterizes the
-  # serve line from its OWN env knobs (QWEN_MAX_MODEL_LEN/QWEN_MAX_NUM_SEQS/
-  # QWEN_GPU_MEMORY_UTILIZATION — same names as lib/vllm_serve_args.sh), so phase-2
-  # values flow straight through here; it keeps its site-specific flags (--host,
-  # --max-num-batched-tokens, --enable-prefix-caching, --generation-config, eager)
-  # and its smoke defaults (8192/0.95), so it deliberately does NOT call
-  # vllm_serve_args() (which would add --trust-remote-code and drop those flags).
   setsid env HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 vllm serve "$QWEN_MODEL" \
     --host 127.0.0.1 \
     --port "$QWEN_PORT" \

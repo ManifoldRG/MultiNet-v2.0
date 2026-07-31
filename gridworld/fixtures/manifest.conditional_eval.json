@@ -166,7 +166,7 @@
       "source": "ogbench/ogbench/procgen/maze_jsons/D3/10x10_dense_deadend_ky_dy_1.json",
       "expected_mechanisms": [],
       "maze_family": "D",
-      "notes": "Held-out distractor maze (dead-end decoy; not in the 50-run). The ogbench submodule was fixed so maze.goal matches goal.target=(8,8) — the stale (8,1) sat behind the dead-end door and the single-goal validator rejected it."
+      "notes": "Held-out distractor maze (dead-end decoy; not in the 50-run)."
     }
   ]
 }

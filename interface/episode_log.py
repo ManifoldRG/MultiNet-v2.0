@@ -132,13 +132,6 @@ def flush_episode_log(result: dict[str, Any], out_dir: Path) -> Path:
             "transcript": transcript_out,
         }
     )
-    # Phase provenance (Task B3): stamp the two-tier pass and the caps the
-    # episode ran under when the caller set them on ``result``. Additive and
-    # optional — absent on non-two-tier runs — and never part of any input hash.
-    for key in ("pass", "max_tokens", "max_model_len", "phase_label"):
-        value = result.get(key)
-        if value is not None:
-            episode[key] = _json_safe(value)
     # Atomic write: a crash mid-write must not leave a truncated episode.json
     # that a matching sidecar would treat as a valid cached episode.
     path = out_dir / "episode.json"

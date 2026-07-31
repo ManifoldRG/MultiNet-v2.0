@@ -772,7 +772,6 @@ def compute_difficulty(
     spec: TaskSpecification,
     validator: TaskValidator | None = None,
     validation_result: tuple[bool, Optional[list[tuple[int, int]]], str] | None = None,
-    bfs_path=None,
 ) -> DifficultyReport:
     """
     Compute solver-derived difficulty metrics for a task.
@@ -781,11 +780,6 @@ def compute_difficulty(
     action count, states explored, coarse mechanism complexity, and a legacy
     composite score. Use scorer.scoring.compute_12d_score when the full rubric vector is
     needed for benchmark comparison.
-
-    ``bfs_path`` accepts a precomputed ``plan_bfs_path(spec)`` result so callers
-    that already ran the executable planner (e.g. to inspect its action labels)
-    don't pay for a second BFS; like ``validation_result``, it must have been
-    computed for this exact ``spec``.
     """
     task_validator = validator or TaskValidator(spec)
     if validation_result is None:
@@ -798,12 +792,9 @@ def compute_difficulty(
     # The validator's abstract transitions remain the beatability authority
     # and the fallback for mechanics the executable planner can't traverse
     # (block pushes).
-    if not is_beatable:
-        bfs_path = None
-    elif bfs_path is None:
-        from gridworld.baselines import plan_bfs_path  # lazy: avoids model_interface at import
+    from gridworld.baselines import plan_bfs_path  # lazy: avoids model_interface at import
 
-        bfs_path = plan_bfs_path(spec)
+    bfs_path = plan_bfs_path(spec) if is_beatable else None
     if bfs_path is not None and bfs_path.success:
         optimal_steps = len(bfs_path.action_labels)
         solution = [tuple(pos) for pos in bfs_path.positions]

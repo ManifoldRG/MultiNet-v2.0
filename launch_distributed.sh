@@ -121,21 +121,6 @@ sync_code_to_vm() {  # $1 sha  $2 zone  $3 vm
   git archive --format=tar "$sha" \
     | gcloud compute ssh "$vm" --zone "$zone" --command \
         "tar -x -C ~/MultiNet-v2.0 && echo \"$sha\" > ~/MultiNet-v2.0/.deployed_sha"
-  # `git archive` skips submodule contents, and the VM can't fetch them itself
-  # (the image leaves ogbench uninitialized; its remote needs creds the VM
-  # lacks). Ship each submodule's tracked tree at the commit the superproject
-  # pins at $sha, so ogbench-sourced mazes (conditional_eval) exist at prepare
-  # time instead of failing FileNotFound on the coordinator.
-  local path sub_sha
-  while IFS= read -r path; do
-    [[ -n "$path" ]] || continue
-    sub_sha="$(git rev-parse "$sha:$path" 2>/dev/null)" \
-      || { echo "code-sync: cannot resolve submodule '$path' at $sha" >&2; return 1; }
-    git -C "$path" archive --format=tar "$sub_sha" \
-      | gcloud compute ssh "$vm" --zone "$zone" --command \
-          "mkdir -p ~/MultiNet-v2.0/$path && tar -x -C ~/MultiNet-v2.0/$path" \
-      || { echo "code-sync: submodule '$path' push failed on $vm" >&2; return 1; }
-  done < <(git ls-tree -r "$sha" | awk '$2 == "commit" { print $4 }')
 }
 
 # Verify the on-VM code matches $sha: sentinel + content spot-check. Returns 1 on mismatch.
@@ -153,18 +138,6 @@ verify_code_on_vm() {  # $1 sha  $2 zone  $3 vm
   if [[ "$expected_hash" != "$got_hash" ]]; then
     echo "code-sync content mismatch on $vm: distributed_run_pipeline.py hash differs" >&2; return 1
   fi
-  # Fail-closed on submodules: git archive skips them, so confirm each one's tree
-  # actually landed (the guarded failure was an empty ogbench dir → mazes missing
-  # at prepare time). sync_code_to_vm overwrites with the pinned-sha content, so
-  # presence implies freshness here.
-  local path
-  while IFS= read -r path; do
-    [[ -n "$path" ]] || continue
-    if ! gcloud compute ssh "$vm" --zone "$zone" --command \
-         "test -n \"\$(find ~/MultiNet-v2.0/$path -type f -print -quit 2>/dev/null)\"" 2>/dev/null; then
-      echo "code-sync: submodule '$path' is empty/missing on $vm" >&2; return 1
-    fi
-  done < <(git ls-tree -r "$sha" | awk '$2 == "commit" { print $4 }')
   log "code verified on $vm @ $sha"
   return 0
 }
