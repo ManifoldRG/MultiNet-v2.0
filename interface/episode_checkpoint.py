@@ -34,7 +34,7 @@ from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_row_col
 from interface.episode_log import _json_safe, state_snapshot
 from interface.episode_step import EpisodeStepper
-from interface.runner import _progress_signature
+from interface.progress_watchdog import ProgressStallWatchdog
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
 _FIELDS = (
@@ -138,8 +138,7 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
     reset_rec["_reset_frame_rgb"] = reset_rgb
     state = stepper.state
     stall_k = stepper.stall_k
-    seen = {_progress_signature(state)} if stall_k is not None else None
-    stall_count = 0
+    stall_watchdog = ProgressStallWatchdog(stall_k, state) if stall_k is not None else None
     for rec in step_records:
         action = rec["action"]
         decision_rgb = stepper._runner.last_rgb
@@ -174,13 +173,8 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
                 f"{rec.get('step_index')} ({action!r}) diverged from recorded "
                 "state_after"
             )
-        if stall_k is not None and not rec["terminated"] and not rec["truncated"]:
-            sig = _progress_signature(state)
-            if sig in seen:
-                stall_count += 1
-            else:
-                seen.add(sig)
-                stall_count = 0
+        if stall_watchdog and not rec["terminated"] and not rec["truncated"]:
+            stall_watchdog.observe(state)
 
     # A query record exists per issued-and-applied query; the query in flight at
     # checkpoint time (if any) has no record yet. Roll query_count back to the
@@ -210,8 +204,7 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
     )
     stepper.action_queue = []
     stepper.primitive_buffer = []
-    stepper.seen_signatures = seen
-    stepper.stall_count = stall_count
+    stepper._stall_watchdog = stall_watchdog
     stepper.end_reason = data["end_reason"]
     stepper._finished = bool(data["finished"])
     stepper.last_feedback = _reconstruct_last_feedback(

@@ -40,7 +40,7 @@ from interface.observation import (
     text_summary_history,
 )
 from interface import action_space as action_space_mod
-from interface.runner import ProgressStallWatchdog
+from interface.progress_watchdog import ProgressStallWatchdog
 from interface.renderer import render_initial_maze_text
 
 from scripts.run_pipeline import (
