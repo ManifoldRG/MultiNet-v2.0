@@ -4,7 +4,8 @@ from gridworld.task_spec import TaskSpecification
 from gridworld.backends.base import GridState
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from interface.config import ExperimentConfig
-from interface.runner import _progress_signature, build_runner
+from interface.progress_watchdog import _progress_signature
+from interface.runner import build_runner
 
 
 class ScriptedAgent:

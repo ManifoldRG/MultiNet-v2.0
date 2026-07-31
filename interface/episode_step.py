@@ -41,7 +41,8 @@ from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
 from interface.feedback import format_step_feedback
-from interface.runner import _progress_signature, _user_message_has_image, _trim_rolling_chat
+from interface.progress_watchdog import ProgressStallWatchdog
+from interface.runner import _user_message_has_image, _trim_rolling_chat
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class EpisodeStepper:
         self.prompt = runner.prompt
         self.querying = runner.querying
         self._finished = False
+        self._stall_watchdog: ProgressStallWatchdog | None = None
 
     def start(self) -> None:
         # Persist the exact seed the backend was reset with so a checkpoint can
@@ -117,14 +119,14 @@ class EpisodeStepper:
         self.end_reason = "max_steps"
         self.initial_state = state_snapshot(state)
 
-        self.stall_k = self.config.progress_stall_k
-        if self.stall_k is not None and getattr(self.task_spec.goal, "goal_type", None) == "survive_steps":
+        k = self.config.progress_stall_k
+        if k is not None and getattr(self.task_spec.goal, "goal_type", None) == "survive_steps":
             raise ValueError(
                 "progress_stall_k is incompatible with survive_steps goals: "
                 "repeated states are the intended behavior."
             )
-        self.seen_signatures = {_progress_signature(state)} if self.stall_k is not None else None
-        self.stall_count = 0
+        self.stall_k = k
+        self._stall_watchdog = ProgressStallWatchdog(k, state) if k else None
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(
@@ -321,14 +323,8 @@ class EpisodeStepper:
             )
             self.action_queue_index += 1
 
-            if self.stall_k is not None and not terminated and not truncated:
-                sig = _progress_signature(state)
-                if sig in self.seen_signatures:
-                    self.stall_count += 1
-                else:
-                    self.seen_signatures.add(sig)
-                    self.stall_count = 0
-                if self.stall_count >= self.stall_k:
+            if self._stall_watchdog and not terminated and not truncated:
+                if self._stall_watchdog.observe(state):
                     self.end_reason = "stalled"
                     self._finished = True
                     return None
