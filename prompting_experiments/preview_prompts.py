@@ -361,13 +361,16 @@ def build_preview(
                     "-" * 88,
                 ]
             )
-            if condition.name == "Context window" and variant_name == "text_summary":
+            if condition.name == "Context window" and variant_name in (
+                "text_summary",
+                "text_summary_and_last3",
+            ):
                 solution_steps, system_prompt, user_prompt = _one_shot_text_summary_preview(
                     config
                 )
                 chunks.extend(
                     [
-                        "additional text_summary example: one_shot_example maze after one_shot_example_solution",
+                        f"additional {variant_name} example: one_shot_example maze after one_shot_example_solution",
                         f"maze: {_ONE_SHOT_MAZE_PATH}",
                         f"solution steps replayed: {solution_steps}",
                         "[system prompt]",

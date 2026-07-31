@@ -799,6 +799,48 @@ def _write_run_config(tmp_path: Path, models: dict) -> Path:
     return path
 
 
+def _prepare_plan_with_overlay(tmp_path: Path, experiment_config: dict) -> dict:
+    """Build a run-config with a top-level experiment_config overlay and
+    resolve it into a distributed job plan."""
+    from scripts.distributed_run_pipeline import prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "stub": {
+                        "provider": "claude",
+                        "model": "stub-model",
+                        "tasks": [task],
+                    }
+                },
+                "experiment_config": experiment_config,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=tmp_path / "artifacts",
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+
+def test_distributed_units_carry_resolved_experiment_config(tmp_path):
+    plan = _prepare_plan_with_overlay(tmp_path, {"progress_stall_k": 20})
+    assert plan["units"], "expected units"
+    for u in plan["units"]:
+        assert u["experiment_config"]["progress_stall_k"] == 20
+        assert u["episode_inputs_hash"]
+        assert u["inputs_hash"]
+
+
 def _dummy_run_archive(files: dict[str, str] | None = None) -> bytes:
     files = files or {
         "episode.json": "{}",
@@ -878,7 +920,10 @@ def _valid_unit_archive(unit) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name in EXPECTED_RUN_FILES:
-            data = json.dumps({"unit_id": unit["unit_id"], "file": name}).encode("utf-8")
+            payload = {"unit_id": unit["unit_id"], "file": name}
+            if name == "run_inputs.json":
+                payload["inputs_hash"] = unit["episode_inputs_hash"]
+            data = json.dumps(payload).encode("utf-8")
             info = tarfile.TarInfo(name=name)
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
@@ -1070,6 +1115,38 @@ def test_baseline_thinking_config_11_runs_full_thinking():
     assert qwen["max_tokens"] == 4096
 
 
+def test_kimictx_configs_are_kimi_only_thinking_off_over_15_mazes():
+    """SWEEP_TOPO=kimictx: a Kimi-only 3-worker fleet running the Context-window
+    comparison (last3 / text_summary / text_summary_and_last3) thinking OFF. No
+    Claude/Qwen — the fleet provisions 3 kimi-api VMs + coordinator."""
+    catalog = json.loads(_CONDITIONAL_EVAL_MANIFEST.read_text(encoding="utf-8"))["tasks"]
+
+    rc = load_run_config(_FIXTURES / "run_config.conditional_context_window_kimi.json")
+    assert (_REPO_ROOT / rc["manifest"]).resolve() == _CONDITIONAL_EVAL_MANIFEST.resolve()
+    assert rc["conditions"] == "Context window"
+    check_run_config_expectations(rc, _CONDITIONAL_EVAL_MANIFEST, "Context window")  # no raise
+    assert set(rc["models"]) == {"kimi_k26"}             # Kimi ONLY
+    kimi = rc["models"]["kimi_k26"]
+    assert kimi["provider"] == "kimi" and kimi["model"] == "kimi-k2.6"
+    assert kimi["temperature"] == 0.6 and kimi["enable_thinking"] is False
+    assert kimi["worker_count"] == 3                     # 3 Kimi worker VMs
+    # max_in_flight is a PER-GROUP concurrency cap (_below_max_in_flight counts
+    # active units across the whole model_group). It must equal worker_count or
+    # the coordinator serializes the fleet — a cap of 1 starved 2 of 3 workers in
+    # the kimictx smoke.
+    assert kimi["max_in_flight"] == kimi["worker_count"] == 3
+    assert kimi["max_tokens"] == 4096
+    rows = resolve_task_rows(kimi["tasks"], catalog, _CONDITIONAL_EVAL_MANIFEST)
+    assert len(rows) == 15
+
+    # The provision/smoke config must match the fleet topology (3 kimi-api VMs).
+    smoke = load_run_config(_FIXTURES / "run_config.smoke_kimi3.json")
+    assert smoke["conditions"] is None
+    assert set(smoke["models"]) == {"kimi_k26"}
+    assert smoke["models"]["kimi_k26"]["worker_count"] == 3
+    assert smoke["models"]["kimi_k26"]["enable_thinking"] is False
+
+
 def test_smoke_eval_run_config_uses_two_qwen_one_kimi_workers():
     rc = load_run_config(_SMOKE_EVAL_RUN_CONFIG)
     assert (_REPO_ROOT / rc["manifest"]).resolve() == _SMOKE_EVAL_MANIFEST.resolve()
@@ -1244,6 +1321,159 @@ def test_dedup_rollout_covers_every_unique_variant_config_once():
     assert len(rolled) == len(all_unique)  # baseline run once, no variant twice
 
 
+def test_experiment_config_overlay_applies_under_condition_variant():
+    """A top-level experiment_config overlay composes with a named condition
+    variant: defaults < overlay < condition variant. The variant stays
+    authoritative for the axis it declares (context_window here); the overlay
+    field it doesn't touch (progress_stall_k) survives."""
+    pairs = _condition_configs(
+        "Context window", prompt_variant="text_summary",
+        base_overrides={"progress_stall_k": 20},
+    )
+    assert len(pairs) == 1
+    _, cfg = pairs[0]
+    assert cfg.progress_stall_k == 20            # overlay preserved
+    assert cfg.context_window == "text_summary"  # variant still authoritative
+
+
+def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
+    """The top-level experiment_config overlay in a run-config JSON must flow
+    all the way into the per-run sidecar, proving run_from_config actually
+    threads base_overrides down through _run_one_model/_run_one_unit."""
+    run_config = {
+        "models": {
+            "stub": {
+                "provider": "claude",
+                "model": "stub-model",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+        "experiment_config": {"progress_stall_k": 20},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="cfg",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = (
+        artifacts / "runs" / "validation_10_v01_empty_room" / "minigrid" / "stub-model" / "seed_0" / "default"
+    )
+    sidecar = load_json(run_dir / "run_inputs.json")
+    assert sidecar["experiment_config"]["progress_stall_k"] == 20
+
+
+def test_progress_stall_k_reaches_stored_resolved_config(tmp_path):
+    """Task 11 end-to-end proof: a run-config's top-level experiment_config
+    overlay (progress_stall_k=20) must reach the SAME resolved config through
+    both storage paths -- the local pipeline's run_inputs.json sidecar
+    (run_from_config -> _run_one_model -> _run_one_unit) and a prepared
+    distributed unit (prepare_job -> _condition_configs with the same
+    overlay). Individually these paths are covered by
+    test_run_from_config_experiment_config_overlay_reaches_run_inputs (Task 3)
+    and test_distributed_units_carry_resolved_experiment_config (Task 4); this
+    test is the integration proof that both channels reconstruct the
+    identical resolved config from one run-config, not merely that each
+    independently contains 20."""
+    from scripts.distributed_run_pipeline import prepare_job
+
+    run_config = {
+        "models": {
+            "stub": {
+                "provider": "claude",
+                "model": "stub-model",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+        "experiment_config": {"progress_stall_k": 20},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="cfg",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = (
+        artifacts / "runs" / "validation_10_v01_empty_room" / "minigrid" / "stub-model" / "seed_0" / "default"
+    )
+    sidecar = load_json(run_dir / "run_inputs.json")
+    stored_config = sidecar["experiment_config"]
+    assert stored_config["progress_stall_k"] == 20
+
+    plan = prepare_job(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    assert plan["units"], "expected at least one distributed unit"
+    reconstructed_config = plan["units"][0]["experiment_config"]
+    assert reconstructed_config["progress_stall_k"] == 20
+
+    # The local sidecar's stored config and the distributed unit's
+    # reconstructed config must be the *same* resolved config end to end --
+    # this is what would break (while each half-test above kept passing) if
+    # Task 3's overlay and Task 4's unit-resolution ever drifted apart.
+    assert stored_config == reconstructed_config
+
+
+def test_run_from_config_rejects_invalid_experiment_config_before_model_call(tmp_path):
+    """An unknown/invalid experiment_config key must fail fast during job
+    preparation, before any (paid) model call happens."""
+
+    def _boom(name, model_cfg):
+        raise AssertionError("model call must not happen when the overlay is invalid")
+
+    run_config = {
+        "models": {
+            "stub": {
+                "provider": "claude",
+                "model": "stub-model",
+                "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            }
+        },
+        "experiment_config": {"not_a_real_field": True},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+
+    with pytest.raises(TypeError):
+        run_from_config(
+            run_config_path=cfg_path,
+            manifest_path=_MANIFEST,
+            seeds=[0],
+            artifacts_root=tmp_path / "artifacts",
+            run_set_id="cfg",
+            agent_factory=_boom,
+            difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        )
+
+
 def test_distributed_prepare_honors_prompt_variant(tmp_path):
     """coordinator-prepare can plan a single variant so the shared baseline is
     not re-run once per condition set (the deduplicated launch rollout)."""
@@ -1371,7 +1601,7 @@ def test_distributed_upload_validates_and_extracts_archive(tmp_path):
     worker_id = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
     unit = store.assign(worker_id)["unit"]
 
-    result = store.upload(worker_id, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(worker_id, unit["unit_id"], _valid_unit_archive(unit))
 
     assert result["status"] == "verified"
     run_dir = artifacts / unit["run_dir"]
@@ -1413,7 +1643,7 @@ def test_distributed_upload_mirrors_verified_run_to_bucket(tmp_path, monkeypatch
     calls = []
     monkeypatch.setattr(dist, "mirror_to_bucket", lambda src, dest, **kw: calls.append((str(src), dest)))
 
-    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(wid, unit["unit_id"], _valid_unit_archive(unit))
 
     assert result["status"] == "verified"
     assert len(calls) == 1
@@ -1437,7 +1667,7 @@ def test_distributed_upload_records_pending_when_mirror_fails(tmp_path, monkeypa
 
     # A failed mirror must not lose the (paid) verified run: the upload still
     # succeeds and the result is flagged for a later re-push.
-    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(wid, unit["unit_id"], _valid_unit_archive(unit))
     assert result["status"] == "verified"
     us = store.load_state()["units"][unit["unit_id"]]
     assert us["status"] == "verified"
@@ -1454,7 +1684,7 @@ def test_distributed_upload_without_storage_does_not_mirror(tmp_path, monkeypatc
         lambda *a, **k: pytest.fail("mirror_to_bucket must not run without storage"),
     )
 
-    result = store.upload(wid, unit["unit_id"], _dummy_run_archive())
+    result = store.upload(wid, unit["unit_id"], _valid_unit_archive(unit))
     assert result["status"] == "verified"
     us = store.load_state()["units"][unit["unit_id"]]
     assert "gcs_uri" not in us and "gcs_pending" not in us
@@ -1525,6 +1755,20 @@ def test_distributed_upload_rejects_truncated_json(tmp_path):
     with pytest.raises(ValueError, match="not valid JSON"):
         store.upload(wid, unit["unit_id"], bad)
     # A failed verification must not leave a half-extracted run dir.
+    assert not (artifacts / unit["run_dir"] / "episode.json").exists()
+
+
+def test_distributed_upload_rejects_wrong_episode_inputs_hash(tmp_path):
+    artifacts, store, wid, unit = _stub_unit_store(tmp_path)
+    bad = _dummy_run_archive({
+        "episode.json": "{}",
+        "run_inputs.json": json.dumps({"inputs_hash": "wrong-inputs"}),
+        "run_score.json": "{}",
+    })
+
+    with pytest.raises(ValueError, match="inputs_hash mismatch"):
+        store.upload(wid, unit["unit_id"], bad)
+
     assert not (artifacts / unit["run_dir"] / "episode.json").exists()
 
 
@@ -1643,6 +1887,42 @@ def test_distributed_finalize_is_idempotent(tmp_path):
     rows = (art / "episode_runs.jsonl").read_text().strip().splitlines()
     assert first["run_count"] == second["run_count"] == 1
     assert len(rows) == 1
+
+
+def test_run_assigned_unit_rejects_stale_plan_missing_experiment_config(tmp_path):
+    """A worker resuming a job_plan.json prepared before units carried a
+    resolved experiment_config must get a clear, actionable RuntimeError
+    telling it to regenerate the plan via coordinator-prepare — not a bare
+    KeyError from the from_dict call."""
+    from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job, run_assigned_unit
+
+    manifest_path = _write_manifest(tmp_path)
+    cfg_path = _write_run_config(
+        tmp_path,
+        {"stub": {"provider": "claude", "model": "replay-stub", "group": "stub",
+                  "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
+    )
+    art = tmp_path / "coordinator"
+    prepare_job(
+        run_config_path=cfg_path, manifest_path=manifest_path, seeds=[0], conditions=None,
+        artifacts_root=art, run_set_id="dist", difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(art)
+    wid = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(wid)["unit"]
+    assert "experiment_config" in unit  # sanity: freshly prepared plans do carry it
+
+    # Simulate a job_plan.json persisted before the resolved-config change.
+    del unit["experiment_config"]
+
+    with pytest.raises(RuntimeError) as excinfo:
+        run_assigned_unit(
+            unit, artifacts_root=tmp_path / "worker",
+            agent_factory=lambda n, mc: (ReplayAgent(v01_empty_room_trajectory()), mc["model"]),
+        )
+    message = str(excinfo.value)
+    assert "coordinator-prepare" in message
+    assert "regenerate" in message
 
 
 def test_distributed_worker_upload_finalize_local_integration(tmp_path):
@@ -1784,6 +2064,107 @@ def test_distributed_prepare_preserves_progress_on_rerun(tmp_path):
 
     reread = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
     assert reread["units"][unit_id]["status"] == "verified"
+
+
+def test_explicit_job_id_does_not_preserve_units_after_resolved_config_changes(tmp_path):
+    """A durable job name is a namespace, not permission to reuse stale work.
+
+    The fully resolved experiment config participates in the canonical episode
+    hash and therefore in unit identity. Re-preparing the same explicit job ID
+    with a different watchdog K must replace the completed unit with fresh
+    pending work.
+    """
+    from scripts.distributed_run_pipeline import prepare_job, state_path
+
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg_path = tmp_path / "run_config.json"
+    artifacts = tmp_path / "artifacts"
+
+    def write_config(k):
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "experiment_config": {"progress_stall_k": k},
+                    "models": {
+                        "a": {
+                            "provider": "qwen",
+                            "model": "m",
+                            "group": "g",
+                            "tasks": [task],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    common = dict(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        conditions=None,
+        artifacts_root=artifacts,
+        run_set_id="dist",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        job_id="durable-watchdog-job",
+    )
+
+    write_config(20)
+    first_plan = prepare_job(**common)
+    first_id = first_plan["units"][0]["unit_id"]
+    state = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+    state["units"][first_id]["status"] = "verified"
+    state_path(artifacts).write_text(json.dumps(state), encoding="utf-8")
+
+    write_config(30)
+    second_plan = prepare_job(**common)
+    second_id = second_plan["units"][0]["unit_id"]
+    reread = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
+
+    assert second_id != first_id
+    assert first_id not in reread["units"]
+    assert reread["units"][second_id]["status"] == "pending"
+
+
+def test_distributed_unit_inputs_hash_covers_complete_episode_and_scoring_recipe():
+    from scripts.distributed_run_pipeline import _unit_inputs_hash
+
+    scorer_config = load_scorer_config()
+    common = {
+        "episode_inputs_hash": "episode-a",
+        "task_row": {"task_id": "t", "condition": "a"},
+        "canonical_paths": {"inputs_hash": "canonical-input", "route": [1, 2]},
+        "scored_static": {"inputs_hash": "static-input", "static_score": 10.0},
+        "scorer_config": scorer_config,
+        "difficulty_max_static_score": 100.0,
+    }
+    baseline = _unit_inputs_hash(**common)
+
+    changes = [
+        {**common, "episode_inputs_hash": "episode-b"},
+        {**common, "task_row": {"task_id": "t", "condition": "b"}},
+        {
+            **common,
+            # The complete artifact is hashed, not only its embedded input hash.
+            "canonical_paths": {
+                "inputs_hash": "canonical-input",
+                "route": [1, 3],
+            },
+        },
+        {
+            **common,
+            "scored_static": {
+                "inputs_hash": "static-input",
+                "static_score": 11.0,
+            },
+        },
+        {**common, "difficulty_max_static_score": 101.0},
+    ]
+    changed_scorer = load_scorer_config()
+    changed_scorer.baseline_tokens += 1
+    changes.append({**common, "scorer_config": changed_scorer})
+
+    assert all(_unit_inputs_hash(**changed) != baseline for changed in changes)
 
 
 def test_distributed_api_client_continues_past_failures_and_reports_them(tmp_path):

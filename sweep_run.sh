@@ -33,6 +33,8 @@ SWEEP_LAUNCHER="${SWEEP_LAUNCHER:-$HERE/launch_distributed.sh}"
 # must also drop the qwen model or provision would prepare orphaned qwen units.
 if [[ "${SWEEP_TOPO:-}" == "api" ]]; then
   PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_kimi_claude.json}"
+elif [[ "${SWEEP_TOPO:-}" == "kimictx" ]]; then
+  PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_kimi3.json}"
 else
   PROVISION_RUN_CONFIG="${PROVISION_RUN_CONFIG:-gridworld/fixtures/run_config.smoke_qwen36_kimi_claude.json}"
 fi
@@ -60,6 +62,10 @@ manifest_api_vms() { python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
 print(*[w["name"] for w in d.get("workers",[]) if w.get("kind")=="api"])' "$(manifest_path)"; }
+manifest_gpu_vms() { python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+print(*[w["name"] for w in d.get("workers",[]) if w.get("kind")=="gpu"])' "$(manifest_path)"; }
 
 # ---- batch field resolver (single source of truth = scripts.sweep_state) ---- #
 batch_field() {  # $1 n  $2 field  — prints "" for a JSON null
@@ -265,6 +271,58 @@ cmd_run_massive() {
   log "MASSIVE job (batches $*) started as run_id=$run_id on the reused fleet; watchdog re-armed @ $BATCH_CAP"
 }
 
+# reload-qwen-phase2: two-tier PHASE-2 server reload on the ALREADY-RUNNING fleet.
+# For each GPU VM: stop_gpu_worker (fail-closed GPU free) then relaunch the vLLM
+# server with phase-2 serve args (max-model-len 96000, few seqs) + reduced worker
+# concurrency, and health-check /v1/models. Reuses reload_gpu_worker + start_worker
+# (no new SSH mechanics). Requires BATCH_CAP (cost-safety parity with the other
+# batch-starting subcommands). RUN_CONFIG = the phase-2 qwen run config (derives the
+# worker topology); RUN_ID = phase-2 artifacts namespace (default $SWEEP_ID).
+# See docs/qwen-two-tier-rerun-design.md.
+cmd_reload_qwen_phase2() {
+  _require_manifest || return 1
+  require_gcloud || return 1
+  require_batch_cap || return 1
+  : "${RUN_CONFIG:?RUN_CONFIG is required (phase-2 qwen run config; derives worker topology)}"
+  local zone coord coord_ip gpu_vms vm topo art_id
+  zone="$(manifest_zone)"; coord="$(manifest_coord)"
+  gpu_vms="$(manifest_gpu_vms)"
+  [[ -n "$gpu_vms" ]] || { log "reload-qwen-phase2: no gpu-kind VMs in manifest — nothing to reload"; return 0; }
+  art_id="${RUN_ID:-$SWEEP_ID}"
+
+  export QWEN_WORKER_COUNT
+  topo="$(python3 -m scripts.distributed_topology "$RUN_CONFIG" "$SWEEP_ID")" \
+    || { echo "[sweep_run] topology derive failed for $RUN_CONFIG" >&2; return 1; }
+  coord_ip="$(internal_ip "$coord" "$zone")" \
+    || { echo "[sweep_run] internal_ip failed for $coord" >&2; return 1; }
+
+  # Re-arm the on-VM watchdog with the per-batch cap (fail-closed on reused VM),
+  # mirroring next-batch/run-massive.
+  for vm in $(manifest_vm_names); do
+    MAX_RUN_DURATION="$BATCH_CAP" arm_watchdog "$vm" "$zone" 0 \
+      || { echo "[sweep_run] watchdog re-arm failed on $vm (reload-qwen-phase2)" >&2; return 1; }
+  done
+
+  # Globals consumed by reload_gpu_worker -> start_worker (worker_field reads TOPO_JSON).
+  # WORKER_CONCURRENCY is dropped to the phase-2 (narrow) fan-out; the phase-2 serve
+  # knobs (max-model-len 96000, few seqs) are set inside reload_gpu_worker.
+  export COORD="$coord" ZONE="$zone" RUN_ID="$art_id" TOPO_JSON="$topo" \
+         WORKER_CONCURRENCY="${QWEN_PHASE2_WORKER_CONCURRENCY:-3}"
+
+  for vm in $gpu_vms; do
+    log "reload-qwen-phase2: reloading $vm to phase-2 serve args (max-model-len 96000)"
+    reload_gpu_worker "$vm" "$coord_ip" \
+      || { echo "[sweep_run] reload_gpu_worker failed on $vm" >&2; return 1; }
+    # Explicit post-reload health-check (start_worker already blocks on readiness;
+    # this confirms the phase-2 server answers /v1/models from the driver side).
+    gcloud compute ssh "$vm" --zone "$zone" --command \
+      "curl -fsS http://127.0.0.1:8000/v1/models >/dev/null" >/dev/null 2>&1 \
+      || { echo "[sweep_run] $vm: /v1/models not healthy after reload" >&2; return 1; }
+    log "reload-qwen-phase2: $vm healthy on phase-2 serve args"
+  done
+  log "reload-qwen-phase2 COMPLETE: [$gpu_vms] reloaded to phase-2 (max-model-len 96000); watchdog re-armed @ $BATCH_CAP"
+}
+
 # finalize-batch N: aggregate on the coordinator, egress the batch's artifacts to
 # DEST/<run_id>, and FAIL-CLOSED if nothing lands (fleet left up, no advance).
 cmd_finalize_batch() {
@@ -362,12 +420,13 @@ main() {
     provision)       shift; cmd_provision "$@" ;;
     next-batch)      shift; cmd_next_batch "$@" ;;
     run-massive)     shift; cmd_run_massive "$@" ;;
+    reload-qwen-phase2) shift; cmd_reload_qwen_phase2 "$@" ;;
     finalize-batch)  shift; cmd_finalize_batch "$@" ;;
     stop-apis)       shift; cmd_stop_apis "$@" ;;
     publish)         shift; cmd_publish "$@" ;;
     teardown)        shift; cmd_teardown "$@" ;;
     status)          shift; cmd_status "$@" ;;
-    *) echo "usage: sweep_run.sh {provision|next-batch N|finalize-batch N|stop-apis|publish RUN_ID|status|teardown}" >&2; return 2 ;;
+    *) echo "usage: sweep_run.sh {provision|next-batch N|run-massive N...|reload-qwen-phase2|finalize-batch N|stop-apis|publish RUN_ID|status|teardown}" >&2; return 2 ;;
   esac
 }
 

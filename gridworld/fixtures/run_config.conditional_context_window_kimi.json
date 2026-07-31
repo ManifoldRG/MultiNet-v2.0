@@ -1,0 +1,21 @@
+{
+  "description": "Kimi-only Context-window run config over the 15-maze conditional set, on a 3-Kimi-worker fleet (worker_count 3). Thinking OFF (temp 0.6). Drives the kimictx comparison of last3 vs text_summary vs text_summary_and_last3 (the SWEEP_TOPO=kimictx batch family selects the three prompt variants); the coordinator load-balances the 45 units across the 3 Kimi VMs. [API-only: Kimi, no Claude/Qwen.]",
+  "manifest": "gridworld/fixtures/manifest.conditional_eval.json",
+  "conditions": "Context window",
+  "models": {
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.6,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 3,
+      "max_in_flight": 3,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": false
+    }
+  }
+}

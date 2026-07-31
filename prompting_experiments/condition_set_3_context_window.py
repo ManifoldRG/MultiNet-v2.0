@@ -21,8 +21,8 @@ CONDITION_SET = ConditionSet(
         ),
         "last3": Variant(
             name="last3",
-            description="Include up to the last three executed steps. Each step is rendered as an image with the action taken in that step.",
-            config_overrides={"context_window": "last3"},
+            description="Last three executed steps rendered in one stateless message - same as the fair default.",
+            config_overrides={"context_window": "last3", "chat_history": "stateless"},
         ),
         "text_summary": Variant(
             name="text_summary",

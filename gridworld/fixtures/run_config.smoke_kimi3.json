@@ -1,0 +1,21 @@
+{
+  "description": "Kimi-only 3-worker fleet smoke over the 3-maze smoke manifest, using the SAME per-model settings as the kimictx conditional batches (temp 0.6, thinking OFF, worker_count 3). A green smoke proves the reused 3-Kimi fleet before any paid context-window batch. Non-conditional (conditions=null). Not for measurement. [SWEEP_TOPO=kimictx provision/smoke config.]",
+  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "conditions": null,
+  "models": {
+    "kimi_k26": {
+      "provider": "kimi",
+      "model": "kimi-k2.6",
+      "temperature": 0.6,
+      "max_tokens": 4096,
+      "timeout": 180,
+      "group": "kimi-api",
+      "worker_count": 3,
+      "max_in_flight": 3,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": false
+    }
+  }
+}

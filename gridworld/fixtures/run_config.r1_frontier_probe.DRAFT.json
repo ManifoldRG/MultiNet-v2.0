@@ -1,0 +1,55 @@
+{
+ "_DRAFT": "NOT RUNNABLE AS-IS \u2014 frontier probe draft; resolve _todo fields per analysis/r1-20260717/frontier_probe.md before any paid run.",
+ "description": "R1 frontier probe: 9-maze subset (manifest.r1_frontier_probe_01.json) x post-R1 frontier models. Identical experiment cell to R1; single 64k tier for ALL models (two-tier dropped per teardown \u00a76); equal caps.",
+ "manifest": "gridworld/fixtures/manifest.r1_frontier_probe_01.json",
+ "experiment_config": {
+  "prompting": "minimal",
+  "observation": "image_only",
+  "context_window": "text_summary_and_last3",
+  "chat_history": "stateless",
+  "in_context_learning": "zero_shot",
+  "action_space": "egocentric",
+  "querying": "step_by_step",
+  "progress_stall_k": 30
+ },
+ "models": [
+  {
+   "model": "claude-fable-5",
+   "provider": "claude",
+   "enable_thinking": true,
+   "effort": "xhigh",
+   "max_tokens": 64000,
+   "group": "claude-api",
+   "tasks": [
+    "all"
+   ],
+   "_todo": "confirm model id + effort semantics + no-sampling-params rule for Fable"
+  },
+  {
+   "model": "gpt-5.6-sol",
+   "provider": "openai",
+   "enable_thinking": true,
+   "max_tokens": 64000,
+   "group": "openai-api",
+   "tasks": [
+    "all"
+   ],
+   "_todo": "NO AGENT EXISTS \u2014 implement interface/agents/openai agent + parse tests first"
+  },
+  {
+   "model": "kimi-k3",
+   "provider": "kimi",
+   "enable_thinking": true,
+   "temperature": 1,
+   "timeout": 2400,
+   "max_tokens": 64000,
+   "group": "kimi-api",
+   "tasks": [
+    "all"
+   ],
+   "_todo": "OPTIONAL leg; confirm k3 keeps k2.6 mode-forced temperature + deep-thinking timeout"
+  }
+ ],
+ "_note_qwen37": "qwen3.7-pro leg deferred until serving decision (API vs fresh A100 vLLM).",
+ "_note_smoke": "run 1-maze smoke per model from unit model_config (not stripped plan[models]) before the 9-maze batch (R1 smoke bug)."
+}

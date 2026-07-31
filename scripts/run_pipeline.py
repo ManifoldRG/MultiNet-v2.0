@@ -187,18 +187,20 @@ def condition_variant_names(conditions: Optional[str]) -> list[str]:
 def _condition_configs(
     conditions: Optional[str],
     prompt_variant: Optional[str] = None,
+    base_overrides: Optional[dict] = None,
 ) -> list[tuple[str, ExperimentConfig]]:
     from interface.config import ExperimentConfig
 
+    base = ExperimentConfig(**(base_overrides or {}))
     if not conditions:
         if prompt_variant not in (None, "default"):
             raise ValueError("The default condition set only supports prompt_variant='default'.")
-        return [("default", ExperimentConfig())]
+        return [("default", base)]
     if conditions not in CONDITION_SETS:
         raise ValueError(
             f"Unknown --conditions {conditions!r}; available: {sorted(CONDITION_SETS)}."
         )
-    pairs = list(iter_condition_configs(conditions, ExperimentConfig()))
+    pairs = list(iter_condition_configs(conditions, base))
     if prompt_variant is not None:
         pairs = [(name, cfg) for name, cfg in pairs if name == prompt_variant]
         if not pairs:
@@ -236,6 +238,12 @@ _NON_RUNTIME_MODEL_KEYS = {
     # transport / model-loading (do not affect outputs)
     "timeout",
     "max_attempts",
+    # batch-API round deadline + cancel grace: wall-clock scheduling knobs on the
+    # Claude/Kimi batch clients; they bound how long a round waits, never what the
+    # model emits, so they must stay OUT of the episode/unit hash.
+    "batch_deadline_s",
+    "batch_cancel_grace_s",
+    "batch_poll_interval_s",
     "device_map",
     "local_files_only",
     "max_memory",
@@ -327,6 +335,35 @@ def _expected_run_hash(
             "pipeline_version": PIPELINE_VERSION,
         }
     )
+
+
+def _phase_episode_provenance(
+    phase: Optional[dict[str, Any]], model_config: Optional[dict[str, Any]]
+) -> dict[str, Any]:
+    """Additive phase/caps provenance for episode.json + the run row (Task B3).
+
+    Returns ``{}`` when the run-config declares no top-level ``phase`` block, so
+    non-two-tier runs are unchanged and ``build_run_row`` falls back to
+    ``pass=1``. When a phase is declared, records the two-tier ``pass``, the
+    ``phase_label``, and the output caps (``max_tokens`` / ``max_model_len``) the
+    unit ran under, taken from the model config.
+
+    This is *provenance*, not a generation input: it NEVER enters
+    ``_expected_run_hash`` / the distributed unit hashes (the cap change already
+    differentiates the phases in the hash), so re-labeling a phase never churns
+    a cached episode or an already-paid unit.
+    """
+    if not phase:
+        return {}
+    provenance: dict[str, Any] = {"pass": int(phase.get("pass", 1))}
+    label = phase.get("label")
+    if label is not None:
+        provenance["phase_label"] = str(label)
+    model_config = model_config or {}
+    for cap_key in ("max_tokens", "max_model_len"):
+        if model_config.get(cap_key) is not None:
+            provenance[cap_key] = model_config[cap_key]
+    return provenance
 
 
 def _canonical_optimal_steps(canonical_paths: dict[str, Any]) -> Optional[int]:
@@ -447,9 +484,13 @@ def _run_one_model(
     seeds: Iterable[int],
     conditions: Optional[str],
     prompt_variant: Optional[str] = None,
+    base_overrides: Optional[dict] = None,
+    phase: Optional[dict[str, Any]] = None,
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
-    condition_configs = _condition_configs(conditions, prompt_variant=prompt_variant)
+    condition_configs = _condition_configs(
+        conditions, prompt_variant=prompt_variant, base_overrides=base_overrides
+    )
     run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
 
@@ -476,7 +517,9 @@ def _run_one_model(
                     prompt_variant=variant,
                     experiment_config=cfg,
                     conditions=conditions,
+                    base_overrides=base_overrides,
                     model_config=model_config,
+                    phase=phase,
                     force=force,
                 )
                 if result is None:
@@ -490,37 +533,55 @@ def _run_one_model(
     return run_rows, composites
 
 
-def _run_one_unit(
+@dataclasses.dataclass
+class _PreparedUnitRun:
+    """Everything needed to run + score ONE task/model/seed/prompt-variant unit,
+    without having driven the model yet.
+
+    ``_prepare_unit_run`` factors this out of ``_run_one_unit`` so the distributed
+    lockstep-batch worker (which drives the episode through an ``EpisodeStepper``
+    rather than ``run_episode``) writes byte-identical ``run_inputs.json`` /
+    ``run_score.json`` through the SAME code — in particular the same
+    ``inputs_hash`` that upload verification requires.
+    """
+
+    run_dir: Path
+    source: Path
+    runtime_spec: Any
+    experiment_config: Any
+    expected_hash: str
+    episode_path: Path
+    sidecar_path: Path
+    # write_run_inputs(extras=None): write run_inputs.json. ``extras`` is additive
+    # provenance ONLY (e.g. pricing_tier) and never enters ``inputs_hash``.
+    write_run_inputs: Callable[..., None]
+    # score_episode(episode) -> (run_row, composite): write run_score.json + row.
+    score_episode: Callable[[dict[str, Any]], tuple[dict[str, Any], Optional[float]]]
+
+
+def _prepare_unit_run(
     row: dict[str, Any],
-    agent: Agent,
     model_name: str,
     *,
     model_config: Optional[dict[str, Any]] = None,
     manifest_path: Path,
     artifacts_root: Path,
-    static_by_task: dict[str, dict[str, Any]],
+    scored_static: dict[str, Any],
     difficulty_max: float,
     config: ScorerConfig,
     seed: int,
     prompt_variant: str,
-    experiment_config: Any | None = None,
+    experiment_config: Any,
     conditions: Optional[str] = None,
-    force: bool = False,
-) -> Optional[tuple[dict[str, Any], Optional[float]]]:
-    """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
-    from pipeline.run_stage3 import run_episode
+) -> _PreparedUnitRun:
+    """Resolve the run dir, inputs hash, and the run_inputs/run_score writers for
+    one unit. Pure setup — no model call, no scoring happens here.
 
+    ``experiment_config`` must be already resolved (the callers that could pass
+    ``None`` do so before this point). Verbatim-moved from ``_run_one_unit`` so
+    the on-disk artifacts and hashes are unchanged.
+    """
     task_id = row["task_id"]
-    scored_static = static_by_task[task_id]
-    if not scored_static.get("is_beatable", True):
-        return None
-
-    if experiment_config is None:
-        configs = _condition_configs(conditions, prompt_variant=prompt_variant)
-        if len(configs) != 1:
-            raise ValueError(f"Expected one config for prompt variant {prompt_variant!r}.")
-        _, experiment_config = configs[0]
-
     source = _resolve_source(row, manifest_path)
     spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
     canonical = json.loads(
@@ -547,69 +608,147 @@ def _run_one_unit(
         experiment_config=experiment_config,
         model_config=model_config,
     )
+
+    def write_run_inputs(extras: Optional[dict[str, Any]] = None) -> None:
+        payload = {
+            "inputs_hash": expected_hash,
+            "producer_version": PIPELINE_VERSION,
+            "task_id": task_id,
+            "model_id": model_name,
+            "model_config": _jsonable(model_config or {}),
+            "runtime_model_config": _runtime_model_config(model_config),
+            "seed": seed,
+            "backend": "minigrid",
+            "condition": prompt_variant,
+            "condition_set": conditions,
+            "prompt_variant": prompt_variant,
+            "experiment_config": _experiment_config_payload(experiment_config),
+            "runtime_max_steps_cap": {
+                "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
+                "optimal_steps": _canonical_optimal_steps(canonical),
+                "original_max_steps": spec.max_steps,
+                "effective_max_steps": runtime_spec.max_steps,
+            },
+        }
+        if extras:
+            # Additive provenance only. ``inputs_hash`` is computed above from
+            # ``_expected_run_hash`` (which never sees this sidecar payload), so
+            # these keys are recorded but excluded from the hashed material.
+            payload.update(extras)
+        _write_json_atomic(sidecar_path, payload)
+
+    def score_episode(
+        episode: dict[str, Any],
+    ) -> tuple[dict[str, Any], Optional[float]]:
+        metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
+        enriched = episode_metrics.enrich_run_for_scoring(
+            episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
+        )
+        run_score = compute_runtime_score(
+            enriched,
+            static_score=scored_static,
+            canonical_paths=canonical,
+            config=config,
+            difficulty_max_static_score=difficulty_max,
+        ).to_dict()
+        run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
+
+        run_row = episode_metrics.build_run_row(
+            episode,
+            canonical,
+            manifest_row,
+            agent_or_model=model_name,
+            seed=seed,
+            raw_output_ref=str(episode_path.relative_to(artifacts_root)),
+            metrics=metrics,
+            prompt_variant=prompt_variant,
+        )
+        return run_row, run_score.get("composite")
+
+    return _PreparedUnitRun(
+        run_dir=run_dir,
+        source=Path(source),
+        runtime_spec=runtime_spec,
+        experiment_config=experiment_config,
+        expected_hash=expected_hash,
+        episode_path=episode_path,
+        sidecar_path=sidecar_path,
+        write_run_inputs=write_run_inputs,
+        score_episode=score_episode,
+    )
+
+
+def _run_one_unit(
+    row: dict[str, Any],
+    agent: Agent,
+    model_name: str,
+    *,
+    model_config: Optional[dict[str, Any]] = None,
+    manifest_path: Path,
+    artifacts_root: Path,
+    static_by_task: dict[str, dict[str, Any]],
+    difficulty_max: float,
+    config: ScorerConfig,
+    seed: int,
+    prompt_variant: str,
+    experiment_config: Any | None = None,
+    conditions: Optional[str] = None,
+    base_overrides: Optional[dict] = None,
+    phase: Optional[dict[str, Any]] = None,
+    force: bool = False,
+) -> Optional[tuple[dict[str, Any], Optional[float]]]:
+    """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
+    from pipeline.run_stage3 import run_episode
+
+    task_id = row["task_id"]
+    scored_static = static_by_task[task_id]
+    if not scored_static.get("is_beatable", True):
+        return None
+
+    if experiment_config is None:
+        configs = _condition_configs(
+            conditions, prompt_variant=prompt_variant, base_overrides=base_overrides
+        )
+        if len(configs) != 1:
+            raise ValueError(f"Expected one config for prompt variant {prompt_variant!r}.")
+        _, experiment_config = configs[0]
+
+    prep = _prepare_unit_run(
+        row,
+        model_name,
+        model_config=model_config,
+        manifest_path=manifest_path,
+        artifacts_root=artifacts_root,
+        scored_static=scored_static,
+        difficulty_max=difficulty_max,
+        config=config,
+        seed=seed,
+        prompt_variant=prompt_variant,
+        experiment_config=experiment_config,
+        conditions=conditions,
+    )
+
     episode = None
-    if not force and episode_path.exists() and sidecar_path.exists():
-        sidecar = _load_json_object_if_valid(sidecar_path)
-        if sidecar is not None and sidecar.get("inputs_hash") == expected_hash:
-            episode = _load_json_object_if_valid(episode_path)
+    if not force and prep.episode_path.exists() and prep.sidecar_path.exists():
+        sidecar = _load_json_object_if_valid(prep.sidecar_path)
+        if sidecar is not None and sidecar.get("inputs_hash") == prep.expected_hash:
+            episode = _load_json_object_if_valid(prep.episode_path)
 
     if episode is None:
         episode = run_episode(
-            source,
-            experiment_config,
+            prep.source,
+            prep.experiment_config,
             agent,
             seed,
-            run_dir,
-            max_steps=runtime_spec.max_steps,
+            prep.run_dir,
+            max_steps=prep.runtime_spec.max_steps,
+            provenance=_phase_episode_provenance(phase, model_config),
         )
-        _write_json_atomic(
-            sidecar_path,
-            {
-                "inputs_hash": expected_hash,
-                "producer_version": PIPELINE_VERSION,
-                "task_id": task_id,
-                "model_id": model_name,
-                "model_config": _jsonable(model_config or {}),
-                "runtime_model_config": _runtime_model_config(model_config),
-                "seed": seed,
-                "backend": "minigrid",
-                "condition": prompt_variant,
-                "condition_set": conditions,
-                "prompt_variant": prompt_variant,
-                "experiment_config": _experiment_config_payload(experiment_config),
-                "runtime_max_steps_cap": {
-                    "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
-                    "optimal_steps": _canonical_optimal_steps(canonical),
-                    "original_max_steps": spec.max_steps,
-                    "effective_max_steps": runtime_spec.max_steps,
-                },
-            },
-        )
+        # ``phase`` rides in the run_inputs extras (additive; written AFTER the
+        # inputs_hash is computed, so it is recorded but excluded from the hash).
+        prep.write_run_inputs(extras={"phase": phase} if phase else None)
 
-    metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
-    enriched = episode_metrics.enrich_run_for_scoring(
-        episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
-    )
-    run_score = compute_runtime_score(
-        enriched,
-        static_score=scored_static,
-        canonical_paths=canonical,
-        config=config,
-        difficulty_max_static_score=difficulty_max,
-    ).to_dict()
-    run_score_path.write_text(json.dumps(run_score, indent=2), encoding="utf-8")
-
-    run_row = episode_metrics.build_run_row(
-        episode,
-        canonical,
-        manifest_row,
-        agent_or_model=model_name,
-        seed=seed,
-        raw_output_ref=str(episode_path.relative_to(artifacts_root)),
-        metrics=metrics,
-        prompt_variant=prompt_variant,
-    )
-    return run_row, run_score.get("composite")
+    return prep.score_episode(episode)
 
 
 def _write_aggregate(
@@ -726,6 +865,19 @@ def run_from_config(
     check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = load_manifest(manifest_path)
 
+    from interface.config import ExperimentConfig
+
+    exp_overlay = run_config.get("experiment_config") or {}
+    if exp_overlay:
+        # Fail fast on unknown keys / invalid values before any paid model call.
+        ExperimentConfig.from_dict({**ExperimentConfig().to_dict(), **exp_overlay})
+
+    # Optional top-level two-tier phase block (Task B3): {"pass": int,
+    # "label": str}. Pure provenance — stamped onto artifacts, excluded from
+    # every input hash (see ``_phase_episode_provenance`` and the distributed
+    # ``job_digest`` phase-strip).
+    phase = run_config.get("phase")
+
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
     union: dict[str, dict[str, Any]] = {}
@@ -765,6 +917,8 @@ def run_from_config(
             seeds=seeds,
             conditions=conditions,
             prompt_variant=prompt_variant,
+            base_overrides=exp_overlay,
+            phase=phase,
             force=force,
         )
         all_run_rows.extend(rr)
@@ -856,6 +1010,10 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
         if "effort" in model_cfg:
             cfg.effort = str(model_cfg["effort"])
+        if "batch_deadline_s" in model_cfg:
+            cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
+        if "batch_cancel_grace_s" in model_cfg:
+            cfg.batch_cancel_grace_s = float(model_cfg["batch_cancel_grace_s"])
         return ClaudeAnthropicAgent(config=cfg), model or cfg.model
     if provider == "kimi":
         from interface.agents import KimiK26Agent, KimiK26Config
@@ -871,6 +1029,10 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "batch_deadline_s" in model_cfg:
+            cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
+        if "batch_cancel_grace_s" in model_cfg:
+            cfg.batch_cancel_grace_s = float(model_cfg["batch_cancel_grace_s"])
         return KimiK26Agent(config=cfg), model or cfg.model
     if provider == "qwen":
         from interface.agents import Qwen35VLAgent, Qwen35VLConfig
@@ -973,6 +1135,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             "coordinator-prepare",
             "coordinator-serve",
             "worker",
+            "lockstep-worker",
             "coordinator-run-api-client",
             "coordinator-finalize",
         ],

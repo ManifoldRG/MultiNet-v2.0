@@ -1,0 +1,120 @@
+{
+  "description": "R1 batch-API validation smoke: 5 mazes spanning the ~30-80 optimal-step band (navigation, K->S, K->K, K->S->K, K) for the Claude/Kimi Batch API lockstep validation. Not a scored panel; drives scripts/run_batch_smoke.py.",
+  "selection": {
+    "source_set": "analysis/candidate_mazes/all_maze_features.csv",
+    "candidate": "r1_smoke_batch",
+    "maze_count": 5,
+    "order": "ascending BFS optimal_steps (rank)",
+    "provenance": "Locked in docs/batch-api-lockstep-runner-design.md Validation smoke table (selected 2026-07-16): all beatable, none in balanced_03, none length-risk, 5 distinct mechanism signatures.",
+    "note": "expected_mechanisms are on-path door/gate ids (open_doors/open_gates vocabulary), == CSV path_event_ids; verified via gridworld.baselines.plan_bfs_path replay."
+  },
+  "tasks": [
+    {
+      "task_id": "r1smoke_S4_10x10_dense_0",
+      "experiment": "r1_smoke",
+      "condition": "S",
+      "variant": "10x10_dense_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_0.json",
+      "expected_mechanisms": [],
+      "maze_family": "S",
+      "maze_category": "S4",
+      "rank": 1,
+      "optimal_steps": 30,
+      "path_signature": "none",
+      "path_depth": 0,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "dense",
+      "grid": "10x10",
+      "comparison_cell": "10x10:dense:0"
+    },
+    {
+      "task_id": "r1smoke_D1_10x10_dense_wrong_ky_kr_sg_1",
+      "experiment": "r1_smoke",
+      "condition": "D",
+      "variant": "10x10_dense_wrong_ky_kr_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_1.json",
+      "expected_mechanisms": [
+        "DR",
+        "g1"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1",
+      "rank": 2,
+      "optimal_steps": 42,
+      "path_signature": "K->S",
+      "path_depth": 2,
+      "distractor_count": 1,
+      "five_option": false,
+      "topology": "dense",
+      "grid": "10x10",
+      "comparison_cell": "10x10:dense:1"
+    },
+    {
+      "task_id": "r1smoke_M5_10x10_corridor_kr_kb_1",
+      "experiment": "r1_smoke",
+      "condition": "M",
+      "variant": "10x10_corridor_kr_kb_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M5/10x10_corridor_kr_kb_1.json",
+      "expected_mechanisms": [
+        "DR",
+        "DB"
+      ],
+      "maze_family": "M",
+      "maze_category": "M5",
+      "rank": 3,
+      "optimal_steps": 47,
+      "path_signature": "K->K",
+      "path_depth": 2,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "10x10",
+      "comparison_cell": "10x10:corridor:1"
+    },
+    {
+      "task_id": "r1smoke_M6_10x10_dense_kr_sg_kb_0",
+      "experiment": "r1_smoke",
+      "condition": "M",
+      "variant": "10x10_dense_kr_sg_kb_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M6/10x10_dense_kr_sg_kb_0.json",
+      "expected_mechanisms": [
+        "DR",
+        "g1",
+        "DB"
+      ],
+      "maze_family": "M",
+      "maze_category": "M6",
+      "rank": 4,
+      "optimal_steps": 61,
+      "path_signature": "K->S->K",
+      "path_depth": 3,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "dense",
+      "grid": "10x10",
+      "comparison_cell": "10x10:dense:0"
+    },
+    {
+      "task_id": "r1smoke_D1_14x14_dense_wrong_ky_kr_0",
+      "experiment": "r1_smoke",
+      "condition": "D",
+      "variant": "14x14_dense_wrong_ky_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/D1/14x14_dense_wrong_ky_kr_0.json",
+      "expected_mechanisms": [
+        "DR"
+      ],
+      "maze_family": "D",
+      "maze_category": "D1",
+      "rank": 5,
+      "optimal_steps": 80,
+      "path_signature": "K",
+      "path_depth": 1,
+      "distractor_count": 1,
+      "five_option": false,
+      "topology": "dense",
+      "grid": "14x14",
+      "comparison_cell": "14x14:dense:0"
+    }
+  ]
+}

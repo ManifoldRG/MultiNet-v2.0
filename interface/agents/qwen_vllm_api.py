@@ -8,11 +8,13 @@ import socket
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
 from interface.agents.http_retry import call_with_retry
 from interface.agents.qwen_vllm import DEFAULT_QWEN_VLLM_MODEL, _to_openai_messages
+from interface.agents.reply import Reply, detect_token_truncated
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,7 @@ def _post_chat_completions(
     enable_thinking: bool | None,
     extra_body: dict[str, Any] | None = None,
     max_attempts: int = 3,
-) -> tuple[str, dict[str, int] | None]:
+) -> Reply:
     body: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -80,7 +82,16 @@ def _post_chat_completions(
     choice = (payload.get("choices") or [{}])[0]
     message = choice.get("message") or {}
     text = str(message.get("content") or "").strip()
-    return text, normalize_token_usage(payload.get("usage"))
+    usage = normalize_token_usage(payload.get("usage"))
+    stop_reason = choice.get("finish_reason")
+    # Qwen reasons inline in `content`; there is no separate thinking channel.
+    return Reply(
+        text=text,
+        usage=usage,
+        thinking=None,
+        stop_reason=stop_reason,
+        token_truncated=detect_token_truncated(stop_reason, usage, max_tokens),
+    )
 
 
 @dataclass
@@ -94,6 +105,8 @@ class QwenVLLMAPIConfig:
     enable_thinking: bool | None = False
     extra_body: dict[str, Any] = field(default_factory=dict)
     max_attempts: int = 3
+    # Max concurrent HTTP requests when fanning out a batch; None → min(len, 16).
+    batch_fanout: Optional[int] = None
 
 
 @dataclass
@@ -107,12 +120,13 @@ class QwenVLLMAPIAgent:
 
     config: QwenVLLMAPIConfig = field(default_factory=QwenVLLMAPIConfig)
     last_usage: dict[str, int] | None = field(default=None, init=False)
+    last_thinking: str | None = field(default=None, init=False)
 
     def reset_usage(self) -> None:
         self.last_usage = None
 
-    def __call__(self, messages: List[dict]) -> str:
-        text, self.last_usage = _post_chat_completions(
+    def generate(self, messages: List[dict]) -> Reply:
+        return _post_chat_completions(
             base_url=self.config.base_url,
             api_key=self.config.api_key,
             model=self.config.model,
@@ -124,4 +138,37 @@ class QwenVLLMAPIAgent:
             extra_body=self.config.extra_body,
             max_attempts=self.config.max_attempts,
         )
-        return text
+
+    def generate_batch(self, batch: List[List[dict]]) -> List[Reply]:
+        """Fan a batch of message lists out over concurrent HTTP requests.
+
+        The vLLM server continuous-batches concurrent requests server-side, so a
+        thread pool (one thread blocked per in-flight request) is enough to keep
+        the engine saturated. Results are returned in input order regardless of
+        completion order. A per-item failure (after ``generate``'s internal
+        retries) becomes ``Reply(text="", stop_reason="batch_errored")`` so one
+        bad item never sinks the whole batch. ``last_usage`` is left untouched —
+        only ``__call__`` writes that side-channel.
+        """
+        if not batch:
+            return []
+        max_workers = min(len(batch), self.config.batch_fanout or 16)
+
+        def _one(messages: List[dict]) -> Reply:
+            try:
+                return self.generate(messages)
+            except Exception:  # noqa: BLE001 - isolate per-item failures
+                logger.exception("generate_batch item failed after retries")
+                return Reply(text="", stop_reason="batch_errored")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            # Submit in input order; collect via the futures list (not
+            # as_completed) so ordering is structural, not timing-dependent.
+            futures = [pool.submit(_one, messages) for messages in batch]
+            return [future.result() for future in futures]
+
+    def __call__(self, messages: List[dict]) -> str:
+        reply = self.generate(messages)
+        self.last_usage = reply.usage
+        self.last_thinking = reply.thinking
+        return reply.text
