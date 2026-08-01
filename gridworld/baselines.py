@@ -257,8 +257,21 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
     # DROP exists in the planner graph only when the episode's harness exposed
     # it to the model. R1 had no DROP, so a decoy-key pickup was terminal; the
     # 2026-07-30 rerun did, so the same state is recoverable. The dropped key
-    # stays in collected_keys — it leaves the world rather than becoming
-    # re-acquirable, which keeps this edge conservative (see the plan).
+    # stays in collected_keys here — it leaves the world rather than becoming
+    # re-acquirable — but the runtime disagrees: custom_env.py's DROP handler
+    # does `self.collected_keys.discard(key_id)` (custom_env.py:549), so the
+    # agent CAN walk back and re-pick up a key it dropped. That mismatch makes
+    # this model "conservative" for escapability (it never claims a state is
+    # winnable when it isn't) but WRONG, in the over-reporting direction, for
+    # doomedness: on the D2 spec, with drop_available=True, this model reports
+    # 456 doomed states, of which 304 are false — every state where the agent
+    # dropped a key it still needs and could still retrieve. No row in the
+    # current corpus is affected (both drop_available=True primary/
+    # supplementary episodes are doomed=False), but this MUST be revisited
+    # before scoring any future episode that actually emits DROP, or a
+    # recoverable state will be scored "mechanically unwinnable" when it is
+    # not. See RUN_NOTES_incidents_and_findings.md for the corpus-level
+    # caveat.
     if ctx.drop_available and state.carrying_key is not None:
         yield Transition(
             action=int(MiniGridActions.DROP),

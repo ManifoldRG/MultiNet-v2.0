@@ -1,5 +1,17 @@
 # R1 Kimi make-up rerun — ready-to-launch package (2026-07-28, rev 2026-07-30)
 
+> ⚠️ **SUPERSEDED as of 2026-08-01.** This is a pre-launch planning document;
+> the 3-arm launch it describes **has since run to completion** (2026-07-30).
+> "Status: PREPARED, NOT LAUNCHED" below, the "excluded from R1 failure
+> stats" / "the × in every figure" framing, and the "After the run" TODO list
+> are all pre-launch state, not current state. For the actual outcome (Arm 1
+> `stalled` 192/318 under the original no-DROP harness, Arm 2 `stalled`
+> 145/318 on the fresh DROP harness, Arm 3 `stalled` 46/87 on the fresh DROP
+> harness, DROP never issued in either arm where it was available) see
+> `Multinet-v2-results/r1-20260717/RUN_NOTES_incidents_and_findings.md`
+> §"2026-07-30 Kimi make-up run" and `analysis/parity_report.md`. Left
+> unmodified below as the historical planning record.
+
 **Status: PREPARED, NOT LAUNCHED.** Launch is Sean's call after the Moonshot
 balance gate. Everything below is built and validated on branch
 `fix/drop-key-bookkeeping` (DROP feature + review fixes, tests green).
