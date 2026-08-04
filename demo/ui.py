@@ -46,6 +46,7 @@ from demo.session import MiniGridPlaySession, ProgressEvent, SETTINGS_AXES
 from demo.sounds import DemoSounds
 from demo.fx import DemoFx
 from demo.compare import R1ResultCatalog, r1_task_id
+from demo.r1_tasks import restrict_to_r1_tasks
 from demo import icons
 from demo import overlays
 from demo.theme import (
@@ -178,25 +179,9 @@ class MiniGridPlayerUI:
         self.sounds = DemoSounds()
         self.fx = DemoFx()
         self.r1_catalog = R1ResultCatalog()
-        self._restrict_to_r1_tasks()
+        restrict_to_r1_tasks(self.session, self.r1_catalog)
 
         self._sync_caption()
-
-    def _restrict_to_r1_tasks(self) -> None:
-        """Keep only mazes present in the R1 results table."""
-        session = self.session
-        r1_tasks = [p for p in session.task_list if r1_task_id(p) in self.r1_catalog]
-        if not r1_tasks:
-            raise ValueError(
-                "No tasks in the current selection appear in the R1 results table. "
-                "Point at an R1 maze folder (e.g. mazes/exp_maze_jsons/M1)."
-            )
-        session.task_list = r1_tasks
-        session.task_list_locked = True
-        if session.task_path not in r1_tasks:
-            session._load_task(str(r1_tasks[0]))
-        else:
-            session.task_index = r1_tasks.index(session.task_path)
 
     def _load_font(self, size: int, bold: bool = False) -> pygame.font.Font:
         return load_font(size, bold=bold)

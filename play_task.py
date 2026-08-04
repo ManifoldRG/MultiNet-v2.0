@@ -15,21 +15,10 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from demo.r1_config import R1_CONFIG
 from demo.session import MiniGridPlaySession
 from demo.ui import MiniGridPlayerUI
-from interface.config import ExperimentConfig
 from scripts.run_pipeline import _EXPERIMENT_KEYWORDS
-
-R1_CONFIG = ExperimentConfig(
-    observation="image_only",
-    context_window="text_summary_and_last3",
-    include_current_observation_description=True,
-    observation_text_includes_facing=True,
-    action_space="egocentric",
-    prompting="minimal",
-    in_context_learning="zero_shot",
-    progress_stall_k=30,
-)
 
 
 def main() -> None:

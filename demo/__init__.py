@@ -18,6 +18,10 @@ versa:
   goal pulse) composited on the rendered frame -- never mutates the env.
 - ``demo.compare``: R1 results lookup (requires sibling Multinet-v2-results).
   The demo only plays mazes present in that table.
+- ``demo.r1_config`` / ``demo.r1_tasks``: shared R1 experiment config and
+  allowlist helpers used by both the desktop UI and the web API.
+- ``demo.api``: FastAPI HTTP surface for the web player
+  (``uvicorn demo.api.app:app --reload --app-dir .``).
 
 ``play_task.py`` at the repo root is the thin CLI entry point that wires the
 session and UI together.
