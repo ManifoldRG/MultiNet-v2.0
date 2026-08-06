@@ -18,10 +18,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from demo.api.registry import GameRegistry
-from demo.api.view import is_allowed_action, serialize_task, serialize_view
+from demo.api.view import (
+    is_allowed_action,
+    serialize_model_view,
+    serialize_settings,
+    serialize_task,
+    serialize_trajectory,
+    serialize_view,
+)
 from demo.fx import effects_for_dispatch
 from demo.r1_tasks import list_r1_tasks
 from demo.sounds import sfx_for_dispatch
+
+# Flip to True to let Tab 1–5 cycle ExperimentConfig axes (web + API).
+# Desktop mirrors this via MiniGridPlayerUI.settings_editable.
+SETTINGS_EDITABLE = True
 
 app = FastAPI(title="MultiNet MiniGrid Game API", version="0.1.0")
 app.add_middleware(
@@ -44,6 +55,10 @@ class ActionBody(BaseModel):
 
 class NavigateBody(BaseModel):
     delta: Literal[-1, 1]
+
+
+class SettingBody(BaseModel):
+    key: str
 
 
 def _get(game_id: str):
@@ -73,7 +88,37 @@ def start_game(body: StartBody) -> dict:
         "gameId": entry.game_id,
         "task": serialize_task(entry.session),
         "view": serialize_view(entry.session, catalog=registry.catalog),
+        "settings": serialize_settings(entry.session, editable=SETTINGS_EDITABLE),
     }
+
+
+@app.get("/api/game/{game_id}/settings")
+def game_settings(game_id: str) -> dict:
+    session = _get(game_id).session
+    return serialize_settings(session, editable=SETTINGS_EDITABLE)
+
+
+@app.post("/api/game/{game_id}/setting")
+def game_setting(game_id: str, body: SettingBody) -> dict:
+    """Cycle a settings axis. No-op while frozen for R1 parity."""
+    session = _get(game_id).session
+    if SETTINGS_EDITABLE:
+        session._cycle_setting(body.key)
+    return {
+        "view": serialize_view(session, catalog=registry.catalog),
+        "settings": serialize_settings(session, editable=SETTINGS_EDITABLE),
+        "modelView": serialize_model_view(session),
+    }
+
+
+@app.get("/api/game/{game_id}/model-view")
+def game_model_view(game_id: str) -> dict:
+    return serialize_model_view(_get(game_id).session)
+
+
+@app.get("/api/game/{game_id}/trajectory")
+def game_trajectory(game_id: str) -> dict:
+    return serialize_trajectory(_get(game_id).session)
 
 
 @app.post("/api/game/{game_id}/action")

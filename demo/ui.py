@@ -132,7 +132,7 @@ class MiniGridPlayerUI:
         self.show_start_screen = True
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
-        self.settings_editable = False
+        self.settings_editable = True
         self.show_moves_bar = False
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -173,6 +173,11 @@ class MiniGridPlayerUI:
         self.font_splash_title = self._load_font(64, bold=True)
         self.font_splash_sub = self._load_font(22)
         self.font_splash_prompt = self._load_font(16, bold=True)
+        # Model-view body uses a mono face so prompt text reads like the web overlay.
+        try:
+            self.font_mono = pygame.font.SysFont("consolas", 15)
+        except Exception:
+            self.font_mono = self._load_font(15)
 
         # Quiet interaction SFX + display-only motion feedback. Both are
         # cosmetic -- never touch env state or observations.
@@ -901,68 +906,149 @@ class MiniGridPlayerUI:
     def _render_episode_overlay(self) -> None:
         overlays.render_episode_overlay(self)
 
-    def _content_settings(self, surface: pygame.Surface, x: int, y: int, width: int) -> int:
-        session = self.session
-        y = self._draw_text("SETTINGS", x, y, self.font_title, COLOR_TEXT_TITLE, surface=surface)
-        if self.settings_editable:
-            settings_help = (
-                "These change what a human sees/controls, mirroring interface.config.ExperimentConfig. "
-                "Press a number to cycle a value."
-            )
-        else:
-            settings_help = (
-                "Frozen for R1 parity (matches interface.config.ExperimentConfig). "
-                "Tab / Esc to close."
-            )
-        y = self._draw_wrapped_text(
-            settings_help,
-            x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
-        )
-        y += 10
-        for key_char, attr, choices in SETTINGS_AXES:
-            value = getattr(session.config, attr)
-            _cw, ch = self._draw_chip(f"[{key_char}]", x, y, self.font_small, (20, 20, 24), (*ACCENT_BLUE, 255), surface=surface)
-            self._draw_text(f"{attr} = {value}", x + _cw + 10, y + 2, self.font_main, COLOR_TEXT, surface=surface)
-            y += ch + 4
-        if self.settings_editable:
-            y += 8
-            y = self._draw_wrapped_text(
-                "These only change what is displayed/hinted -- the running episode and its step "
-                "count are unaffected. Tab / Esc to close.",
-                x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
-            )
-
-        manifest_row = session.manifest_row_by_path.get(session.task_path) if session.manifest_mode else None
-        if manifest_row:
-            y += 14
-            y = self._draw_section_label("Manifest row", x, y, ACCENT_PURPLE, surface=surface)
-            y += 6
-            y = self._draw_wrapped_text(
-                f"experiment: {manifest_row.get('experiment', '?')}   condition: {manifest_row.get('condition', '?')}",
-                x, y, self.font_small, COLOR_TEXT, width, surface=surface,
-            )
-            if manifest_row.get("variant"):
-                y = self._draw_text(f"variant: {manifest_row['variant']}", x, y, self.font_small, COLOR_TEXT, surface=surface)
-            mechanisms = manifest_row.get("expected_mechanisms") or []
-            if mechanisms:
-                y = self._draw_wrapped_text(
-                    f"expected mechanisms: {', '.join(mechanisms)}", x, y, self.font_small, ACCENT_AMBER, width,
-                    surface=surface,
-                )
-            if manifest_row.get("notes"):
-                y = self._draw_wrapped_text(manifest_row["notes"], x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface)
-        return y
-
     def _render_settings_overlay(self) -> None:
         if not self.show_settings_overlay:
             return
+        session = self.session
         scrim = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
         scrim.fill((10, 10, 14, 215))
         self.screen.blit(scrim, (0, 0))
 
+        # Centered card matching the web settings overlay.
         card_w = min(560, WINDOW_WIDTH - 80)
+        pad = CARD_PAD + 6
+        inner_w = card_w - 2 * pad
+
+        # Measure content height on a scratch surface first.
+        scratch = pygame.Surface((card_w, 900), pygame.SRCALPHA)
+        y = self._draw_settings_card_body(scratch, pad, pad, inner_w)
+        card_h = y + pad
+
         card_x = (WINDOW_WIDTH - card_w) // 2
-        self._render_card(card_x, 60, card_w, self._content_settings, accent_color=ACCENT_BLUE)
+        card_y = max(40, (WINDOW_HEIGHT - card_h) // 2)
+
+        shadow = pygame.Surface((card_w + 6, card_h + 6), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, COLOR_SHADOW, shadow.get_rect(), border_radius=CARD_RADIUS + 2)
+        self.screen.blit(shadow, (card_x - 1, card_y + 3))
+
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+        pygame.draw.rect(self.screen, COLOR_CARD_BG, card_rect, border_radius=CARD_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_CARD_BORDER, card_rect, 1, border_radius=CARD_RADIUS)
+        stripe = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(
+            stripe,
+            ACCENT_BLUE,
+            pygame.Rect(0, 0, 5, card_h),
+            border_top_left_radius=CARD_RADIUS,
+            border_bottom_left_radius=CARD_RADIUS,
+        )
+        self.screen.blit(stripe, (card_x, card_y))
+        self._draw_settings_card_body(self.screen, card_x + pad, card_y + pad, inner_w)
+
+    def _draw_settings_card_body(
+        self, surface: pygame.Surface, x: int, y: int, width: int
+    ) -> int:
+        """Web-matching settings body: title + Esc, help, numbered axes, manifest."""
+        session = self.session
+
+        title_surf = self.font_title.render("SETTINGS", True, COLOR_TEXT_TITLE)
+        surface.blit(title_surf, (x, y))
+        esc_probe = self.font_small_bold.render("Esc", True, COLOR_TEXT)
+        esc_w = esc_probe.get_width() + CHIP_PAD_X * 2
+        esc_h = esc_probe.get_height() + 6
+        esc_x = x + width - esc_w
+        self._draw_chip(
+            "Esc",
+            esc_x,
+            y + 2,
+            self.font_small_bold,
+            COLOR_TEXT,
+            (*COLOR_BUTTON_BG, 255),
+            surface=surface,
+        )
+        pygame.draw.rect(
+            surface,
+            COLOR_BUTTON_BORDER,
+            pygame.Rect(esc_x, y + 2, esc_w, esc_h),
+            1,
+            border_radius=CHIP_RADIUS,
+        )
+        y += max(title_surf.get_height(), esc_h) + 8
+
+        if self.settings_editable:
+            help_text = "Press a number to cycle a value. Tab / Esc to close."
+        else:
+            help_text = (
+                "Frozen for R1 parity (matches interface.config.ExperimentConfig). "
+                "Tab / Esc to close."
+            )
+        y = self._draw_wrapped_text(
+            help_text, x, y, self.font_small_bold, COLOR_TEXT, width, surface=surface
+        )
+        y += 12
+
+        key_bg = (28, 32, 48)
+        key_fg = (180, 200, 255)
+        key_border = (70, 90, 140)
+        for key_char, attr, _choices in SETTINGS_AXES:
+            value = getattr(session.config, attr)
+            # Number key badge (web settings-key look).
+            key_surf = self.font_small_bold.render(str(key_char), True, key_fg)
+            badge_w = max(26, key_surf.get_width() + 12)
+            badge_h = key_surf.get_height() + 6
+            badge = pygame.Rect(x, y, badge_w, badge_h)
+            pygame.draw.rect(surface, key_bg, badge, border_radius=5)
+            pygame.draw.rect(surface, key_border, badge, 1, border_radius=5)
+            surface.blit(
+                key_surf,
+                (badge.x + (badge_w - key_surf.get_width()) // 2, badge.y + 3),
+            )
+
+            tx = x + badge_w + 10
+            ty = y + 2
+            name_surf = self.font_main.render(f"{attr} = ", True, COLOR_TEXT)
+            surface.blit(name_surf, (tx, ty))
+            val_surf = self.font_main_bold.render(str(value), True, COLOR_TEXT_TITLE)
+            surface.blit(val_surf, (tx + name_surf.get_width(), ty))
+            y += badge_h + 8
+
+        manifest_row = (
+            session.manifest_row_by_path.get(session.task_path)
+            if session.manifest_mode
+            else None
+        )
+        if manifest_row:
+            y += 6
+            pygame.draw.line(
+                surface, COLOR_SEPARATOR, (x, y), (x + width, y), 1
+            )
+            y += 12
+            label = self.font_label.render("MANIFEST ROW", True, ACCENT_PURPLE)
+            surface.blit(label, (x, y))
+            y += label.get_height() + 6
+
+            bits = [
+                f"experiment: {manifest_row.get('experiment', '?')}",
+                f"condition: {manifest_row.get('condition', '?')}",
+            ]
+            if manifest_row.get("variant"):
+                bits.append(f"variant: {manifest_row['variant']}")
+            y = self._draw_wrapped_text(
+                " · ".join(bits),
+                x, y, self.font_small_bold, COLOR_TEXT, width, surface=surface,
+            )
+            mechanisms = manifest_row.get("expected_mechanisms") or []
+            if mechanisms:
+                y = self._draw_wrapped_text(
+                    f"expected mechanisms: {', '.join(mechanisms)}",
+                    x, y, self.font_small, ACCENT_AMBER, width, surface=surface,
+                )
+            if manifest_row.get("notes"):
+                y = self._draw_wrapped_text(
+                    manifest_row["notes"],
+                    x, y, self.font_small_bold, COLOR_TEXT, width, surface=surface,
+                )
+        return y
 
     def _render_model_view_overlay(self) -> None:
         if not self.show_model_view_overlay:
@@ -972,35 +1058,144 @@ class MiniGridPlayerUI:
         scrim.fill((10, 10, 14, 225))
         self.screen.blit(scrim, (0, 0))
 
-        title = (
-            f"MODEL VIEW  (observation={session.config.observation}, "
-            f"context_window={session.config.context_window})"
+        # Centered card matching the web model-view overlay.
+        card_w = min(640, WINDOW_WIDTH - 80)
+        card_h = min(520, WINDOW_HEIGHT - 80)
+        card_x = (WINDOW_WIDTH - card_w) // 2
+        card_y = max(40, (WINDOW_HEIGHT - card_h) // 2)
+
+        shadow = pygame.Surface((card_w + 6, card_h + 6), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, COLOR_SHADOW, shadow.get_rect(), border_radius=CARD_RADIUS + 2)
+        self.screen.blit(shadow, (card_x - 1, card_y + 3))
+
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+        pygame.draw.rect(self.screen, COLOR_CARD_BG, card_rect, border_radius=CARD_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_CARD_BORDER, card_rect, 1, border_radius=CARD_RADIUS)
+        stripe = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(
+            stripe,
+            ACCENT_PURPLE,
+            pygame.Rect(0, 0, 5, card_h),
+            border_top_left_radius=CARD_RADIUS,
+            border_bottom_left_radius=CARD_RADIUS,
+        )
+        self.screen.blit(stripe, (card_x, card_y))
+
+        pad = CARD_PAD + 6
+        x = card_x + pad
+        y = card_y + pad
+        inner_w = card_w - 2 * pad
+
+        # Header: title + Esc chip (flush right)
+        title_surf = self.font_title.render("MODEL VIEW", True, COLOR_TEXT_TITLE)
+        self.screen.blit(title_surf, (x, y))
+        esc_probe = self.font_small_bold.render("Esc", True, COLOR_TEXT)
+        esc_w = esc_probe.get_width() + CHIP_PAD_X * 2
+        esc_h = esc_probe.get_height() + 6
+        esc_x = x + inner_w - esc_w
+        self._draw_chip(
+            "Esc",
+            esc_x,
+            y + 2,
+            self.font_small_bold,
+            COLOR_TEXT,
+            (*COLOR_BUTTON_BG, 255),
+        )
+        pygame.draw.rect(
+            self.screen,
+            COLOR_BUTTON_BORDER,
+            pygame.Rect(esc_x, y + 2, esc_w, esc_h),
+            1,
+            border_radius=CHIP_RADIUS,
+        )
+        y += max(title_surf.get_height(), esc_h) + 8
+
+        y = self._draw_wrapped_text(
+            f"observation={session.config.observation} · "
+            f"context_window={session.config.context_window}",
+            x, y, self.font_small_bold, COLOR_TEXT, inner_w,
+        )
+        y += 8
+        pygame.draw.line(self.screen, COLOR_SEPARATOR, (x, y), (x + inner_w, y), 1)
+        y += 12
+
+        sections = session._build_model_view_sections()
+        if not sections:
+            sections = [("Empty", "No model-view sections yet.")]
+
+        body = pygame.Rect(x, y, inner_w, card_y + card_h - pad - y)
+        self.model_view_scroll = self._draw_model_view_sections(
+            sections, body, self.model_view_scroll
         )
 
-        def header_content(surface: pygame.Surface, x: int, y: int, width: int) -> int:
-            y = self._draw_text(title, x, y, self.font_main, COLOR_TEXT_TITLE, surface=surface)
-            y = self._draw_wrapped_text(
-                "This is exactly the text interface/ would build for the model right now. "
-                "M / Esc to close -- mouse wheel or Page Up/Down to scroll.",
-                x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
+    def _draw_model_view_sections(
+        self,
+        sections: list[tuple[str, str]],
+        rect: pygame.Rect,
+        scroll: int,
+    ) -> int:
+        """Scrollable section labels + inset monospace boxes (web model-view look)."""
+        mono = self.font_mono
+        box_pad_x = 12
+        box_pad_y = 10
+        box_radius = 8
+        section_gap = 14
+        inset_bg = (12, 14, 20)
+        inset_border = (55, 60, 78)
+        text_width = max(40, rect.width - 2 * box_pad_x)
+
+        blocks: list[dict] = []
+        for title, text in sections:
+            lines = self._wrap_lines((text or "").split("\n"), mono, text_width)
+            if not lines:
+                lines = [""]
+            lh = self._line_height(mono)
+            label_h = self.font_label.get_height() + 6
+            box_h = 2 * box_pad_y + lh * len(lines)
+            blocks.append(
+                {
+                    "title": title,
+                    "lines": lines,
+                    "label_h": label_h,
+                    "box_h": box_h,
+                    "height": label_h + box_h + section_gap,
+                }
             )
-            return y
 
-        y = self._render_card(16, 12, WINDOW_WIDTH - 32, header_content, accent_color=ACCENT_BLUE)
+        total_h = sum(b["height"] for b in blocks)
+        max_scroll = max(0, total_h - rect.height)
+        scroll = max(0, min(scroll, max_scroll))
 
-        lines: list[str] = []
-        for section_title, text in session._build_model_view_sections():
-            lines.append(f"== {section_title} ==")
-            lines.extend(text.split("\n"))
-            lines.append("")
+        self.screen.set_clip(rect)
+        y = rect.top - scroll
+        for block in blocks:
+            bottom = y + block["height"]
+            if bottom >= rect.top and y <= rect.bottom:
+                # Section header (uppercase purple, matches web overlay).
+                label_surf = self.font_label.render(
+                    block["title"].upper(), True, ACCENT_PURPLE
+                )
+                self.screen.blit(label_surf, (rect.left, y))
 
-        rect = pygame.Rect(16, y, WINDOW_WIDTH - 32, WINDOW_HEIGHT - y - 12)
-        pygame.draw.rect(self.screen, COLOR_CARD_BG, rect, border_radius=CARD_RADIUS)
-        inner = rect.inflate(-28, -20)
-        wrapped = self._wrap_lines(lines, self.font_small, inner.width)
-        self.model_view_scroll = self._draw_scrollable_text(
-            wrapped, inner, self.font_small, COLOR_TEXT, self.model_view_scroll
-        )
+                box = pygame.Rect(
+                    rect.left,
+                    y + block["label_h"],
+                    rect.width,
+                    block["box_h"],
+                )
+                pygame.draw.rect(self.screen, inset_bg, box, border_radius=box_radius)
+                pygame.draw.rect(
+                    self.screen, inset_border, box, 1, border_radius=box_radius
+                )
+
+                ty = box.top + box_pad_y
+                for line in block["lines"]:
+                    line_surf = mono.render(line, True, COLOR_TEXT_TITLE)
+                    self.screen.blit(line_surf, (box.left + box_pad_x, ty))
+                    ty += self._line_height(mono)
+            y += block["height"]
+        self.screen.set_clip(None)
+        return scroll
 
     # ------------------------------------------------------------------
     # Main loop
