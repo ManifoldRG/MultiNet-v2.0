@@ -1,0 +1,19 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # maze corpus + maze-family tests live in the submodule
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install -e ".[dev,visual]"
+      - run: pytest -q   # addopts already excludes ogbench collection and slow benchmarks
