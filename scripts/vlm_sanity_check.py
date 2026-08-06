@@ -508,7 +508,7 @@ def run_sanity_check_all_tiers(
     return reports
 
 
-if __name__ == "__main__":
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="VLM Vision Sanity Check")
@@ -558,3 +558,7 @@ if __name__ == "__main__":
             with open(args.output, "w") as f:
                 json.dump(report.to_dict(), f, indent=2)
             print(f"\nResults saved to {args.output}")
+
+
+if __name__ == "__main__":
+    main()

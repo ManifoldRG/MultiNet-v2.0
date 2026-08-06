@@ -80,7 +80,7 @@ def build_prompt() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Probe an Ollama vision model for maze-shape perception.")
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     parser.add_argument("--model", required=True, help="Ollama model name")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama base URL")
     parser.add_argument(

@@ -336,7 +336,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     task_path = args.task or str(root / "mazes" / "validation_10" / "V01_empty_room.json")
     actions = parse_action_sequence(args.actions)
     context = collect_probe_context(
