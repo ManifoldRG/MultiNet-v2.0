@@ -4,10 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multinet-v2-0"
-version = "0.1.0"
+version = "2.0.0"
 description = "Gridworld and multigrid evaluation harness for multimodal model benchmarking."
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Manifold Research Group"}]
 dependencies = [
     "gymnasium",
     "minigrid",
@@ -33,6 +35,10 @@ hf = [
 vllm = [
     "vllm==0.19.0",
 ]
+
+[project.urls]
+Homepage = "https://multinet.ai"
+Repository = "https://github.com/ManifoldRG/MultiNet-v2.0"
 
 [project.scripts]
 multinet-run-eval = "run_eval:main"
@@ -79,10 +85,8 @@ where = ["."]
 include = [
     "adapters*",
     "cross_domain*",
-    "deploy*",
     "gridworld*",
     "interface*",
-    "mazes*",
     "multigrid*",
     "pipeline*",
     "prompting_experiments*",
@@ -92,5 +96,4 @@ include = [
 
 [tool.setuptools.package-data]
 gridworld = ["tasks/**/*.json", "tasks/*.json", "fixtures/**/*.json", "fixtures/*.json"]
-mazes = ["validation_10/**/*.json", "validation_10/*.json"]
 scorer = ["scorer_config.json"]

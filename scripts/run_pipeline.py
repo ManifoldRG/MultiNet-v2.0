@@ -1,4 +1,4 @@
-"""Bare-bones run-pipeline orchestrator for MultiNet v2.0 (tests 1-3).
+"""Run-pipeline orchestrator for MultiNet v2.0: manifest + run-config driven evaluation runs.
 
 Sequential, inspectable Stage 1->5 driver. No DAG runner. Writes the
 ``artifacts/`` tree:
@@ -319,7 +319,7 @@ def _expected_run_hash(
     """Hash the inputs that determine a Stage-3 episode.
 
     Excludes scorer config: that invalidates run_score, not the model call.
-    TODO(release): fold in backend_version + adapter/model code version so code
+    TODO(post-release): fold in backend_version + adapter/model code version so code
     changes invalidate cached episodes at v1.
     """
     return stable_hash(
@@ -1110,7 +1110,7 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
 
 
 def main(argv: Optional[list[str]] = None) -> None:
-    parser = argparse.ArgumentParser(description="MultiNet v2.0 bare-bones run pipeline (tests 1-3).")
+    parser = argparse.ArgumentParser(description="MultiNet v2.0 run pipeline: manifest + run-config driven evaluation runs.")
     parser.add_argument("--run-config", help="JSON run-config mapping models to task files (preferred).")
     parser.add_argument("--manifest", default=str(_DEFAULT_MANIFEST), help="Task catalog (metadata).")
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
