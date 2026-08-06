@@ -4,8 +4,87 @@ from pathlib import Path
 from BFS_solver import solve
 
 
-MAZE_JSON_DIR = Path(__file__).resolve().parent.parent / 'mazes' / 'exp_maze_jsons'
+# The experiment corpus lives in the ogbench submodule — the same files every
+# R1 manifest resolves. (mazes/exp_maze_jsons/ was a stale duplicate, removed
+# 2026-08: it had drifted on 9 files and carried a goal-invariant violation.)
+MAZE_JSON_DIR = (
+	Path(__file__).resolve().parent.parent
+	/ 'ogbench' / 'ogbench' / 'procgen' / 'maze_jsons'
+)
+if not MAZE_JSON_DIR.exists():
+	raise RuntimeError(
+		f'Maze corpus missing at {MAZE_JSON_DIR} — the ogbench submodule is '
+		'not initialized. Run: git submodule update --init'
+	)
 MECHANISM_KEYS = ('keys', 'doors', 'switches', 'gates')
+
+
+# --- Known corpus defects: FROZEN, not fixed ---------------------------------
+# The ogbench submodule above is the exact corpus every paid R1 episode
+# resolved, including the files below — it must not be edited or re-pinned
+# pre-release. None of these have runtime impact: chain_pattern and
+# difficulty_tier are labels no runtime/scoring/prompting code reads
+# (difficulty is computed via BFS), and every file remains self-consistent on
+# maze.goal == goal.target (see test_maze_goal_invariant.py). Each entry names
+# the known-bad value the affected test pins instead of the normal
+# expectation, so any future change — including the eventual ogbench-fork
+# fix — turns the suite red and forces the entry's removal.
+KNOWN_CORPUS_DEFECTS = {
+	'm_vs_s4_goal_desync': {
+		'description': (
+			"submodule commit 31a0549 fixed S4/10x10_dense_1.json's goal from "
+			'[8, 1] to the correct [8, 8] but did not propagate the fix to '
+			'these M-family structural counterparts, which still carry the '
+			'pre-fix goal.'
+		),
+		'files': (
+			'M1/10x10_dense_kr_1.json',
+			'M2/10x10_dense_sg_1.json',
+			'M3/10x10_dense_kr_sg_1.json',
+			'M4/10x10_dense_sg_kr_1.json',
+			'M5/10x10_dense_kr_kb_1.json',
+			'M6/10x10_dense_kr_sg_kb_1.json',
+		),
+		'bad_goal': [8, 1],
+		'counterpart_goal': [8, 8],  # S4/10x10_dense_1.json, fixed by 31a0549
+	},
+	'm2_chain_pattern_corruption': {
+		'description': (
+			'submodule commit 271bf47 mislabeled these pure switch/gate mazes '
+			'as key_door (description text and metadata.chain_pattern); the '
+			'retired mazes/exp_maze_jsons duplicate carried the correct '
+			'single_switch_gate label for the same files.'
+		),
+		'files': (
+			'M2/8x8_corridor_sg_0.json',
+			'M2/8x8_corridor_sg_1.json',
+		),
+		'bad_chain_pattern': 'key_door',
+	},
+	'd1_m2_difficulty_tier_mismatch': {
+		'description': (
+			"D1/8x8_corridor_wrong_ky_sg_1.json's difficulty_tier drifted to "
+			'4 in the submodule; its M2 counterpart kept the correct tier 3.'
+		),
+		'd_file': 'D1/8x8_corridor_wrong_ky_sg_1.json',
+		'm_file': 'M2/8x8_corridor_sg_1.json',
+		'bad_tiers': (4, 3),  # (D1 difficulty_tier, M2 difficulty_tier)
+	},
+	'd2_chain_pattern_corruption': {
+		'description': (
+			'Same submodule commit 271bf47 regression as '
+			'm2_chain_pattern_corruption, on the D2 wrong-key overlays of the '
+			'same base mazes. No existing D2 test reads metadata.chain_pattern '
+			'today, so this entry has no matching test exemption — it is '
+			'listed here for the record.'
+		),
+		'files': (
+			'D2/8x8_corridor_wrong_ky_inactive_sb_sg_0.json',
+			'D2/8x8_corridor_wrong_ky_inactive_sb_sg_1.json',
+			'D2/10x10_corridor_wrong_ky_inactive_sb_sg_1.json',
+		),
+	},
+}
 
 
 def load_maze_specs(maze_type, *, include_file_name=False):

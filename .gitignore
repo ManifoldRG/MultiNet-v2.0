@@ -39,8 +39,6 @@ interface/smoke_tests/results/
 # Generated evaluation outputs
 mazes/results/*_results.json
 mazes/results/*.progress.json
-# Generated maze render PNGs (regenerated from the maze JSONs; keep README.md)
-mazes/exp_maze_images/**/*.png
 # Bare-bones run pipeline artifact tree (regenerated locally)
 artifacts/
 # Artifacts pulled off coordinators by the cost-safety monitor (run output)
