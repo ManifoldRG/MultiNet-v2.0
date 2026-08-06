@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from multigrid.env import MultiGridEnv, Action
 
+pytestmark = pytest.mark.slow
+
 
 def create_task(grid_size=10, max_steps=100):
     """Helper to create a task spec for performance testing."""

@@ -55,7 +55,10 @@ multinet-run-pipeline = "scripts.run_pipeline:main"
 # Multinet-v2-results is the sibling data repo (often checked out nested here);
 # it now hosts the moved analysis package + its tests, which import `analysis.*`
 # and must not be collected from this repo.
-addopts = "--ignore=ogbench --ignore=Multinet-v2-results"
+addopts = "--ignore=ogbench --ignore=Multinet-v2-results -m 'not slow'"
+markers = [
+    "slow: load-sensitive performance/scalability benchmarks; excluded by default, run with -m slow",
+]
 
 [tool.setuptools]
 include-package-data = true
