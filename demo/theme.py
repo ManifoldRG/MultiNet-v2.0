@@ -123,6 +123,21 @@ def mech_color(name: str) -> tuple:
     return MECH_COLOR_RGB[name.lower()]
 
 
+def recolor_walls(rgb_array):
+    """Swap MiniGrid's flat wall gray for the softer slate (display-only).
+
+    Never mutates the env render buffer used for scoring/models.
+    """
+    import numpy as np
+
+    arr = np.asarray(rgb_array, dtype=np.uint8)
+    mask = np.all(np.abs(arr.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
+    if mask.any():
+        arr = arr.copy()
+        arr[mask] = WALL_GRAY_DST
+    return arr
+
+
 def control_accent(token: str | None) -> tuple:
     if token in MOVE_TOKENS:
         return CTRL_MOVE

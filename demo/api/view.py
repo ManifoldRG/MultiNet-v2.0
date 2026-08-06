@@ -12,25 +12,12 @@ from PIL import Image
 from demo.compare import R1ResultCatalog, TaskComparison
 from demo.r1_tasks import canonical_task_id
 from demo.session import SETTINGS_AXES, MiniGridPlaySession, TASK_INSTRUCTION
-from demo.theme import WALL_GRAY_DST, WALL_GRAY_SRC
+from demo.theme import recolor_walls
 from interface.action_space import EGOCENTRIC_ACTIONS, valid_actions
 
 
-def _recolor_walls(rgb_array: np.ndarray) -> np.ndarray:
-    """Swap MiniGrid's flat wall gray for a softer slate (display-only).
-
-    Matches ``MiniGridPlayerUI._recolor_walls``; never mutates the env render
-    buffer used for scoring/models.
-    """
-    mask = np.all(np.abs(rgb_array.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
-    if mask.any():
-        rgb_array = rgb_array.copy()
-        rgb_array[mask] = WALL_GRAY_DST
-    return rgb_array
-
-
 def _grid_image_b64(session: MiniGridPlaySession) -> str:
-    rgb = _recolor_walls(np.asarray(session.backend.render(), dtype=np.uint8))
+    rgb = recolor_walls(np.asarray(session.backend.render(), dtype=np.uint8))
     img = Image.fromarray(rgb[:, :, :3], mode="RGB")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -107,17 +94,15 @@ def is_allowed_action(session: MiniGridPlaySession, action: str) -> bool:
 
 
 def serialize_settings(session: MiniGridPlaySession, *, editable: bool = False) -> dict:
-    """R1 Tab-settings payload. ``editable`` stays False for web R1 parity."""
-    axes = []
-    for key_char, attr, choices in SETTINGS_AXES:
-        axes.append(
-            {
-                "key": key_char,
-                "attr": attr,
-                "value": getattr(session.config, attr),
-                "choices": list(choices) if choices is not None else None,
-            }
-        )
+    """Tab-settings payload. Web R1 keeps ``editable=False``."""
+    axes = [
+        {
+            "key": key_char,
+            "attr": attr,
+            "value": getattr(session.config, attr),
+        }
+        for key_char, attr, _choices in SETTINGS_AXES
+    ]
     manifest_row = None
     if session.manifest_mode and session.task_path is not None:
         manifest_row = session.manifest_row_by_path.get(session.task_path)
@@ -135,33 +120,16 @@ def serialize_settings(session: MiniGridPlaySession, *, editable: bool = False) 
 
 
 def serialize_model_view(session: MiniGridPlaySession) -> dict:
-    sections = [
-        {"title": title, "text": text}
-        for title, text in session._build_model_view_sections()
-    ]
     return {
         "observation": session.config.observation,
         "contextWindow": session.config.context_window,
-        "sections": sections,
+        "sections": [
+            {"title": title, "text": text}
+            for title, text in session._build_model_view_sections()
+        ],
     }
 
 
 def serialize_trajectory(session: MiniGridPlaySession) -> dict:
-    """In-memory trajectory JSON (same fields as desktop ``_save_trajectory``)."""
-    task_id = session.task_spec.task_id if session.task_spec else "unknown"
-    manifest_row = None
-    if session.manifest_mode and session.task_path is not None:
-        manifest_row = session.manifest_row_by_path.get(session.task_path)
-    raw = {
-        "task_id": task_id,
-        "task_file": str(session.task_path) if session.task_path else None,
-        "manifest_row": manifest_row,
-        "config": session.config.to_dict(),
-        "total_steps": session.step_index,
-        "total_reward": session.total_reward,
-        "success": session.episode_success,
-        "episode_done": session.episode_done,
-        "transcript": session.transcript,
-    }
-    # Round-trip through json so numpy / Path leftovers become plain JSON.
-    return json.loads(json.dumps(raw, default=str))
+    """In-memory trajectory JSON (same fields as desktop ``--record``)."""
+    return json.loads(json.dumps(session.trajectory_dict(), default=str))

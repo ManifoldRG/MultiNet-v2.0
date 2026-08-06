@@ -30,8 +30,6 @@ _repo_root_str = str(_REPO_ROOT)
 if _repo_root_str not in sys.path:
     sys.path.insert(0, _repo_root_str)
 
-import numpy as np
-
 try:
     import pygame
 except ImportError:
@@ -101,13 +99,12 @@ from demo.theme import (
     STATUS_MOVES_OK,
     STATUS_MOVES_WARN,
     TOP_BAR_H,
-    WALL_GRAY_DST,
-    WALL_GRAY_SRC,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     control_accent,
     load_font,
     mech_color,
+    recolor_walls,
 )
 
 
@@ -132,7 +129,7 @@ class MiniGridPlayerUI:
         self.show_start_screen = True
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
-        self.settings_editable = True
+        self.settings_editable = False
         self.show_moves_bar = False
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -228,36 +225,21 @@ class MiniGridPlayerUI:
         prev_state = session.state
         prev_rgb = None
         if session.backend.env is not None and session.config.observation != "text_only":
-            try:
-                prev_rgb = session.backend.render()
-            except Exception:
-                prev_rgb = None
+            prev_rgb = session.backend.render()
 
         session._dispatch_token(token)
         self.sounds.play(sfx_for_dispatch(session, events_before))
 
-        env = session.backend.env
-        if env is None or prev_state is None:
+        if session.backend.env is None or prev_state is None:
             return
-        last = next(
-            (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
-            None,
-        )
-        event_type = last.get("event_type") if last else None
         self.fx.trigger(
             now_ms=pygame.time.get_ticks(),
+            session=session,
             token=token,
-            event_type=event_type,
             events_before=events_before,
-            event_log=session.event_log,
             prev_state=prev_state,
-            new_state=session.state,
             prev_rgb=prev_rgb,
-            task_spec=session.task_spec,
-            grid_w=env.width,
-            grid_h=env.height,
             display_size=GRID_DISPLAY_SIZE,
-            episode_success=bool(session.episode_done and session.episode_success),
         )
 
     # ------------------------------------------------------------------
@@ -562,24 +544,13 @@ class MiniGridPlayerUI:
             self.screen.blit(rec_surf, (bx, cy - rec_surf.get_height() // 2))
             pygame.draw.circle(self.screen, (225, 70, 70), (bx - 9, cy), 4)
 
-    @staticmethod
-    def _recolor_walls(rgb_array: np.ndarray) -> np.ndarray:
-        """Swap MiniGrid's flat, harsh wall gray for a softer slate tone on
-        this display-only copy of the frame (see WALL_GRAY_SRC/DST). Never
-        touches the array the session hands to scoring/model code."""
-        mask = np.all(np.abs(rgb_array.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
-        if mask.any():
-            rgb_array = rgb_array.copy()
-            rgb_array[mask] = WALL_GRAY_DST
-        return rgb_array
-
     def _render_grid(self) -> None:
         """Render the MiniGrid environment as the hero panel: a softened,
         enlarged copy of the raw frame framed with a strong border so it
         reads as the centerpiece rather than a flat inset image. Display-only
         FX (nudge / cell flash / fade) are composited here and never touch
         the env's own render buffer."""
-        rgb_array = self._recolor_walls(self.session.backend.render())
+        rgb_array = recolor_walls(self.session.backend.render())
         h, w, _c = rgb_array.shape
         surf = pygame.image.frombuffer(rgb_array.tobytes(), (w, h), "RGB")
         scaled = pygame.transform.smoothscale(surf, (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE))

@@ -16,6 +16,7 @@ if str(_ROOT) not in sys.path:
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import numpy as np
 
 from demo.api.registry import GameRegistry
 from demo.api.view import (
@@ -30,9 +31,9 @@ from demo.fx import effects_for_dispatch
 from demo.r1_tasks import list_r1_tasks
 from demo.sounds import sfx_for_dispatch
 
-# Flip to True to let Tab 1–5 cycle ExperimentConfig axes (web + API).
-# Desktop mirrors this via MiniGridPlayerUI.settings_editable.
-SETTINGS_EDITABLE = True
+# Web R1 keeps ExperimentConfig frozen (read-only Tab overlay).
+# Flip to True to let Tab 1–5 cycle axes.
+SETTINGS_EDITABLE = False
 
 app = FastAPI(title="MultiNet MiniGrid Game API", version="0.1.0")
 app.add_middleware(
@@ -107,7 +108,6 @@ def game_setting(game_id: str, body: SettingBody) -> dict:
     return {
         "view": serialize_view(session, catalog=registry.catalog),
         "settings": serialize_settings(session, editable=SETTINGS_EDITABLE),
-        "modelView": serialize_model_view(session),
     }
 
 
@@ -133,13 +133,8 @@ def game_action(game_id: str, body: ActionBody) -> dict:
         prev_state = session.state
         events_before = len(session.event_log)
         prev_rgb = None
-        try:
-            if session.backend.env is not None:
-                import numpy as np
-
-                prev_rgb = np.asarray(session.backend.render(), dtype=np.uint8)
-        except Exception:
-            prev_rgb = None
+        if session.backend.env is not None:
+            prev_rgb = np.asarray(session.backend.render(), dtype=np.uint8)
         session._dispatch_token(action)
         sfx = sfx_for_dispatch(session, events_before)
         effects = effects_for_dispatch(

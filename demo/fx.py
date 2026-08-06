@@ -7,6 +7,9 @@ scoring path are never touched -- so benchmark parity is preserved.
 Effects are short and restrained (eval-terminal feedback, not game juice):
 camera wall-bounce, one-shot key flash, door/gate fade, switch
 press, goal pulse before the success overlay.
+
+``plan_effects`` is the shared decision path for desktop ``DemoFx`` and the
+web API serializer.
 """
 
 from __future__ import annotations
@@ -16,6 +19,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+from demo.theme import recolor_walls
 
 try:
     import pygame
@@ -69,24 +74,116 @@ def _first_changed_cell(specs, prev_ids, new_ids) -> Optional[tuple[int, int]]:
     return None
 
 
-def _recolor_walls(rgb_array: np.ndarray) -> np.ndarray:
-    from demo.theme import WALL_GRAY_DST, WALL_GRAY_SRC
+def plan_effects(session, token: str, prev_state, events_before: int) -> list[dict]:
+    """Decide display-only effects for one dispatch (no RGB / tile payloads).
 
-    mask = np.all(np.abs(rgb_array.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
-    if mask.any():
-        rgb_array = rgb_array.copy()
-        rgb_array[mask] = WALL_GRAY_DST
-    return rgb_array
+    Each item has ``kind`` plus geometry/timing fields. Callers attach platform
+    tiles (web PNG / pygame Surface) as needed.
+    """
+    plan: list[dict] = []
+
+    last = next(
+        (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
+        None,
+    )
+    event_type = last.get("event_type") if last else None
+
+    travel = travel_delta(token, prev_state)
+    if event_type == "BLOCKED" and travel != (0, 0):
+        dx, dy = travel
+        plan.append(
+            {
+                "kind": "bounce",
+                "dx": int(-dx * BOUNCE_PX),
+                "dy": int(-dy * BOUNCE_PX),
+                "durationMs": BOUNCE_MS,
+            }
+        )
+
+    mech = session.task_spec.mechanisms if session.task_spec is not None else None
+    new_state = session.state
+
+    for event in session.event_log[events_before:]:
+        if event.icon == "key" and event.prefix.startswith("Picked") and prev_state is not None:
+            plan.append(
+                {
+                    "kind": "flash",
+                    "cell": [
+                        int(prev_state.agent_position[0]),
+                        int(prev_state.agent_position[1]),
+                    ],
+                    "durationMs": KEY_FLASH_MS,
+                }
+            )
+        elif event.icon == "door" and mech is not None:
+            cell = _door_cell_for_event(mech, event)
+            if cell is not None:
+                plan.append(
+                    {
+                        "kind": "fade",
+                        "cell": [int(cell[0]), int(cell[1])],
+                        "durationMs": DOOR_FADE_MS,
+                    }
+                )
+        elif (
+            event.icon == "gate"
+            and mech is not None
+            and prev_state is not None
+            and new_state is not None
+        ):
+            cell = _first_changed_cell(mech.gates, prev_state.open_gates, new_state.open_gates)
+            if cell is not None:
+                plan.append(
+                    {
+                        "kind": "fade",
+                        "cell": [int(cell[0]), int(cell[1])],
+                        "durationMs": GATE_FADE_MS,
+                    }
+                )
+        elif (
+            event.icon == "switch"
+            and mech is not None
+            and prev_state is not None
+            and new_state is not None
+        ):
+            cell = _first_changed_cell(
+                mech.switches, prev_state.active_switches, new_state.active_switches
+            )
+            if cell is not None:
+                plan.append(
+                    {
+                        "kind": "press",
+                        "cell": [int(cell[0]), int(cell[1])],
+                        "durationMs": SWITCH_PRESS_MS,
+                    }
+                )
+
+    if session.episode_done and session.episode_success and new_state is not None:
+        pos = new_state.agent_position
+        plan.append(
+            {
+                "kind": "pulse",
+                "cell": [int(pos[0]), int(pos[1])],
+                "durationMs": GOAL_PULSE_MS,
+            }
+        )
+
+    return plan
+
+
+def _grid_size(session) -> tuple[int, int]:
+    env = session.backend.env
+    return int(env.width), int(env.height)
 
 
 def _tile_image_b64(
     rgb: Optional[np.ndarray],
-    cell: Optional[tuple[int, int]],
+    cell: tuple[int, int],
     grid_w: int,
     grid_h: int,
 ) -> Optional[str]:
     """PNG data-URL of one grid cell (caller should wall-recolor ``rgb``)."""
-    if rgb is None or cell is None:
+    if rgb is None:
         return None
     cx, cy = cell
     if not (0 <= cx < grid_w and 0 <= cy < grid_h):
@@ -112,16 +209,9 @@ def _tile_image_b64(
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def _grid_size(session) -> tuple[int, int]:
-    env = session.backend.env
-    if env is None:
-        return 1, 1
-    return int(env.width), int(env.height)
-
-
 def _cell_effect(
     kind: str,
-    cell: tuple[int, int],
+    cell: list[int],
     grid_w: int,
     grid_h: int,
     duration_ms: int,
@@ -130,7 +220,7 @@ def _cell_effect(
 ) -> dict:
     out = {
         "kind": kind,
-        "cell": [int(cell[0]), int(cell[1])],
+        "cell": cell,
         "gridW": grid_w,
         "gridH": grid_h,
         "durationMs": duration_ms,
@@ -148,98 +238,51 @@ def effects_for_dispatch(
     *,
     prev_rgb: Optional[np.ndarray] = None,
 ) -> list[dict]:
-    """Serialize DemoFx clips for the web player (bounce/flash/fade/press/pulse)."""
-    effects: list[dict] = []
+    """Serialize ``plan_effects`` for the web player (adds tile PNGs)."""
+    plan = plan_effects(session, token, prev_state, events_before)
     grid_w, grid_h = _grid_size(session)
-    prev_frame = _recolor_walls(np.asarray(prev_rgb, dtype=np.uint8)) if prev_rgb is not None else None
+    prev_frame = recolor_walls(prev_rgb) if prev_rgb is not None else None
+    post_frame = None
+    effects: list[dict] = []
 
-    last = next(
-        (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
-        None,
-    )
-    event_type = last.get("event_type") if last else None
+    for item in plan:
+        kind = item["kind"]
+        if kind == "bounce":
+            effects.append(item)
+            continue
 
-    travel = travel_delta(token, prev_state)
-    if event_type == "BLOCKED" and travel != (0, 0):
-        dx, dy = travel
-        effects.append(
-            {
-                "kind": "bounce",
-                "dx": int(-dx * BOUNCE_PX),
-                "dy": int(-dy * BOUNCE_PX),
-                "durationMs": BOUNCE_MS,
-            }
-        )
+        cell = item["cell"]
+        duration = item["durationMs"]
 
-    new_events = session.event_log[events_before:]
-    mech = session.task_spec.mechanisms if session.task_spec is not None else None
-    new_state = session.state
-
-    for event in new_events:
-        if event.icon == "key" and event.prefix.startswith("Picked") and prev_state is not None:
-            cell = (int(prev_state.agent_position[0]), int(prev_state.agent_position[1]))
-            tile = _tile_image_b64(prev_frame, cell, grid_w, grid_h)
-            if tile is not None:
-                effects.append(
-                    _cell_effect("flash", cell, grid_w, grid_h, KEY_FLASH_MS, tile_image=tile)
-                )
-
-        elif event.icon == "door" and mech is not None:
-            cell = _door_cell_for_event(mech, event)
-            tile = _tile_image_b64(prev_frame, cell, grid_w, grid_h)
-            if cell and tile is not None:
-                effects.append(
-                    _cell_effect("fade", cell, grid_w, grid_h, DOOR_FADE_MS, tile_image=tile)
-                )
-
-        elif (
-            event.icon == "gate"
-            and mech is not None
-            and prev_state is not None
-            and new_state is not None
-        ):
-            cell = _first_changed_cell(mech.gates, prev_state.open_gates, new_state.open_gates)
-            tile = _tile_image_b64(prev_frame, cell, grid_w, grid_h)
-            if cell and tile is not None:
-                effects.append(
-                    _cell_effect("fade", cell, grid_w, grid_h, GATE_FADE_MS, tile_image=tile)
-                )
-
-        elif (
-            event.icon == "switch"
-            and mech is not None
-            and prev_state is not None
-            and new_state is not None
-        ):
-            cell = _first_changed_cell(
-                mech.switches, prev_state.active_switches, new_state.active_switches
+        if kind == "pulse":
+            effects.append(
+                {
+                    "kind": "pulse",
+                    "cell": cell,
+                    "gridW": grid_w,
+                    "gridH": grid_h,
+                    "durationMs": duration,
+                }
             )
-            if cell is not None:
-                # Press uses the post-step tile (switch already flipped).
-                try:
-                    new_rgb = _recolor_walls(
-                        np.asarray(session.backend.render(), dtype=np.uint8)
-                    )
-                except Exception:
-                    new_rgb = None
-                tile = _tile_image_b64(new_rgb, cell, grid_w, grid_h)
-                effects.append(
-                    _cell_effect(
-                        "press", cell, grid_w, grid_h, SWITCH_PRESS_MS, tile_image=tile
-                    )
-                )
+            continue
 
-    if session.episode_done and session.episode_success and session.state is not None:
-        pos = session.state.agent_position
-        effects.append(
-            {
-                "kind": "pulse",
-                "cell": [int(pos[0]), int(pos[1])],
-                "gridW": grid_w,
-                "gridH": grid_h,
-                "durationMs": GOAL_PULSE_MS,
-            }
-        )
+        if kind == "press":
+            if post_frame is None:
+                post_frame = recolor_walls(
+                    np.asarray(session.backend.render(), dtype=np.uint8)
+                )
+            tile = _tile_image_b64(post_frame, tuple(cell), grid_w, grid_h)
+            effects.append(
+                _cell_effect("press", cell, grid_w, grid_h, duration, tile_image=tile)
+            )
+            continue
+
+        # flash / fade use the pre-step tile
+        tile = _tile_image_b64(prev_frame, tuple(cell), grid_w, grid_h)
+        if tile is not None:
+            effects.append(
+                _cell_effect(kind, cell, grid_w, grid_h, duration, tile_image=tile)
+            )
 
     return effects
 
@@ -285,86 +328,55 @@ class DemoFx:
         self,
         *,
         now_ms: int,
+        session,
         token: str,
-        event_type: Optional[str],
         events_before: int,
-        event_log: list,
         prev_state,
-        new_state,
         prev_rgb: Optional[np.ndarray],
-        task_spec,
-        grid_w: int,
-        grid_h: int,
         display_size: int,
-        episode_success: bool = False,
     ) -> None:
         if not self.enabled or pygame is None:
+            return
+        env = session.backend.env
+        if env is None or prev_state is None:
             return
 
         # Rapid key-repeat shouldn't stack camera offsets.
         self._clips = [c for c in self._clips if c.kind != "bounce"]
 
-        travel = self._travel_delta(token, prev_state)
-        new_events = event_log[events_before:]
-        mech = task_spec.mechanisms if task_spec is not None else None
+        grid_w, grid_h = int(env.width), int(env.height)
+        for item in plan_effects(session, token, prev_state, events_before):
+            kind = item["kind"]
+            duration = item["durationMs"]
 
-        if episode_success and new_state is not None:
-            # Only arm the delayed SUCCESS dialog when we can actually show a
-            # goal pulse on the grid; text-only mode skips straight to overlay.
-            pos = new_state.agent_position
-            self._clips.append(
-                _Clip(
-                    kind="pulse",
-                    start_ms=now_ms,
-                    duration_ms=GOAL_PULSE_MS,
-                    cell=(int(pos[0]), int(pos[1])),
-                )
-            )
-            if prev_rgb is not None:
-                self._success_pulse_pending = True
-
-        for event in new_events:
-            if event.icon == "key" and event.prefix.startswith("Picked") and prev_state is not None:
-                # Same-cell pickup: key was under the agent.
-                cell = (int(prev_state.agent_position[0]), int(prev_state.agent_position[1]))
-                tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
-                if tile is not None:
-                    self._clips.append(
-                        _Clip("flash", now_ms, KEY_FLASH_MS, cell=cell, tile_surf=tile)
+            if kind == "bounce":
+                self._clips.append(
+                    _Clip(
+                        "bounce",
+                        now_ms,
+                        duration,
+                        offset=(item["dx"], item["dy"]),
                     )
-
-            elif event.icon == "door" and mech is not None:
-                cell = self._door_cell_for_event(mech, event)
-                tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
-                if cell and tile is not None:
-                    self._clips.append(
-                        _Clip("fade", now_ms, DOOR_FADE_MS, cell=cell, tile_surf=tile)
-                    )
-
-            elif event.icon == "gate" and mech is not None and prev_state is not None and new_state is not None:
-                cell = self._first_changed_cell(
-                    mech.gates, prev_state.open_gates, new_state.open_gates
                 )
-                tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
-                if cell and tile is not None:
-                    self._clips.append(
-                        _Clip("fade", now_ms, GATE_FADE_MS, cell=cell, tile_surf=tile)
-                    )
+                continue
 
-            elif event.icon == "switch" and mech is not None and prev_state is not None and new_state is not None:
-                cell = self._first_changed_cell(
-                    mech.switches, prev_state.active_switches, new_state.active_switches
+            cell = (int(item["cell"][0]), int(item["cell"][1]))
+
+            if kind == "pulse":
+                self._clips.append(_Clip("pulse", now_ms, duration, cell=cell))
+                if prev_rgb is not None:
+                    self._success_pulse_pending = True
+                continue
+
+            if kind == "press":
+                self._clips.append(_Clip("press", now_ms, duration, cell=cell))
+                continue
+
+            tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
+            if tile is not None:
+                self._clips.append(
+                    _Clip(kind, now_ms, duration, cell=cell, tile_surf=tile)
                 )
-                if cell is not None:
-                    self._clips.append(_Clip("press", now_ms, SWITCH_PRESS_MS, cell=cell))
-
-        # Wall bump only -- successful moves stay visually still (a per-step
-        # camera nudge read as screen shake under key-repeat).
-        if event_type == "BLOCKED" and travel != (0, 0):
-            dx, dy = travel
-            self._clips.append(
-                _Clip("bounce", now_ms, BOUNCE_MS, offset=(-dx * BOUNCE_PX, -dy * BOUNCE_PX))
-            )
 
     def apply(
         self,
@@ -445,31 +457,15 @@ class DemoFx:
 
         return out, offset
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _travel_delta(token: str, prev_state) -> tuple[int, int]:
-        return travel_delta(token, prev_state)
-
-    @staticmethod
-    def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
-        return _door_cell_for_event(mech, event)
-
-    @staticmethod
-    def _first_changed_cell(specs, prev_ids, new_ids) -> Optional[tuple[int, int]]:
-        return _first_changed_cell(specs, prev_ids, new_ids)
-
     @staticmethod
     def _extract_tile(
         prev_rgb: Optional[np.ndarray],
-        cell: Optional[tuple[int, int]],
+        cell: tuple[int, int],
         grid_w: int,
         grid_h: int,
         display_size: int,
     ) -> Optional["pygame.Surface"]:
-        if prev_rgb is None or cell is None or pygame is None:
+        if prev_rgb is None or pygame is None:
             return None
         cx, cy = cell
         if not (0 <= cx < grid_w and 0 <= cy < grid_h):

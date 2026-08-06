@@ -636,6 +636,24 @@ class MiniGridPlaySession:
     # Recording / trajectory saving
     # ------------------------------------------------------------------
 
+    def trajectory_dict(self) -> dict:
+        """Transcript payload shared by desktop ``--record`` and the web API."""
+        task_id = self.task_spec.task_id if self.task_spec else "unknown"
+        manifest_row = (
+            self.manifest_row_by_path.get(self.task_path) if self.manifest_mode else None
+        )
+        return {
+            "task_id": task_id,
+            "task_file": str(self.task_path) if self.task_path else None,
+            "manifest_row": manifest_row,
+            "config": self.config.to_dict(),
+            "total_steps": self.step_index,
+            "total_reward": self.total_reward,
+            "success": self.episode_success,
+            "episode_done": self.episode_done,
+            "transcript": self.transcript,
+        }
+
     def _checkpoint_trajectory(self) -> None:
         """Save the in-progress transcript if --record is on, using whatever
         task_path/task_spec/manifest row are *currently* set. Callers must
@@ -650,23 +668,11 @@ class MiniGridPlaySession:
         if not self.transcript:
             return
 
-        task_id = self.task_spec.task_id if self.task_spec else "unknown"
+        data = self.trajectory_dict()
+        task_id = data["task_id"]
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         filename = f"trajectory_{task_id}_{timestamp}.json"
         output_path = self.base_dir / filename
-
-        manifest_row = self.manifest_row_by_path.get(self.task_path) if self.manifest_mode else None
-        data = {
-            "task_id": task_id,
-            "task_file": str(self.task_path) if self.task_path else None,
-            "manifest_row": manifest_row,
-            "config": self.config.to_dict(),
-            "total_steps": self.step_index,
-            "total_reward": self.total_reward,
-            "success": self.episode_success,
-            "episode_done": self.episode_done,
-            "transcript": self.transcript,
-        }
 
         with open(output_path, "w") as f:
             json.dump(data, f, indent=2, default=str)
