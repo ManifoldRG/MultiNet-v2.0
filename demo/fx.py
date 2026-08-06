@@ -42,6 +42,208 @@ _CARDINAL_DELTA = {
 }
 
 
+def travel_delta(token: str, prev_state) -> tuple[int, int]:
+    if token in _CARDINAL_DELTA:
+        return _CARDINAL_DELTA[token]
+    if token == "MOVE_FORWARD" and prev_state is not None:
+        return _DIR_DELTA.get(prev_state.agent_direction, (0, 0))
+    return (0, 0)
+
+
+def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
+    color = (event.color or "").lower()
+    for door in mech.doors:
+        if door.requires_key.lower() == color:
+            return (door.position.x, door.position.y)
+    if len(mech.doors) == 1:
+        d = mech.doors[0]
+        return (d.position.x, d.position.y)
+    return None
+
+
+def _first_changed_cell(specs, prev_ids, new_ids) -> Optional[tuple[int, int]]:
+    changed = set(prev_ids) ^ set(new_ids)
+    for spec in specs:
+        if spec.id in changed:
+            return (spec.position.x, spec.position.y)
+    return None
+
+
+def _recolor_walls(rgb_array: np.ndarray) -> np.ndarray:
+    from demo.theme import WALL_GRAY_DST, WALL_GRAY_SRC
+
+    mask = np.all(np.abs(rgb_array.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
+    if mask.any():
+        rgb_array = rgb_array.copy()
+        rgb_array[mask] = WALL_GRAY_DST
+    return rgb_array
+
+
+def _tile_image_b64(
+    rgb: Optional[np.ndarray],
+    cell: Optional[tuple[int, int]],
+    grid_w: int,
+    grid_h: int,
+) -> Optional[str]:
+    """PNG data-URL of one grid cell (caller should wall-recolor ``rgb``)."""
+    if rgb is None or cell is None:
+        return None
+    cx, cy = cell
+    if not (0 <= cx < grid_w and 0 <= cy < grid_h):
+        return None
+    arr = np.asarray(rgb, dtype=np.uint8)
+    h, w, _ = arr.shape
+    tile_h = h // grid_h
+    tile_w = w // grid_w
+    if tile_h < 1 or tile_w < 1:
+        return None
+    tile = np.ascontiguousarray(
+        arr[cy * tile_h : (cy + 1) * tile_h, cx * tile_w : (cx + 1) * tile_w, :3]
+    )
+    if tile.size == 0:
+        return None
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.fromarray(tile, mode="RGB").save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _grid_size(session) -> tuple[int, int]:
+    env = session.backend.env
+    if env is None:
+        return 1, 1
+    return int(env.width), int(env.height)
+
+
+def _cell_effect(
+    kind: str,
+    cell: tuple[int, int],
+    grid_w: int,
+    grid_h: int,
+    duration_ms: int,
+    *,
+    tile_image: Optional[str] = None,
+) -> dict:
+    out = {
+        "kind": kind,
+        "cell": [int(cell[0]), int(cell[1])],
+        "gridW": grid_w,
+        "gridH": grid_h,
+        "durationMs": duration_ms,
+    }
+    if tile_image:
+        out["tileImage"] = tile_image
+    return out
+
+
+def effects_for_dispatch(
+    session,
+    token: str,
+    prev_state,
+    events_before: int,
+    *,
+    prev_rgb: Optional[np.ndarray] = None,
+) -> list[dict]:
+    """Serialize DemoFx clips for the web player (bounce/flash/fade/press/pulse)."""
+    effects: list[dict] = []
+    grid_w, grid_h = _grid_size(session)
+    prev_frame = _recolor_walls(np.asarray(prev_rgb, dtype=np.uint8)) if prev_rgb is not None else None
+
+    last = next(
+        (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
+        None,
+    )
+    event_type = last.get("event_type") if last else None
+
+    travel = travel_delta(token, prev_state)
+    if event_type == "BLOCKED" and travel != (0, 0):
+        dx, dy = travel
+        effects.append(
+            {
+                "kind": "bounce",
+                "dx": int(-dx * BOUNCE_PX),
+                "dy": int(-dy * BOUNCE_PX),
+                "durationMs": BOUNCE_MS,
+            }
+        )
+
+    new_events = session.event_log[events_before:]
+    mech = session.task_spec.mechanisms if session.task_spec is not None else None
+    new_state = session.state
+
+    for event in new_events:
+        if event.icon == "key" and event.prefix.startswith("Picked") and prev_state is not None:
+            cell = (int(prev_state.agent_position[0]), int(prev_state.agent_position[1]))
+            tile = _tile_image_b64(prev_frame, cell, grid_w, grid_h)
+            if tile is not None:
+                effects.append(
+                    _cell_effect("flash", cell, grid_w, grid_h, KEY_FLASH_MS, tile_image=tile)
+                )
+
+        elif event.icon == "door" and mech is not None:
+            cell = _door_cell_for_event(mech, event)
+            tile = _tile_image_b64(prev_frame, cell, grid_w, grid_h)
+            if cell and tile is not None:
+                effects.append(
+                    _cell_effect("fade", cell, grid_w, grid_h, DOOR_FADE_MS, tile_image=tile)
+                )
+
+        elif (
+            event.icon == "gate"
+            and mech is not None
+            and prev_state is not None
+            and new_state is not None
+        ):
+            cell = _first_changed_cell(mech.gates, prev_state.open_gates, new_state.open_gates)
+            tile = _tile_image_b64(prev_frame, cell, grid_w, grid_h)
+            if cell and tile is not None:
+                effects.append(
+                    _cell_effect("fade", cell, grid_w, grid_h, GATE_FADE_MS, tile_image=tile)
+                )
+
+        elif (
+            event.icon == "switch"
+            and mech is not None
+            and prev_state is not None
+            and new_state is not None
+        ):
+            cell = _first_changed_cell(
+                mech.switches, prev_state.active_switches, new_state.active_switches
+            )
+            if cell is not None:
+                # Press uses the post-step tile (switch already flipped).
+                try:
+                    new_rgb = _recolor_walls(
+                        np.asarray(session.backend.render(), dtype=np.uint8)
+                    )
+                except Exception:
+                    new_rgb = None
+                tile = _tile_image_b64(new_rgb, cell, grid_w, grid_h)
+                effects.append(
+                    _cell_effect(
+                        "press", cell, grid_w, grid_h, SWITCH_PRESS_MS, tile_image=tile
+                    )
+                )
+
+    if session.episode_done and session.episode_success and session.state is not None:
+        pos = session.state.agent_position
+        effects.append(
+            {
+                "kind": "pulse",
+                "cell": [int(pos[0]), int(pos[1])],
+                "gridW": grid_w,
+                "gridH": grid_h,
+                "durationMs": GOAL_PULSE_MS,
+            }
+        )
+
+    return effects
+
+
 def _sin_pulse(t: float) -> float:
     """0→1→0 over t in [0, 1]."""
     return math.sin(max(0.0, min(1.0, t)) * math.pi)
@@ -249,31 +451,15 @@ class DemoFx:
 
     @staticmethod
     def _travel_delta(token: str, prev_state) -> tuple[int, int]:
-        if token in _CARDINAL_DELTA:
-            return _CARDINAL_DELTA[token]
-        if token == "MOVE_FORWARD" and prev_state is not None:
-            return _DIR_DELTA.get(prev_state.agent_direction, (0, 0))
-        return (0, 0)
+        return travel_delta(token, prev_state)
 
     @staticmethod
     def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
-        # Progress text is "red door" etc. -- match requires_key color.
-        color = (event.color or "").lower()
-        for door in mech.doors:
-            if door.requires_key.lower() == color:
-                return (door.position.x, door.position.y)
-        if len(mech.doors) == 1:
-            d = mech.doors[0]
-            return (d.position.x, d.position.y)
-        return None
+        return _door_cell_for_event(mech, event)
 
     @staticmethod
     def _first_changed_cell(specs, prev_ids, new_ids) -> Optional[tuple[int, int]]:
-        changed = set(prev_ids) ^ set(new_ids)
-        for spec in specs:
-            if spec.id in changed:
-                return (spec.position.x, spec.position.y)
-        return None
+        return _first_changed_cell(specs, prev_ids, new_ids)
 
     @staticmethod
     def _extract_tile(

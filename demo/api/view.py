@@ -11,11 +11,25 @@ from PIL import Image
 from demo.compare import R1ResultCatalog, TaskComparison
 from demo.r1_tasks import canonical_task_id
 from demo.session import MiniGridPlaySession, TASK_INSTRUCTION
+from demo.theme import WALL_GRAY_DST, WALL_GRAY_SRC
 from interface.action_space import EGOCENTRIC_ACTIONS, valid_actions
 
 
+def _recolor_walls(rgb_array: np.ndarray) -> np.ndarray:
+    """Swap MiniGrid's flat wall gray for a softer slate (display-only).
+
+    Matches ``MiniGridPlayerUI._recolor_walls``; never mutates the env render
+    buffer used for scoring/models.
+    """
+    mask = np.all(np.abs(rgb_array.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
+    if mask.any():
+        rgb_array = rgb_array.copy()
+        rgb_array[mask] = WALL_GRAY_DST
+    return rgb_array
+
+
 def _grid_image_b64(session: MiniGridPlaySession) -> str:
-    rgb = np.asarray(session.backend.render(), dtype=np.uint8)
+    rgb = _recolor_walls(np.asarray(session.backend.render(), dtype=np.uint8))
     img = Image.fromarray(rgb[:, :, :3], mode="RGB")
     buf = io.BytesIO()
     img.save(buf, format="PNG")

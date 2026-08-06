@@ -19,7 +19,9 @@ from pydantic import BaseModel
 
 from demo.api.registry import GameRegistry
 from demo.api.view import is_allowed_action, serialize_task, serialize_view
+from demo.fx import effects_for_dispatch
 from demo.r1_tasks import list_r1_tasks
+from demo.sounds import sfx_for_dispatch
 
 app = FastAPI(title="MultiNet MiniGrid Game API", version="0.1.0")
 app.add_middleware(
@@ -80,16 +82,36 @@ def game_action(game_id: str, body: ActionBody) -> dict:
     action = body.action.upper()
     if not is_allowed_action(session, action):
         raise HTTPException(status_code=400, detail=f"Invalid action {action!r}")
+    sfx = None
+    effects: list = []
     if not session.episode_done:
+        prev_state = session.state
+        events_before = len(session.event_log)
+        prev_rgb = None
+        try:
+            if session.backend.env is not None:
+                import numpy as np
+
+                prev_rgb = np.asarray(session.backend.render(), dtype=np.uint8)
+        except Exception:
+            prev_rgb = None
         session._dispatch_token(action)
-    return {"view": serialize_view(session, catalog=registry.catalog)}
+        sfx = sfx_for_dispatch(session, events_before)
+        effects = effects_for_dispatch(
+            session, action, prev_state, events_before, prev_rgb=prev_rgb
+        )
+    return {
+        "view": serialize_view(session, catalog=registry.catalog),
+        "sfx": sfx,
+        "effects": effects,
+    }
 
 
 @app.post("/api/game/{game_id}/reset")
 def game_reset(game_id: str) -> dict:
     session = _get(game_id).session
     session._reset_env()
-    return {"view": serialize_view(session, catalog=registry.catalog)}
+    return {"view": serialize_view(session, catalog=registry.catalog), "sfx": "restart"}
 
 
 @app.post("/api/game/{game_id}/navigate")
@@ -99,4 +121,5 @@ def game_navigate(game_id: str, body: NavigateBody) -> dict:
     return {
         "task": serialize_task(session),
         "view": serialize_view(session, catalog=registry.catalog),
+        "sfx": "navigate",
     }

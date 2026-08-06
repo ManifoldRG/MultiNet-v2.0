@@ -43,7 +43,7 @@ except ImportError:
     sys.exit(1)
 
 from demo.session import MiniGridPlaySession, ProgressEvent, SETTINGS_AXES
-from demo.sounds import DemoSounds
+from demo.sounds import DemoSounds, sfx_for_dispatch
 from demo.fx import DemoFx
 from demo.compare import R1ResultCatalog, r1_task_id
 from demo.r1_tasks import restrict_to_r1_tasks
@@ -229,7 +229,7 @@ class MiniGridPlayerUI:
                 prev_rgb = None
 
         session._dispatch_token(token)
-        self.sounds.play(self._sfx_for_dispatch(events_before))
+        self.sounds.play(sfx_for_dispatch(session, events_before))
 
         env = session.backend.env
         if env is None or prev_state is None:
@@ -254,58 +254,6 @@ class MiniGridPlayerUI:
             display_size=GRID_DISPLAY_SIZE,
             episode_success=bool(session.episode_done and session.episode_success),
         )
-
-    def _sfx_for_dispatch(self, events_before: int) -> str:
-        """Pick one short UI clip for the action that just ran.
-
-        Prefers semantic Progress milestones (pickup / door / switch) when
-        they fired this step, then falls back to the transcript's
-        ``event_type`` (move / turn / wall bump / invalid). Success always
-        wins so completing a task gets the ascending chime even if the last
-        primitive was a plain move onto the goal."""
-        session = self.session
-        if session.episode_done and session.episode_success:
-            return "success"
-
-        for event in reversed(session.event_log[events_before:]):
-            if event.icon == "key":
-                return "pickup"
-            if event.icon == "door":
-                return "door"
-            if event.icon in ("switch", "gate"):
-                # Gate state changes are switch-driven; prefer the distinct
-                # switch click over the door latch so the two mechanisms
-                # stay audibly different.
-                return "switch"
-            if event.icon == "goal":
-                return "success"
-
-        last = next(
-            (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
-            None,
-        )
-        event_type = last.get("event_type") if last else None
-        if event_type == "MOVED":
-            return "step"
-        if event_type == "TURNED":
-            return "turn"
-        if event_type == "BLOCKED":
-            return "wall"
-        if event_type in ("PICKUP",):
-            return "pickup"
-        if event_type == "OPENED":
-            return "door"
-        if event_type == "TOGGLED":
-            return "switch"
-        if event_type == "DONE":
-            return "success"
-        if event_type == "DROPPED":
-            # Successful drops already returned "pickup" via the Progress
-            # event above; reaching here means X with an empty inventory.
-            return "invalid"
-        if event_type in ("NOTHING", "INVALID", "WRONG_DONE"):
-            return "invalid"
-        return "invalid"
 
     # ------------------------------------------------------------------
     # Input: physical key -> action token
