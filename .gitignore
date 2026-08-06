@@ -54,6 +54,25 @@ deploy/*.log
 # Dev planning docs (specs/plans) - kept out of the pushed/release branch
 docs/superpowers/
 
+# Local release-audit kickoff prompt + agent-authored reports (never commit these)
+docs/release_cleanup_reviews/
+docs/RELEASE_CLEANUP.md
+
+# Editor swap/backup files
+*.sw[a-p]
+*~
+
+# Agent/tool local working state (never release content)
+.claude/
+.superpowers/
+scratchpad/
+
+# Generated prompt previews (regenerate: multinet-preview-prompts)
+prompting_experiments/prompts.txt
+
+# Local R1 analysis planning note (operator-owned, not release content)
+docs/MultiNet v2 0 R1 Analysis Guide.md
+
 #AI configuration files
 CLAUDE.md
 AGENTS.md
