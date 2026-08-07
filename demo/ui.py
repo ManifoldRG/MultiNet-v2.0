@@ -183,14 +183,15 @@ class MiniGridPlayerUI:
         self._sync_caption()
 
     def _restrict_to_r1_tasks(self) -> None:
-        """Keep only mazes present in the R1 results table."""
+        """Narrow browsing to mazes present in the R1 results table, when any
+        of the current selection is. If none are -- a non-R1 experiment/
+        directory was requested, or no results table is available at all --
+        leave the task list alone; R1-comparison is just unavailable for
+        this session rather than a reason to refuse to launch."""
         session = self.session
         r1_tasks = [p for p in session.task_list if r1_task_id(p) in self.r1_catalog]
         if not r1_tasks:
-            raise ValueError(
-                "No tasks in the current selection appear in the R1 results table. "
-                "Point at an R1 maze folder (e.g. mazes/exp_maze_jsons/M1)."
-            )
+            return
         session.task_list = r1_tasks
         session.task_list_locked = True
         if session.task_path not in r1_tasks:

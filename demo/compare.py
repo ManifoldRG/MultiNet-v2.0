@@ -1,7 +1,9 @@
 """R1 model-comparison lookup for the human-play demo's end screen.
 
-Reads the sibling Multinet-v2-results canonical metrics table so a finished
-episode can show human steps vs BFS optimal vs Claude / Kimi / Qwen.
+Reads the Multinet-v2-results canonical metrics table (sibling checkout, or
+nested inside this repo -- see ``_find_default_csv``) so a finished episode
+can show human steps vs BFS optimal vs Claude / Kimi / Qwen. If no table is
+found, the catalog is empty and comparison is simply unavailable.
 """
 
 from __future__ import annotations
@@ -31,15 +33,27 @@ _FAILURE_BLURBS = {
     "solved": "solved",
 }
 
-# Sibling checkout next to MultiNet-v2.0.
-_DEFAULT_CSV = (
-    Path(__file__).resolve().parents[1].parent
-    / "Multinet-v2-results"
-    / "r1-20260717"
-    / "analysis"
-    / "metrics"
-    / "canonical_results_table.csv"
-)
+_RESULTS_TABLE_TAIL = Path("r1-20260717") / "analysis" / "metrics" / "canonical_results_table.csv"
+
+
+def _find_default_csv() -> Path | None:
+    """Locate the R1 canonical results table.
+
+    Prefers a ``Multinet-v2-results`` checkout sibling to this repo (the
+    layout the demo was originally written against); falls back to a
+    ``Multinet-v2-results/`` directory nested inside this repo (this
+    machine's actual layout -- see CLAUDE.md's Layout section). Returns
+    ``None`` if neither exists, so callers can degrade to an empty/absent
+    catalog instead of crashing the demo at launch.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    sibling = repo_root.parent / "Multinet-v2-results" / _RESULTS_TABLE_TAIL
+    if sibling.is_file():
+        return sibling
+    nested = repo_root / "Multinet-v2-results" / _RESULTS_TABLE_TAIL
+    if nested.is_file():
+        return nested
+    return None
 
 
 def r1_task_id(task_path: Path) -> str:
@@ -94,16 +108,24 @@ class TaskComparison:
 
 
 class R1ResultCatalog:
-    """Index of R1 canonical results, keyed by ``r1_*`` task_id."""
+    """Index of R1 canonical results, keyed by ``r1_*`` task_id.
+
+    When ``csv_path`` isn't given explicitly, the table is auto-discovered
+    via ``_find_default_csv`` (sibling checkout, then nested). If neither
+    location has it, the catalog is constructed empty rather than raising --
+    ``__contains__`` is always False and ``lookup`` always raises ``KeyError``
+    -- so the demo can still launch with the R1-comparison feature disabled.
+    An explicitly-passed ``csv_path`` that doesn't exist still raises: that's
+    a deliberate ask, not auto-discovery.
+    """
 
     def __init__(self, csv_path: Path | None = None):
-        self.csv_path = Path(csv_path) if csv_path else _DEFAULT_CSV
-        if not self.csv_path.is_file():
-            raise FileNotFoundError(
-                f"R1 results CSV not found at {self.csv_path}. "
-                "Expected sibling Multinet-v2-results checkout."
-            )
+        self.csv_path = Path(csv_path) if csv_path else _find_default_csv()
         self._by_task: dict[str, list[dict]] = {}
+        if self.csv_path is None:
+            return
+        if not self.csv_path.is_file():
+            raise FileNotFoundError(f"R1 results CSV not found at {self.csv_path}.")
         with open(self.csv_path, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 tid = row["task_id"].strip()
@@ -115,6 +137,11 @@ class R1ResultCatalog:
     def lookup(self, task_id: str) -> TaskComparison:
         rows = self._by_task.get(task_id)
         if rows is None:
+            if self.csv_path is None:
+                raise KeyError(
+                    f"No R1 results table is available (no Multinet-v2-results "
+                    f"checkout found); cannot look up {task_id!r}."
+                )
             raise KeyError(f"Task {task_id!r} not in R1 results table ({self.csv_path})")
         return self._build(task_id, rows)
 
