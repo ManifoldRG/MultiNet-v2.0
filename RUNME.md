@@ -40,6 +40,7 @@ export ANTHROPIC_API_KEY=...   # only for the providers you actually run
 # at minimal cost. Not for measurement.
 python -m scripts.run_pipeline \
   --run-config gridworld/fixtures/run_config.smoke_claude_sonnet.json \
+  --manifest gridworld/fixtures/manifest.smoke_eval.json \
   --seeds 0
 ```
 
@@ -50,10 +51,12 @@ Artifacts land under
 
 ### Reproduce the R1 evaluation (paid)
 
-The R1 cell runs three models over the 50-maze balanced panel with 64k
-output caps — it requires an Anthropic key (Opus 4.8), a Moonshot key, and
-a locally served Qwen3.6-27B vLLM endpoint (A100-class GPU), and it spends
-real money. Read the run-config before launching.
+The R1 cell runs three models over the 50-maze balanced panel — Claude and
+Kimi at 64k output caps, the served Qwen tier starting at an 8k cap with a
+phase-2 widen for cap-hitters (see the run-config's inline notes) — and it
+requires an Anthropic key (Opus 4.8), a Moonshot key, and a locally served
+Qwen3.6-27B vLLM endpoint (A100-class GPU), and it spends real money. Read
+the run-config before launching.
 
 ```bash
 export ANTHROPIC_API_KEY=... MOONSHOT_API_KEY=...
@@ -85,9 +88,10 @@ pull artifacts before spindown.
 
 Implement an agent in `interface/agents/` exposing
 `generate(messages) -> Reply` (see `interface/agents/claude.py` and
-`interface/agents/reply.py`), register it under a provider name in a
-run-config's `models` block, and run the pipeline. The harness handles
-prompting, parsing, stepping, scoring, and artifacts.
+`interface/agents/reply.py`), add a provider branch for it in
+`scripts/run_pipeline.py`'s `_build_agent_from_spec`, register that
+provider name in a run-config's `models` block, and run the pipeline. The
+harness handles prompting, parsing, stepping, scoring, and artifacts.
 
 ## Appendix: legacy local/VLM demo harness
 
