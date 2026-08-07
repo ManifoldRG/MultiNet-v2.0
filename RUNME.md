@@ -96,9 +96,9 @@ remains usable for local exploration with Ollama / LM Studio VLMs and
 exotic tilings. It is **not** the stack behind any published number.
 
 ```bash
-python run_eval.py --model random --tiers 1        # random baseline on tier tasks
+python run_eval.py --model random --benchmark tiers --tier 1  # random baseline on tier tasks
 python run_eval.py --model ollama --backend multigrid --tiling hex
-python play_task.py --task gridworld/tasks/tier1/maze_simple_001.json   # pygame
+python play_task.py gridworld/tasks/tier1/maze_simple_001.json   # pygame
 python visualize_all_tilings.py
 python -m scripts.vlm_sanity_check --model ollama  # VLM vision sanity check
 ```
