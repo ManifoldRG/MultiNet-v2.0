@@ -16,8 +16,9 @@ versa:
   chimes), best-effort and silent when audio isn't available.
 - ``demo.fx``: display-only motion feedback (wall bounce, cell flash/fade,
   goal pulse) composited on the rendered frame -- never mutates the env.
-- ``demo.compare``: R1 results lookup (requires sibling Multinet-v2-results).
-  The demo only plays mazes present in that table.
+- ``demo.compare``: R1 results lookup (sibling checkout or nested
+  Multinet-v2-results directory; degrades gracefully when neither is
+  present). Any maze plays; the table only gates the comparison card.
 - ``demo.r1_config`` / ``demo.r1_tasks``: shared R1 experiment config and
   allowlist helpers used by both the desktop UI and the web API.
 - ``demo.api``: FastAPI HTTP surface for the web player

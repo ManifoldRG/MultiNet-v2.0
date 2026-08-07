@@ -1,5 +1,5 @@
 {
-  "description": "Conditional-evaluation manifest (15 mazes) = the 10 validation_10 mazes + 5 held-out S/M/B/D/D mazes (one S, one M, one blind B probe, two D), all held out from manifest.ogbench_50_smbd.json so verification experiments cannot affect the 50-maze run. The B row is the blind probe (mazes/conditional/blind_probe_B_holdout.json). See docs/conditional_experiments_launch_checklist.md.",
+  "description": "Conditional-evaluation manifest (15 mazes) = the 10 validation_10 mazes + 5 held-out S/M/B/D/D mazes (one S, one M, one blind B probe, two D), all held out from manifest.ogbench_50_smbd.json so verification experiments cannot affect the 50-maze run. The B row is the blind probe (mazes/conditional/blind_probe_B_holdout.json).",
   "selection": {
     "counts": {
       "validation_10": 10,

@@ -214,9 +214,9 @@ Each **round** (one tick):
 
 ## Validation smoke
 
-- **Mazes (selected 2026-07-16 from `analysis/candidate_mazes/all_maze_features.csv` (relocated to the Multinet-v2-results repo);
-  all beatable, none in balanced_03, none length-risk, 5 distinct mechanism
-  signatures):**
+- **Mazes (selected 2026-07-16 from the candidate-maze feature table, maintained
+  with the results; all beatable, none in balanced_03, none length-risk, 5
+  distinct mechanism signatures):**
 
   | slot | maze | optimal actions | signature |
   |---|---|---:|---|
