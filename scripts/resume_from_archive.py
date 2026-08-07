@@ -297,7 +297,7 @@ def main() -> int:
         "facing": replayed_final["facing"],
         "collected_keys": replayed_final["collected_keys"],
         "open_doors": replayed_final["open_doors"],
-        "stall_count": stepper.stall_count,
+        "stall_count": stepper._stall_watchdog.stall_count if stepper._stall_watchdog else 0,
         "stall_k": stepper.stall_k,
         "queries_counted": stepper.query_count,
         "parse_failures_pending": stepper.parse_failures,
