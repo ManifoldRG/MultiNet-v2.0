@@ -21,6 +21,11 @@ dependencies = [
 dev = [
     "pytest",
 ]
+web = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+]
 visual = [
     "matplotlib",
     "pygame",
