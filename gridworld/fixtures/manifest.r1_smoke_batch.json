@@ -1,7 +1,7 @@
 {
   "description": "R1 batch-API validation smoke: 5 mazes spanning the ~30-80 optimal-step band (navigation, K->S, K->K, K->S->K, K) for the Claude/Kimi Batch API lockstep validation. Not a scored panel; drives scripts/run_batch_smoke.py.",
   "selection": {
-    "source_set": "analysis/candidate_mazes/all_maze_features.csv",
+    "source_set": "analysis/candidate_mazes/all_maze_features.csv (relocated to the Multinet-v2-results repo)",
     "candidate": "r1_smoke_batch",
     "maze_count": 5,
     "order": "ascending BFS optimal_steps (rank)",
