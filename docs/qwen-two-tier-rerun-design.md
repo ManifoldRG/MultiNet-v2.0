@@ -34,7 +34,7 @@ up. Consequences:
   `stop_gpu_worker` / `lib/gpu_teardown.sh` (`lib/distributed_start.sh:215-222`,
   fail-closed GPU-free polling), then relaunches with phase-2 args. Serve-args
   cannot change at runtime; this is a real ~14-min reload (see
-  `docs/qwen-served-vllm-concurrency.md`).
+  `docs/qwen-served-vllm-concurrency.md` (archived to the results repo's docs-archive/)).
 
 ## Scope
 
@@ -144,7 +144,7 @@ to retry forever).
 
 ## Documentation (explicit requirement — clear & replicable)
 
-- Runbook `docs/qwen-two-tier-rerun.md`: what/why/how, the KV-vs-parallelism
+- Runbook `docs/qwen-two-tier-rerun.md` (archived to the results repo's docs-archive/): what/why/how, the KV-vs-parallelism
   rationale, the exact reload step and phase-2 serve args, how to re-run.
 - Inline comments at the phase-transition points in the run scripts
   (`launch_distributed.sh` / `lib/distributed_start.sh` / the sweep driver).
