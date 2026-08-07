@@ -93,6 +93,26 @@ Implement an agent in `interface/agents/` exposing
 provider name in a run-config's `models` block, and run the pipeline. The
 harness handles prompting, parsing, stepping, scoring, and artifacts.
 
+## 7. Playable human demo (pygame)
+
+`play_task.py` is a human-playable client wired into the same `interface/`
+code the LLM pipeline uses to build observations. It fixes its
+`ExperimentConfig` to the R1 cell (`image_only` observation,
+`text_summary_and_last3` context window, `egocentric` action space) so a
+human run mirrors what the R1 models actually saw — `Tab` opens a read-only
+settings overlay showing that config, `M` shows the exact model-facing text,
+and `[ / ]` steps through the current task list. Task browsing is restricted
+to mazes that appear in the R1 results table, so point it at the R1 corpus
+(`ogbench/ogbench/procgen/maze_jsons/<family>` or the manifest's `r1`
+experiment), not `mazes/validation_10/`.
+
+```bash
+python play_task.py ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json
+python play_task.py --tasks-dir ogbench/ogbench/procgen/maze_jsons/M1   # browse a family with [ / ]
+python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1
+python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1.json
+```
+
 ## Appendix: legacy local/VLM demo harness
 
 An earlier single-machine harness predates the canonical pipeline and
