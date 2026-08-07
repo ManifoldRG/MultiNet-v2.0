@@ -75,14 +75,10 @@ markers = [
 include-package-data = true
 py-modules = [
     "evaluation_harness",
-    "example_usage",
-    "interactive_demo",
     "model_interface",
     "play_task",
     "run_eval",
     "visualize_all_tilings",
-    "visualize_grid",
-    "visualize_grids_proper",
 ]
 
 [tool.setuptools.packages.find]
