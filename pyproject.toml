@@ -19,6 +19,11 @@ dependencies = [
 dev = [
     "pytest",
 ]
+web = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+]
 visual = [
     "matplotlib",
     "pygame",
@@ -76,6 +81,7 @@ where = ["."]
 include = [
     "adapters*",
     "cross_domain*",
+    "demo*",
     "deploy*",
     "gridworld*",
     "interface*",
