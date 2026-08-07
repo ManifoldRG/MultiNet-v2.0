@@ -270,8 +270,7 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
     # supplementary episodes are doomed=False), but this MUST be revisited
     # before scoring any future episode that actually emits DROP, or a
     # recoverable state will be scored "mechanically unwinnable" when it is
-    # not. See RUN_NOTES_incidents_and_findings.md for the corpus-level
-    # caveat.
+    # not.
     if ctx.drop_available and state.carrying_key is not None:
         yield Transition(
             action=int(MiniGridActions.DROP),

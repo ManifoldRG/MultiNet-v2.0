@@ -3,7 +3,7 @@
  "selection": {
   "source_set": "gridworld/fixtures/manifest.r1_balanced_03.json",
   "criteria": "end_reason=parse_failed(infra) OR doomed=True in R1_FINAL_episode_runs (Kimi leg)",
-  "evidence": "Multinet-v2-results/r1-20260717/analysis/metrics/long_table.csv (doomed, doomed_at_env_step)",
+  "evidence": "doomed / doomed_at_env_step columns of the R1 per-episode metrics table (Kimi leg)",
   "maze_count": 2
  },
  "tasks": [
