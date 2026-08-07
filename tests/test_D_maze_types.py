@@ -7,7 +7,6 @@ if _REPO_ROOT not in sys.path:
 	sys.path.insert(0, _REPO_ROOT)
 
 from maze_test_utils import (
-	KNOWN_CORPUS_DEFECTS,
 	MAZE_JSON_DIR,
 	assert_goal_target_matches_maze_goal,
 	assert_navigation_contract,
@@ -142,7 +141,6 @@ class TestD1MazeTypes(unittest.TestCase):
 
 	def test_matches_m_counterpart_except_yellow_key(self):
 		"""Tests that D1 gameplay fields match the M counterpart after removing kY."""
-		tier_defect = KNOWN_CORPUS_DEFECTS['d1_m2_difficulty_tier_mismatch']
 		for file_name, d_spec in self.specs:
 			with self.subTest(file_name=file_name):
 				maze_type = _m_counterpart_type(file_name)
@@ -151,14 +149,7 @@ class TestD1MazeTypes(unittest.TestCase):
 
 				self.assertEqual(d_spec['version'], m_spec['version'])
 				self.assertEqual(d_spec['seed'], m_spec['seed'])
-				if f'D1/{file_name}' == tier_defect['d_file']:
-					# FROZEN known defect — see KNOWN_CORPUS_DEFECTS in maze_test_utils.py.
-					self.assertEqual(
-						(d_spec['difficulty_tier'], m_spec['difficulty_tier']),
-						tier_defect['bad_tiers'],
-					)
-				else:
-					self.assertEqual(d_spec['difficulty_tier'], m_spec['difficulty_tier'])
+				self.assertEqual(d_spec['difficulty_tier'], m_spec['difficulty_tier'])
 				self.assertEqual(d_spec['maze'], m_spec['maze'])
 				self.assertEqual(d_spec['rules'], m_spec['rules'])
 				self.assertEqual(d_spec['goal'], m_spec['goal'])
