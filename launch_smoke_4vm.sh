@@ -24,7 +24,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"
 #   ./launch_smoke_4vm.sh stop      # spin all 4 VMs down, KEEP disks + run data
 #   ./launch_smoke_4vm.sh delete    # delete all 4 VMs incl. disks (post-export only)
 #
-# Cost safety net (see docs/superpowers/specs/2026-06-29-distributed-run-cost-safety-net-design.md):
+# Cost safety net (see docs/superpowers/specs/2026-06-29-distributed-run-cost-safety-net-design.md): (local design notes, not published)
 #   Layer 0  GCP-native: every created VM gets --max-run-duration=$MAX_RUN_DURATION
 #            --instance-termination-action=STOP (server-side stop, data preserved).
 #   Layer 1  On-VM watchdog: each VM schedules `sudo shutdown -h` at the floor + 1h.

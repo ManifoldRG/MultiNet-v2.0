@@ -3,7 +3,7 @@
 # SINGLE reused fleet (3 Qwen + 1 Kimi + 1 Claude + coordinator). It composes the
 # already-tested primitives (launch_distributed.sh + lib/cost_safety.sh +
 # lib/distributed_start.sh) and holds NO cost-safety logic of its own. It STOPs,
-# never deletes. See docs/superpowers/specs/2026-07-03-sequential-supervised-sweep-design.md
+# never deletes. See docs/superpowers/specs/2026-07-03-sequential-supervised-sweep-design.md (local design notes, not published)
 #
 # NOTE: -e is intentionally OFF — a tick must survive a nonzero sub-step so the
 # fail-closed egress guard can run and the fleet is never left in a half-known state.

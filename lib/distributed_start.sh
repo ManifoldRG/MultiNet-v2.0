@@ -3,7 +3,7 @@
 # Provides start_coordinator + start_worker, generalized from launch_qwen_smoke.sh
 # (coordinator prepare/serve; GPU worker) and launch_smoke_4vm.sh (API worker + key
 # delivery). Consumed by launch_distributed.sh (replaces its stub start hooks).
-# See docs/superpowers/specs/2026-07-01-distributed-start-hooks-design.md
+# See docs/superpowers/specs/2026-07-01-distributed-start-hooks-design.md (local design notes, not published)
 
 worker_field() {  # $1 vm-name  $2 field  -> value from TOPO_JSON on stdout
   printf '%s' "$TOPO_JSON" | python3 -c '
@@ -200,7 +200,7 @@ REMOTE
   # or "lockstep-worker" (batch-API lockstep runner; R1 uses this). For lockstep,
   # API_WORKER_CONCURRENCY is MAX_BATCHES (working-set size; R1: 50) and the
   # coordinator must be serving with --stale-after-seconds >= worst-case batch
-  # round (see docs/batch-api-lockstep-runner-design.md, docs/r1-run-preparation.md).
+  # round (see docs/batch-api-lockstep-runner-design.md, docs/r1-run-preparation.md (archived to the results repo's docs-archive/)).
   # Exactly ONE lockstep worker per API model group — a second one double-pays.
   local api_role="${API_WORKER_ROLE:-worker}"
   case "$api_role" in

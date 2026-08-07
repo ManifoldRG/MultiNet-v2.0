@@ -239,7 +239,7 @@ def test_publish_excludes_png_and_runs_git_only_in_results_repo(tmp_path):
 
 def test_results_repo_is_gitignored():
     # The results repo is a SEPARATE git repo; the code repo must never track it.
-    assert bash("git check-ignore Multinet-v2-results").returncode == 0
+    assert bash("git check-ignore Multinet-v2-results/").returncode == 0
 
 
 def test_status_renders_table(tmp_path):

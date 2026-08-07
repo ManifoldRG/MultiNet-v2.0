@@ -5,7 +5,7 @@ set -euo pipefail
 # run_config, finds A100 capacity across zones, verifies on-VM code matches the
 # local committed sha, applies the cost-safety net, starts the fleet, and writes
 # .runs/<run_id>/manifest.json. See
-# docs/superpowers/specs/2026-06-30-distributed-provisioner-design.md
+# docs/superpowers/specs/2026-06-30-distributed-provisioner-design.md (local design notes, not published)
 #
 # Required: RUN_CONFIG, MANIFEST, MAX_RUN_DURATION.
 # Subcommands (no creds / no MAX_RUN_DURATION): stop | delete (operate on the manifest).
