@@ -44,6 +44,10 @@ python -m scripts.run_pipeline \
   --seeds 0
 ```
 
+Always pass an explicit `--run-config` and `--manifest`: the default
+`gridworld/fixtures/manifest.json` is a browse catalog for the demo and now
+includes the 42-maze R1 panel.
+
 Artifacts land under
 `artifacts/runs/<task>/<backend>/<model>/seed_<n>/<variant>/episode.json`
 (git-ignored) and aggregate into `episode_runs.jsonl` with a per-run
@@ -101,10 +105,13 @@ code the LLM pipeline uses to build observations. It fixes its
 `text_summary_and_last3` context window, `egocentric` action space) so a
 human run mirrors what the R1 models actually saw — `Tab` opens a read-only
 settings overlay showing that config, `M` shows the exact model-facing text,
-and `[ / ]` steps through the current task list. Task browsing is restricted
-to mazes that appear in the R1 results table, so point it at the R1 corpus
-(`ogbench/ogbench/procgen/maze_jsons/<family>` or the manifest's `r1`
-experiment), not `mazes/validation_10/`.
+and `[ / ]` steps through the current task list. When an R1 results table is
+available, task browsing can be restricted to mazes that appear in it —
+point it at the R1 corpus (`ogbench/ogbench/procgen/maze_jsons/<family>` or
+the manifest's `r1` experiment) to get the end-of-episode comparison against
+Claude/Kimi/Qwen. Without a table (e.g. a fresh clone with no
+`Multinet-v2-results` checkout), any maze still plays, just without that
+comparison.
 
 ```bash
 python play_task.py ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json
@@ -122,7 +129,6 @@ exotic tilings. It is **not** the stack behind any published number.
 ```bash
 python run_eval.py --model random --benchmark tiers --tier 1  # random baseline on tier tasks
 python run_eval.py --model ollama --backend multigrid --tiling hex
-python play_task.py gridworld/tasks/tier1/maze_simple_001.json   # pygame
 python visualize_all_tilings.py
 python -m scripts.vlm_sanity_check --model ollama  # VLM vision sanity check
 ```
