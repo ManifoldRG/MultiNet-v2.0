@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pygame
 from minigrid.core.constants import COLORS as _MINIGRID_COLORS
 
 
@@ -112,7 +111,9 @@ MAX_DIFFICULTY_TIER = 6
 FPS = 30
 
 
-def load_font(size: int, bold: bool = False) -> pygame.font.Font:
+def load_font(size: int, bold: bool = False):
+    import pygame
+
     path = pygame.font.match_font("Segoe UI", bold=bold)
     if path:
         return pygame.font.Font(path, size)

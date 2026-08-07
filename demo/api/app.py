@@ -1,10 +1,16 @@
 """FastAPI surface for the MultiNet web MiniGrid player.
 
     uvicorn demo.api.app:app --reload --app-dir .
+
+Env:
+  MULTINET_CORS_ORIGINS     comma-separated origins (default: local static servers)
+  MULTINET_SETTINGS_EDITABLE  1/true to allow Tab 1–5 cycling (default: frozen)
+  MULTINET_MAX_GAMES        live session cap (default: 64)
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Literal
@@ -31,19 +37,36 @@ from demo.fx import effects_for_dispatch
 from demo.r1_tasks import list_r1_tasks
 from demo.sounds import sfx_for_dispatch
 
-# Web R1 keeps ExperimentConfig frozen (read-only Tab overlay).
-# Flip to True to let Tab 1–5 cycle axes.
-SETTINGS_EDITABLE = False
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_origins(name: str, default: str) -> list[str]:
+    raw = os.environ.get(name, default)
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+# Web R1 keeps ExperimentConfig frozen unless explicitly enabled.
+SETTINGS_EDITABLE = _env_flag("MULTINET_SETTINGS_EDITABLE", default=False)
+
+_CORS_ORIGINS = _env_origins(
+    "MULTINET_CORS_ORIGINS",
+    "http://127.0.0.1:5500,http://localhost:5500",
+)
 
 app = FastAPI(title="MultiNet MiniGrid Game API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_CORS_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
-registry = GameRegistry()
+registry = GameRegistry(max_games=int(os.environ.get("MULTINET_MAX_GAMES", "64")))
 
 
 class StartBody(BaseModel):
@@ -100,15 +123,17 @@ def game_settings(game_id: str) -> dict:
 
 
 @app.post("/api/game/{game_id}/setting")
-def game_setting(game_id: str, body: SettingBody) -> dict:
+async def game_setting(game_id: str, body: SettingBody) -> dict:
     """Cycle a settings axis. No-op while frozen for R1 parity."""
-    session = _get(game_id).session
-    if SETTINGS_EDITABLE:
-        session._cycle_setting(body.key)
-    return {
-        "view": serialize_view(session, catalog=registry.catalog),
-        "settings": serialize_settings(session, editable=SETTINGS_EDITABLE),
-    }
+    entry = _get(game_id)
+    async with entry.lock:
+        session = entry.session
+        if SETTINGS_EDITABLE:
+            session._cycle_setting(body.key)
+        return {
+            "view": serialize_view(session, catalog=registry.catalog),
+            "settings": serialize_settings(session, editable=SETTINGS_EDITABLE),
+        }
 
 
 @app.get("/api/game/{game_id}/model-view")
@@ -122,44 +147,53 @@ def game_trajectory(game_id: str) -> dict:
 
 
 @app.post("/api/game/{game_id}/action")
-def game_action(game_id: str, body: ActionBody) -> dict:
-    session = _get(game_id).session
-    action = body.action.upper()
-    if not is_allowed_action(session, action):
-        raise HTTPException(status_code=400, detail=f"Invalid action {action!r}")
-    sfx = None
-    effects: list = []
-    if not session.episode_done:
-        prev_state = session.state
-        events_before = len(session.event_log)
-        prev_rgb = None
-        if session.backend.env is not None:
-            prev_rgb = np.asarray(session.backend.render(), dtype=np.uint8)
-        session._dispatch_token(action)
-        sfx = sfx_for_dispatch(session, events_before)
-        effects = effects_for_dispatch(
-            session, action, prev_state, events_before, prev_rgb=prev_rgb
-        )
-    return {
-        "view": serialize_view(session, catalog=registry.catalog),
-        "sfx": sfx,
-        "effects": effects,
-    }
+async def game_action(game_id: str, body: ActionBody) -> dict:
+    entry = _get(game_id)
+    async with entry.lock:
+        session = entry.session
+        action = body.action.upper()
+        if not is_allowed_action(session, action):
+            raise HTTPException(status_code=400, detail=f"Invalid action {action!r}")
+        sfx = None
+        effects: list = []
+        if not session.episode_done:
+            prev_state = session.state
+            events_before = len(session.event_log)
+            prev_rgb = None
+            if session.backend.env is not None:
+                prev_rgb = np.asarray(session.backend.render(), dtype=np.uint8)
+            session._dispatch_token(action)
+            sfx = sfx_for_dispatch(session, events_before)
+            effects = effects_for_dispatch(
+                session, action, prev_state, events_before, prev_rgb=prev_rgb
+            )
+        return {
+            "view": serialize_view(session, catalog=registry.catalog),
+            "sfx": sfx,
+            "effects": effects,
+        }
 
 
 @app.post("/api/game/{game_id}/reset")
-def game_reset(game_id: str) -> dict:
-    session = _get(game_id).session
-    session._reset_env()
-    return {"view": serialize_view(session, catalog=registry.catalog), "sfx": "restart"}
+async def game_reset(game_id: str) -> dict:
+    entry = _get(game_id)
+    async with entry.lock:
+        session = entry.session
+        session._reset_env()
+        return {
+            "view": serialize_view(session, catalog=registry.catalog),
+            "sfx": "restart",
+        }
 
 
 @app.post("/api/game/{game_id}/navigate")
-def game_navigate(game_id: str, body: NavigateBody) -> dict:
-    session = _get(game_id).session
-    session._load_adjacent_task(body.delta)
-    return {
-        "task": serialize_task(session),
-        "view": serialize_view(session, catalog=registry.catalog),
-        "sfx": "navigate",
-    }
+async def game_navigate(game_id: str, body: NavigateBody) -> dict:
+    entry = _get(game_id)
+    async with entry.lock:
+        session = entry.session
+        session._load_adjacent_task(body.delta)
+        return {
+            "task": serialize_task(session),
+            "view": serialize_view(session, catalog=registry.catalog),
+            "sfx": "navigate",
+        }
