@@ -18,7 +18,7 @@ The served-vLLM path **ignores the run-config's `max_model_len` /
 in-process `qwen_vllm` provider. The server is launched with hard-coded args in
 `lib/distributed_start.sh:150-157`
 (`--max-model-len 16384 --max-num-seqs 64 --gpu-memory-utilization 0.9`), with
-twin copies in the local backfill launcher and `launch_qwen_smoke.sh:171`. A
+twin copies in the backfill launcher (kept with the run records) and `launch_qwen_smoke.sh:171`. A
 reuse guard (`distributed_start.sh:150`) skips relaunch when a server is already
 up. Consequences:
 
