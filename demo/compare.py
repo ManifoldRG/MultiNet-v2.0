@@ -7,6 +7,7 @@ episode can show human steps vs BFS optimal vs Claude / Kimi / Qwen.
 from __future__ import annotations
 
 import csv
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,8 +32,14 @@ _FAILURE_BLURBS = {
     "solved": "solved",
 }
 
-# Sibling checkout next to MultiNet-v2.0.
-_DEFAULT_CSV = (
+# Where the R1 results table comes from, most specific first:
+#   1. MULTINET_R1_RESULTS_CSV, for a deployment that mounts it elsewhere.
+#   2. The sibling Multinet-v2-results checkout - authoritative, and what
+#      anyone working across both repos already has.
+#   3. demo/data/, a vendored copy. This is the one that matters for the
+#      container: an image has no sibling checkout to reach into, and
+#      without it the API raises FileNotFoundError at import.
+_SIBLING_CSV = (
     Path(__file__).resolve().parents[1].parent
     / "Multinet-v2-results"
     / "r1-20260717"
@@ -40,6 +47,16 @@ _DEFAULT_CSV = (
     / "metrics"
     / "canonical_results_table.csv"
 )
+_VENDORED_CSV = Path(__file__).resolve().parent / "data" / "canonical_results_table.csv"
+
+
+def _default_csv() -> Path:
+    override = os.environ.get("MULTINET_R1_RESULTS_CSV")
+    if override:
+        return Path(override)
+    if _SIBLING_CSV.is_file():
+        return _SIBLING_CSV
+    return _VENDORED_CSV
 
 
 def r1_task_id(task_path: Path) -> str:
@@ -97,11 +114,12 @@ class R1ResultCatalog:
     """Index of R1 canonical results, keyed by ``r1_*`` task_id."""
 
     def __init__(self, csv_path: Path | None = None):
-        self.csv_path = Path(csv_path) if csv_path else _DEFAULT_CSV
+        self.csv_path = Path(csv_path) if csv_path else _default_csv()
         if not self.csv_path.is_file():
             raise FileNotFoundError(
-                f"R1 results CSV not found at {self.csv_path}. "
-                "Expected sibling Multinet-v2-results checkout."
+                f"R1 results CSV not found at {self.csv_path}. Expected a sibling "
+                "Multinet-v2-results checkout, a vendored demo/data/ copy, or "
+                "MULTINET_R1_RESULTS_CSV pointing at one."
             )
         self._by_task: dict[str, list[dict]] = {}
         with open(self.csv_path, newline="", encoding="utf-8") as f:
