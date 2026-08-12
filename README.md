@@ -1,185 +1,187 @@
-<div align="center">
+<p align="center">
+  <kbd>
+  <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet v2.0 &mdash; R1: Long-Horizon Action Taking and Causal Reasoning in 2D Mazes</h1>
+  </kbd>
+</p>
 
-<img src="docs/figures/multinet_logo.png" alt="MultiNet" width="200" />
-<!-- HUMAN: commit the logo asset at docs/figures/multinet_logo.png, or delete the img tag -->
+<p align="center">
+  <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-blue?style=flat-square&logo=googlechrome" alt="Website"></a>
+  <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-Read-8A2BE2?style=flat-square&logo=Blogger" alt="Technical Report"></a>
+  <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-v1.0%20%26%20earlier-lightgrey?style=flat-square&logo=github" alt="MultiNet archive"></a>
+  <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute%E2%A0%80%E2%A0%80%E2%A0%80%E2%A0%80%E2%A0%80-7289DA?style=flat-square&logo=discord" alt="Contribute"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT"></a>
+</p>
+<!-- HUMAN: swap the Technical Report badge URL for the real Fig blog post before launch -->
 
-# MultiNet v2.0 — Gridworld
+### MultiNet is a collaborative initiative with contributions from leading research teams at institutions like:
 
-[![Website](https://img.shields.io/badge/Website-multinet.ai-blue)](https://multinet.ai)
-[![v1 Paper](https://img.shields.io/badge/CVPR%202026W-MultiNet%20v1-red)](https://openaccess.thecvf.com/content/CVPR2026W/MMFM5/papers/Guruprasad_Do_Multimodal_Foundation_Models_Truly_Generalize_Exposing_Failure_Modes_Across_CVPRW_2026_paper.pdf)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
-<!-- HUMAN: re-add Paper + Discord badges when the arXiv link and invite URL exist -->
+<p align="center">
+  <a href="https://metarch.ai/" target="_blank">
+    <kbd>
+    <img src="assets/fig_logo.png" alt="Fig Logo" height="40">
+    </kbd>
+  </a>
+  <a href="https://www.manifoldrg.com/" target="_blank">
+    <kbd>
+    <img src="assets/manifold_logo.png" alt="Manifold Research Logo" height="40">
+    </kbd>
+  </a>
+  <a href="https://www.gatech.edu/" target="_blank">
+    <kbd>
+    <img src="assets/gt_logo.png" alt="Georgia Tech Logo" style="height:40px; border-radius:50%;">
+    </kbd>
+  </a>
+  <a href="https://www.tufts.edu/" target="_blank">
+    <kbd>
+    <img src="assets/tufts_logo.jpg" alt="Tufts Logo" style="height:40px; border-radius:50%;">
+    </kbd>
+  </a>
+</p>
 
-</div>
+<p align="center">
+  <img src="assets/r1_failure_reel.gif" alt="Claude Opus 4.8 failing an 8x8 maze" width="620">
+  <br>
+  <em>Claude Opus 4.8 on an 8×8 maze: it finds the key and opens the door, then walks into walls with the goal tile in view.</em>
+</p>
 
-MultiNet v2.0 evaluates how VLM/LLM agents perceive, plan, and act in
-procedurally generated gridworld mazes — keys, doors, switches, gates, and
-decoys — from raster observations, one action at a time, under strictly
-controlled prompt, observation, and query conditions.
+## 🔍 What this release is
 
-*MultiNet is a collaborative initiative from [Manifold Research](https://www.manifoldrg.com/)
-and partner institutions — see the [MultiNet v1 repository](https://github.com/ManifoldRG/MultiNet)
-for the broader benchmark program.*
+**R1 is the first release of MultiNet v2.0, and a preview of the full cross-domain benchmark we are building.**
 
-## 📢 Updates
+We ask a question a single benchmark number cannot answer: when a model has to act over a long horizon in an environment whose rules it has *not* been told, where exactly does it break? R1 puts three frontier VLMs into 2D mazes built so that every source of difficulty is an independent knob, and a failure can be attributed rather than merely recorded.
 
-- **2026-XX-XX** 🚀 **v2.0 release** — R1 evaluation of Claude Opus 4.8,
-  Kimi k2.6, and Qwen3.6-27B on 50 difficulty-balanced mazes.
-  <!-- HUMAN: date + release-page link -->
+The maze is a *substrate*, not a domain. Because its structure carries no domain content, the same underlying task can be projected into other modalities — 3D simulation, pure language — and a model evaluated across all of them. This repository is the environment and evaluation machinery behind that first run.
 
-## 🔍 Overview
+## 🧩 What we built
 
-This repository provides:
+- **The environment** — 8×8 to 14×14 [MiniGrid](https://github.com/Farama-Foundation/Minigrid) mazes with a six-action space (turn left, turn right, move forward, pickup, toggle, done). The agent must navigate walls and dead ends, operate mechanisms in the right order, and reach a goal tile. Beyond the task instruction and the action space, **nothing about the environment is explained** — how a mechanism works has to be discovered by acting and observing.
+- **Mechanisms that isolate distinct capabilities** — keys and doors (operating a mechanism the model has priors for), switches and gates (discovering one it does not), dependency chains (reasoning about ordering), and distractors (error recovery). Each can be added or removed independently of the others.
+- **A validator and BFS oracle** — every maze is confirmed solvable, with checks for mechanism necessity, chain ordering, and distractor safety. The oracle yields the exact optimal action sequence from any reachable state, giving objective difficulty, partial credit, and the ability to label a single move as strictly wrong.
+- **An evaluation harness** — a config-driven episode runner (prompt assembly, strict action parsing, per-episode artifact logging, a progress-stall watchdog, difficulty-relative step caps), model adapters behind one interface, mechanism-aware scoring, and fleet tooling for large sweeps.
+- **An ablation-derived protocol** — 540 episodes across 12 conditions on held-out mazes, varying one field at a time, settled the evaluation protocol before any benchmark numbers were produced.
 
-1. **Task specification + validation** — mechanism chains (key→door,
-   switch→gate), decoy objects, and dead-end distractors; every shipped
-   maze is BFS-verified solvable, with difficulty measured in executable
-   actions.
-2. **A controlled evaluation harness** — prompt strategies, observation
-   renderers (raster image / text summary / hybrids), query modes,
-   chat-history regimes, and a progress-stall watchdog, all config-driven.
-3. **Model adapters** — Anthropic (incl. Batch API), Moonshot/Kimi, and
-   local vLLM backends behind one interface, with strict `FINAL_OUTPUT`
-   action parsing and per-episode artifact logging.
-4. **Scoring** — canonical per-run results tables and a mechanism-aware
-   progress score (analysis notebooks and figures are published with the
-   results, separately from this repo).
-5. **Fleet tooling** — GCP provisioning/teardown with cost-safety rails
-   for large sweeps.
+## 📊 A first look at the results
 
-**Headline R1 result:** all three frontier models are near the floor —
-Claude Opus 4.8 solves 4/50, Kimi k2.6 and Qwen3.6-27B 1/50 each — with a
-shared 2D-raster perception bottleneck expressed as three distinct failure
-styles. Full analysis: results page + paper.
-<!-- HUMAN: confirm the three counts against the FINAL post-Kimi-rerun tables, then link results page + arXiv -->
+We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and **Qwen3.6-27B** (thinking) on 50 difficulty-balanced mazes, with an equal 64k output-token budget.
 
-## 🚀 Getting Started
+| | Claude Opus 4.8 | Kimi k2.6 | Qwen3.6-27B |
+|---|--:|--:|--:|
+| **Mazes solved (/50)** | **4** | **1** | **1** |
+| Mean action progress | 0.19 | 0.23 | 0.23 |
 
-### Installation
+**6 solves out of 150 episodes. 45 of the 50 mazes were solved by no model at all.** These are puzzles a person who has never seen one solves in a few minutes.
+
+<p align="center">
+  <img src="assets/r1_progress_grid.png" alt="Progress score per maze × model" width="100%">
+  <br>
+  <em>Progress per maze (columns) per model (rows); stars mark the six solves. Median closest approach is 47.5 executable actions from the goal — outside the six solves, nothing came close.</em>
+</p>
+
+- **Path length dominates difficulty.** Mazes of ≤30 optimal moves gave 5 solves in 39 episodes; mazes of ≥61 moves gave 0 in 66. No 14×14 maze was ever solved.
+- **Mechanisms without priors break models.** Across 105 switch-maze episodes there were **zero** solves: 132 TOGGLE actions produced 2 switch flips, and models stood on a live switch in 38 of those episodes without ever flipping it. Key-door mazes — same structure, but with priors — produced 27 key pickups, 15 door opens, and 4 of the 6 total solves.
+- **Extended reasoning buys survival, not solves.** Kimi and Qwen spend 20–26× the output tokens per newly discovered tile that Claude does and survive ~1.6× longer, yet solve fewer mazes.
+- **Each model fails in its own style.** Claude walks into walls, Kimi re-treads ground it has already covered, and Qwen turns in place while its rate of reaching new tiles collapses.
+
+Full analysis — difficulty regressions, failure taxonomy, test-time-compute study, scope and limitations — is in the [technical report](https://metarch.ai/blog).
+
+## 🚀 Quickstart
 
 ```bash
 git clone --recurse-submodules https://github.com/ManifoldRG/MultiNet-v2.0.git
 cd MultiNet-v2.0
-# already cloned without submodules? run: git submodule update --init
 
 conda create -n multinet-v2 python=3.10 && conda activate multinet-v2
 # (or: python -m venv .venv && source .venv/bin/activate)
 pip install -e ".[dev,visual]"
+
 pytest   # verify the install — no API keys or GPU needed
 ```
 
-The `ogbench` submodule (~50 MB) supplies the evaluation maze corpus.
-
-### Quickstart (cheap smoke run)
+Mazes are declarative JSON task specifications. Validate every example spec in the repo and rank them by difficulty:
 
 ```bash
-export ANTHROPIC_API_KEY=...
-
-# 1 model x 3 mazes x 4k-token cap: exercises the full loop
-# (prompting -> parsing -> stepping -> scoring -> artifacts) at minimal
-# cost. Not for measurement.
-python -m scripts.run_pipeline \
-  --run-config gridworld/fixtures/run_config.smoke_claude_sonnet.json \
-  --manifest gridworld/fixtures/manifest.smoke_eval.json \
-  --seeds 0
+python -m gridworld.task_validator
 ```
 
-Per-episode artifacts (full transcript, frames, queries, scores) land under
-`artifacts/runs/<task>/<backend>/<model>/seed_<n>/<variant>/episode.json`
-(git-ignored) and aggregate into `episode_runs.jsonl`.
-
-### Reproduce the R1 evaluation (paid)
-
-Reproducing R1 runs three models over the 50-maze panel — Claude and Kimi
-at 64k output caps, the served Qwen tier starting at an 8k cap with a
-phase-2 widen for cap-hitters — and requires an Anthropic key (Opus 4.8), a
-Moonshot key, and a locally served Qwen3.6-27B vLLM endpoint (A100-class
-GPU). **Expect real API spend.** See [RUNME.md](./RUNME.md) for the full
-operator guide (fleet sweeps, scoring, budgeting).
-
-```bash
-export ANTHROPIC_API_KEY=... MOONSHOT_API_KEY=...
-python -m scripts.run_pipeline \
-  --run-config gridworld/fixtures/run_config.r1.json \
-  --manifest gridworld/fixtures/manifest.r1_balanced_03.json \
-  --seeds 0
+```
+  [PASS] tier3_key_switch_001: optimal=30 steps, mechanisms=4, score=70.61
+  ...
+=== Summary: 16/16 tasks beatable ===
 ```
 
-### Evaluate your own model
+To build your own maze, copy a spec from `gridworld/tasks/`, edit the layout and mechanisms, then validate and render it:
 
-Implement an agent in `interface/agents/` exposing
-`generate(messages) -> Reply` (see `interface/agents/claude.py` and
-`interface/agents/reply.py`), add a provider branch for it in
-`scripts/run_pipeline.py`'s `_build_agent_from_spec`, register that
-provider name in a run config, and the harness handles prompting, parsing,
-stepping, scoring, and artifacts.
+```python
+from PIL import Image
+
+from gridworld.task_spec import TaskSpecification
+from gridworld.task_validator import compute_difficulty
+from gridworld.backends.minigrid_backend import MiniGridBackend
+
+spec = TaskSpecification.from_json("gridworld/tasks/tier3/key_switch_001.json")
+
+report = compute_difficulty(spec)
+print(report.is_beatable, report.optimal_steps, report.mechanism_count)
+
+backend = MiniGridBackend()
+backend.configure(spec)
+backend.reset(seed=0)
+Image.fromarray(backend.render()).save("maze.png")
+```
+
+`compute_difficulty` runs the BFS oracle: if your maze is unsolvable, has a decorative mechanism, or has a distractor that can strand the agent, it will tell you.
 
 ## 🗺️ Repository structure
 
 | Path | Contents |
 |---|---|
-| `gridworld/` | task specs, runtime env, validator, BFS planners, fixtures |
-| `interface/` | episode runner, prompt assembly, parsing, model agents |
-| `prompting_experiments/prompt_templates/` | every prompt string (none inline) |
-| `scorer/` | static + runtime scoring, per-run reports |
-| `scripts/` | local + distributed run pipelines |
-| `ogbench/` | submodule: the procgen maze corpus the R1 manifests resolve |
-| `mazes/` | validation + one-shot example mazes used by tests and docs |
-| `tests/` | pytest suite (1000+ tests) |
+| `gridworld/` | task specification, maze validator, BFS oracle, MiniGrid + MultiGrid backends |
+| `interface/` | episode runner, prompt assembly, action parsing, model adapters |
+| `prompting_experiments/` | every prompt template used in the protocol sweep (none inline) |
+| `scorer/` | static and runtime scoring, mechanism-aware progress |
+| `demo/` | the playable maze demo embedded on the website |
+| `scripts/` | evaluation pipeline entrypoints and run tooling |
+| `deploy/` | fleet provisioning and teardown with cost-safety rails |
 | `docs/` | design documentation ([index](./docs/README.md)) |
+| `tests/` | pytest suite (1000+ tests) |
 
-Published results and analysis live in a separate results repository — this
-repo is the harness. Running it writes artifacts locally (git-ignored).
+## 🔭 What's next
 
-**A note on evaluation data:** the current maze panels are deliberately
-public (here and in the `ogbench` fork) for reproducibility of the R1
-results. Evaluation panels will be rotated for the next release cycle, so
-treat the current mazes as reproducibility artifacts, not held-out data.
+R1 covers one rendering of one substrate. The full version of MultiNet v2.0 projects the *same* underlying task into additional domains — 3D simulation and pure language among them — so a model can be evaluated on identical structure across different modes of perception and action spaces. That contrast is what turns a benchmark score into a measurement of generalization rather than interface familiarity.
 
-## ⚠️ Limitations
+Because difficulty here is a set of knobs rather than a fixed set of puzzles, the benchmark scales with the models instead of saturating, and every maze is newly generated rather than drawn from anything a model could have trained on.
 
-- Single-agent, fully synthetic 2D gridworld — results speak to raster
-  perception + sequential decision-making, not general embodiment.
-- R1 runs one seed per cell; per-cell variance is not characterized.
-- Difficulty is measured in executable actions; mechanism-specific effects
-  are partially confounded with path length.
-- The shared 2D-raster perception bottleneck dominates current results:
-  models are near the floor, which compresses between-model contrasts.
+## 📚 MultiNet archive
+
+MultiNet v1.0 and earlier — evaluating VLMs, VLAs, and generalist models across robotics, multimodal understanding, and procedurally generated game environments — live in the [MultiNet v1.0 repository](https://github.com/ManifoldRG/MultiNet).
 
 ## 🙏 Acknowledgments
 
-MultiNet v2.0 builds on [OGBench](https://github.com/seohongpark/ogbench)
-(MIT License, © 2024 OGBench Authors); we vendor a fork at
-[ManifoldRG/ogbench](https://github.com/ManifoldRG/ogbench) with
-maze-generation and correctness fixes (see `ogbench/LICENSE`). The runtime
-builds on [MiniGrid](https://github.com/Farama-Foundation/Minigrid) and
-[Gymnasium](https://github.com/Farama-Foundation/Gymnasium).
+The runtime builds on [MiniGrid](https://github.com/Farama-Foundation/Minigrid) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium). We also build on [OGBench](https://github.com/seohongpark/ogbench) (MIT License, © 2024 OGBench Authors) and vendor a fork at [ManifoldRG/ogbench](https://github.com/ManifoldRG/ogbench) with maze-generation and correctness fixes.
+
+<!-- HUMAN: add the reviewer acknowledgments from the technical report (Victor Barres, Yuansheng Ni, Greg Kamradt, et al.) -->
 
 ## 📜 Citation
 
 If you use MultiNet v2.0 in your research, please cite:
 
 ```bibtex
-@misc{multinet_v2_2026,
-  title  = {TODO — v2.0 paper title},
-  author = {TODO — author list},
-  year   = {2026},
-  note   = {arXiv link TBD}
-}
-
-@inproceedings{guruprasad2026multinet,
-  title     = {Do Multimodal Foundation Models Truly Generalize?
-               Exposing Failure Modes Across Embodied Tasks},
-  author    = {Guruprasad et al.},
-  booktitle = {CVPR Workshops (MMFM5)},
-  year      = {2026}
-}
+@misc{guruprasad2026multinetv2,
+      title={Frontier Vision-Language Models Fail Simple 2D Mazes: Benchmarking
+             Long-Horizon Action Taking and Causal Reasoning Capabilities},
+      author={Pranav Guruprasad and Sean Rivera and Helen Lu and Arushi Jain
+              and Hangliang Ren and Harshvardhan Sikka},
+      year={2026},
+      note={TODO — arXiv link},
+      }
 ```
-<!-- HUMAN: v2 BibTeX (title/authors/link); replace 'Guruprasad et al.' with the full v1 author list -->
+<!-- HUMAN: replace the note with the arXiv eprint once the preprint is up -->
 
 ## 🤝 Contributing & contact
 
-Issues and PRs welcome. For benchmark submissions, collaboration, or
-evaluation services, reach us via [multinet.ai](https://multinet.ai).
+Issues and PRs are welcome. Feedback from researchers working on living benchmarks, long-horizon agentic evaluation, and RL environments is especially valuable to us as we build the full cross-domain benchmark.
+
+For collaboration or evaluation services, reach us via [multinet.ai](https://multinet.ai) or [pranav@metarch.ai](mailto:pranav@metarch.ai).
 
 Released under the [MIT License](./LICENSE).
