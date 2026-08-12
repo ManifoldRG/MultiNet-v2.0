@@ -47,39 +47,56 @@
 
 ## 🔍 An early preview into a new kind of agentic benchmark
 
-This release is an early preview into MultiNet v2.0, where we evaluated 3 frontier VLMs on 50 2D mazes. Through this evaluation we try and understand how, where and why a frontier VLM breaks in an environment that requires exploration, planning, action taking, and reasoning.
+This release is an early preview into MultiNet v2.0, where we evaluated 3 frontier VLMs on 50 2D mazes. Through this evaluation we try and understand how, where, and why a frontier VLM breaks in an environment that requires exploration, planning, action taking, and reasoning.
 
 ## 🧩 What we built
 
-- **The environment** — 8×8 to 14×14 [MiniGrid](https://github.com/Farama-Foundation/Minigrid) mazes with a six-action space (turn left, turn right, move forward, pickup, toggle, done). The agent must navigate walls and dead ends, operate mechanisms in the right order, and reach a goal tile. Beyond the task instruction and the action space, **nothing about the environment is explained** — how a mechanism works has to be discovered by acting and observing.
-- **Mechanisms that isolate distinct capabilities** — keys and doors (operating a mechanism the model has priors for), switches and gates (discovering one it does not), dependency chains (reasoning about ordering), and distractors (error recovery). Each can be added or removed independently of the others.
-- **A validator and BFS oracle** — every maze is confirmed solvable, with checks for mechanism necessity, chain ordering, and distractor safety. The oracle yields the exact optimal action sequence from any reachable state, giving objective difficulty, partial credit, and the ability to label a single move as strictly wrong.
-- **An evaluation harness** — a config-driven episode runner (prompt assembly, strict action parsing, per-episode artifact logging, a progress-stall watchdog, difficulty-relative step caps), model adapters behind one interface, mechanism-aware scoring, and fleet tooling for large sweeps.
-- **An ablation-derived protocol** — 540 episodes across 12 conditions on held-out mazes, varying one field at a time, settled the evaluation protocol before any benchmark numbers were produced.
+- **The environment:** 8×8 to 14×14 [MiniGrid](https://github.com/Farama-Foundation/Minigrid) mazes with a six-action space (turn left, turn right, move forward, pickup, toggle, done). The agent must navigate corridors, dead ends, distractors and decoys, operate mechanisms in the right order and reach a goal tile. Beyond the task instruction and the action space, nothing about the environment is explained.
+- **Mechanisms that isolate distinct capabilities:** keys and doors (operating a mechanism the model has priors for), switches and gates (discovering one it does not), dependency chains (reasoning about ordering), and distractors (error recovery). Each can be added or removed independently of the others.
+- **A validator and BFS oracle:** every maze is confirmed solvable, with checks for mechanism necessity, chain ordering, and distractor safety. The oracle yields the exact optimal action sequence from any reachable state, giving objective difficulty, partial credit, and the ability to label a single move as strictly wrong.
+- **An evaluation harness:** a config-driven episode runner (prompt assembly, strict action parsing, per-episode artifact logging, a progress-stall watchdog, difficulty-relative step caps), model adapters behind one interface, mechanism-aware scoring, and fleet tooling for large sweeps.
+- **An ablation-derived protocol:** extensive experiments were run across 540 episodes to finalize the evaluation protocol for the final run on 50 mazes.
 
-## 📊 A first look at the results
+## 📊 A peek into the results
 
 We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and **Qwen3.6-27B** (thinking) on 50 difficulty-balanced mazes, with an equal 64k output-token budget.
 
-| | Claude Opus 4.8 | Kimi k2.6 | Qwen3.6-27B |
-|---|--:|--:|--:|
-| **Mazes solved (/50)** | **4** | **1** | **1** |
-| Mean action progress | 0.19 | 0.23 | 0.23 |
+<div align="center">
+<table>
+  <thead>
+    <tr>
+      <th></th>
+      <th>Claude Opus 4.8</th>
+      <th>Kimi k2.6</th>
+      <th>Qwen3.6-27B</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Mazes solved (/50)</td>
+      <td align="center">4</td>
+      <td align="center">1</td>
+      <td align="center">1</td>
+    </tr>
+    <tr>
+      <td>Mean action progress</td>
+      <td align="center">0.19</td>
+      <td align="center">0.23</td>
+      <td align="center">0.23</td>
+    </tr>
+  </tbody>
+</table>
+</div>
 
-**6 solves out of 150 episodes. 45 of the 50 mazes were solved by no model at all.** These are puzzles a person who has never seen one solves in a few minutes.
+**6 solves out of 150 episodes. 45 of the 50 mazes were solved by no model at all.** These are puzzles a person who has never seen one solves in a few minutes. [Try out some of the mazes from this evaluation and see how you fare!](https://multinet.ai/#play-the-maze)
 
 <p align="center">
   <img src="assets/r1_progress_grid.png" alt="Progress score per maze × model" width="100%">
   <br>
-  <em>Progress per maze (columns) per model (rows); stars mark the six solves. Median closest approach is 47.5 executable actions from the goal — outside the six solves, nothing came close.</em>
+  <em>Progress per maze (columns) per model (rows); stars mark the six solves.</em>
 </p>
 
-- **Path length dominates difficulty.** Mazes of ≤30 optimal moves gave 5 solves in 39 episodes; mazes of ≥61 moves gave 0 in 66. No 14×14 maze was ever solved.
-- **Mechanisms without priors break models.** Across 105 switch-maze episodes there were **zero** solves: 132 TOGGLE actions produced 2 switch flips, and models stood on a live switch in 38 of those episodes without ever flipping it. Key-door mazes — same structure, but with priors — produced 27 key pickups, 15 door opens, and 4 of the 6 total solves.
-- **Extended reasoning buys survival, not solves.** Kimi and Qwen spend 20–26× the output tokens per newly discovered tile that Claude does and survive ~1.6× longer, yet solve fewer mazes.
-- **Each model fails in its own style.** Claude walks into walls, Kimi re-treads ground it has already covered, and Qwen turns in place while its rate of reaching new tiles collapses.
-
-Full analysis — difficulty regressions, failure taxonomy, test-time-compute study, scope and limitations — is in the [technical report](https://metarch.ai/blog).
+For a deeper dive, read our [technical report](https://metarch.ai/blog).
 
 ## 🚀 Quickstart
 
@@ -91,7 +108,7 @@ conda create -n multinet-v2 python=3.10 && conda activate multinet-v2
 # (or: python -m venv .venv && source .venv/bin/activate)
 pip install -e ".[dev,visual]"
 
-pytest   # verify the install — no API keys or GPU needed
+pytest   # verify the install: no API keys or GPU needed
 ```
 
 Mazes are declarative JSON task specifications. Validate every example spec in the repo and rank them by difficulty:
@@ -144,13 +161,13 @@ Image.fromarray(backend.render()).save("maze.png")
 
 ## 🔭 What's next
 
-R1 covers one rendering of one substrate. The full version of MultiNet v2.0 projects the *same* underlying task into additional domains — 3D simulation and pure language among them — so a model can be evaluated on identical structure across different modes of perception and action spaces. That contrast is what turns a benchmark score into a measurement of generalization rather than interface familiarity.
+R1 covers one rendering of one substrate. The full version of MultiNet v2.0 projects the *same* underlying task into additional domains such as 3D simulation and pure language, so a model can be evaluated on identical structure across different modes of perception and action spaces. That contrast is what turns a benchmark score into a measurement of generalization rather than interface familiarity.
 
 Because difficulty here is a set of knobs rather than a fixed set of puzzles, the benchmark scales with the models instead of saturating, and every maze is newly generated rather than drawn from anything a model could have trained on.
 
 ## 📚 MultiNet archive
 
-MultiNet v1.0 and earlier — evaluating VLMs, VLAs, and generalist models across robotics, multimodal understanding, and procedurally generated game environments — live in the [MultiNet v1.0 repository](https://github.com/ManifoldRG/MultiNet).
+MultiNet v1.0 and earlier live in the [MultiNet v1.0 repository](https://github.com/ManifoldRG/MultiNet): evaluations of VLMs, VLAs, and generalist models across robotics, multimodal understanding, and procedurally generated game environments.
 
 ## 🙏 Acknowledgments
 
@@ -169,7 +186,7 @@ If you use MultiNet v2.0 in your research, please cite:
       author={Pranav Guruprasad and Sean Rivera and Helen Lu and Arushi Jain
               and Hangliang Ren and Harshvardhan Sikka},
       year={2026},
-      note={TODO — arXiv link},
+      note={TODO: arXiv link},
       }
 ```
 <!-- HUMAN: replace the note with the arXiv eprint once the preprint is up -->
