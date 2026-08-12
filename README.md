@@ -45,6 +45,15 @@
   <em>Claude Opus 4.8, Kimi K2.6 and Qwen 3.6 27B models failing on 2D mazes.</em>
 </p>
 
+## 📢 News
+
+- 🔥 2026-08-18: An early preview into Multinet v2.0 - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, action taking, and reasoning. Read our technical report [here](https://metarch.ai/blog).
+- 🌟 2025-13-10: Multinet v1.0 - We release our most comprehensive benchmark yet - evaluating a SoTA VLM, VLA, and generalist model on a wide variety of multimodal understanding and action datasets. Read more [here](https://multinet.ai/static/pages/Multinetv1.html)
+- 🏅 2025-06-10: Paper accepted at ICML 2025! Our paper detailing the Open-Source contributions of Multinet that benefit the AI community has been accepted at the [CodeML Workshop](https://codeml-workshop.github.io/codeml2025/) at ICML 2025! Read our paper [here](https://multinet.ai/static/pdfs/An%20Open-Source%20Software%20Toolkit%20&%20Benchmark%20Suite%20for%20the%20Evaluation%20and%20Adaptation%20of%20Multimodal%20Action%20Models.pdf).
+- 🏆 2025-05-22: Multinet v0.2 - We systematically profile state-of-the-art VLAs and VLMs to understand how they perform in procedurally generated OOD game environments! Read more about our release [here](https://multinet.ai/static/pages/Multinetv02.html)
+- 🎉 2024-11-08: We release the first version of MultiNet where we profiled SoTA VLMs and VLAs on real-world robotics tasks - Multinet v0.1! Check our [release page](https://multinet.ai/static/pages/Multinetv01.html) for more details.
+- 🚀 2024-03-22: Introducing Multinet! A new generalist benchmark to evaluate Vision-Language & Action models. Learn more [here](https://multinet.ai)
+
 ## 🔍 An early preview into a new kind of agentic benchmark
 
 This release is an early preview into MultiNet v2.0, where we evaluated 3 frontier VLMs on 50 2D mazes. Through this evaluation we try and understand how, where, and why a frontier VLM breaks in an environment that requires exploration, planning, action taking, and reasoning.
@@ -52,9 +61,8 @@ This release is an early preview into MultiNet v2.0, where we evaluated 3 fronti
 ## 🧩 What we built
 
 - **The environment:** 8×8 to 14×14 [MiniGrid](https://github.com/Farama-Foundation/Minigrid) mazes with a six-action space (turn left, turn right, move forward, pickup, toggle, done). The agent must navigate corridors, dead ends, distractors and decoys, operate mechanisms in the right order and reach a goal tile. Beyond the task instruction and the action space, nothing about the environment is explained.
-- **Mechanisms that isolate distinct capabilities:** keys and doors (operating a mechanism the model has priors for), switches and gates (discovering one it does not), dependency chains (reasoning about ordering), and distractors (error recovery). Each can be added or removed independently of the others.
 - **A validator and BFS oracle:** every maze is confirmed solvable, with checks for mechanism necessity, chain ordering, and distractor safety. The oracle yields the exact optimal action sequence from any reachable state, giving objective difficulty, partial credit, and the ability to label a single move as strictly wrong.
-- **An evaluation harness:** a config-driven episode runner (prompt assembly, strict action parsing, per-episode artifact logging, a progress-stall watchdog, difficulty-relative step caps), model adapters behind one interface, mechanism-aware scoring, and fleet tooling for large sweeps.
+- **An evaluation harness:** a config-driven episode runner (prompt assembly, strict action parsing, per-episode artifact logging, a progress-stall watchdog, difficulty-relative step caps), model adapters behind one interface, mechanism-aware scoring, and the distributed run infrastructure that executed the evaluation across a fleet of VMs and GPUs.
 - **An ablation-derived protocol:** extensive experiments were run across 540 episodes to finalize the evaluation protocol for the final run on 50 mazes.
 
 ## 📊 A peek into the results
@@ -88,7 +96,7 @@ We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and
 </table>
 </div>
 
-**6 solves out of 150 episodes. 45 of the 50 mazes were solved by no model at all.** These are puzzles a person who has never seen one solves in a few minutes. [Try out some of the mazes from this evaluation and see how you fare!](https://multinet.ai/#play-the-maze)
+**6 solves out of 150 episodes. 45 of the 50 mazes were solved by no model at all.** These are puzzles a person who has never seen one solves in a few minutes. Try out some of the mazes [here](https://multinet.ai/#play-the-maze) and see how you fare!
 
 <p align="center">
   <img src="assets/r1_progress_grid.png" alt="Progress score per maze × model" width="100%">
@@ -101,14 +109,12 @@ For a deeper dive, read our [technical report](https://metarch.ai/blog).
 ## 🚀 Quickstart
 
 ```bash
-git clone --recurse-submodules https://github.com/ManifoldRG/MultiNet-v2.0.git
+git clone https://github.com/ManifoldRG/MultiNet-v2.0.git
 cd MultiNet-v2.0
 
 conda create -n multinet-v2 python=3.10 && conda activate multinet-v2
 # (or: python -m venv .venv && source .venv/bin/activate)
 pip install -e ".[dev,visual]"
-
-pytest   # verify the install: no API keys or GPU needed
 ```
 
 Mazes are declarative JSON task specifications. Validate every example spec in the repo and rank them by difficulty:
@@ -156,24 +162,11 @@ Image.fromarray(backend.render()).save("maze.png")
 | `demo/` | the playable maze demo embedded on the website |
 | `scripts/` | evaluation pipeline entrypoints and run tooling |
 | `deploy/` | fleet provisioning and teardown with cost-safety rails |
-| `docs/` | design documentation ([index](./docs/README.md)) |
 | `tests/` | pytest suite (1000+ tests) |
-
-## 🔭 What's next
-
-R1 covers one rendering of one substrate. The full version of MultiNet v2.0 projects the *same* underlying task into additional domains such as 3D simulation and pure language, so a model can be evaluated on identical structure across different modes of perception and action spaces. That contrast is what turns a benchmark score into a measurement of generalization rather than interface familiarity.
-
-Because difficulty here is a set of knobs rather than a fixed set of puzzles, the benchmark scales with the models instead of saturating, and every maze is newly generated rather than drawn from anything a model could have trained on.
 
 ## 📚 MultiNet archive
 
-MultiNet v1.0 and earlier live in the [MultiNet v1.0 repository](https://github.com/ManifoldRG/MultiNet): evaluations of VLMs, VLAs, and generalist models across robotics, multimodal understanding, and procedurally generated game environments.
-
-## 🙏 Acknowledgments
-
-The runtime builds on [MiniGrid](https://github.com/Farama-Foundation/Minigrid) and [Gymnasium](https://github.com/Farama-Foundation/Gymnasium). We also build on [OGBench](https://github.com/seohongpark/ogbench) (MIT License, © 2024 OGBench Authors) and vendor a fork at [ManifoldRG/ogbench](https://github.com/ManifoldRG/ogbench) with maze-generation and correctness fixes.
-
-<!-- HUMAN: add the reviewer acknowledgments from the technical report (Victor Barres, Yuansheng Ni, Greg Kamradt, et al.) -->
+Our previous research with MultiNet v1.0 and earlier versions all live in the [MultiNet v1.0 repository](https://github.com/ManifoldRG/MultiNet): evaluations of VLMs, VLAs, and generalist models across a wide variety of domains such as robotics, multimodal understanding, game play, and tool-calling to understand their cross-domain generalization capabilities.
 
 ## 📜 Citation
 
@@ -191,10 +184,14 @@ If you use MultiNet v2.0 in your research, please cite:
 ```
 <!-- HUMAN: replace the note with the arXiv eprint once the preprint is up -->
 
-## 🤝 Contributing & contact
+## 🤝 Work with us!
 
-Issues and PRs are welcome. Feedback from researchers working on living benchmarks, long-horizon agentic evaluation, and RL environments is especially valuable to us as we build the full cross-domain benchmark.
+**Can your model or agent generalize across modalities?**
 
-For collaboration or evaluation services, reach us via [multinet.ai](https://multinet.ai) or [pranav@metarch.ai](mailto:pranav@metarch.ai).
+This release is an early preview of the MultiNet v2.0 benchmark, the full version of which will contain the same underlying task of a maze projected in multiple domains such as 3D simulation and pure language. Are models capable of taking actions in any environment? Or do they just overfit to a specific interface? With v2.0 we aim to quantify this.
+
+If you work on building models and agents, or benchmarking and evaluation, we would love to hear from you, whether that means getting your model on the benchmark, contributing to the environments, or working with us on what comes after.
+
+[See our research at Fig](https://metarch.ai/) &nbsp;&middot;&nbsp; [Work with us](mailto:pranav@metarch.ai?subject=Collaborating%20on%20MultiNet%20v2.0) &nbsp;&middot;&nbsp; [Join the Discord](https://discord.gg/Rk4gAq5aYr)
 
 Released under the [MIT License](./LICENSE).
