@@ -1,7 +1,7 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet v2.0 &mdash; R1: Long-Horizon Action Taking and Causal Reasoning in 2D Mazes</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">An early preview into MultiNet v2.0: Benchmarking Long-Horizon Action Taking and Causal Reasoning Capabilities in Frontier Vision-Language Models</h1>
   </kbd>
 </p>
 
@@ -40,9 +40,9 @@
 </p>
 
 <p align="center">
-  <img src="assets/r1_failure_reel.gif" alt="Claude Opus 4.8 failing an 8x8 maze" width="620">
+  <img src="assets/r1_failure_reels.gif" alt="Failure replay reels for Claude Opus 4.8, Kimi K2.6 and Qwen3.6-27B" width="100%">
   <br>
-  <em>Claude Opus 4.8 on an 8×8 maze: it finds the key and opens the door, then walks into walls with the goal tile in view.</em>
+  <em>Claude Opus 4.8, Kimi K2.6 and Qwen 3.6 27B models failing on 2D mazes.</em>
 </p>
 
 ## 🔍 What this release is
