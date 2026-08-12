@@ -10,7 +10,6 @@
   <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-Read-8A2BE2?style=flat-square&logo=Blogger" alt="Technical Report"></a>
   <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-v1.0%20%26%20earlier-lightgrey?style=flat-square&logo=github" alt="MultiNet archive"></a>
   <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute%E2%A0%80%E2%A0%80%E2%A0%80%E2%A0%80%E2%A0%80-7289DA?style=flat-square&logo=discord" alt="Contribute"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT"></a>
 </p>
 <!-- HUMAN: swap the Technical Report badge URL for the real Fig blog post before launch -->
 
@@ -47,7 +46,9 @@
 
 ## 📢 News
 
-- 🔥 2026-08-18: An early preview into Multinet v2.0 - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, action taking, and reasoning. Read our technical report [here](https://metarch.ai/blog).
+- ✨ 2026-08-18: An early preview into Multinet v2.0 - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, action taking, and reasoning. Read our technical report [here](https://metarch.ai/blog).
+- 🎓 2026-XX-XX: Paper accepted at CVPR 2026! Our work has been accepted at the [MMFM Workshop](https://mmfm-workshop.github.io/) at CVPR 2026! Read our paper [here](https://openaccess.thecvf.com/content/CVPR2026W/MMFM5/papers/Guruprasad_Do_Multimodal_Foundation_Models_Truly_Generalize_Exposing_Failure_Modes_Across_CVPRW_2026_paper.pdf).
+<!-- HUMAN: fill in the CVPR 2026 acceptance date -->
 - 🌟 2025-13-10: Multinet v1.0 - We release our most comprehensive benchmark yet - evaluating a SoTA VLM, VLA, and generalist model on a wide variety of multimodal understanding and action datasets. Read more [here](https://multinet.ai/static/pages/Multinetv1.html)
 - 🏅 2025-06-10: Paper accepted at ICML 2025! Our paper detailing the Open-Source contributions of Multinet that benefit the AI community has been accepted at the [CodeML Workshop](https://codeml-workshop.github.io/codeml2025/) at ICML 2025! Read our paper [here](https://multinet.ai/static/pdfs/An%20Open-Source%20Software%20Toolkit%20&%20Benchmark%20Suite%20for%20the%20Evaluation%20and%20Adaptation%20of%20Multimodal%20Action%20Models.pdf).
 - 🏆 2025-05-22: Multinet v0.2 - We systematically profile state-of-the-art VLAs and VLMs to understand how they perform in procedurally generated OOD game environments! Read more about our release [here](https://multinet.ai/static/pages/Multinetv02.html)
@@ -60,7 +61,7 @@ This release is an early preview into MultiNet v2.0, where we evaluated 3 fronti
 
 ## 🧩 What we built
 
-- **The environment:** 8×8 to 14×14 [MiniGrid](https://github.com/Farama-Foundation/Minigrid) mazes with a six-action space (turn left, turn right, move forward, pickup, toggle, done). The agent must navigate corridors, dead ends, distractors and decoys, operate mechanisms in the right order and reach a goal tile. Beyond the task instruction and the action space, nothing about the environment is explained.
+- **The environment:** 8×8 to 14×14 [MiniGrid](https://github.com/Farama-Foundation/Minigrid) mazes with an action space containing 6 valid actions: turn left, turn right, move forward, pickup, toggle, and done. The agent must navigate corridors, dead ends, distractors and decoys, operate mechanisms in the right order and reach a goal tile.
 - **A validator and BFS oracle:** every maze is confirmed solvable, with checks for mechanism necessity, chain ordering, and distractor safety. The oracle yields the exact optimal action sequence from any reachable state, giving objective difficulty, partial credit, and the ability to label a single move as strictly wrong.
 - **An evaluation harness:** a config-driven episode runner (prompt assembly, strict action parsing, per-episode artifact logging, a progress-stall watchdog, difficulty-relative step caps), model adapters behind one interface, mechanism-aware scoring, and the distributed run infrastructure that executed the evaluation across a fleet of VMs and GPUs.
 - **An ablation-derived protocol:** extensive experiments were run across 540 episodes to finalize the evaluation protocol for the final run on 50 mazes.
@@ -157,12 +158,11 @@ Image.fromarray(backend.render()).save("maze.png")
 |---|---|
 | `gridworld/` | task specification, maze validator, BFS oracle, MiniGrid + MultiGrid backends |
 | `interface/` | episode runner, prompt assembly, action parsing, model adapters |
-| `prompting_experiments/` | every prompt template used in the protocol sweep (none inline) |
+| `prompting_experiments/` | every prompt template used in the protocol sweep |
 | `scorer/` | static and runtime scoring, mechanism-aware progress |
 | `demo/` | the playable maze demo embedded on the website |
 | `scripts/` | evaluation pipeline entrypoints and run tooling |
-| `deploy/` | fleet provisioning and teardown with cost-safety rails |
-| `tests/` | pytest suite (1000+ tests) |
+| `deploy/` | distributed run infrastructure: VM and GPU fleet provisioning, teardown, and cost-safety rails |
 
 ## 📚 MultiNet archive
 
@@ -192,6 +192,10 @@ This release is an early preview of the MultiNet v2.0 benchmark, the full versio
 
 If you work on building models and agents, or benchmarking and evaluation, we would love to hear from you, whether that means getting your model on the benchmark, contributing to the environments, or working with us on what comes after.
 
-[See our research at Fig](https://metarch.ai/) &nbsp;&middot;&nbsp; [Work with us](mailto:pranav@metarch.ai?subject=Collaborating%20on%20MultiNet%20v2.0) &nbsp;&middot;&nbsp; [Join the Discord](https://discord.gg/Rk4gAq5aYr)
+<p align="center">
+  <a href="mailto:pranav@metarch.ai?subject=Collaborating%20on%20MultiNet%20v2.0">Work with us</a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://discord.gg/Rk4gAq5aYr">Join the Discord</a>
+</p>
 
 Released under the [MIT License](./LICENSE).
