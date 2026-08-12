@@ -45,13 +45,9 @@
   <em>Claude Opus 4.8, Kimi K2.6 and Qwen 3.6 27B models failing on 2D mazes.</em>
 </p>
 
-## 🔍 What this release is
+## 🔍 An early preview into a new kind of agentic benchmark
 
-**R1 is the first release of MultiNet v2.0, and a preview of the full cross-domain benchmark we are building.**
-
-We ask a question a single benchmark number cannot answer: when a model has to act over a long horizon in an environment whose rules it has *not* been told, where exactly does it break? R1 puts three frontier VLMs into 2D mazes built so that every source of difficulty is an independent knob, and a failure can be attributed rather than merely recorded.
-
-The maze is a *substrate*, not a domain. Because its structure carries no domain content, the same underlying task can be projected into other modalities — 3D simulation, pure language — and a model evaluated across all of them. This repository is the environment and evaluation machinery behind that first run.
+This release is an early preview into MultiNet v2.0, where we evaluated 3 frontier VLMs on 50 2D mazes. Through this evaluation we try and understand how, where and why a frontier VLM breaks in an environment that requires exploration, planning, action taking, and reasoning.
 
 ## 🧩 What we built
 
