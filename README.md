@@ -1,7 +1,7 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet v2.0-GridWorld: An interactive, controllable 2-dimensional environment to benchmark long-horizon action taking and causal reasoning</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet v2.0-GridWorld: An interactive, controllable, 2-dimensional environment to benchmark long-horizon action taking and causal reasoning</h1>
   </kbd>
 </p>
 
