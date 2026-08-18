@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-009688?style=flat-square&logo=googlechrome&logoColor=white" alt="Website"></a>
-  <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-8A2BE2?style=flat-square&logo=ghost&logoColor=white" alt="Technical Report"></a>
+  <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-B31B1B?style=flat-square&logo=arxiv&logoColor=white" alt="Technical Report"></a>
   <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-181717?style=flat-square&logo=github&logoColor=white" alt="MultiNet archive"></a>
   <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Contribute"></a>
 </p>
