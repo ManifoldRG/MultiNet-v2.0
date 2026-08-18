@@ -38,6 +38,8 @@
   </a>
 </p>
 
+### _How does your agent do on cross-domain, multimodal, long-horizon tasks? [Work with us to find out!](https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0)_
+
 <p align="center">
   <img src="assets/r1_failure_reels.gif" alt="Failure replay reels for Claude Opus 4.8, Kimi K2.6 and Qwen3.6-27B" width="100%">
   <br>
@@ -46,7 +48,7 @@
 
 ## 📢 News
 
-- 👁️ 2026-08-18: MultiNet v2.0-GridWorld - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://metarch.ai/blog).
+- 🌀 2026-08-20: MultiNet v2.0-GridWorld - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://metarch.ai/blog).
 - 🎓 2026-04-03: Paper accepted at CVPR 2026! Our work has been accepted at the [MMFM Workshop](https://mmfm-workshop.github.io/) at CVPR 2026! Read our paper [here](https://arxiv.org/abs/2512.11315).
 - 🌟 2025-10-13: Multinet v1.0 - We release our most comprehensive benchmark yet - evaluating a SoTA VLM, VLA, and generalist model on a wide variety of multimodal understanding and action datasets. Read more [here](https://multinet.ai/static/pages/Multinetv1.html)
 - 🏅 2025-06-10: Paper accepted at ICML 2025! Our paper detailing the Open-Source contributions of Multinet that benefit the AI community has been accepted at the [CodeML Workshop](https://codeml-workshop.github.io/codeml2025/) at ICML 2025! Read our paper [here](https://multinet.ai/static/pdfs/An%20Open-Source%20Software%20Toolkit%20&%20Benchmark%20Suite%20for%20the%20Evaluation%20and%20Adaptation%20of%20Multimodal%20Action%20Models.pdf).
@@ -54,9 +56,9 @@
 - 🎉 2024-11-08: We release the first version of MultiNet where we profiled SoTA VLMs and VLAs on real-world robotics tasks - Multinet v0.1! Check our [release page](https://multinet.ai/static/pages/Multinetv01.html) for more details.
 - 🚀 2024-03-22: Introducing Multinet! A new generalist benchmark to evaluate Vision-Language & Action models. Learn more [here](https://multinet.ai)
 
-## 🔍 An interactive, controllable environment to benchmark long-horizon action and causal reasoning
+## 🔍 About MultiNet v2.0
 
-With MultiNet v2.0 we aim to build interactive environments that represent real-world scenarios. However, at the same time we are keen to keep the setup controllable, which will allow us to deterministically vary parameters in our environment in order to make it easier or more difficult for models to succeed in.
+With MultiNet v2.0 we aim to build interactive environments that are proxies for real-world scenarios. However, at the same time we are keen to keep the setup controllable, which will allow us to deterministically vary parameters in our environment in order to make it easier or more difficult for models to succeed in.
 
 The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. In this release, MultiNet v2.0-GridWorld, we evaluated 3 frontier VLMs on 50 2D mazes.
 
@@ -153,7 +155,7 @@ Image.fromarray(backend.render()).save("maze.png")
 
 `compute_difficulty` runs the BFS oracle: if your maze is unsolvable, has a decorative mechanism, or has a distractor that can strand the agent, it will tell you.
 
-## 🗺️ Repository structure
+## 📁 Repository structure
 
 | Path | Contents |
 |---|---|
@@ -185,18 +187,18 @@ If you use MultiNet v2.0 in your research, please cite:
 ```
 <!-- HUMAN: replace the note with the arXiv eprint once the preprint is up -->
 
-## 🤝 Work with us!
-
-**Can your model successfully complete long-horizon tasks in a variety of domains?**
+## 🤝 How does your agent do on cross-domain, multimodal, long-horizon tasks?
 
 MultiNet v2.0 projects the same maze into 3D simulation and into pure language, so a model meets entirely new modes of perception and action spaces while the task underneath stays identical. This evaluates how well models understand a task and carry it out successfully across domains, making the benchmark representative of real-world workflows.
 
-If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on the benchmark, contributing to the environments, or working with us on what comes after.
+If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on our MultiNet v2.0 benchmark, contributing to the environments we are building, or working with us on what comes after!
 
 <p align="center">
-  <a href="mailto:pranav@metarch.ai?subject=Collaborating%20on%20MultiNet%20v2.0">Work with us</a>
-  &nbsp;&middot;&nbsp;
-  <a href="https://discord.gg/Rk4gAq5aYr">Join the Discord</a>
+  <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">📨 Evaluate your model</a>
+  &nbsp;&nbsp;&middot;&nbsp;&nbsp;
+  <a href="mailto:pranav@metarch.ai?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
+  &nbsp;&nbsp;&middot;&nbsp;&nbsp;
+  <a href="https://discord.gg/Rk4gAq5aYr">💬 Join the Discord</a>
 </p>
 
 Released under the [MIT License](./LICENSE).
