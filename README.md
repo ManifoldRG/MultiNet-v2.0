@@ -6,10 +6,10 @@
 </p>
 
 <p align="center">
-  <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-blue?style=flat-square&logo=googlechrome" alt="Website"></a>
-  <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-Read-8A2BE2?style=flat-square&logo=Blogger" alt="Technical Report"></a>
-  <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-v1.0%20%26%20earlier-lightgrey?style=flat-square&logo=github" alt="MultiNet archive"></a>
-  <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute%E2%A0%80%E2%A0%80%E2%A0%80%E2%A0%80%E2%A0%80-7289DA?style=flat-square&logo=discord" alt="Contribute"></a>
+  <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-009688?style=flat-square&logo=googlechrome&logoColor=white" alt="Website"></a>
+  <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-8A2BE2?style=flat-square&logo=ghost&logoColor=white" alt="Technical Report"></a>
+  <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-181717?style=flat-square&logo=github&logoColor=white" alt="MultiNet archive"></a>
+  <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Contribute"></a>
 </p>
 <!-- HUMAN: swap the Technical Report badge URL for the real Fig blog post before launch -->
 
@@ -189,12 +189,10 @@ If you use MultiNet v2.0 in your research, please cite:
 
 ## 🤝 How does your agent do on cross-domain, multimodal, long-horizon tasks?
 
-MultiNet v2.0 projects the same maze into 3D simulation and into pure language, so a model meets entirely new modes of perception and action spaces while the task underneath stays identical. This evaluates how well models understand a task and carry it out successfully across domains, making the benchmark representative of real-world workflows.
-
 If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on our MultiNet v2.0 benchmark, contributing to the environments we are building, or working with us on what comes after!
 
 <p align="center">
-  <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">📨 Evaluate your model</a>
+  <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">🧪 Evaluate your model</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
   <a href="mailto:pranav@metarch.ai?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
