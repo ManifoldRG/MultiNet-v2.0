@@ -1,7 +1,7 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">Agentic behavior in 2D mazes: previewing a multi-domain benchmark</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">Agentic Behavior in 2D Mazes: Previewing a Multi-Domain Benchmark</h1>
   </kbd>
 </p>
 
