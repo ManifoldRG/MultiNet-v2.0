@@ -175,7 +175,7 @@ Our previous research with MultiNet v1.0 and earlier versions all live in the [M
 Please cite this work as:
 
 ```
-Fig, "Agentic behavior in 2D mazes: previewing a multi-domain benchmark", Fig Research Blog, August 2026.
+Guruprasad, P., Rivera, S., Lu, H., Jain, A., Ren, H. and Sikka, H. (2026) Agentic behavior in 2D mazes: previewing a multi-domain benchmark. Available at: https://www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark
 ```
 
 Or use the BibTeX citation:
