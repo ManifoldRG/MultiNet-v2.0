@@ -55,7 +55,7 @@
 - 🎉 2024-11-08: We release the first version of MultiNet where we profiled SoTA VLMs and VLAs on real-world robotics tasks - Multinet v0.1! Check our [release page](https://multinet.ai/static/pages/Multinetv01.html) for more details.
 - 🚀 2024-03-22: Introducing Multinet! A new generalist benchmark to evaluate Vision-Language & Action models. Learn more [here](https://multinet.ai)
 
-## 🔍 A Preview of our Multi-Domain Agentic Benchmark to Evaluate Long-Horizon Action
+## 🔍 A Preview of our Multi-Domain Agentic Benchmark
 
 With MultiNet v2.0 we aim to build interactive environments that are proxies for real-world scenarios. However, at the same time we are keen to keep the setup controllable, which will allow us to deterministically vary parameters in our environment in order to make it easier or more difficult for models to succeed in.
 
