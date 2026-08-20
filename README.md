@@ -1,18 +1,16 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet v2.0-GridWorld: An interactive, controllable, 2-dimensional environment to benchmark long-horizon action taking and causal reasoning</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">Agentic behavior in 2D mazes: previewing a multi-domain benchmark</h1>
   </kbd>
 </p>
 
 <p align="center">
   <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-009688?style=flat-square&logo=googlechrome&logoColor=white" alt="Website"></a>
-  <a href="https://metarch.ai/blog"><img src="https://img.shields.io/badge/Technical%20Report-8B0000?style=flat-square&logo=arxiv&logoColor=white" alt="Technical Report"></a>
+  <a href="https://www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark/"><img src="https://img.shields.io/badge/Technical%20Report-8B0000?style=flat-square&logo=googledocs&logoColor=white" alt="Technical Report"></a>
   <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-181717?style=flat-square&logo=github&logoColor=white" alt="MultiNet archive"></a>
   <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Contribute"></a>
 </p>
-<!-- HUMAN: swap the Technical Report badge URL for the real Fig blog post before launch -->
-
 ### MultiNet is a collaborative initiative with contributions from leading research teams at institutions like:
 
 <p align="center">
@@ -48,7 +46,7 @@
 
 ## 📢 News
 
-- 🌀 2026-08-20: MultiNet v2.0-GridWorld - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://metarch.ai/blog).
+- 🌀 2026-08-20: A Preview of a Multi-Domain Agentic Benchmark - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark/).
 - 🎓 2026-04-03: Paper accepted at CVPR 2026! Our work has been accepted at the [MMFM Workshop](https://mmfm-workshop.github.io/) at CVPR 2026! Read our paper [here](https://arxiv.org/abs/2512.11315).
 - 🌟 2025-10-13: Multinet v1.0 - We release our most comprehensive benchmark yet - evaluating a SoTA VLM, VLA, and generalist model on a wide variety of multimodal understanding and action datasets. Read more [here](https://multinet.ai/static/pages/Multinetv1.html)
 - 🏅 2025-06-10: Paper accepted at ICML 2025! Our paper detailing the Open-Source contributions of Multinet that benefit the AI community has been accepted at the [CodeML Workshop](https://codeml-workshop.github.io/codeml2025/) at ICML 2025! Read our paper [here](https://multinet.ai/static/pdfs/An%20Open-Source%20Software%20Toolkit%20&%20Benchmark%20Suite%20for%20the%20Evaluation%20and%20Adaptation%20of%20Multimodal%20Action%20Models.pdf).
@@ -56,11 +54,11 @@
 - 🎉 2024-11-08: We release the first version of MultiNet where we profiled SoTA VLMs and VLAs on real-world robotics tasks - Multinet v0.1! Check our [release page](https://multinet.ai/static/pages/Multinetv01.html) for more details.
 - 🚀 2024-03-22: Introducing Multinet! A new generalist benchmark to evaluate Vision-Language & Action models. Learn more [here](https://multinet.ai)
 
-## 🔍 About MultiNet v2.0
+## 🔍 A Preview of our Multi-Domain Agentic Benchmark to Evaluate Long-Horizon Action
 
 With MultiNet v2.0 we aim to build interactive environments that are proxies for real-world scenarios. However, at the same time we are keen to keep the setup controllable, which will allow us to deterministically vary parameters in our environment in order to make it easier or more difficult for models to succeed in.
 
-The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. In this release, MultiNet v2.0-GridWorld, we evaluated 3 frontier VLMs on 50 2D mazes.
+The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. Additionally, mazes with mechanisms are projectable into multiple domains: the same maze can be re-rendered in language or 3D or many other domains, quantifying cross-domain generalization. In this release, MultiNet v2.0-GridWorld, we evaluated 3 frontier VLMs on 50 2D mazes.
 
 ## 🧩 What we built
 
@@ -108,7 +106,7 @@ We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and
   <em>Progress per maze (columns) per model (rows); stars mark the six solves.</em>
 </p>
 
-For a deeper dive, read our [technical report](https://metarch.ai/blog).
+For a deeper dive, read our [technical report](https://www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark/).
 
 ## 🚀 Quickstart
 
@@ -173,19 +171,23 @@ Our previous research with MultiNet v1.0 and earlier versions all live in the [M
 
 ## 📜 Citation
 
-If you use MultiNet v2.0 in your research, please cite:
+Please cite this work as:
+
+```
+Fig, "Agentic behavior in 2D mazes: previewing a multi-domain benchmark", Fig Research Blog, August 2026.
+```
+
+Or use the BibTeX citation:
 
 ```bibtex
-@misc{guruprasad2026multinetv2,
-      title={Frontier Vision-Language Models Fail Simple 2D Mazes: Benchmarking
-             Long-Horizon Action Taking and Causal Reasoning Capabilities},
-      author={Pranav Guruprasad and Sean Rivera and Helen Lu and Arushi Jain
-              and Hangliang Ren and Harshvardhan Sikka},
-      year={2026},
-      note={TODO: arXiv link},
-      }
+@online{multinet_v2_gridworld_technical_report_2026,
+  title   = {Agentic behavior in 2D mazes: previewing a multi-domain benchmark},
+  author  = {Pranav Guruprasad and Sean Rivera and Helen Lu and Arushi Jain and Hangliang Ren and Harshvardhan Sikka},
+  year    = {2026},
+  url     = {www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark},
+  note    = {MultiNet v2.0, GridWorld domain}
+}
 ```
-<!-- HUMAN: replace the note with the arXiv eprint once the preprint is up -->
 
 ## 🤝 How does your agent do on cross-domain, multimodal, long-horizon tasks?
 
