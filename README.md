@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-009688?style=flat-square&logo=googlechrome&logoColor=white" alt="Website"></a>
   <a href="https://www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark/"><img src="https://img.shields.io/badge/Technical%20Report-8B0000?style=flat-square&logo=googledocs&logoColor=white" alt="Technical Report"></a>
-  <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20archive-181717?style=flat-square&logo=github&logoColor=white" alt="MultiNet archive"></a>
+  <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20v1.0-181717?style=flat-square&logo=github&logoColor=white" alt="MultiNet v1.0"></a>
   <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Contribute"></a>
 </p>
 
@@ -166,7 +166,7 @@ Image.fromarray(backend.render()).save("maze.png")
 | `scripts/` | evaluation pipeline entrypoints and run tooling |
 | `deploy/` | distributed run infrastructure: VM and GPU fleet provisioning, teardown, and cost-safety rails |
 
-## 📚 MultiNet archive
+## 📚 MultiNet v1.0
 
 Our previous research with MultiNet v1.0 and earlier versions all live in the [MultiNet v1.0 repository](https://github.com/ManifoldRG/MultiNet): evaluations of VLMs, VLAs, and generalist models across a wide variety of domains such as robotics, multimodal understanding, game play, and tool-calling to understand their cross-domain generalization capabilities.
 
