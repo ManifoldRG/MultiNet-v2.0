@@ -1,6 +1,7 @@
-# The image only needs demo/, gridworld/, interface/, mazes/, scripts/ (see
-# Dockerfile). Everything below is either excluded by that or is build noise
-# that would bloat the layer and bust the cache on every commit.
+# The image only needs demo/, gridworld/, interface/, scripts/, and
+# ogbench/ogbench/procgen/maze_jsons/ (see Dockerfile). Everything below is
+# either excluded by that or is build noise that would bloat the layer and
+# bust the cache on every commit.
 
 .git
 .gitignore
@@ -27,7 +28,14 @@ analysis/
 adapters/
 cross_domain/
 multigrid/
-ogbench/
+# ogbench Python code is not imported; only procgen/maze_jsons/ is copied into
+# the image. Exclude the rest of the submodule to keep the build context small.
+ogbench/*
+!ogbench/ogbench/
+ogbench/ogbench/*
+!ogbench/ogbench/procgen/
+ogbench/ogbench/procgen/*
+!ogbench/ogbench/procgen/maze_jsons/
 deploy/
 lib/
 *.sh
