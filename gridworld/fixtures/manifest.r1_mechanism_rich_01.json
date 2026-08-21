@@ -1,7 +1,7 @@
 {
   "description": "R1 mechanism-rich: distractor/depth-stress 50-maze panel.",
   "selection": {
-    "source_set": "analysis/candidate_mazes/sets/mechanism_rich_01",
+    "source_set": "mechanism_rich_01",
     "candidate": "mechanism_rich_01",
     "maze_count": 50,
     "order": "ascending BFS optimal_steps (rank)",

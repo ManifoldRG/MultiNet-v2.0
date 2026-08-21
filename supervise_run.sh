@@ -2,7 +2,7 @@
 # supervise_run.sh — self-contained distributed-run supervisor.
 # Consumes .runs/<run_id>/manifest.json, drives a live run to a terminal state,
 # owns the guaranteed STOP on every terminal path, NEVER deletes. Does not use or
-# modify monitor_run.sh. See docs/superpowers/specs/2026-07-01-distributed-supervisor-design.md
+# modify monitor_run.sh.
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cost_safety.sh"

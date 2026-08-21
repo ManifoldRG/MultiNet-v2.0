@@ -13,7 +13,7 @@
 # UNSET env reproduces today's exact phase-1 hard-coded string. The phase-2
 # reload (lib/distributed_start.sh::reload_gpu_worker) exports the phase-2 knobs
 # before relaunching the worker; served serve-args cannot change at runtime, so
-# switching phases is a real ~14-min server reload (docs/qwen-served-vllm-concurrency.md).
+# switching phases is a real ~14-min server reload.
 #
 # The served model name is site-specific (--served-model-name "$MODEL") and stays
 # at each call site; --port/--dtype/--trust-remote-code are NOT phase-dependent

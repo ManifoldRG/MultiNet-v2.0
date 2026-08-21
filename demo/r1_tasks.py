@@ -23,10 +23,15 @@ def restrict_to_r1_tasks(
     session: MiniGridPlaySession,
     catalog: R1ResultCatalog | None = None,
 ) -> None:
+    """Narrow browsing to mazes present in the R1 results table, when any of
+    the current selection is. If none are -- a non-R1 experiment/directory
+    was requested, or no results table is available at all -- leave the
+    task list alone; R1-comparison is just unavailable for this session
+    rather than a reason to refuse to launch."""
     catalog = catalog or R1ResultCatalog()
     r1_tasks = [p for p in session.task_list if r1_task_id(p) in catalog]
     if not r1_tasks:
-        raise ValueError("No tasks in the current selection appear in the R1 results table.")
+        return
     session.task_list = r1_tasks
     session.task_list_locked = True
     if session.task_path not in r1_tasks:

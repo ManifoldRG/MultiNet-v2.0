@@ -13,8 +13,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Today's hard-coded phase-1 arg string (lib/distributed_start.sh gpu branch +
-# run_qwen_backfill.sh, verbatim, modulo ordering which is irrelevant to vllm).
+# Today's hard-coded phase-1 arg string (lib/distributed_start.sh gpu branch,
+# verbatim, modulo ordering which is irrelevant to vllm).
 PHASE1 = ("--port 8000 --gpu-memory-utilization 0.9 --max-model-len 16384 "
           "--max-num-seqs 64 --dtype bfloat16 --trust-remote-code")
 
@@ -22,7 +22,6 @@ PHASE1 = ("--port 8000 --gpu-memory-utilization 0.9 --max-model-len 16384 "
 TOUCHED = [
     "lib/vllm_serve_args.sh",
     "lib/distributed_start.sh",
-    "run_qwen_backfill.sh",
     "launch_qwen_smoke.sh",
     "sweep_run.sh",
 ]

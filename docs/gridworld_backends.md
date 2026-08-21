@@ -563,8 +563,6 @@ gridworld/
 │   └── multigrid_backend.py  # MultiGrid adapter
 ├── runner/
 │   └── grid_runner.py        # Episode execution
-├── envs/
-│   └── tier_envs.py          # Pre-configured environments
 └── tasks/                    # Sample task JSON files
     ├── tier1/
     ├── tier2/

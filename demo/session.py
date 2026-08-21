@@ -200,7 +200,7 @@ class MiniGridPlaySession:
                     task_path = str(self.task_list[0])
 
         if task_path is None:
-            task_path = "mazes/exp_maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
+            task_path = "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
 
         # Backend for environment logic
         self.backend = MiniGridBackend(render_mode="rgb_array")
@@ -258,11 +258,19 @@ class MiniGridPlaySession:
         raw_spec = TaskSpecification.from_json(str(resolved))
         manifest_row = self.manifest_row_by_path.get(resolved)
         task_id = manifest_row["task_id"] if manifest_row else r1_task_id(resolved)
-        self.optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
-        cap = max(1, self.optimal_steps * 3)
-        self.task_spec = (
-            raw_spec if raw_spec.max_steps <= cap else dataclasses.replace(raw_spec, max_steps=cap)
-        )
+        try:
+            self.optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
+        except KeyError:
+            # Not an R1 task, or no results table is available at all --
+            # R1-comparison is simply off for this task; keep the maze's own
+            # max_steps rather than crashing the whole load.
+            self.optimal_steps = 0
+            self.task_spec = raw_spec
+        else:
+            cap = max(1, self.optimal_steps * 3)
+            self.task_spec = (
+                raw_spec if raw_spec.max_steps <= cap else dataclasses.replace(raw_spec, max_steps=cap)
+            )
 
         if self.task_list_locked:
             if resolved not in self.task_list:

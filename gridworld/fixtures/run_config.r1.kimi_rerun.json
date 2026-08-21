@@ -1,5 +1,5 @@
 {
- "description": "R1 Kimi make-up rerun: same fixed cell as run_config.r1.json (minimal/image_only/egocentric/zero_shot/text_summary_and_last3 stateless, K=30, thinking ON, 64k), Kimi ONLY, on manifest.r1_kimi_rerun.json (2 mazes). Runs on the DROP-enabled harness \u2014 action vocabulary includes DROP, so episodes are DROP-aware and not prompt-identical to the R1 corpus (deliberate; see docs/r1-kimi-rerun-package.md).",
+ "description": "R1 Kimi make-up rerun: same fixed cell as run_config.r1.json (minimal/image_only/egocentric/zero_shot/text_summary_and_last3 stateless, K=30, thinking ON, 64k), Kimi ONLY, on manifest.r1_kimi_rerun.json (2 mazes). Runs on the DROP-enabled harness \u2014 action vocabulary includes DROP, so episodes are DROP-aware and not prompt-identical to the R1 corpus (deliberate).",
  "manifest": "gridworld/fixtures/manifest.r1_kimi_rerun.json",
  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
  "experiment_config": {

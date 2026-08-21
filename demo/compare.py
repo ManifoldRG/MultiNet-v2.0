@@ -1,7 +1,8 @@
 """R1 model-comparison lookup for the human-play demo's end screen.
 
-Reads the sibling Multinet-v2-results canonical metrics table so a finished
-episode can show human steps vs BFS optimal vs Claude / Kimi / Qwen.
+Reads the R1 canonical metrics table (env override, Multinet-v2-results
+checkout, or the vendored ``demo/data/`` copy -- see ``_default_csv``) so a
+finished episode can show human steps vs BFS optimal vs Claude / Kimi / Qwen.
 """
 
 from __future__ import annotations
@@ -34,19 +35,17 @@ _FAILURE_BLURBS = {
 
 # Where the R1 results table comes from, most specific first:
 #   1. MULTINET_R1_RESULTS_CSV, for a deployment that mounts it elsewhere.
-#   2. The sibling Multinet-v2-results checkout - authoritative, and what
-#      anyone working across both repos already has.
+#   2. A Multinet-v2-results checkout - authoritative, and what anyone
+#      working across both repos already has - either sibling to this repo
+#      or nested inside it (both layouts occur in practice).
 #   3. demo/data/, a vendored copy. This is the one that matters for the
-#      container: an image has no sibling checkout to reach into, and
+#      container: an image has no results checkout to reach into, and
 #      without it the API raises FileNotFoundError at import.
-_SIBLING_CSV = (
-    Path(__file__).resolve().parents[1].parent
-    / "Multinet-v2-results"
-    / "r1-20260717"
-    / "analysis"
-    / "metrics"
-    / "canonical_results_table.csv"
+_RESULTS_TABLE_TAIL = (
+    Path("r1-20260717") / "analysis" / "metrics" / "canonical_results_table.csv"
 )
+_SIBLING_CSV = Path(__file__).resolve().parents[1].parent / "Multinet-v2-results" / _RESULTS_TABLE_TAIL
+_NESTED_CSV = Path(__file__).resolve().parents[1] / "Multinet-v2-results" / _RESULTS_TABLE_TAIL
 _VENDORED_CSV = Path(__file__).resolve().parent / "data" / "canonical_results_table.csv"
 
 
@@ -56,6 +55,8 @@ def _default_csv() -> Path:
         return Path(override)
     if _SIBLING_CSV.is_file():
         return _SIBLING_CSV
+    if _NESTED_CSV.is_file():
+        return _NESTED_CSV
     return _VENDORED_CSV
 
 
@@ -111,15 +112,23 @@ class TaskComparison:
 
 
 class R1ResultCatalog:
-    """Index of R1 canonical results, keyed by ``r1_*`` task_id."""
+    """Index of R1 canonical results, keyed by ``r1_*`` task_id.
+
+    When ``csv_path`` isn't given explicitly, the table is auto-discovered
+    via ``_default_csv`` (env override, then a sibling or nested
+    Multinet-v2-results checkout, then the vendored ``demo/data/`` copy).
+    The vendored copy ships with the package, so discovery only fails on a
+    broken install -- and that, or an explicitly-passed ``csv_path`` that
+    doesn't exist, raises ``FileNotFoundError``.
+    """
 
     def __init__(self, csv_path: Path | None = None):
         self.csv_path = Path(csv_path) if csv_path else _default_csv()
         if not self.csv_path.is_file():
             raise FileNotFoundError(
-                f"R1 results CSV not found at {self.csv_path}. Expected a sibling "
-                "Multinet-v2-results checkout, a vendored demo/data/ copy, or "
-                "MULTINET_R1_RESULTS_CSV pointing at one."
+                f"R1 results CSV not found at {self.csv_path}. Expected a "
+                "Multinet-v2-results checkout (sibling or nested), a vendored "
+                "demo/data/ copy, or MULTINET_R1_RESULTS_CSV pointing at one."
             )
         self._by_task: dict[str, list[dict]] = {}
         with open(self.csv_path, newline="", encoding="utf-8") as f:
@@ -133,6 +142,11 @@ class R1ResultCatalog:
     def lookup(self, task_id: str) -> TaskComparison:
         rows = self._by_task.get(task_id)
         if rows is None:
+            if self.csv_path is None:
+                raise KeyError(
+                    f"No R1 results table is available (no Multinet-v2-results "
+                    f"checkout found); cannot look up {task_id!r}."
+                )
             raise KeyError(f"Task {task_id!r} not in R1 results table ({self.csv_path})")
         return self._build(task_id, rows)
 

@@ -63,8 +63,9 @@ class PlannedPath:
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
-    def __init__(self, spec: TaskSpecification):
+    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
         self.spec = spec
+        self.drop_available = drop_available
         self.width, self.height = spec.maze.dimensions
         self.goal = spec.resolved_goal()
         self.start = spec.maze.start.to_tuple()
@@ -246,6 +247,39 @@ def _successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Trans
                 agent_dir=state.agent_dir,
                 carrying_key=key["id"],
                 collected_keys=state.collected_keys | {key["id"]},
+                active_switches=state.active_switches,
+                used_switches=state.used_switches,
+                open_gates=state.open_gates,
+                open_doors=state.open_doors,
+            ),
+        )
+
+    # DROP exists in the planner graph only when the episode's harness exposed
+    # it to the model. R1 had no DROP, so a decoy-key pickup was terminal; the
+    # 2026-07-30 rerun did, so the same state is recoverable. The dropped key
+    # stays in collected_keys here — it leaves the world rather than becoming
+    # re-acquirable — but the runtime disagrees: custom_env.py's DROP handler
+    # does `self.collected_keys.discard(key_id)` (custom_env.py:549), so the
+    # agent CAN walk back and re-pick up a key it dropped. That mismatch makes
+    # this model "conservative" for escapability (it never claims a state is
+    # winnable when it isn't) but WRONG, in the over-reporting direction, for
+    # doomedness: on the D2 spec, with drop_available=True, this model reports
+    # 456 doomed states, of which 304 are false — every state where the agent
+    # dropped a key it still needs and could still retrieve. No row in the
+    # current corpus is affected (both drop_available=True primary/
+    # supplementary episodes are doomed=False), but this MUST be revisited
+    # before scoring any future episode that actually emits DROP, or a
+    # recoverable state will be scored "mechanically unwinnable" when it is
+    # not.
+    if ctx.drop_available and state.carrying_key is not None:
+        yield Transition(
+            action=int(MiniGridActions.DROP),
+            label=f"drop:{state.carrying_key}",
+            next_state=PlannerState(
+                agent_pos=state.agent_pos,
+                agent_dir=state.agent_dir,
+                carrying_key=None,
+                collected_keys=state.collected_keys,
                 active_switches=state.active_switches,
                 used_switches=state.used_switches,
                 open_gates=state.open_gates,
@@ -454,8 +488,10 @@ def _bfs_actions(spec: TaskSpecification) -> list[int]:
     return actions
 
 
-def _bfs_actions_with_stats(spec: TaskSpecification) -> tuple[list[int], int]:
-    ctx = TaskPlanningContext(spec)
+def _bfs_actions_with_stats(
+    spec: TaskSpecification, *, drop_available: bool = False
+) -> tuple[list[int], int]:
+    ctx = TaskPlanningContext(spec, drop_available=drop_available)
     actions, _, states_explored = _shortest_plan(
         ctx,
         ctx.initial_state(),
@@ -487,9 +523,11 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
     return actions
 
 
-def trace_planned_actions(spec: TaskSpecification, actions: list[int]) -> PlannedPath:
+def trace_planned_actions(
+    spec: TaskSpecification, actions: list[int], *, drop_available: bool = False
+) -> PlannedPath:
     """Replay planner actions through the planner graph without running a backend."""
-    ctx = TaskPlanningContext(spec)
+    ctx = TaskPlanningContext(spec, drop_available=drop_available)
     state = ctx.initial_state()
     positions = [state.agent_pos]
     executed_actions: list[int] = []
@@ -533,10 +571,10 @@ def plan_greedy_actions(spec: TaskSpecification) -> list[int]:
     return _greedy_actions(spec)
 
 
-def plan_bfs_path(spec: TaskSpecification) -> PlannedPath:
+def plan_bfs_path(spec: TaskSpecification, *, drop_available: bool = False) -> PlannedPath:
     """Return the BFS baseline plan plus replayed positions."""
-    actions, states_explored = _bfs_actions_with_stats(spec)
-    path = trace_planned_actions(spec, actions)
+    actions, states_explored = _bfs_actions_with_stats(spec, drop_available=drop_available)
+    path = trace_planned_actions(spec, actions, drop_available=drop_available)
     return PlannedPath(
         success=path.success,
         actions=path.actions,

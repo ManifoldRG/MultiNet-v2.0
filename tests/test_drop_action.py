@@ -448,8 +448,15 @@ class TestPlannerIgnoresDrop:
         from gridworld.baselines import plan_bfs_path
 
         mazes_root = Path(__file__).resolve().parent.parent / "mazes"
+        ogbench_root = (
+            Path(__file__).resolve().parent.parent
+            / "ogbench" / "ogbench" / "procgen" / "maze_jsons"
+        )
+        maze_paths = list(mazes_root.rglob("*.json"))
+        if ogbench_root.exists():
+            maze_paths.extend(ogbench_root.rglob("*.json"))
         checked = 0
-        for path in sorted(mazes_root.rglob("*.json")):
+        for path in sorted(maze_paths):
             with open(path) as fh:
                 try:
                     raw = json.load(fh)

@@ -1,7 +1,8 @@
 # MultiNet MiniGrid play API - the backend behind the playable maze on
 # multinet.ai.
 #
-# Local:
+# Local (init the ogbench submodule first — it carries the R1 maze corpus):
+#   git submodule update --init
 #   docker build -t multinet-maze .
 #   docker run -p 8080:8080 -e MULTINET_CORS_ORIGINS=http://127.0.0.1:8899 multinet-maze
 #
@@ -43,8 +44,8 @@ RUN pip install --upgrade pip && \
 #
 # demo/data/ carries the vendored R1 results table; there is no sibling
 # Multinet-v2-results checkout inside an image and R1ResultCatalog raises
-# FileNotFoundError without it. mazes/ holds the 42 task JSONs that the
-# manifest's `source` fields point at.
+# FileNotFoundError without it. The R1 manifest resolves all 42 playable tasks
+# under ogbench/ogbench/procgen/maze_jsons/ (same corpus as local dev).
 COPY demo/ ./demo/
 COPY gridworld/ ./gridworld/
 COPY interface/ ./interface/
@@ -52,18 +53,18 @@ COPY pipeline/ ./pipeline/
 COPY prompting_experiments/ ./prompting_experiments/
 COPY scorer/ ./scorer/
 COPY scripts/ ./scripts/
-COPY mazes/ ./mazes/
+COPY ogbench/ogbench/procgen/maze_jsons/ ./ogbench/ogbench/procgen/maze_jsons/
 COPY model_interface.py ./
 
 # Fail the build rather than the deploy. The task count is asserted, not just
 # printed: load_manifest_tasks skips manifest rows whose `source` file is
-# missing with a warning rather than an error, so a dropped mazes/ directory
-# would otherwise produce a container that boots happily and serves zero mazes.
+# missing with a warning rather than an error, so a missing maze corpus would
+# otherwise produce a container that boots happily and serves zero mazes.
 RUN python -c "\
 import demo.api.app; \
 from demo.r1_tasks import list_r1_tasks; \
 n = len(list_r1_tasks()); \
-assert n == 42, 'expected 42 R1 tasks, got %d - check mazes/ and the manifest' % n; \
+assert n == 42, 'expected 42 R1 tasks, got %d - check ogbench maze_jsons and the manifest' % n; \
 print('import ok,', n, 'tasks')"
 
 # Cloud Run injects PORT and ignores EXPOSE; 8080 is its default and a fine

@@ -1232,8 +1232,7 @@ def test_run_hash_canonicalizes_numeric_spelling():
 
 
 # The six condition sets launched over the conditional eval, and the
-# deduplicated rollout that runs the shared baseline exactly once. See
-# docs/validation10_condition_sweep_rollout.md.
+# deduplicated rollout that runs the shared baseline exactly once.
 _LAUNCH_CONDITION_SETS = [
     "Prompt",
     "Observation format",
