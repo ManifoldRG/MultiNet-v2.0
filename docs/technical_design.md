@@ -1,8 +1,8 @@
-# Technical Design Document: Multinet-v2.0 GridWorld Framework
+# Technical Design Document: MultiNet 2.0 Preview: Interactive 2D Mazes
 
 ## Document Overview
 
-This document provides the technical rationale and architectural decisions behind the Multinet-v2.0 GridWorld evaluation framework. It explains why certain technologies were chosen, how components interact, and the forward-looking vision for cross-domain evaluation.
+This document provides the technical rationale and architectural decisions behind the MultiNet 2.0 Preview: Interactive 2D Mazes evaluation framework. It explains why certain technologies were chosen, how components interact, and the forward-looking vision for cross-domain evaluation.
 
 **Target Audience**: Researchers, contributors, and engineers extending the framework
 
