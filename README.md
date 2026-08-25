@@ -1,7 +1,7 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">Agentic Behavior in 2D Mazes: Previewing a Multi-Domain Benchmark</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">Goal Progress Decays with Task Horizon for Frontier VLMs in Interactive 2D Environments</h1>
   </kbd>
 </p>
 
@@ -37,7 +37,7 @@
   </a>
 </p>
 
-### _How does your agent do on cross-domain, multimodal, long-horizon tasks? [Work with us to find out!](https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0)_
+### _Interested in evaluating your agent on long horizon tasks, or collaborating on research? [Let's work together](https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0)_
 
 <p align="center">
   <img src="assets/r1_failure_reels.gif" alt="Failure replay reels for Claude Opus 4.8, Kimi K2.6 and Qwen3.6-27B" width="100%">
@@ -59,7 +59,7 @@
 
 With MultiNet v2.0 we aim to build interactive environments that are proxies for real-world scenarios. However, at the same time we are keen to keep the setup controllable, which will allow us to deterministically vary parameters in our environment in order to make it easier or more difficult for models to succeed in.
 
-The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. Additionally, mazes with mechanisms are projectable into multiple domains: the same maze can be re-rendered in language or 3D or many other domains, quantifying cross-domain generalization. In this release, MultiNet v2.0-GridWorld, we evaluated 3 frontier VLMs on 50 2D mazes.
+The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. Additionally, mazes with mechanisms are projectable into multiple domains: the same maze can be re-rendered in language or 3D or many other domains, quantifying cross-domain generalization. In this release, MultiNet 2.0 Preview: Interactive 2D Mazes, we evaluated 3 frontier VLMs on 50 2D mazes.
 
 ## 🧩 What we built
 
@@ -181,21 +181,21 @@ Guruprasad, P., Rivera, S., Lu, H., Jain, A., Ren, H. and Sikka, H. (2026) Agent
 Or use the BibTeX citation:
 
 ```bibtex
-@online{multinet_v2_gridworld_technical_report_2026,
-  title   = {Agentic behavior in 2D mazes: previewing a multi-domain benchmark},
+@online{multinet_v2_preview_technical_report_2026,
+  title   = {Goal Progress Decays with Task Horizon for Frontier VLMs in Interactive 2D Environments},
   author  = {Pranav Guruprasad and Sean Rivera and Helen Lu and Arushi Jain and Hangliang Ren and Harshvardhan Sikka},
   year    = {2026},
   url     = {www.fig.inc/agentic-behavior-in-2d-mazes-previewing-a-multi-domain-benchmark},
-  note    = {MultiNet v2.0, GridWorld domain}
+  note    = {MultiNet 2.0 Preview: Interactive 2D Mazes}
 }
 ```
 
-## 🤝 How does your agent do on cross-domain, multimodal, long-horizon tasks?
+## 🤝 Interested in evaluating your agent on long horizon tasks, or collaborating on research?
 
-If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on our MultiNet v2.0 benchmark, contributing to the environments we are building, or working with us on what comes after!
+If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on MultiNet 2.0 Preview, collaborating on the next version of the benchmark, or working with us on what comes after.
 
 <p align="center">
-  <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">🧪 Evaluate your model</a>
+  <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">🧪 Let's work together</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
   <a href="mailto:pranav@fig.inc?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
