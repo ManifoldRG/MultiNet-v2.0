@@ -192,7 +192,7 @@ Or use the BibTeX citation:
 
 ## 🤝 Interested in evaluating your agent on long horizon tasks, or collaborating on research?
 
-If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on MultiNet 2.0 Preview, collaborating on the next version of the benchmark, or working with us on what comes after.
+If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on the MultiNet 2.0 Benchmark, collaborating on the next version of the benchmark, or working with us on what comes after.
 
 <p align="center">
   <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">🧪 Let's work together</a>
