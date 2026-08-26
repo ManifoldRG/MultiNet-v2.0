@@ -197,7 +197,7 @@ If you build models or agents, or work on benchmarking and evaluation, we would 
 <p align="center">
   <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">🧪 Let's work together</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="mailto:pranav@fig.inc?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
+  <a href="mailto:contact@fig.inc?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
   <a href="https://discord.gg/Rk4gAq5aYr">💬 Join the Discord</a>
 </p>
