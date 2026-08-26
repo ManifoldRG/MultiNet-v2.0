@@ -47,7 +47,7 @@
 
 ## 📢 News
 
-- 🌀 2026-08-20: A Preview of our Multi-Domain Agentic Benchmark - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://www.fig.inc/multinet-v2-preview/).
+- 🌀 2026-08-26: A Preview of our Multi-Domain Agentic Benchmark - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://www.fig.inc/multinet-v2-preview/).
 - 🎓 2026-04-03: Paper accepted at CVPR 2026! Our work has been accepted at the [MMFM Workshop](https://mmfm-workshop.github.io/) at CVPR 2026! Read our paper [here](https://arxiv.org/abs/2512.11315).
 - 🌟 2025-10-13: Multinet v1.0 - We release our most comprehensive benchmark yet - evaluating a SoTA VLM, VLA, and generalist model on a wide variety of multimodal understanding and action datasets. Read more [here](https://multinet.ai/static/pages/Multinetv1.html)
 - 🏅 2025-06-10: Paper accepted at ICML 2025! Our paper detailing the Open-Source contributions of Multinet that benefit the AI community has been accepted at the [CodeML Workshop](https://codeml-workshop.github.io/codeml2025/) at ICML 2025! Read our paper [here](https://multinet.ai/static/pdfs/An%20Open-Source%20Software%20Toolkit%20&%20Benchmark%20Suite%20for%20the%20Evaluation%20and%20Adaptation%20of%20Multimodal%20Action%20Models.pdf).
