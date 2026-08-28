@@ -41,12 +41,19 @@ export ANTHROPIC_API_KEY=...   # only for the providers you actually run
 python -m scripts.run_pipeline \
   --run-config gridworld/fixtures/run_config.smoke_claude_sonnet.json \
   --manifest gridworld/fixtures/manifest.smoke_eval.json \
+  --difficulty-max-static-score 1000.0 \
   --seeds 0
 ```
 
 Always pass an explicit `--run-config` and `--manifest`: the default
 `gridworld/fixtures/manifest.json` is a browse catalog for the demo and now
 includes the 42-maze R1 panel.
+
+`--difficulty-max-static-score` is also required. The shipped scorer config
+leaves the suite maximum unset on purpose (see `docs/system_design.md`), so
+runtime scoring has no denominator until you supply one and the pipeline
+aborts before it queries any model. `1000.0` is the value the smoke launchers
+use; a measurement run wants a maximum calibrated to its own panel.
 
 Artifacts land under
 `artifacts/runs/<task>/<backend>/<model>/seed_<n>/<variant>/episode.json`
@@ -67,6 +74,7 @@ export ANTHROPIC_API_KEY=... MOONSHOT_API_KEY=...
 python -m scripts.run_pipeline \
   --run-config gridworld/fixtures/run_config.r1.json \
   --manifest gridworld/fixtures/manifest.r1_balanced_03.json \
+  --difficulty-max-static-score 1000.0 \
   --seeds 0
 ```
 
