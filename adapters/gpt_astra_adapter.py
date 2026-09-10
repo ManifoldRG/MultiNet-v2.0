@@ -34,7 +34,7 @@ class GPTAstraAdapter(ModelInterface):
 
     def __init__(
         self,
-        model: str = "gpt-5.4",
+        model: str = "gpt-6-astra",
         api_key: str | None = None,
         base_url: str = "https://api.openai.com/v1",
         temperature: float = 0.0,
@@ -55,6 +55,25 @@ class GPTAstraAdapter(ModelInterface):
     @property
     def model_name(self) -> str:
         return f"gpt_astra_{self.model}"
+
+    def setup(self, device: str = "cpu") -> None:
+        """Verify the API key by requesting the available models."""
+        if not self.api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set.")
+
+        request = urllib.request.Request(
+            f"{self.base_url}/models",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, urllib.error.HTTPError, ConnectionError) as exc:
+            raise RuntimeError(
+                f"Could not verify the OpenAI API key at {self.base_url}. "
+                f"Original error: {self._format_request_error(exc)}"
+            ) from exc
 
     def predict(self, input: ModelInput) -> ModelOutput:
         """Send the maze observation to GPT and return its next action."""
