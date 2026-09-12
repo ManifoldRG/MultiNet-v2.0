@@ -49,3 +49,29 @@ CORRIDOR = {
     "goal": {"type": "reach_position", "target": [5, 1]},
     "max_steps": 40,
 }
+
+
+def corpus_sample(step: int = 27) -> list[Path]:
+    """Every ``step``-th maze of the submodule corpus (sorted; ~8 of 214 by default)."""
+    from maze_test_utils import MAZE_JSON_DIR
+
+    return sorted(MAZE_JSON_DIR.rglob("*.json"))[::step]
+
+
+# 9x5 room with every supported mechanism: red key (2,1), red door (4,2)
+# between spec walls (4,1)/(4,3), yellow switch s1 (2,3) -> grey gate g1 (6,2),
+# goal (7,2). Agent starts at (1,2) facing EAST.
+MECHANISMS = {
+    "task_id": "render3d_mechanisms",
+    "seed": 0,
+    "difficulty_tier": 3,
+    "maze": {"dimensions": [9, 5], "walls": [[4, 1], [4, 3]], "start": [1, 2], "goal": [7, 2]},
+    "mechanisms": {
+        "keys": [{"id": "k1", "position": [2, 1], "color": "red"}],
+        "doors": [{"id": "d1", "position": [4, 2], "requires_key": "red"}],
+        "switches": [{"id": "s1", "position": [2, 3], "controls": ["g1"], "color": "yellow"}],
+        "gates": [{"id": "g1", "position": [6, 2]}],
+    },
+    "goal": {"type": "reach_position", "target": [7, 2]},
+    "max_steps": 80,
+}
