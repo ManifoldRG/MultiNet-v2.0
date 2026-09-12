@@ -52,3 +52,20 @@ def test_load_task_default_backend_is_minigrid(tmp_path):
     backend, spec = load_task(path)
     assert isinstance(backend, MiniGridBackend)
     assert backend.is_configured and spec.task_id == "render3d_corridor"
+
+
+import importlib.util
+
+DEMO_MODULES = ["demo.theme", "demo.session", "demo.fx", "demo.api.view"]
+
+
+@pytest.mark.parametrize("module", DEMO_MODULES)
+def test_demo_module_imports_without_minigrid(module):
+    result = run_with_minigrid_blocked(f"import {module}")
+    assert result.returncode == 0, result.stderr[-3000:]
+
+
+@pytest.mark.skipif(importlib.util.find_spec("fastapi") is None, reason="web extra not installed")
+def test_demo_web_app_imports_without_minigrid():
+    result = run_with_minigrid_blocked("import demo.api.app")
+    assert result.returncode == 0, result.stderr[-3000:]

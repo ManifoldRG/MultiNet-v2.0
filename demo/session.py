@@ -24,7 +24,7 @@ if _repo_root_str not in sys.path:
     sys.path.insert(0, _repo_root_str)
 
 from gridworld.task_spec import TaskSpecification
-from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.backends import get_backend
 from gridworld.backends.base import GridState
 from gridworld.actions import MiniGridActions
 
@@ -203,7 +203,7 @@ class MiniGridPlaySession:
             task_path = "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
 
         # Backend for environment logic
-        self.backend = MiniGridBackend(render_mode="rgb_array")
+        self.backend = get_backend("minigrid", render_mode="rgb_array")
 
         # Episode state
         self.state: Optional[GridState] = None
