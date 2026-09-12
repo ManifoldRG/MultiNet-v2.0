@@ -1,4 +1,4 @@
-"""ExperimentRunner — LLM episode loop using gridworld MiniGridBackend."""
+"""ExperimentRunner — LLM episode loop over any gridworld backend."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Callable, List
 
 import numpy as np
 
-from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
 from interface import action_space as action_space_mod
@@ -109,7 +109,7 @@ def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> l
 
 def build_runner(
     config: ExperimentConfig,
-    backend: MiniGridBackend,
+    backend: AbstractGridBackend,
     task_spec: TaskSpecification,
 ) -> ExperimentRunner:
     space = config.action_space
@@ -129,7 +129,7 @@ def build_runner(
 class ExperimentRunner:
     def __init__(
         self,
-        backend: MiniGridBackend,
+        backend: AbstractGridBackend,
         task_spec: TaskSpecification,
         config: ExperimentConfig,
         prompt: PromptStrategy,
