@@ -29,6 +29,7 @@ DIRECTION_YAW: dict[int, float] = {0: 0.0, 1: -90.0, 2: 180.0, 3: 90.0}
 PERSPECTIVE_FOVY = 45.0  # MuJoCo's default free-camera fovy (degrees)
 FIRST_PERSON_FOVY = 90.0
 FIT_MARGIN = 0.06  # fraction of the half-frame kept clear around the maze
+FIT_TOLERANCE = 1e-9  # float-rounding slack: a corner placed exactly on the margin still fits
 CHASE_ELEVATION = -55.0
 CHASE_LEAD = 1.0  # cells ahead of the agent the chase camera aims at...
 CHASE_AGENT_WEIGHT = 0.5  # ...blended this far from the maze centre
@@ -99,7 +100,7 @@ def maze_corners(width, height, wall_height) -> list[tuple[float, float, float]]
 
 
 def fits(pose: CameraPose, points, margin: float = FIT_MARGIN) -> bool:
-    limit = 1.0 - margin
+    limit = 1.0 - margin + FIT_TOLERANCE
     return all(abs(u) <= limit and abs(v) <= limit for u, v in (project(pose, p) for p in points))
 
 
