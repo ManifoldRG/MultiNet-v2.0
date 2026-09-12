@@ -162,6 +162,8 @@ class MiniGridPlaySession:
         tasks_dir: Optional[str] = None,
         manifest: Optional[str] = None,
         experiment: Optional[str] = None,
+        backend: str = "minigrid",
+        camera: Optional[str] = None,
     ):
         self.base_dir = _REPO_ROOT
         self.record = record
@@ -202,8 +204,11 @@ class MiniGridPlaySession:
         if task_path is None:
             task_path = "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
 
-        # Backend for environment logic
-        self.backend = get_backend("minigrid", render_mode="rgb_array")
+        # Backend for environment logic (and the frame the human sees).
+        backend_kwargs: dict = {"render_mode": "rgb_array"} if backend == "minigrid" else {}
+        if camera is not None:
+            backend_kwargs["camera"] = camera
+        self.backend = get_backend(backend, **backend_kwargs)
 
         # Episode state
         self.state: Optional[GridState] = None
@@ -521,23 +526,17 @@ class MiniGridPlaySession:
     # ------------------------------------------------------------------
 
     def _physical_door_states(self) -> dict[str, bool]:
-        """True ``is_open`` per door read directly off the live grid cell.
+        """True physical open/closed per door, from the backend.
 
-        ``GridState.open_doors`` (from the backend) counts a door as "open"
-        once it's ever been *unlocked*, even if the player has since closed
-        it again -- the right notion for goal/scoring purposes, since an
-        unlocked door no longer blocks progress. But it's the wrong notion
-        for this live progress log: closing a door you just opened should
-        show up as closed, not stay stuck saying "opened" forever. So the
-        progress log tracks true physical open/closed state separately, by
-        reading each door's ``is_open`` straight off the grid."""
-        if self.task_spec is None or self.backend.env is None:
+        ``GridState.open_doors`` counts a door as "open" once it's ever been
+        *unlocked*, even if the player has since closed it again -- the right
+        notion for goal/scoring purposes, but the wrong one for this live
+        progress log: closing a door you just opened should show up as closed.
+        ``AbstractGridBackend.door_states`` reports the physical state for any
+        backend (MiniGrid reads it off the grid)."""
+        if self.task_spec is None or not self.backend.is_configured:
             return {}
-        result: dict[str, bool] = {}
-        for door in self.task_spec.mechanisms.doors:
-            cell = self.backend.env.grid.get(door.position.x, door.position.y)
-            result[door.id] = bool(getattr(cell, "is_open", False))
-        return result
+        return self.backend.door_states()
 
     def _record_events(
         self, prev: GridState, new: GridState, prev_doors: dict[str, bool]
@@ -639,6 +638,21 @@ class MiniGridPlaySession:
             else:
                 setattr(self.config, attr, choices[(choices.index(current) + 1) % len(choices)])
             return
+
+    @property
+    def camera_names(self) -> tuple[str, ...]:
+        """Camera presets the backend offers (empty for 2D backends)."""
+        return tuple(getattr(self.backend, "camera_names", ()))
+
+    def cycle_camera(self) -> Optional[str]:
+        """Switch to the backend's next camera preset. Display-only: state and
+        transcript are untouched. Returns the new preset, or None for 2D."""
+        names = self.camera_names
+        if not names:
+            return None
+        nxt = names[(names.index(self.backend.camera) + 1) % len(names)]
+        self.backend.set_camera(nxt)
+        return nxt
 
     # ------------------------------------------------------------------
     # Recording / trajectory saving

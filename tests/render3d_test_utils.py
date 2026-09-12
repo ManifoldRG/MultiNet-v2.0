@@ -75,3 +75,21 @@ MECHANISMS = {
     "goal": {"type": "reach_position", "target": [7, 2]},
     "max_steps": 80,
 }
+
+
+def make_play_session(tmp_path, backend: str, camera: str | None = None, spec: dict = CORRIDOR):
+    """Headless human-play demo session on ``spec`` (no pygame window)."""
+    import dataclasses
+    import json
+
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / f"{spec['task_id']}.json"
+    path.write_text(json.dumps(spec))
+    return MiniGridPlaySession(
+        task_path=str(path),
+        config=dataclasses.replace(R1_CONFIG),
+        backend=backend,
+        camera=camera,
+    )
