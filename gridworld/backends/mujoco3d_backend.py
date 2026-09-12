@@ -45,6 +45,7 @@ class Mujoco3DBackend(AbstractGridBackend):
         self.state_backend.configure(task_spec)
         if self._renderer is not None:
             self._renderer.close()
+            self._renderer = None
         self._renderer = SceneRenderer(
             task_spec, camera=self._camera, resolution=self.resolution, wall_height=self.wall_height
         )
@@ -54,10 +55,14 @@ class Mujoco3DBackend(AbstractGridBackend):
         self._frame_key = None
 
     def reset(self, seed: Optional[int] = None) -> tuple[np.ndarray, GridState, dict]:
+        if self._renderer is None:
+            raise RuntimeError("Backend must be configured before reset()/step()")
         _flat, state, info = self.state_backend.reset(seed=seed)
         return self._frame_for(state), state, info
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, GridState, dict]:
+        if self._renderer is None:
+            raise RuntimeError("Backend must be configured before reset()/step()")
         _flat, reward, terminated, truncated, state, info = self.state_backend.step(action)
         return self._frame_for(state), reward, terminated, truncated, state, info
 
@@ -127,4 +132,5 @@ class Mujoco3DBackend(AbstractGridBackend):
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
+        self._configured = False
         self.state_backend.close()

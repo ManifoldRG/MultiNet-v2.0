@@ -30,6 +30,10 @@ def _spec(d):
         ),
         ({"goal": {"type": "collect_all", "target_ids": ["k1"]}}, "goal_type"),
         ({"rules": {"observability": "view_cone"}}, "observability"),
+        (
+            {"mechanisms": {"keys": [{"id": "k1", "position": [2, 1], "color": "chartreuse"}]}},
+            "colour",
+        ),
     ],
 )
 def test_check_supported_rejects_unrenderable_features(patch, feature):

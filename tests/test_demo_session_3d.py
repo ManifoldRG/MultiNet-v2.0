@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import json
 import subprocess
 import sys
 
@@ -10,7 +12,7 @@ import pytest
 pytest.importorskip("mujoco")
 pytest.importorskip("minigrid")
 
-from render3d_test_utils import REPO_ROOT, make_play_session  # noqa: E402
+from render3d_test_utils import CORRIDOR, REPO_ROOT, make_play_session  # noqa: E402
 
 TOKENS = ["MOVE_FORWARD", "PICKUP", "TOGGLE", "MOVE_FORWARD", "MOVE_FORWARD", "MOVE_FORWARD"]
 
@@ -75,6 +77,36 @@ def test_physical_door_log_follows_backend_door_states(tmp_path, backend):
         for token in ["MOVE_FORWARD", "PICKUP", "TOGGLE", "TOGGLE"]:  # unlock, then re-close
             session._dispatch_token(token)
         assert session._physical_door_states() == {"d1": False}
+    finally:
+        session.close()
+
+
+def test_load_task_survives_a_maze_the_backend_cannot_render(tmp_path, capsys):
+    """I1: switching (`[`/`]`) onto a spec the 3D backend rejects must not
+    crash the demo loop or desync the session from the backend."""
+    session = make_play_session(tmp_path, "mujoco3d", "top_down")
+    try:
+        prev_path = session.task_path
+        prev_task_id = session.task_spec.task_id
+        prev_index = session.task_index
+
+        bad = copy.deepcopy(CORRIDOR)
+        bad["task_id"] = "render3d_corridor_blocked"
+        bad["mechanisms"]["blocks"] = [{"id": "b1", "position": [4, 1]}]
+        bad_path = tmp_path / "corridor_blocked.json"
+        bad_path.write_text(json.dumps(bad))
+
+        session._load_task(str(bad_path))
+
+        assert session.task_path == prev_path
+        assert session.task_spec.task_id == prev_task_id
+        assert session.task_index == prev_index
+        assert session.backend.render().shape == (512, 512, 3)
+        session._dispatch_token("MOVE_FORWARD")
+        assert session.state.step_count == 1
+
+        captured = capsys.readouterr()
+        assert "backend cannot load" in captured.out
     finally:
         session.close()
 

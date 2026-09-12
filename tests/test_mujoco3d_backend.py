@@ -130,6 +130,38 @@ def test_configure_rejects_unsupported_spec_before_touching_state_backend():
     assert not backend.is_configured and not backend.state_backend.is_configured
 
 
+def test_configure_with_bad_colour_leaves_backend_still_playable():
+    """I3: check_supported must reject unknown colours before configure()
+    touches the state backend or closes the current renderer."""
+    backend = get_backend("mujoco3d", resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    backend.reset(seed=0)
+    try:
+        bad = copy.deepcopy(CORRIDOR)
+        bad["task_id"] = "render3d_corridor_bad_colour"
+        bad["mechanisms"]["keys"][0]["color"] = "chartreuse"
+        with pytest.raises(UnsupportedSpecError, match="colour"):
+            backend.configure(TaskSpecification.from_dict(bad))
+        assert backend.render().shape == (RES, RES, 3)
+        assert backend.state_backend.task_spec.task_id == "render3d_corridor"
+    finally:
+        backend.close()
+
+
+def test_close_clears_configured_flag_and_guards_reset_and_step():
+    """M8: close() must not leave the backend reporting configured, and
+    reset()/step() must fail loudly (not silently reuse a dead renderer)."""
+    backend = get_backend("mujoco3d", resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    backend.reset(seed=0)
+    backend.close()
+    assert backend.is_configured is False
+    with pytest.raises(RuntimeError, match="must be configured"):
+        backend.reset(seed=0)
+    with pytest.raises(RuntimeError, match="must be configured"):
+        backend.step(0)
+
+
 def test_registry_wraps_minigrid_by_default():
     backend = get_backend("mujoco3d", camera="chase", resolution=RES)
     assert isinstance(backend.state_backend, MiniGridBackend)

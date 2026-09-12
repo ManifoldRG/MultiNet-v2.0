@@ -249,54 +249,81 @@ class MiniGridPlaySession:
     # Task loading
     # ------------------------------------------------------------------
 
+    def _resolved_task_list(self, resolved: Path) -> tuple[list[Path], int]:
+        """Compute the task list/index a load of ``resolved`` would produce,
+        *without* mutating session state. Called before the backend accepts
+        the new spec so a rejected load (see ``_load_task``) leaves the
+        current list/index untouched."""
+        if self.task_list_locked:
+            if resolved not in self.task_list:
+                raise ValueError(f"{resolved} is not in the locked task list")
+            task_list = self.task_list
+        elif self.manifest_mode:
+            # self.task_list is the manifest's resolved order; leave it alone
+            # so [ / ] keeps stepping through the curated catalog rather than
+            # whatever else happens to sit in this file's directory.
+            task_list = self.task_list
+            if resolved not in task_list:
+                task_list = sorted(set(task_list) | {resolved})
+        else:
+            tasks_dir = self.tasks_dir_override or resolved.parent
+            task_list = discover_tasks_in_dir(tasks_dir)
+            if resolved not in task_list:
+                task_list = sorted(set(task_list) | {resolved})
+        try:
+            task_index = task_list.index(resolved)
+        except ValueError:
+            task_index = 0
+        return task_list, task_index
+
     def _load_task(self, path: str) -> None:
-        """Load a task JSON file, refresh directory browsing, and reset."""
+        """Load a task JSON file, refresh directory browsing, and reset.
+
+        Session fields (``task_path``/``task_spec``/``task_list``/
+        ``task_index``) are assigned only after ``backend.configure()``
+        succeeds, so a spec the backend rejects (``UnsupportedSpecError`` on
+        ``--backend mujoco3d``, a ``ValueError`` subclass) leaves the session
+        exactly on its previous task rather than desyncing it from the
+        backend (see the mujoco3d backend's own atomic-configure guarantee).
+        """
         resolved = self._resolve_path(path)
 
         if not resolved.exists():
             print(f"Error: task file not found: {resolved}")
             return
 
-        self._checkpoint_trajectory()
-
-        self.task_path = resolved
         raw_spec = TaskSpecification.from_json(str(resolved))
         manifest_row = self.manifest_row_by_path.get(resolved)
         task_id = manifest_row["task_id"] if manifest_row else r1_task_id(resolved)
         try:
-            self.optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
+            optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
         except KeyError:
             # Not an R1 task, or no results table is available at all --
             # R1-comparison is simply off for this task; keep the maze's own
             # max_steps rather than crashing the whole load.
-            self.optimal_steps = 0
-            self.task_spec = raw_spec
+            optimal_steps = 0
+            new_spec = raw_spec
         else:
-            cap = max(1, self.optimal_steps * 3)
-            self.task_spec = (
+            cap = max(1, optimal_steps * 3)
+            new_spec = (
                 raw_spec if raw_spec.max_steps <= cap else dataclasses.replace(raw_spec, max_steps=cap)
             )
 
-        if self.task_list_locked:
-            if resolved not in self.task_list:
-                raise ValueError(f"{resolved} is not in the locked task list")
-        elif self.manifest_mode:
-            # self.task_list is the manifest's resolved order; leave it alone
-            # so [ / ] keeps stepping through the curated catalog rather than
-            # whatever else happens to sit in this file's directory.
-            if resolved not in self.task_list:
-                self.task_list = sorted(set(self.task_list) | {resolved})
-        else:
-            tasks_dir = self.tasks_dir_override or resolved.parent
-            self.task_list = discover_tasks_in_dir(tasks_dir)
-            if resolved not in self.task_list:
-                self.task_list = sorted(set(self.task_list) | {resolved})
-        try:
-            self.task_index = self.task_list.index(resolved)
-        except ValueError:
-            self.task_index = 0
+        new_task_list, new_task_index = self._resolved_task_list(resolved)
 
-        self._reset_env()
+        try:
+            self.backend.configure(new_spec)
+        except ValueError as exc:
+            print(f"Error: backend cannot load {resolved}: {exc}")
+            return
+
+        self._checkpoint_trajectory()
+        self.task_path = resolved
+        self.task_spec = new_spec
+        self.optimal_steps = optimal_steps
+        self.task_list = new_task_list
+        self.task_index = new_task_index
+        self._finish_reset()
 
     @property
     def display_reward(self) -> float:
@@ -312,11 +339,25 @@ class MiniGridPlaySession:
         )
 
     def _reset_env(self) -> None:
-        """Reset the environment from the current task spec."""
+        """Reset the environment from the current task spec (restart the same
+        task). Guarded the same way task-switching is (see ``_load_task``):
+        a backend rejection prints and leaves the session as it was rather
+        than raising out of the pygame loop."""
         if self.task_spec is None:
             return
 
-        self.backend.configure(self.task_spec)
+        try:
+            self.backend.configure(self.task_spec)
+        except ValueError as exc:
+            print(f"Error: backend cannot load {self.task_path}: {exc}")
+            return
+
+        self._finish_reset()
+
+    def _finish_reset(self) -> None:
+        """Populate fresh episode state, assuming the backend is already
+        configured for ``self.task_spec`` (split out of ``_reset_env`` so
+        ``_load_task`` doesn't configure the backend twice per switch)."""
         _obs, self.state, _info = self.backend.reset(seed=self.task_spec.seed)
 
         self.episode_done = False

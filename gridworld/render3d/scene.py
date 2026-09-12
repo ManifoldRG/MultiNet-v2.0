@@ -40,6 +40,26 @@ def check_supported(spec: TaskSpecification) -> None:
         problems.append(f"goal_type={spec.goal.goal_type!r}")
     if spec.rules.observability != "full":
         problems.append(f"observability={spec.rules.observability!r}")
+
+    # Colours are pure-Python (no mujoco) and checked here too, so a bad
+    # colour is rejected before configure() touches the state backend or
+    # closes the current renderer -- the same completeness the other checks
+    # give (build_scene would otherwise raise mid-build via palette.rgba).
+    colour_names = (
+        [key.color for key in mech.keys]
+        + [door.requires_key for door in mech.doors]
+        + [switch.color for switch in mech.switches]
+        + [gate.color for gate in mech.gates]
+    )
+    bad_colours: list[str] = []
+    for name in colour_names:
+        try:
+            palette.rgba(name)
+        except ValueError:
+            if name not in bad_colours:
+                bad_colours.append(name)
+    problems.extend(f"colour {name!r}" for name in bad_colours)
+
     if problems:
         raise UnsupportedSpecError(
             f"3D renderer does not support {', '.join(problems)} (task {spec.task_id!r})"
