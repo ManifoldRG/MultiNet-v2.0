@@ -168,12 +168,16 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
             }
         )
 
+    if not session.backend.frame_is_grid_aligned:
+        # Per-cell effects slice the frame into equal tiles -- meaningless on a
+        # perspective (3D) frame. Keep only the camera bounce.
+        plan = [item for item in plan if item["kind"] == "bounce"]
     return plan
 
 
 def _grid_size(session) -> tuple[int, int]:
-    env = session.backend.env
-    return int(env.width), int(env.height)
+    width, height = session.task_spec.maze.dimensions
+    return int(width), int(height)
 
 
 def _tile_image_b64(
@@ -241,7 +245,8 @@ def effects_for_dispatch(
     """Serialize ``plan_effects`` for the web player (adds tile PNGs)."""
     plan = plan_effects(session, token, prev_state, events_before)
     grid_w, grid_h = _grid_size(session)
-    prev_frame = recolor_walls(prev_rgb) if prev_rgb is not None else None
+    grid_aligned = session.backend.frame_is_grid_aligned
+    prev_frame = recolor_walls(prev_rgb) if (prev_rgb is not None and grid_aligned) else prev_rgb
     post_frame = None
     effects: list[dict] = []
 
@@ -337,14 +342,13 @@ class DemoFx:
     ) -> None:
         if not self.enabled or pygame is None:
             return
-        env = session.backend.env
-        if env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
 
         # Rapid key-repeat shouldn't stack camera offsets.
         self._clips = [c for c in self._clips if c.kind != "bounce"]
 
-        grid_w, grid_h = int(env.width), int(env.height)
+        grid_w, grid_h = _grid_size(session)
         for item in plan_effects(session, token, prev_state, events_before):
             kind = item["kind"]
             duration = item["durationMs"]
