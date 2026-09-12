@@ -40,7 +40,11 @@ def resolve_mazes(manifest: str | None, experiment: str | None, patterns: list[s
         manifest_path = Path(manifest)
         catalog = load_manifest(manifest_path)
         for row in resolve_task_rows([experiment] if experiment else ["all"], catalog, manifest_path):
-            paths.append(Path(_resolve_source(row, manifest_path)))
+            try:
+                paths.append(Path(_resolve_source(row, manifest_path)))
+            except FileNotFoundError as exc:
+                print(f"Warning: skipping manifest row {row.get('task_id')!r}: {exc}", file=sys.stderr)
+                continue
     for pattern in patterns:
         paths.extend(Path(p) for p in sorted(glob.glob(pattern, recursive=True)))
     seen: set[Path] = set()
