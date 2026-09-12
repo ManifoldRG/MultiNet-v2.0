@@ -66,6 +66,11 @@ def check_supported(spec: TaskSpecification) -> None:
         )
 
 
+# wall_cells() and _across_is_x() below encode MiniGrid-derived placement
+# assumptions: objects overwrite the wall at their cell, and doors/gates/
+# switches sit in 1-wide passages (so "the wall on one side" determines the
+# barrier's orientation). A future non-MiniGrid state engine must preserve
+# these assumptions -- or these two functions must be revisited alongside it.
 def wall_cells(spec: TaskSpecification) -> frozenset[tuple[int, int]]:
     width, height = spec.maze.dimensions
     border = {
@@ -121,6 +126,8 @@ def _key_parts(prefix, rgba, *, scale: float = 1.0, z: float = 0.0, group: int =
     ]
 
 
+# See the MiniGrid-derived placement note above wall_cells(): this also
+# assumes a 1-wide passage (exactly one axis has walls on both sides).
 def _across_is_x(cell, walls) -> bool:
     """True when the passage through ``cell`` runs north-south (walls east and
     west), so a barrier spans the x axis; otherwise it spans y."""

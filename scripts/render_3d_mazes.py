@@ -58,7 +58,12 @@ def resolve_mazes(manifest: str | None, experiment: str | None, patterns: list[s
 
 def render_maze(path: Path, cameras: list[str], resolution: int, replay: str, out_dir: Path) -> list[dict]:
     spec = TaskSpecification.from_json(str(path))
-    actions = plan_bfs_path(spec).actions if replay == "bfs" else []
+    actions: list[int] = []
+    if replay == "bfs":
+        plan = plan_bfs_path(spec)
+        actions = plan.actions
+        if not plan.success:
+            print(f"Warning: BFS plan failed for {path}; rendering the partial replay", file=sys.stderr)
     records: list[dict] = []
     for camera in cameras:
         backend = get_backend("mujoco3d", camera=camera, resolution=resolution)

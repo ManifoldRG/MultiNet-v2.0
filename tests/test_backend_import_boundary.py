@@ -5,9 +5,12 @@ Runtime checks run in a subprocess with every ``minigrid`` import blocked.
 
 from __future__ import annotations
 
+import ast
+import importlib.util
+
 import pytest
 
-from render3d_test_utils import run_with_minigrid_blocked
+from render3d_test_utils import REPO_ROOT, run_with_minigrid_blocked
 
 COMMON_MODULES = [
     "gridworld.backends",
@@ -54,8 +57,6 @@ def test_load_task_default_backend_is_minigrid(tmp_path):
     assert backend.is_configured and spec.task_id == "render3d_corridor"
 
 
-import importlib.util
-
 DEMO_MODULES = ["demo.theme", "demo.session", "demo.fx", "demo.api.view"]
 
 
@@ -70,10 +71,6 @@ def test_demo_web_app_imports_without_minigrid():
     result = run_with_minigrid_blocked("import demo.api.app")
     assert result.returncode == 0, result.stderr[-3000:]
 
-
-import ast
-
-from render3d_test_utils import REPO_ROOT
 
 FORBIDDEN = (
     "minigrid",
