@@ -1,0 +1,34 @@
+{
+  "description": "R1-frontier Astra token probe: GPT-6 Astra on ONE out-of-panel smoke maze (M5 10x10 corridor, key+door, 47 optimal steps) with the exact run_config.r1_frontier.json model params (xhigh, 64k, flex, image_detail=high). Terra calibrates queries/episode; this measures Astra's OWN per-query reasoning/output tokens so the panel projection is not a cross-model guess. spend_cap_usd=15 hard-stops it — a cap-cut episode still yields the per-query profile. NOT a scored panel.",
+  "manifest": "gridworld/fixtures/manifest.r1_smoke_batch.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 15,
+      "group": "openai-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "r1smoke_M5_10x10_corridor_kr_kb_1"
+      ]
+    }
+  }
+}

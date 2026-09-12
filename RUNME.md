@@ -70,6 +70,23 @@ python -m scripts.run_pipeline \
   --seeds 0
 ```
 
+### R1-frontier: OpenAI models on the R1 cell (paid)
+
+A separate experimental set: GPT-6 Astra on the same 50-maze panel and the
+same fixed cell (`run_config.r1_frontier.json`, provider `openai`, xhigh
+reasoning, 64k cap, flex tier). `OPENAI_API_KEY` resolves from env, `.env`,
+or line 3 of `api_key.txt`; `python -m deploy.check_api_keys --provider
+openai` round-trips it and prints the key's rate limits (OpenAI reserves the
+64k `max_completion_tokens` against TPM, so the tier bounds concurrency).
+Every config carries a `spend_cap_usd` hard stop.
+
+1. Calibrate: `run_config.r1_frontier_calib_terra.json` (Terra, 5 smoke
+   mazes) and optionally `run_config.r1_frontier_probe_astra.json` (Astra, one
+   maze) over `manifest.r1_smoke_batch.json`.
+2. Project: `python -m scripts.estimate_frontier_cost --artifacts-root <root>`.
+3. Launch: `launch_distributed.sh` with `RUN_CONFIG=gridworld/fixtures/run_config.r1_frontier.json`
+   (one coordinator + one API VM; `API_WORKER_CONCURRENCY` sized to the tier).
+
 ## 4. Scoring
 
 Scoring runs inside the pipeline (`scorer/`): static maze/difficulty scores

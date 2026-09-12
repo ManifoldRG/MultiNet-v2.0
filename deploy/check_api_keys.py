@@ -26,6 +26,23 @@ def hello_roundtrip(provider: str, key: str) -> Dict[str, object]:
         from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
 
         agent = KimiK26Agent(config=KimiK26Config(max_tokens=32), api_key=key)
+    elif provider == "openai":
+        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
+
+        # Cheapest model + low effort; reasoning tokens count against the cap, so
+        # leave headroom for a visible reply. Echo the rate-limit headers: the
+        # key's usage tier (TPM) sets the safe fleet concurrency.
+        agent = OpenAIAgent(
+            config=OpenAIConfig(model="gpt-5.6-luna", max_tokens=512, reasoning_effort="low"),
+            api_key=key,
+        )
+        reply = agent(messages)
+        return {
+            "provider": provider,
+            "ok": True,
+            "reply": f"{reply} | rate_limits={agent.last_rate_limits}",
+            "usage": agent.last_usage,
+        }
     else:
         raise ValueError(f"Unknown provider: {provider!r}")
     reply = agent(messages)
