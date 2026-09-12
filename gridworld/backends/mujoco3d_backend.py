@@ -1,0 +1,130 @@
+"""3D backend: any AbstractGridBackend supplies mechanics + GridState; MuJoCo
+draws the frame.
+
+Reward, termination, GridState and info pass through untouched, so a 3D
+episode is action-for-action identical to one on the state backend. Imports
+only the common layer; mujoco loads lazily in configure().
+"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+import numpy as np
+
+from ..render3d.cameras import PRESETS
+from ..render3d.scene import check_supported
+from ..task_spec import TaskSpecification
+from .base import AbstractGridBackend, GridState
+
+
+class Mujoco3DBackend(AbstractGridBackend):
+    def __init__(
+        self,
+        state_backend: AbstractGridBackend,
+        *,
+        camera: str = "top_down",
+        resolution: int = 512,
+        wall_height: Optional[float] = None,
+    ):
+        super().__init__()
+        if camera not in PRESETS:
+            raise ValueError(f"unknown camera preset {camera!r}; choose from {PRESETS}")
+        self.state_backend = state_backend
+        self.resolution = int(resolution)
+        self.wall_height = wall_height
+        self._camera = camera
+        self._renderer = None
+        self._frame: Optional[np.ndarray] = None
+        self._frame_key = None
+
+    def configure(self, task_spec: TaskSpecification) -> None:
+        check_supported(task_spec)  # before touching the state backend
+        from ..render3d.renderer import SceneRenderer  # lazy: mujoco loads only when used
+
+        self.state_backend.configure(task_spec)
+        if self._renderer is not None:
+            self._renderer.close()
+        self._renderer = SceneRenderer(
+            task_spec, camera=self._camera, resolution=self.resolution, wall_height=self.wall_height
+        )
+        self.task_spec = task_spec
+        self._configured = True
+        self._frame = None
+        self._frame_key = None
+
+    def reset(self, seed: Optional[int] = None) -> tuple[np.ndarray, GridState, dict]:
+        _flat, state, info = self.state_backend.reset(seed=seed)
+        return self._frame_for(state), state, info
+
+    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, GridState, dict]:
+        _flat, reward, terminated, truncated, state, info = self.state_backend.step(action)
+        return self._frame_for(state), reward, terminated, truncated, state, info
+
+    def render(self) -> np.ndarray:
+        if self._renderer is None:
+            raise RuntimeError("Backend must be configured before render()")
+        return self._frame_for(self.state_backend.get_state())
+
+    def _frame_for(self, state: GridState) -> np.ndarray:
+        doors = self.state_backend.door_states()
+        # Everything the frame depends on; a matching key reuses the cached frame
+        # (the pygame UI calls render() every tick).
+        key = (
+            tuple(int(v) for v in state.agent_position),
+            int(state.agent_direction),
+            state.agent_carrying,
+            frozenset(state.active_switches),
+            frozenset(state.open_gates),
+            frozenset((k, tuple(int(c) for c in v)) for k, v in state.key_positions.items()),
+            frozenset(doors.items()),
+            self._camera,
+        )
+        if self._frame is None or key != self._frame_key:
+            self._frame = self._renderer.render(state, doors)
+            self._frame_key = key
+        return self._frame
+
+    def get_mission_text(self) -> str:
+        return self.state_backend.get_mission_text()
+
+    def get_state(self) -> GridState:
+        return self.state_backend.get_state()
+
+    def door_states(self) -> dict[str, bool]:
+        return self.state_backend.door_states()
+
+    @property
+    def frame_is_grid_aligned(self) -> bool:
+        return False
+
+    @property
+    def action_space_size(self) -> int:
+        return self.state_backend.action_space_size
+
+    @property
+    def observation_shape(self) -> tuple[int, int, int]:
+        return (self.resolution, self.resolution, 3)
+
+    @property
+    def camera(self) -> str:
+        return self._camera
+
+    @property
+    def camera_names(self) -> tuple[str, ...]:
+        return PRESETS
+
+    def set_camera(self, camera: str) -> None:
+        if camera not in PRESETS:
+            raise ValueError(f"unknown camera preset {camera!r}; choose from {PRESETS}")
+        self._camera = camera
+        if self._renderer is not None:
+            self._renderer.set_camera(camera)
+        self._frame = None
+        self._frame_key = None
+
+    def close(self) -> None:
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None
+        self.state_backend.close()
