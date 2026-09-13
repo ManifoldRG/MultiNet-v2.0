@@ -3,9 +3,12 @@
 
 The R1 episode r1_M6_14x14_dense_kr_sg_kb_1 / kimi-k2.6 / seed_0 was killed at
 env step 143 by a Moonshot network outage (terminal ``parse_failed`` produced
-by empty replies, not by the model). Its archived ``episode.json`` transcript
-has exactly the record shape that ``interface/episode_checkpoint.py`` persists
-in a query-boundary checkpoint, so this driver:
+by empty replies, not by the model). R1-frontier GPT-6 Astra episodes were
+killed mid-run by OpenAI billing exhaustion (terminal
+``agent_error:RuntimeError: OpenAI API quota exhausted ...``). Both archived
+``episode.json`` transcripts have exactly the record shape that
+``interface/episode_checkpoint.py`` persists in a query-boundary checkpoint, so
+this driver:
 
 1. inserts ``--repo-root`` (a git worktree of the as-run SHA) at ``sys.path[0]``
    BEFORE importing any harness module, so ``interface``/``gridworld`` come
@@ -14,15 +17,18 @@ in a query-boundary checkpoint, so this driver:
    ``episode.json`` (no manifests/submodules touched);
 3. builds a synthetic checkpoint payload from the archive (query counter and
    trailing parse-failure count rebuilt from the query records; the terminal
-   ``parse_failed`` status cleared) and hands it to the old code's
-   ``resume_stepper``, which replays the recorded actions through a fresh
-   backend, verifying position_after/state_after per step and rebuilding
-   stall-watchdog state with the old code's ``_progress_signature``;
+   infra-kill status — ``parse_failed`` or any ``agent_error:`` — cleared) and
+   hands it to the old code's ``resume_stepper``, which replays the recorded
+   actions through a fresh backend, verifying position_after/state_after per
+   step and rebuilding stall-watchdog state with the old code's
+   ``_progress_signature``;
 4. ``--mode replay-verify``: prints a verification report and exits 0 only if
    the replayed final state matches the archive's last recorded state;
-5. ``--mode continue``: keeps running the live query loop (Kimi agent, sync
-   transport, model config verbatim from ``run_inputs.json``) and flushes full
-   episode artifacts to ``--out-dir`` via the old code's ``flush_episode_log``.
+5. ``--mode continue``: keeps running the live query loop (the Kimi or OpenAI
+   agent rebuilt from ``run_inputs.json``'s model config verbatim; OpenAI also
+   needs ``--spend-cap-usd`` because its spend ledger is per process) and
+   flushes full episode artifacts to ``--out-dir`` via the old code's
+   ``flush_episode_log``.
 
 The archive directory is never written to; the worktree is never modified.
 """
@@ -37,6 +43,9 @@ import tempfile
 from pathlib import Path
 
 ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
+# The runner ends an episode with "agent_error:<Type>: ..." only for transport or
+# billing failures (interface/runner.py) — an infra outcome, never a model one.
+INFRA_KILL_PREFIXES = ("agent_error:",)
 # The stepper's in-progress default (see EpisodeStepper.start()).
 IN_PROGRESS_END_REASON = "max_steps"
 
@@ -57,20 +66,28 @@ def trailing_parse_failures(query_records: list[dict]) -> int:
     return n
 
 
+def is_infra_kill(end_reason: object) -> bool:
+    """True for archived end reasons this driver may clear and resume."""
+    return end_reason in ARCHIVED_END_REASONS_TO_CLEAR or str(end_reason).startswith(
+        INFRA_KILL_PREFIXES
+    )
+
+
 def build_checkpoint_payload(episode: dict) -> dict:
     """A synthetic query-boundary checkpoint equivalent to what the as-run
-    process would have saved just before the outage killed it, with the
-    terminal parse_failed status cleared so the episode continues as if the
-    lost query were re-issued."""
+    process would have saved just before the infra failure killed it, with the
+    terminal status cleared so the episode continues as if the lost query were
+    re-issued."""
     transcript = episode["transcript"]
     query_records = [r for r in transcript if r.get("kind") == "query"]
     step_records = [r for r in transcript if r.get("kind") == "step"]
     end_reason = episode.get("end_reason")
-    if end_reason not in ARCHIVED_END_REASONS_TO_CLEAR:
+    if not is_infra_kill(end_reason):
         raise SystemExit(
             f"archive end_reason={end_reason!r} is not an infra-kill this driver "
-            f"knows how to clear (expected one of {sorted(ARCHIVED_END_REASONS_TO_CLEAR)}); "
-            "refusing to resume a genuinely finished episode"
+            f"knows how to clear (expected one of {sorted(ARCHIVED_END_REASONS_TO_CLEAR)} "
+            f"or a {INFRA_KILL_PREFIXES} prefix); refusing to resume a genuinely "
+            "finished episode"
         )
     parse_failures = trailing_parse_failures(query_records)
     return {
@@ -170,6 +187,39 @@ def scripted_action_from_spec(spec: str) -> str:
     return spec[len(prefix):]
 
 
+def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
+                     spend_cap_usd: float | None = None, log=print):
+    """Rebuild the live agent from the archived run_inputs model config.
+
+    Imports are deferred so that, under main(), they resolve against the as-run
+    worktree. Only fields the agent's config dataclass defines pass through;
+    fleet routing keys (group, max_in_flight, tasks, ...) are dropped.
+    """
+    cfg = dict(model_cfg)
+    if timeout is not None:
+        log(f"  timeout override: {cfg.get('timeout')} -> {timeout}s")
+        cfg["timeout"] = timeout
+    provider = str(cfg.get("provider") or "kimi").lower()
+    if provider == "openai":
+        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
+
+        if spend_cap_usd is None:
+            raise SystemExit(
+                "--spend-cap-usd is required to resume an OpenAI episode: the agent's "
+                "spend ledger is per process and starts at $0 here, so the archived "
+                f"per-run cap (${cfg.get('spend_cap_usd')}) would not bound this resume"
+            )
+        cfg["spend_cap_usd"] = float(spend_cap_usd)
+        allowed = set(OpenAIConfig.__dataclass_fields__)
+        return OpenAIAgent(config=OpenAIConfig(**{k: v for k, v in cfg.items() if k in allowed}))
+    if provider == "kimi":
+        from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
+
+        allowed = set(KimiK26Config.__dataclass_fields__)
+        return KimiK26Agent(config=KimiK26Config(**{k: v for k, v in cfg.items() if k in allowed}))
+    raise SystemExit(f"resume does not support provider {provider!r}")
+
+
 # --------------------------------------------------------------------------
 # Driver.
 # --------------------------------------------------------------------------
@@ -188,7 +238,7 @@ def _install_repo_root(repo_root: Path) -> None:
 
 
 class _ScriptedAgent:
-    """Offline stand-in for the Kimi agent: emits one fixed action in valid
+    """Offline stand-in for the live agent: emits one fixed action in valid
     FINAL_OUTPUT form for ``limit`` queries, then reports itself exhausted."""
 
     def __init__(self, action: str, reply_cls, limit: int = 2) -> None:
@@ -227,6 +277,10 @@ def main() -> int:
                          "comparability with the as-run episode. The archived 600s "
                          "predates the run_config default for 64k thinking runs "
                          "(the as-run process had the KIMI_TIMEOUT_OVERRIDE hack).")
+    ap.add_argument("--spend-cap-usd", type=float, default=None,
+                    help="hard spend cap for THIS process; required for OpenAI agents. "
+                         "Their ledger is per process and starts at $0, so pass this "
+                         "resume's share of the remaining budget, not the archived cap.")
     ap.add_argument("--agent", default=None,
                     help="override: scripted:<ACTION> emits that action for 2 "
                          "queries then stops (no API key / spend)")
@@ -333,15 +387,8 @@ def main() -> int:
         from interface.agents.reply import Reply
         agent = _ScriptedAgent(scripted_action_from_spec(args.agent), Reply)
     else:
-        from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
-        model_cfg = {**run_inputs["model_config"], **run_inputs["runtime_model_config"]}
-        if args.timeout is not None:
-            print(f"  timeout override: {model_cfg.get('timeout')} -> {args.timeout}s")
-            model_cfg["timeout"] = args.timeout
-        allowed = set(KimiK26Config.__dataclass_fields__)
-        agent = KimiK26Agent(
-            config=KimiK26Config(**{k: v for k, v in model_cfg.items() if k in allowed})
-        )
+        model_cfg = {**run_inputs["model_config"], **(run_inputs.get("runtime_model_config") or {})}
+        agent = build_live_agent(model_cfg, timeout=args.timeout, spend_cap_usd=args.spend_cap_usd)
 
     new_queries, stopped_early = drive_continue_loop(
         stepper,
