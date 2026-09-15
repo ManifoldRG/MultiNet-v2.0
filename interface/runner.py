@@ -247,7 +247,13 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript, self.task_spec),
+            history_text(
+                obs,
+                ctx,
+                transcript,
+                self.task_spec,
+                self.config.max_history_tokens,
+            ),
             state,
             observation=obs,
         )
@@ -268,7 +274,9 @@ class ExperimentRunner:
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
-        hist_blocks = history_content_blocks(obs, ctx, transcript)
+        hist_blocks = history_content_blocks(
+            obs, ctx, transcript, self.config.max_history_tokens
+        )
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []

@@ -1269,6 +1269,7 @@ _DEDUP_ROLLOUT = [
 # intentionally not part of that already-run batch.
 _NOT_IN_VALIDATION10_ROLLOUT = {
     ("Context window", "text_summary_and_last3"),
+    ("Context window", "full"),
 }
 
 
@@ -1282,7 +1283,7 @@ def test_launch_condition_sets_expose_expected_variants():
     assert {cs: condition_variant_names(cs) for cs in _LAUNCH_CONDITION_SETS} == {
         "Prompt": ["standard", "minimal", "verbose"],
         "Observation format": ["image_only", "text_only", "image_text"],
-        "Context window": ["current", "last3", "text_summary", "text_summary_and_last3"],
+        "Context window": ["current", "last3", "text_summary", "text_summary_and_last3", "full"],
         "Action space": ["egocentric", "cardinal"],
         "Querying strategy": ["step_by_step", "subgoal", "full_trajectory"],
         "In-context learning": ["zero_shot", "one_shot"],
