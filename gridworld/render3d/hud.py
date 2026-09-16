@@ -15,6 +15,14 @@ from PIL import Image, ImageDraw
 
 COMPASS_CAMERAS: tuple[str, ...] = ("chase", "first_person")
 
+
+def turns_with_agent(camera: str, tilt: int | None = None) -> bool:
+    """Whether the view turns with the agent (and so carries a compass):
+    every demo tilt level but the top-down one, else the turning presets."""
+    if tilt is not None:
+        return tilt > 0
+    return camera in COMPASS_CAMERAS
+
 DISC = (16, 18, 26)
 RING = (150, 156, 170)
 LETTER = RING

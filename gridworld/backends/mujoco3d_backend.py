@@ -13,8 +13,8 @@ from typing import Optional
 
 import numpy as np
 
-from ..render3d.cameras import DIRECTION_YAW, PRESETS
-from ..render3d.hud import COMPASS_CAMERAS
+from ..render3d.cameras import DIRECTION_YAW, PRESETS, TILT_LEVELS, check_tilt, view_wall_height
+from ..render3d.hud import turns_with_agent
 from ..render3d.scene import check_supported
 from ..task_spec import TaskSpecification
 from .base import AbstractGridBackend, GridState
@@ -36,6 +36,7 @@ class Mujoco3DBackend(AbstractGridBackend):
         self.resolution = int(resolution)
         self.wall_height = wall_height
         self._camera = camera
+        self._tilt: Optional[int] = None  # demo tilt level; overrides the preset while set
         self._renderer = None
         self._frame: Optional[np.ndarray] = None
         self._frame_key = None
@@ -49,7 +50,11 @@ class Mujoco3DBackend(AbstractGridBackend):
             self._renderer.close()
             self._renderer = None
         self._renderer = SceneRenderer(
-            task_spec, camera=self._camera, resolution=self.resolution, wall_height=self.wall_height
+            task_spec,
+            camera=self._camera,
+            resolution=self.resolution,
+            wall_height=self.wall_height,
+            tilt=self._tilt,
         )
         self.task_spec = task_spec
         self._configured = True
@@ -86,6 +91,7 @@ class Mujoco3DBackend(AbstractGridBackend):
             frozenset((k, tuple(int(c) for c in v)) for k, v in state.key_positions.items()),
             frozenset(doors.items()),
             self._camera,
+            self._tilt,
         )
         if self._frame is None or key != self._frame_key:
             self._frame = self._renderer.render(state, doors)
@@ -109,7 +115,29 @@ class Mujoco3DBackend(AbstractGridBackend):
 
     @property
     def view_turns_with_agent(self) -> bool:
-        return self._camera in COMPASS_CAMERAS
+        return turns_with_agent(self._camera, self._tilt)
+
+    @property
+    def tilt(self) -> Optional[int]:
+        return self._tilt
+
+    @property
+    def tilt_levels(self) -> int:
+        return len(TILT_LEVELS)
+
+    @property
+    def wall_height_shown(self) -> float:
+        return view_wall_height(self._camera, self._tilt, self.wall_height)
+
+    def set_tilt(self, level: Optional[int]) -> None:
+        """Show a demo tilt level (None: back to the camera preset).
+        Display-only: state is untouched."""
+        check_tilt(level)
+        self._tilt = level
+        if self._renderer is not None:
+            self._renderer.set_tilt(level)
+        self._frame = None
+        self._frame_key = None
 
     def get_mission_text(self) -> str:
         return self.state_backend.get_mission_text()
@@ -144,6 +172,7 @@ class Mujoco3DBackend(AbstractGridBackend):
         if camera not in PRESETS:
             raise ValueError(f"unknown camera preset {camera!r}; choose from {PRESETS}")
         self._camera = camera
+        self._tilt = None
         if self._renderer is not None:
             self._renderer.set_camera(camera)
         self._frame = None

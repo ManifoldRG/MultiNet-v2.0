@@ -121,3 +121,33 @@ def test_play_task_rejects_camera_without_3d_backend():
     )
     assert result.returncode == 2
     assert "--camera requires --backend mujoco3d" in result.stderr
+
+
+def test_tilt_steps_from_the_current_preset_clamps_and_is_display_only(tmp_path):
+    session = make_play_session(tmp_path, "mujoco3d", "chase")
+    try:
+        last = session.backend.tilt_levels - 1
+        assert session.tilt_status() is None
+        assert session.step_tilt(+1) == 3  # chase sits at level 2
+        assert session.tilt_status() == f"Tilt 3/{last} · walls 0.8"
+        assert session.step_tilt(-1) == 2
+        for _ in range(last + 2):
+            session.step_tilt(-1)
+        assert session.backend.tilt == 0
+        for _ in range(last + 2):
+            session.step_tilt(+1)
+        assert session.backend.tilt == last
+        assert session.state.step_count == 0 and len(session.transcript) == 1
+        session.cycle_camera()  # V leaves tilt mode
+        assert session.backend.tilt is None and session.tilt_status() is None
+    finally:
+        session.close()
+
+
+def test_2d_session_cannot_tilt(tmp_path):
+    session = make_play_session(tmp_path, "minigrid")
+    try:
+        assert session.step_tilt(+1) is None
+        assert session.tilt_status() is None
+    finally:
+        session.close()

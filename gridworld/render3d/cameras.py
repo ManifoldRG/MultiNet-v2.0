@@ -116,18 +116,94 @@ def _fit_distance(make_pose, points, lo: float = 0.5, hi: float = 500.0) -> Came
     return make_pose(hi)
 
 
-@functools.lru_cache(maxsize=64)
 def _chase_distance(width: int, height: int, wall_height: float) -> float:
-    """One chase distance per maze: aimed at the maze centre, it fits the whole
-    maze at every heading, so steps never re-zoom and turns only rotate."""
+    return _whole_maze_distance(width, height, wall_height, CHASE_ELEVATION)
+
+
+@functools.lru_cache(maxsize=64)
+def _whole_maze_distance(width: int, height: int, wall_height: float, elevation: float) -> float:
+    """One distance per maze for a view aimed at the maze centre: it fits the
+    whole maze at every heading, so steps never re-zoom and turns only rotate."""
     centre = (width / 2.0, -height / 2.0, 0.0)
     corners = maze_corners(width, height, wall_height)
     return max(
         _fit_distance(
-            lambda d, a=yaw: CameraPose(centre, d, a, CHASE_ELEVATION, False, PERSPECTIVE_FOVY), corners
+            lambda d, a=yaw: CameraPose(centre, d, a, elevation, False, PERSPECTIVE_FOVY), corners
         ).distance
         for yaw in DIRECTION_YAW.values()
     )
+
+
+@dataclass(frozen=True)
+class TiltLevel:
+    wall_height: float
+    preset: str | None = None  # reuse this preset's pose exactly
+    elevation: float | None = None  # otherwise a view that turns with the agent,
+    distance: float | None = None  # this far from a point ahead of it (None: whole maze)
+
+
+# Demo tilt: from top_down (level 0) through views that turn with the agent
+# down to first person (last level). Walls grow as the camera drops, so the
+# levels show how wall height affects what is visible. The close levels keep
+# the camera above the walls.
+TILT_LEVELS: tuple[TiltLevel, ...] = (
+    TiltLevel(0.4, preset="top_down"),
+    TiltLevel(0.5, elevation=-80.0),
+    TiltLevel(0.6, preset="chase"),
+    TiltLevel(0.8, elevation=-50.0, distance=7.0),
+    TiltLevel(1.0, elevation=-38.0, distance=5.0),
+    TiltLevel(1.2, elevation=-25.0, distance=4.0),
+    TiltLevel(1.4, preset="first_person"),
+)
+TILT_LOOK_AHEAD = 2.0  # cells ahead of the agent the close levels aim at
+
+
+def tilt_wall_height(level: int) -> float:
+    return TILT_LEVELS[level].wall_height
+
+
+def view_wall_height(camera: str, tilt: int | None = None, override: float | None = None) -> float:
+    """Wall height a view draws: the tilt level's, else an explicit override,
+    else the preset default."""
+    if tilt is not None:
+        return tilt_wall_height(tilt)
+    if override is not None:
+        return float(override)
+    return DEFAULT_WALL_HEIGHT[camera]
+
+
+def check_tilt(level: int | None) -> None:
+    if level is not None and not 0 <= level < len(TILT_LEVELS):
+        raise ValueError(f"tilt level must be 0-{len(TILT_LEVELS) - 1} or None, got {level!r}")
+
+
+def tilt_pose(level: int, *, agent_cell, direction: int, maze_dims, yaw: float | None = None) -> CameraPose:
+    if level is None:
+        raise ValueError(f"tilt level must be 0-{len(TILT_LEVELS) - 1}, got None")
+    check_tilt(level)
+    tilt = TILT_LEVELS[level]
+    if tilt.preset is not None:
+        return pose_for(
+            tilt.preset,
+            agent_cell=agent_cell,
+            direction=direction,
+            maze_dims=maze_dims,
+            wall_height=tilt.wall_height,
+            yaw=yaw,
+        )
+    heading_yaw, fx, fy = _heading(int(direction))
+    if yaw is None:
+        yaw = heading_yaw
+    else:
+        fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    width, height = maze_dims
+    if tilt.distance is None:
+        centre = (width / 2.0, -height / 2.0, 0.0)
+        distance = _whole_maze_distance(width, height, tilt.wall_height, tilt.elevation)
+        return CameraPose(centre, distance, yaw, tilt.elevation, False, PERSPECTIVE_FOVY)
+    ax, ay, _ = cell_center(*agent_cell)
+    lookat = (ax + TILT_LOOK_AHEAD * fx, ay + TILT_LOOK_AHEAD * fy, 0.0)
+    return CameraPose(lookat, tilt.distance, yaw, tilt.elevation, False, PERSPECTIVE_FOVY)
 
 
 def _heading(direction: int) -> tuple[float, float, float]:

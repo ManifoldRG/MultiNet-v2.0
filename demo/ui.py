@@ -621,7 +621,8 @@ class MiniGridPlayerUI:
         # narrower window widths.
         segments = ["[ / ] switch task", "Tab settings", "M model view"]
         if self.session.camera_names:
-            segments.append("V camera")
+            tilt = self.session.tilt_status()
+            segments += ([tilt] if tilt else []) + ["V camera", ", . tilt"]
         segments.append("Q quit")
         max_width = WINDOW_WIDTH - 28
         text = ""
@@ -1334,6 +1335,12 @@ class MiniGridPlayerUI:
 
         if key == pygame.K_v and session.camera_names:
             session.cycle_camera()
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
+            return None
+
+        if key in (pygame.K_COMMA, pygame.K_PERIOD) and session.camera_names:
+            session.step_tilt(-1 if key == pygame.K_COMMA else 1)
             self.turn_anim.clear()
             self.sounds.play("navigate")
             return None

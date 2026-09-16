@@ -700,6 +700,30 @@ class MiniGridPlaySession:
         self.backend.set_camera(nxt)
         return nxt
 
+    def step_tilt(self, delta: int) -> Optional[int]:
+        """Tilt the 3D camera one level toward first person (+1) or top-down
+        (-1), walls rising as it drops. Display-only. Returns the new level,
+        or None for 2D."""
+        levels = getattr(self.backend, "tilt_levels", 0)
+        if not levels:
+            return None
+        current = self.backend.tilt
+        if current is None:  # start from where the current preset sits
+            current = {"top_down": 0, "fixed_angled": 1, "chase": 2, "first_person": levels - 1}.get(
+                self.backend.camera, 0
+            )
+        level = min(max(current + delta, 0), levels - 1)
+        self.backend.set_tilt(level)
+        return level
+
+    def tilt_status(self) -> Optional[str]:
+        """Footer text for the tilt level and wall height, None when not tilting."""
+        tilt = getattr(self.backend, "tilt", None)
+        if tilt is None:
+            return None
+        last = self.backend.tilt_levels - 1
+        return f"Tilt {tilt}/{last} · walls {self.backend.wall_height_shown:.1f}"
+
     # ------------------------------------------------------------------
     # Recording / trajectory saving
     # ------------------------------------------------------------------

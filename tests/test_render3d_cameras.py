@@ -100,3 +100,47 @@ def test_unknown_preset_or_direction_raises():
         pose_for("isometric", agent_cell=(1, 1), direction=0, maze_dims=(8, 8), wall_height=0.6)
     with pytest.raises(ValueError, match="agent_direction"):
         pose_for("chase", agent_cell=(1, 1), direction=7, maze_dims=(8, 8), wall_height=0.6)
+
+
+# --- demo tilt: top_down (level 0) down to first person (last level) --------
+
+
+def test_tilt_ladder_is_anchored_on_the_presets():
+    from gridworld.render3d.cameras import TILT_LEVELS, tilt_pose, tilt_wall_height
+
+    kwargs = dict(agent_cell=(3, 4), direction=1, maze_dims=(10, 8))
+    anchors = {0: "top_down", 2: "chase", len(TILT_LEVELS) - 1: "first_person"}
+    for level, preset in anchors.items():
+        wall = tilt_wall_height(level)
+        assert tilt_pose(level, **kwargs) == pose_for(preset, wall_height=wall, **kwargs)
+    assert tilt_wall_height(0) == 0.4 and tilt_wall_height(len(TILT_LEVELS) - 1) == 1.4
+
+
+def test_tilt_levels_descend_and_walls_rise_step_by_step():
+    from gridworld.render3d.cameras import TILT_LEVELS, tilt_pose, tilt_wall_height
+
+    levels = range(len(TILT_LEVELS))
+    poses = [tilt_pose(n, agent_cell=(3, 4), direction=0, maze_dims=(10, 8)) for n in levels]
+    elevations = [p.elevation for p in poses]
+    walls = [tilt_wall_height(n) for n in levels]
+    assert elevations == sorted(elevations) and len(set(elevations)) == len(elevations)
+    assert walls == sorted(walls) and len(set(walls)) == len(walls)
+
+
+@pytest.mark.parametrize("dims", DIMS)
+def test_tilt_keeps_the_agent_in_view_and_the_camera_out_of_walls(dims):
+    from gridworld.render3d.cameras import TILT_LEVELS, tilt_pose, tilt_wall_height
+
+    width, height = dims
+    for level in range(1, len(TILT_LEVELS) - 1):
+        wall = tilt_wall_height(level)
+        for cell in [(1, 1), (width - 2, height - 2), (width // 2, 1)]:
+            for direction in range(4):
+                pose = tilt_pose(level, agent_cell=cell, direction=direction, maze_dims=dims)
+                u, v = project(pose, cell_center(*cell, 0.15))
+                assert abs(u) < 1 and abs(v) < 1, (level, cell, direction)
+                cam = camera_position(pose)
+                inside_agent_cell = (
+                    abs(cam[0] - cell_center(*cell)[0]) < 0.5 and abs(cam[1] - cell_center(*cell)[1]) < 0.5
+                )
+                assert cam[2] > wall or inside_agent_cell, (level, cell, direction)

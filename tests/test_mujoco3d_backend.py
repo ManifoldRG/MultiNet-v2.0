@@ -204,3 +204,50 @@ def test_view_turns_with_agent_only_on_heading_following_cameras():
         if backend.view_turns_with_agent:
             turning.add(camera)
     assert turning == {"chase", "first_person"}
+
+
+def test_tilt_is_display_only_and_steps_through_every_level():
+    from gridworld.render3d.cameras import TILT_LEVELS, tilt_wall_height
+
+    backend = get_backend("mujoco3d", camera="top_down", resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    try:
+        backend.reset(seed=0)
+        state = backend.get_state().to_dict()
+        assert backend.tilt is None and backend.tilt_levels == len(TILT_LEVELS)
+        frames = set()
+        for level in range(len(TILT_LEVELS)):
+            backend.set_tilt(level)
+            assert backend.tilt == level
+            assert backend.wall_height_shown == tilt_wall_height(level)
+            assert backend.view_turns_with_agent == (level > 0)
+            frames.add(backend.render().tobytes())
+        assert len(frames) == len(TILT_LEVELS)
+        assert backend.get_state().to_dict() == state
+        with pytest.raises(ValueError, match="tilt level"):
+            backend.set_tilt(len(TILT_LEVELS))
+        backend.set_camera("chase")  # V leaves tilt mode
+        assert backend.tilt is None and backend.view_turns_with_agent
+        assert backend.wall_height_shown == 0.6
+    finally:
+        backend.close()
+
+
+def test_tilt_anchor_levels_render_exactly_like_their_presets():
+    from gridworld.render3d.cameras import TILT_LEVELS
+
+    spec = TaskSpecification.from_dict(CORRIDOR)
+    anchors = {0: "top_down", 2: "chase", len(TILT_LEVELS) - 1: "first_person"}
+    for level, preset in anchors.items():
+        tilted = get_backend("mujoco3d", camera="fixed_angled", resolution=RES)
+        plain = get_backend("mujoco3d", camera=preset, resolution=RES)
+        try:
+            for b in (tilted, plain):
+                b.configure(spec)
+                b.reset(seed=0)
+                b.step(int(A.TURN_RIGHT))
+            tilted.set_tilt(level)
+            assert tilted.render().tobytes() == plain.render().tobytes(), preset
+        finally:
+            tilted.close()
+            plain.close()
