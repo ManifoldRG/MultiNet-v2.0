@@ -172,6 +172,28 @@ def test_goal_pad_lands_where_project_predicts(spec, camera):
     assert math.dist((rows.mean(), cols.mean()), want) < 3.0
 
 
+@pytest.mark.parametrize("camera", ["top_down", "chase", "fixed_angled"])
+@pytest.mark.parametrize("direction", [0, 1, 2, 3])
+def test_agent_silhouette_points_where_it_faces(spec, camera, direction):
+    # The agent reads like MiniGrid's triangle: along its facing, the front
+    # half of its cyan shape is much narrower than the back half, in every
+    # overhead-ish view (a disc has equal halves).
+    frame, pose, _ = _render(spec, camera, _state(agent_position=(3, 2), agent_direction=direction))
+    centre = np.array(to_pixel(project(pose, cell_center(3, 2, 0.15)), RES))
+    yaw = math.radians({0: 0.0, 1: -90.0, 2: 180.0, 3: 90.0}[direction])
+    ahead = np.array(
+        to_pixel(project(pose, (3.5 + 0.3 * math.cos(yaw), -2.5 + 0.3 * math.sin(yaw), 0.15)), RES)
+    )
+    axis = (ahead - centre) / np.linalg.norm(ahead - centre)
+    img = frame.astype(int)
+    cyan = (img[..., 1] > 120) & (img[..., 2] > 120) & (img[..., 0] < 90)
+    points = np.argwhere(cyan).astype(float)
+    along, across = points @ axis, points @ np.array([-axis[1], axis[0]])
+    front = along > (along.max() + along.min()) / 2
+    width = lambda sel: across[sel].max() - across[sel].min()  # noqa: E731
+    assert width(front) < 0.75 * width(~front)
+
+
 def test_agent_hidden_only_in_first_person(spec):
     top, _, _ = _render(spec, "top_down", _state())
     first, _, _ = _render(spec, "first_person", _state())

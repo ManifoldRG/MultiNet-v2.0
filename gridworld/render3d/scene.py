@@ -235,13 +235,16 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         carried[colour_name] = tuple(f"{prefix}:{p}" for p in KEY_PARTS)
 
     sx, sy, _ = cell_center(spec.maze.start.x, spec.maze.start.y)
+    # A wedge pointing along the body's +x (its facing), like MiniGrid's triangle.
     agent = (
         f'<body name="agent" mocap="true" pos="{_fmt((sx, sy, 0.0))}">'
-        + _geom("agent:body", "cylinder", (0, 0, 0.14), (0.28, 0.12), palette.AGENT, group=AGENT_GROUP)
-        + f'<geom name="agent:nose" type="mesh" mesh="agent_nose" rgba="{_fmt(palette.dim(palette.AGENT, 0.45))}" '
+        + f'<geom name="agent:body" type="mesh" mesh="agent_wedge" rgba="{_fmt(palette.AGENT)}" '
         f'group="{AGENT_GROUP}" contype="0" conaffinity="0"/>'
         + "".join(carried_parts)
         + "</body>"
+    )
+    wedge = "  ".join(
+        f"{x} {y} {z}" for z in (0.02, 0.28) for x, y in ((0.42, 0), (-0.26, 0.3), (-0.26, -0.3))
     )
 
     newline = "\n    "
@@ -252,7 +255,7 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
     <headlight ambient="0.45 0.45 0.45" diffuse="0.35 0.35 0.35" specular="0 0 0"/>
   </visual>
   <asset>
-    <mesh name="agent_nose" vertex="0.42 0 0.2  0.1 0.16 0.2  0.1 -0.16 0.2  0.1 0 0.34"/>
+    <mesh name="agent_wedge" vertex="{wedge}"/>
   </asset>
   <worldbody>
     <light directional="true" pos="0 0 10" dir="0.3 0.4 -1" diffuse="0.5 0.5 0.5" specular="0 0 0" castshadow="false"/>
