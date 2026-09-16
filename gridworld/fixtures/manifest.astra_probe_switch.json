@@ -1,0 +1,31 @@
+{
+  "description": "GPT-6 Astra harness probes 2-3 (2026-09-14): the smallest-BFS switch maze of the R1 panel (r1_M2_8x8_corridor_sg_0, BFS-min 26; one live switch, one gate, no decoys), source unchanged from the R1-frontier run.",
+  "selection": {
+    "source_set": "r1_balanced_03",
+    "maze_count": 1,
+    "note": "task entry copied verbatim from manifest.r1_balanced_03.json"
+  },
+  "tasks": [
+    {
+      "task_id": "r1_M2_8x8_corridor_sg_0",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M2/8x8_corridor_sg_0.json",
+      "expected_mechanisms": [
+        "g1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M2",
+      "rank": 4,
+      "optimal_steps": 26,
+      "path_signature": "S",
+      "path_depth": 1,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:0"
+    }
+  ]
+}

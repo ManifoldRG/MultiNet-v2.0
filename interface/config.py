@@ -8,7 +8,16 @@ from typing import Literal, Optional
 class ExperimentConfig:
     """Selects one implementation along each experimental axis."""
 
-    prompting: Literal["minimal", "standard", "verbose", "text_initial_maze"] = "standard"
+    prompting: Literal[
+        "minimal",
+        "minimal_switch_hint",
+        "minimal_state_change_hint",
+        "minimal_interaction_rules",
+        "minimal_interaction_rules_stand",
+        "standard",
+        "verbose",
+        "text_initial_maze",
+    ] = "standard"
     observation: Literal["text_only", "image_text", "image_only"] = "image_text"
     include_current_observation_description: bool = True
     observation_text_includes_facing: bool = True

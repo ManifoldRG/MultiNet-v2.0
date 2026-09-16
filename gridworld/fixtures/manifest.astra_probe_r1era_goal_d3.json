@@ -1,0 +1,29 @@
+{
+  "description": "GPT-6 Astra harness probe 1 (2026-09-14): the two R1 mazes whose goal was moved post-R1 (ogbench 8d8cecd), in the exact versions R1 played (ogbench 31a0549: maze.goal = goal.target = (8,8); verified equal to R1's episode task_specs apart from the runtime max_steps cap). D3-only rerun manifest: the first attempt's D3 episode was lost when the host ran low on memory (2026-09-14).",
+  "selection": {
+    "source_set": "r1_balanced_03 (R1-era sources)",
+    "maze_count": 1,
+    "note": "task entries copied from manifest.r1_balanced_03.json; only source changed"
+  },
+  "tasks": [
+    {
+      "task_id": "r1_D3_10x10_dense_deadend_ky_dy_1",
+      "experiment": "r1",
+      "condition": "D",
+      "variant": "10x10_dense_deadend_ky_dy_1",
+      "source": "gridworld/fixtures/probe_mazes/r1_era/D3/10x10_dense_deadend_ky_dy_1.json",
+      "expected_mechanisms": [],
+      "maze_family": "D",
+      "maze_category": "D3",
+      "rank": 1,
+      "optimal_steps": 23,
+      "path_signature": "none",
+      "path_depth": 0,
+      "distractor_count": 1,
+      "five_option": false,
+      "topology": "dense",
+      "grid": "10x10",
+      "comparison_cell": "10x10:dense:1"
+    }
+  ]
+}

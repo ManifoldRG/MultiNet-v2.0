@@ -23,7 +23,11 @@ from interface.observation import (
     leading_summary_blocks,
 )
 from interface.prompt_strategies import (
+    MinimalInteractionRulesPromptStrategy,
+    MinimalInteractionRulesStandPromptStrategy,
     MinimalPromptStrategy,
+    MinimalStateChangeHintPromptStrategy,
+    MinimalSwitchHintPromptStrategy,
     PromptStrategy,
     StandardPromptStrategy,
     VerbosePromptStrategy,
@@ -40,6 +44,10 @@ logger = logging.getLogger(__name__)
 
 _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
+    "minimal_switch_hint": MinimalSwitchHintPromptStrategy,
+    "minimal_state_change_hint": MinimalStateChangeHintPromptStrategy,
+    "minimal_interaction_rules": MinimalInteractionRulesPromptStrategy,
+    "minimal_interaction_rules_stand": MinimalInteractionRulesStandPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
     "text_initial_maze": TextInitialMazePromptStrategy,

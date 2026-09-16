@@ -39,6 +39,31 @@ class MinimalPromptStrategy:
         )
 
 
+class _MinimalWithHintPromptStrategy(MinimalPromptStrategy):
+    """The minimal prompt plus one hint line after the Valid actions line."""
+
+    HINT = ""
+
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        return "\n".join([super().build_system_prompt(querying_suffix), self.HINT])
+
+
+class MinimalSwitchHintPromptStrategy(_MinimalWithHintPromptStrategy):
+    HINT = system_templates.SWITCH_TOGGLE_HINT
+
+
+class MinimalStateChangeHintPromptStrategy(_MinimalWithHintPromptStrategy):
+    HINT = system_templates.STATE_CHANGE_HINT
+
+
+class MinimalInteractionRulesPromptStrategy(_MinimalWithHintPromptStrategy):
+    HINT = system_templates.INTERACTION_RULES_HINT
+
+
+class MinimalInteractionRulesStandPromptStrategy(_MinimalWithHintPromptStrategy):
+    HINT = system_templates.INTERACTION_RULES_STAND_HINT
+
+
 class StandardPromptStrategy(MinimalPromptStrategy):
     def build_system_prompt(self, querying_suffix: str = "") -> str:
         del querying_suffix

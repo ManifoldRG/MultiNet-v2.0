@@ -1,0 +1,32 @@
+{
+  "description": "GPT-6 Astra harness probe 5 (2026-09-14): the smallest R1-panel maze with both a key and a switch (r1_M3_8x8_corridor_kr_sg_1, BFS-min 29: red key-door then switch-gate), source unchanged from the R1-frontier run.",
+  "selection": {
+    "source_set": "r1_balanced_03",
+    "maze_count": 1,
+    "note": "task entry copied verbatim from manifest.r1_balanced_03.json"
+  },
+  "tasks": [
+    {
+      "task_id": "r1_M3_8x8_corridor_kr_sg_1",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_kr_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M3/8x8_corridor_kr_sg_1.json",
+      "expected_mechanisms": [
+        "DR",
+        "g1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M3",
+      "rank": 10,
+      "optimal_steps": 29,
+      "path_signature": "K->S",
+      "path_depth": 2,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:1"
+    }
+  ]
+}

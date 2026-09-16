@@ -1,0 +1,36 @@
+{
+  "description": "Astra probe 5 (launched only if probe 4 fails): r1_M3_8x8_corridor_kr_sg_1 with the probe-4 paragraph plus 'You must stand on a key/switch to act on it.' appended after the action list. Everything else = the R1 cell.",
+  "manifest": "gridworld/fixtures/manifest.astra_probe_key_switch.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_model_params": "OpenAI reasoning models reject temperature/top_p, so none is sent (the temperature key is absent on purpose). max_tokens is sent as max_completion_tokens and covers reasoning + visible output, matching the Claude/Kimi R1 64k cap. image_detail=high so the maze render is not downscaled to the 512px low-detail tile. service_tier=flex bills at Batch rates ($5 in / $0.50 cached / $25 out per 1M for gpt-6-astra, developers.openai.com/api/docs/pricing 2026-09-12); flex capacity misses return 429 (not billed) and are retried with backoff \u2014 max_attempts=30 rides out a flex/TPM storm instead of ending the episode as agent_error. spend_cap_usd is a per-worker-process hard stop (reset on restart) \u2014 pair it with an OpenAI project budget limit. Calibration (2026-09-12): the one-maze Astra probe measured 295 mean output tokens/query, projecting the panel at $16-34 flex across the calibration/Opus-R1/Kimi-R1 queries-per-episode scenarios; a stress case (Opus-R1-like 1,098 tokens/query at Kimi-R1 queries/episode) reaches ~$98. Cap $150, team-approved 2026-09-13. The action vocabulary includes DROP on purpose (post-R1 harness fix; kept going forward). OpenAI reserves max_completion_tokens against the TPM limit at request time, so API_WORKER_CONCURRENCY must fit the key's usage tier (see scripts/estimate_frontier_cost.py output).",
+  "experiment_config": {
+    "prompting": "minimal_interaction_rules_stand",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 4,
+      "group": "openai-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    }
+  },
+  "_note_probe": "Local single-process probe (scripts.run_pipeline --run-config). Model settings identical to run_config.r1_frontier.json (the R1-frontier Astra run) except spend_cap_usd (per-process hard stop sized to this probe) and max_in_flight."
+}
