@@ -77,6 +77,77 @@ def test_each_mechanism_state_is_visibly_distinct(spec, camera, mechanism):
     assert _changed_px(frame_a, frame_b, _cell_region(pose, cell, wall_height)) >= MIN_CHANGED_PX
 
 
+ALL_CAMERAS = ["top_down", "chase", "fixed_angled", "first_person"]
+# One mechanism flips per case; the key case uses a used-up key (not carried),
+# so nothing but the key's own cell may change.
+LOCAL_CHANGES = {
+    "door": ((_state(), {"d1": False}), (_state(), {"d1": True}), (4, 2)),
+    "switch": ((_state(), CLOSED), (_state(active_switches={"s1"}), CLOSED), (2, 3)),
+    "gate": ((_state(), CLOSED), (_state(open_gates={"g1"}), CLOSED), (6, 2)),
+    "key": ((_state(), CLOSED), (_state(key_positions={}, collected_keys={"k1"}), CLOSED), (2, 1)),
+}
+
+
+@pytest.mark.parametrize("camera", ALL_CAMERAS)
+@pytest.mark.parametrize("mechanism", sorted(LOCAL_CHANGES))
+def test_state_change_repaints_only_its_own_cell(spec, camera, mechanism):
+    # A hidden part that is still drawn somewhere (e.g. a used key parked
+    # below the world origin) shows up as a change outside the cell.
+    a, b, cell = LOCAL_CHANGES[mechanism]
+    frame_a, pose, wall_height = _render(spec, camera, *a)
+    frame_b, _, _ = _render(spec, camera, *b)
+    rows, cols = _cell_region(pose, cell, wall_height)
+    outside = np.any(frame_a != frame_b, axis=-1)
+    outside[max(0, rows.start - 2) : rows.stop + 2, max(0, cols.start - 2) : cols.stop + 2] = False
+    assert int(outside.sum()) == 0
+
+
+def _drawn_geoms(renderer) -> set[str]:
+    scene = renderer._renderer.scene
+    return {
+        renderer.model.geom(int(scene.geoms[i].objid)).name
+        for i in range(scene.ngeom)
+        if scene.geoms[i].objtype == mujoco.mjtObj.mjOBJ_GEOM
+    }
+
+
+def _body_geoms(model, body: str) -> set[str]:
+    body_id = model.body(body).id
+    return {model.geom(g).name for g in range(model.ngeom) if model.geom_bodyid[g] == body_id}
+
+
+@pytest.mark.parametrize("camera", ALL_CAMERAS)
+@pytest.mark.parametrize("flipped", [False, True])
+def test_hidden_parts_are_not_drawn(spec, camera, flipped):
+    # Hidden parts must leave the draw list, not just move out of the way:
+    # a part moved below the floor still shows past the floor's edge.
+    if flipped:
+        state = _state(
+            key_positions={}, collected_keys={"k1"}, active_switches={"s1"}, open_gates={"g1"}
+        )
+        doors = {"d1": True}
+    else:
+        state, doors = _state(), CLOSED
+    renderer = SceneRenderer(spec, camera=camera, resolution=64)
+    try:
+        renderer.render(state, doors)
+        index = renderer.index
+        hidden: set[str] = set().union(*index.carried.values())
+        pairs = [
+            (index.door_closed["d1"], index.door_open["d1"]),
+            (index.switch_off["s1"], index.switch_on["s1"]),
+            (index.gate_closed["g1"], index.gate_open["g1"]),
+        ]
+        for shown_when_unflipped, shown_when_flipped in pairs:
+            hidden |= set(shown_when_unflipped if flipped else shown_when_flipped)
+        if flipped:
+            hidden |= _body_geoms(renderer.model, index.key_bodies["k1"])
+        drawn = _drawn_geoms(renderer)
+    finally:
+        renderer.close()
+    assert hidden and not (hidden & drawn)
+
+
 def test_carried_key_shows_on_the_agent(spec):
     empty, pose, wall_height = _render(spec, "top_down", _state())
     carrying, _, _ = _render(spec, "top_down", _state(key_positions={}, agent_carrying="red"))

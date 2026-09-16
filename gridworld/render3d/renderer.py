@@ -13,7 +13,7 @@ from gridworld.backends.base import GridState  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 
 from .cameras import DEFAULT_WALL_HEIGHT, PRESETS, CameraPose, pose_for  # noqa: E402
-from .scene import AGENT_GROUP, build_scene  # noqa: E402
+from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
 
@@ -83,8 +83,10 @@ class SceneRenderer:
         self._cam.azimuth = pose.azimuth
         self._cam.elevation = pose.elevation
         # MjvOption hides geom groups 3-5 by default: switch the agent's group
-        # on explicitly, and off for the first-person eye.
+        # on explicitly, and off for the first-person eye. The hidden group
+        # stays off whatever the default.
         self._option.geomgroup[AGENT_GROUP] = 0 if self._camera == "first_person" else 1
+        self._option.geomgroup[HIDDEN_GROUP] = 0
         self._renderer.update_scene(self.data, camera=self._cam, scene_option=self._option)
         return self._renderer.render().copy()
 

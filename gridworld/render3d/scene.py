@@ -16,10 +16,10 @@ from gridworld.task_spec import TaskSpecification
 from . import palette
 from .cameras import cell_center
 
-HIDE_DEPTH = 50.0  # hidden geoms / bodies are sunk this far below the floor
 KEY_HEIGHT = 0.10
 CARRIED_KEY_HEIGHT = 0.62
 AGENT_GROUP = 3  # agent geoms; hidden in first_person via MjvOption.geomgroup
+HIDDEN_GROUP = 5  # geoms of the inactive state; the renderer never draws this group
 KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
 
 
