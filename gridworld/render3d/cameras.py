@@ -137,7 +137,11 @@ def _heading(direction: int) -> tuple[float, float, float]:
     return yaw, math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
 
 
-def pose_for(preset: str, *, agent_cell, direction: int, maze_dims, wall_height: float) -> CameraPose:
+def pose_for(
+    preset: str, *, agent_cell, direction: int, maze_dims, wall_height: float, yaw: float | None = None
+) -> CameraPose:
+    """``yaw`` (degrees) overrides the heading's yaw for the views that turn
+    with the agent; the demo uses it to draw frames partway through a turn."""
     if preset not in PRESETS:
         raise ValueError(f"unknown camera preset {preset!r}; choose from {PRESETS}")
     width, height = maze_dims
@@ -154,7 +158,11 @@ def pose_for(preset: str, *, agent_cell, direction: int, maze_dims, wall_height:
             lambda d: CameraPose(centre, d, 90.0, FIXED_ELEVATION, False, PERSPECTIVE_FOVY), corners
         )
 
-    yaw, fx, fy = _heading(int(direction))
+    heading_yaw, fx, fy = _heading(int(direction))
+    if yaw is None:
+        yaw = heading_yaw
+    else:
+        fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     ax, ay, _ = cell_center(*agent_cell)
 
     if preset == "chase":

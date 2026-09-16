@@ -174,3 +174,33 @@ def test_registry_wraps_minigrid_by_default():
 def test_unknown_camera_rejected():
     with pytest.raises(ValueError, match="unknown camera preset"):
         get_backend("mujoco3d", camera="isometric")
+
+
+@pytest.mark.parametrize("camera", ["chase", "first_person"])
+def test_render_turn_animates_between_headings_and_touches_nothing(camera):
+    backend = get_backend("mujoco3d", camera=camera, resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    try:
+        backend.reset(seed=0)
+        before = backend.render().copy()  # facing east
+        backend.step(int(A.TURN_RIGHT))
+        after = backend.render().copy()  # facing south
+        state = backend.get_state().to_dict()
+        start, middle, end = (backend.render_turn(0, f) for f in (0.0, 0.5, 1.0))
+        assert start.tobytes() == before.tobytes()
+        assert end.tobytes() == after.tobytes()
+        assert middle.tobytes() not in (before.tobytes(), after.tobytes())
+        assert backend.get_state().to_dict() == state
+        assert backend.render().tobytes() == after.tobytes()
+    finally:
+        backend.close()
+
+
+def test_view_turns_with_agent_only_on_heading_following_cameras():
+    backend = get_backend("mujoco3d", resolution=RES)
+    turning = set()
+    for camera in backend.camera_names:
+        backend.set_camera(camera)
+        if backend.view_turns_with_agent:
+            turning.add(camera)
+    assert turning == {"chase", "first_person"}

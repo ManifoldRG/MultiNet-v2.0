@@ -8,11 +8,13 @@ only the common layer; mujoco loads lazily in configure().
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Optional
 
 import numpy as np
 
-from ..render3d.cameras import PRESETS
+from ..render3d.cameras import DIRECTION_YAW, PRESETS
+from ..render3d.hud import COMPASS_CAMERAS
 from ..render3d.scene import check_supported
 from ..task_spec import TaskSpecification
 from .base import AbstractGridBackend, GridState
@@ -89,6 +91,25 @@ class Mujoco3DBackend(AbstractGridBackend):
             self._frame = self._renderer.render(state, doors)
             self._frame_key = key
         return self._frame
+
+    def render_turn(self, from_direction: int, fraction: float) -> np.ndarray:
+        """Display-only frame ``fraction`` of the way through a turn from
+        ``from_direction`` to the current heading. State and the cached frame
+        are untouched; the compass shows whichever heading is nearer."""
+        if self._renderer is None:
+            raise RuntimeError("Backend must be configured before render_turn()")
+        fraction = min(max(float(fraction), 0.0), 1.0)
+        if fraction >= 1.0:
+            return self.render()
+        state = self.state_backend.get_state()
+        start = DIRECTION_YAW[int(from_direction)]
+        delta = (DIRECTION_YAW[int(state.agent_direction)] - start + 180.0) % 360.0 - 180.0
+        shown = state if fraction >= 0.5 else dataclasses.replace(state, agent_direction=int(from_direction))
+        return self._renderer.render(shown, self.state_backend.door_states(), yaw=start + fraction * delta)
+
+    @property
+    def view_turns_with_agent(self) -> bool:
+        return self._camera in COMPASS_CAMERAS
 
     def get_mission_text(self) -> str:
         return self.state_backend.get_mission_text()

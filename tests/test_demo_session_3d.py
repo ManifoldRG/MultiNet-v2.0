@@ -12,6 +12,7 @@ import pytest
 pytest.importorskip("mujoco")
 pytest.importorskip("minigrid")
 
+from demo.theme import GRID_DISPLAY_SIZE  # noqa: E402
 from render3d_test_utils import CORRIDOR, REPO_ROOT, make_play_session  # noqa: E402
 
 TOKENS = ["MOVE_FORWARD", "PICKUP", "TOGGLE", "MOVE_FORWARD", "MOVE_FORWARD", "MOVE_FORWARD"]
@@ -49,7 +50,8 @@ def test_3d_frame_and_camera_cycle_are_display_only(tmp_path):
     session = make_play_session(tmp_path, "mujoco3d", "top_down")
     try:
         assert session.backend.frame_is_grid_aligned is False
-        assert session.backend.render().shape == (512, 512, 3)
+        # rendered at the demo panel size, not stretched from 512
+        assert session.backend.render().shape == (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE, 3)
         assert session.camera_names == ("top_down", "chase", "fixed_angled", "first_person")
         assert session.cycle_camera() == "chase"
         assert session.backend.camera == "chase"
@@ -101,7 +103,7 @@ def test_load_task_survives_a_maze_the_backend_cannot_render(tmp_path, capsys):
         assert session.task_path == prev_path
         assert session.task_spec.task_id == prev_task_id
         assert session.task_index == prev_index
-        assert session.backend.render().shape == (512, 512, 3)
+        assert session.backend.render().shape == (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE, 3)
         session._dispatch_token("MOVE_FORWARD")
         assert session.state.step_count == 1
 

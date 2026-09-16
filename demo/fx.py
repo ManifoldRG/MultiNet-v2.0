@@ -297,6 +297,44 @@ def _sin_pulse(t: float) -> float:
     return math.sin(max(0.0, min(1.0, t)) * math.pi)
 
 
+TURN_ANIM_MS = 250
+
+
+@dataclass
+class TurnAnimation:
+    """Timing for the 3D demo's turn animation: while it runs, the UI draws
+    ``backend.render_turn(direction, fraction)`` instead of the final frame.
+    Display-only: in-between frames are never recorded or sent to a model."""
+
+    _from_direction: Optional[int] = None
+    _start_ms: int = 0
+
+    def maybe_start(self, backend, prev_state, new_state, *, now_ms: int) -> bool:
+        """Start when a 3D view that turns with the agent sees a new heading."""
+        if not getattr(backend, "view_turns_with_agent", False):
+            return False
+        if prev_state is None or new_state is None:
+            return False
+        if int(prev_state.agent_direction) == int(new_state.agent_direction):
+            return False
+        self._from_direction = int(prev_state.agent_direction)
+        self._start_ms = now_ms
+        return True
+
+    def frame_request(self, now_ms: int) -> Optional[tuple[int, float]]:
+        """(from_direction, fraction) while running, else None."""
+        if self._from_direction is None:
+            return None
+        elapsed = now_ms - self._start_ms
+        if elapsed >= TURN_ANIM_MS:
+            self._from_direction = None
+            return None
+        return self._from_direction, max(0, elapsed) / TURN_ANIM_MS
+
+    def clear(self) -> None:
+        self._from_direction = None
+
+
 @dataclass
 class _Clip:
     kind: str

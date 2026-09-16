@@ -29,6 +29,7 @@ from gridworld.backends.base import GridState
 from gridworld.actions import MiniGridActions
 
 from demo.compare import R1ResultCatalog, r1_task_id
+from demo.theme import GRID_DISPLAY_SIZE
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
@@ -206,6 +207,10 @@ class MiniGridPlaySession:
 
         # Backend for environment logic (and the frame the human sees).
         backend_kwargs: dict = {"render_mode": "rgb_array"} if backend == "minigrid" else {}
+        if backend == "mujoco3d":
+            # Render at the panel size rather than stretching the 512 px
+            # model-facing default (display-only).
+            backend_kwargs["resolution"] = GRID_DISPLAY_SIZE
         if camera is not None:
             backend_kwargs["camera"] = camera
         self.backend = get_backend(backend, **backend_kwargs)

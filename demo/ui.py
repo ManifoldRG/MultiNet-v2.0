@@ -42,7 +42,7 @@ except ImportError:
 
 from demo.session import MiniGridPlaySession, ProgressEvent, SETTINGS_AXES
 from demo.sounds import DemoSounds, sfx_for_dispatch
-from demo.fx import DemoFx
+from demo.fx import DemoFx, TurnAnimation
 from demo.compare import R1ResultCatalog, r1_task_id
 from demo.r1_tasks import restrict_to_r1_tasks
 from demo import icons
@@ -180,6 +180,7 @@ class MiniGridPlayerUI:
         # cosmetic -- never touch env state or observations.
         self.sounds = DemoSounds()
         self.fx = DemoFx()
+        self.turn_anim = TurnAnimation()  # 3D views that turn with the agent
         self.r1_catalog = R1ResultCatalog()
         restrict_to_r1_tasks(self.session, self.r1_catalog)
 
@@ -199,6 +200,7 @@ class MiniGridPlayerUI:
     def _reset(self) -> None:
         self.sounds.play("restart")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._checkpoint_trajectory()
         self.session._reset_env()
         self.model_view_scroll = 0
@@ -208,6 +210,7 @@ class MiniGridPlayerUI:
     def _switch_task(self, delta: int) -> None:
         self.sounds.play("navigate")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._load_adjacent_task(delta)
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -232,6 +235,7 @@ class MiniGridPlayerUI:
 
         if not session.backend.is_configured or prev_state is None:
             return
+        self.turn_anim.maybe_start(session.backend, prev_state, session.state, now_ms=pygame.time.get_ticks())
         self.fx.trigger(
             now_ms=pygame.time.get_ticks(),
             session=session,
@@ -550,8 +554,10 @@ class MiniGridPlayerUI:
         reads as the centerpiece rather than a flat inset image. Display-only
         FX (nudge / cell flash / fade) are composited here and never touch
         the env's own render buffer."""
-        rgb_array = self.session.backend.render()
-        if self.session.backend.frame_is_grid_aligned:
+        turn = self.turn_anim.frame_request(pygame.time.get_ticks())
+        backend = self.session.backend
+        rgb_array = backend.render_turn(*turn) if turn else backend.render()
+        if backend.frame_is_grid_aligned:
             rgb_array = recolor_walls(rgb_array)
         h, w, _c = rgb_array.shape
         surf = pygame.image.frombuffer(rgb_array.tobytes(), (w, h), "RGB")
@@ -1328,6 +1334,7 @@ class MiniGridPlayerUI:
 
         if key == pygame.K_v and session.camera_names:
             session.cycle_camera()
+            self.turn_anim.clear()
             self.sounds.play("navigate")
             return None
 

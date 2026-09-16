@@ -66,14 +66,17 @@ class SceneRenderer:
             self.close()
             self._build()
 
-    def render(self, state: GridState, door_states: dict[str, bool]) -> np.ndarray:
-        self._sync.apply(self.data, state, door_states)
+    def render(self, state: GridState, door_states: dict[str, bool], *, yaw: float | None = None) -> np.ndarray:
+        """``yaw`` (degrees) overrides the heading's yaw for the agent and the
+        views that turn with it (frames partway through a turn)."""
+        self._sync.apply(self.data, state, door_states, yaw=yaw)
         pose = pose_for(
             self._camera,
             agent_cell=tuple(state.agent_position),
             direction=int(state.agent_direction),
             maze_dims=(self.index.width, self.index.height),
             wall_height=self.index.wall_height,
+            yaw=yaw,
         )
         self.last_pose = pose
         # Free-camera projection is model-global: set it per frame.

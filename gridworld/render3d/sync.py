@@ -59,7 +59,10 @@ class SceneState:
         for gid in geom_ids:
             self.model.geom_group[gid] = self._home_group[gid] if visible else HIDDEN_GROUP
 
-    def apply(self, data: mujoco.MjData, state: GridState, door_states: dict[str, bool]) -> None:
+    def apply(
+        self, data: mujoco.MjData, state: GridState, door_states: dict[str, bool], *, yaw: float | None = None
+    ) -> None:
+        """``yaw`` (degrees) overrides the agent's heading yaw (turn animation)."""
         for door_id, (closed, opened) in self._doors.items():
             is_open = bool(door_states.get(door_id, False))
             self._show(closed, not is_open)
@@ -83,6 +86,6 @@ class SceneState:
             self._show(geom_ids, colour == carrying)
         ax, ay, _ = cell_center(*state.agent_position)
         data.mocap_pos[self._agent] = (ax, ay, 0.0)
-        yaw = math.radians(DIRECTION_YAW[int(state.agent_direction)])
-        data.mocap_quat[self._agent] = (math.cos(yaw / 2.0), 0.0, 0.0, math.sin(yaw / 2.0))
+        half = math.radians(DIRECTION_YAW[int(state.agent_direction)] if yaw is None else yaw) / 2.0
+        data.mocap_quat[self._agent] = (math.cos(half), 0.0, 0.0, math.sin(half))
         mujoco.mj_kinematics(self.model, data)  # mocap edits -> world poses
