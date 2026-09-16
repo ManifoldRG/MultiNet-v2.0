@@ -194,6 +194,16 @@ def test_agent_silhouette_points_where_it_faces(spec, camera, direction):
     assert width(front) < 0.75 * width(~front)
 
 
+@pytest.mark.parametrize("camera", ALL_CAMERAS)
+def test_compass_is_drawn_only_on_views_that_turn(spec, camera):
+    from gridworld.render3d.hud import COMPASS_CAMERAS, DISC, compass_box
+
+    frame, _, _ = _render(spec, camera, _state())
+    top, left, bottom, right = compass_box(RES)
+    disc_px = int((frame[top:bottom, left:right] == np.array(DISC, np.uint8)).all(axis=-1).sum())
+    assert (disc_px > 0) == (camera in COMPASS_CAMERAS)
+
+
 def test_agent_hidden_only_in_first_person(spec):
     top, _, _ = _render(spec, "top_down", _state())
     first, _, _ = _render(spec, "first_person", _state())

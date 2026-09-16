@@ -13,6 +13,7 @@ from gridworld.backends.base import GridState  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 
 from .cameras import DEFAULT_WALL_HEIGHT, PRESETS, CameraPose, pose_for  # noqa: E402
+from .hud import COMPASS_CAMERAS, draw_compass  # noqa: E402
 from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
@@ -88,7 +89,10 @@ class SceneRenderer:
         self._option.geomgroup[AGENT_GROUP] = 0 if self._camera == "first_person" else 1
         self._option.geomgroup[HIDDEN_GROUP] = 0
         self._renderer.update_scene(self.data, camera=self._cam, scene_option=self._option)
-        return self._renderer.render().copy()
+        frame = self._renderer.render().copy()
+        if self._camera in COMPASS_CAMERAS:
+            frame = draw_compass(frame, int(state.agent_direction))
+        return frame
 
     def close(self) -> None:
         # Explicit close avoids EGL "Exception ignored" noise at interpreter exit.
