@@ -10,6 +10,7 @@ xy-plane (0 = +x/east, 90 = +y/north), pitched ``elevation`` degrees
 
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass
 
@@ -31,8 +32,6 @@ FIRST_PERSON_FOVY = 90.0
 FIT_MARGIN = 0.06  # fraction of the half-frame kept clear around the maze
 FIT_TOLERANCE = 1e-9  # float-rounding slack: a corner placed exactly on the margin still fits
 CHASE_ELEVATION = -55.0
-CHASE_LEAD = 1.0  # cells ahead of the agent the chase camera aims at...
-CHASE_AGENT_WEIGHT = 0.5  # ...blended this far from the maze centre
 FIXED_ELEVATION = -50.0
 EYE_HEIGHT = 0.55
 FIRST_PERSON_ELEVATION = -12.0
@@ -117,6 +116,20 @@ def _fit_distance(make_pose, points, lo: float = 0.5, hi: float = 500.0) -> Came
     return make_pose(hi)
 
 
+@functools.lru_cache(maxsize=64)
+def _chase_distance(width: int, height: int, wall_height: float) -> float:
+    """One chase distance per maze: aimed at the maze centre, it fits the whole
+    maze at every heading, so steps never re-zoom and turns only rotate."""
+    centre = (width / 2.0, -height / 2.0, 0.0)
+    corners = maze_corners(width, height, wall_height)
+    return max(
+        _fit_distance(
+            lambda d, a=yaw: CameraPose(centre, d, a, CHASE_ELEVATION, False, PERSPECTIVE_FOVY), corners
+        ).distance
+        for yaw in DIRECTION_YAW.values()
+    )
+
+
 def _heading(direction: int) -> tuple[float, float, float]:
     if direction not in DIRECTION_YAW:
         raise ValueError(f"agent_direction must be 0-3, got {direction!r}")
@@ -145,15 +158,8 @@ def pose_for(preset: str, *, agent_cell, direction: int, maze_dims, wall_height:
     ax, ay, _ = cell_center(*agent_cell)
 
     if preset == "chase":
-        lead_x, lead_y = ax + CHASE_LEAD * fx, ay + CHASE_LEAD * fy
-        lookat = (
-            centre[0] + CHASE_AGENT_WEIGHT * (lead_x - centre[0]),
-            centre[1] + CHASE_AGENT_WEIGHT * (lead_y - centre[1]),
-            0.0,
-        )
-        return _fit_distance(
-            lambda d: CameraPose(lookat, d, yaw, CHASE_ELEVATION, False, PERSPECTIVE_FOVY), corners
-        )
+        distance = _chase_distance(width, height, wall_height)
+        return CameraPose(centre, distance, yaw, CHASE_ELEVATION, False, PERSPECTIVE_FOVY)
 
     # first_person: the free camera sits exactly at the eye (lookat - distance*forward).
     forward, _, _ = basis(yaw, FIRST_PERSON_ELEVATION)

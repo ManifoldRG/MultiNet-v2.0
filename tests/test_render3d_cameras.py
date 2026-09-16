@@ -64,10 +64,26 @@ def test_auto_fit_keeps_whole_maze_in_frame_and_is_tight(preset, dims):
     width, height = dims
     corners = maze_corners(width, height, 0.6)
     for cell in [(1, 1), (width - 2, 1), (1, height - 2), (width - 2, height - 2)]:
+        tight_somewhere = False
         for direction in range(4):
             pose = pose_for(preset, agent_cell=cell, direction=direction, maze_dims=dims, wall_height=0.6)
             assert fits(pose, corners)
-            assert not fits(dataclasses.replace(pose, distance=pose.distance * 0.9), corners)
+            tight_somewhere |= not fits(dataclasses.replace(pose, distance=pose.distance * 0.9), corners)
+        # chase keeps one distance for all headings, so it is tight at its worst one
+        assert tight_somewhere
+
+
+@pytest.mark.parametrize("dims", DIMS)
+def test_chase_zoom_and_aim_never_change_within_a_maze(dims):
+    # Playtest: the view breathed on every step. Only a turn may move it.
+    width, height = dims
+    poses = [
+        pose_for("chase", agent_cell=cell, direction=direction, maze_dims=dims, wall_height=0.6)
+        for cell in [(1, 1), (width - 2, 1), (1, height - 2), (width // 2, height // 2)]
+        for direction in range(4)
+    ]
+    assert len({(p.lookat, p.distance, p.elevation, p.fovy) for p in poses}) == 1
+    assert {p.azimuth for p in poses} == set(DIRECTION_YAW.values())
 
 
 def test_first_person_sits_at_agent_eye_facing_heading():
