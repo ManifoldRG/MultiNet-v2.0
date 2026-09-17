@@ -26,7 +26,16 @@ from prompting_experiments.prompt_templates import observation as observation_te
 from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3", "text_summary", "text_summary_and_last3"]
+ContextWindow = Literal[
+    "current", "last3", "text_summary", "text_summary_and_last3", "full"
+]
+
+# Approximate history budget: Anthropic's exact tokenizer is not available in
+# this package. Four characters per text token plus 256 tokens per image keeps
+# growth bounded; revisit these estimates when exact multimodal tokenization is
+# available.
+_DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
+_IMAGE_HISTORY_TOKEN_ESTIMATE = 256
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -38,8 +47,23 @@ def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def recent_history_steps(
-    transcript: list[dict[str, Any]], context_window: ContextWindow
+    transcript: list[dict[str, Any]],
+    context_window: ContextWindow,
+    *,
+    observation: ObservationMode = "text_only",
+    max_history_tokens: int = _DEFAULT_MAX_HISTORY_TOKENS,
 ) -> list[dict[str, Any]]:
+    if context_window == "full":
+        steps = history_steps(transcript)
+        selected: list[dict[str, Any]] = []
+        used_tokens = 0
+        for step in reversed(steps):
+            step_tokens = _history_step_token_estimate(step, observation)
+            if selected and used_tokens + step_tokens > max_history_tokens:
+                break
+            selected.append(step)
+            used_tokens += step_tokens
+        return list(reversed(selected))
     if context_window not in ("last3", "text_summary_and_last3"):
         return []
     return history_steps(transcript)[-3:]
@@ -50,6 +74,7 @@ def history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
+    max_history_tokens: int = _DEFAULT_MAX_HISTORY_TOKENS,
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
@@ -59,7 +84,12 @@ def history_text(
             # leading_summary_blocks) so it can precede the last3 image
             # blocks in the message content list.
             return ""
-        recent_text = _last3_history_text(context_window, transcript)
+        recent_text = _last3_history_text(
+            context_window,
+            transcript,
+            observation=observation,
+            max_history_tokens=max_history_tokens,
+        )
         if observation == "image_text":
             # Same reason: the summary precedes the last3 image blocks, so
             # it is supplied by leading_summary_blocks instead of here.
@@ -70,7 +100,12 @@ def history_text(
         return f"{summary}\n\n{recent_text}"
     if observation not in ("text_only", "image_text"):
         return ""
-    return _last3_history_text(context_window, transcript)
+    return _last3_history_text(
+        context_window,
+        transcript,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
 
 
 def leading_summary_blocks(
@@ -113,12 +148,25 @@ def _history_record_action(rec: dict[str, Any]) -> str:
 def _last3_history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    *,
+    observation: ObservationMode = "text_only",
+    max_history_tokens: int = _DEFAULT_MAX_HISTORY_TOKENS,
 ) -> str:
-    recs = recent_history_steps(transcript, context_window)
+    recs = recent_history_steps(
+        transcript,
+        context_window,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
     if not recs:
         return ""
 
-    lines = [observation_templates.RECENT_HISTORY_HEADER]
+    header = (
+        "Full history (oldest first):"
+        if context_window == "full"
+        else observation_templates.RECENT_HISTORY_HEADER
+    )
+    lines = [header]
     for rec in recs:
         row, col = rec["position_after_row_col"]
         lines.append(
@@ -346,10 +394,16 @@ def history_content_blocks(
     observation: ObservationMode,
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    max_history_tokens: int = _DEFAULT_MAX_HISTORY_TOKENS,
 ) -> list[dict]:
     if observation not in ("image_only", "image_text"):
         return []
-    recs = recent_history_steps(transcript, context_window)
+    recs = recent_history_steps(
+        transcript,
+        context_window,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
     if not recs:
         return []
 
@@ -376,7 +430,29 @@ def history_content_blocks(
     if not blocks:
         return []
 
-    return [{"type": "text", "text": user_templates.LAST3_USER_PROMPT["header"]}] + blocks
+    header = (
+        "Full history (oldest first):\n"
+        if context_window == "full"
+        else user_templates.LAST3_USER_PROMPT["header"]
+    )
+    return [{"type": "text", "text": header}] + blocks
+
+
+def _history_step_token_estimate(
+    step: dict[str, Any], observation: ObservationMode
+) -> int:
+    position = step.get("position_after_row_col", (0, 0))
+    text = observation_templates.RECENT_HISTORY_STEP.format(
+        row=int(position[0]),
+        col=int(position[1]),
+        facing=step.get("facing_after", ""),
+        action=_history_record_action(step),
+        feedback=step.get("prompt_feedback", ""),
+    )
+    estimate = max(1, (len(text) + 3) // 4)
+    if observation in ("image_only", "image_text") and step.get("_decision_frame_rgb") is not None:
+        estimate += _IMAGE_HISTORY_TOKEN_ESTIMATE
+    return estimate
 
 
 def current_observation_text(
