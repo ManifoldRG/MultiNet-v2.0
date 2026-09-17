@@ -15,7 +15,7 @@ class ExperimentConfig:
     context_window: Literal[
         "current", "last3", "text_summary", "text_summary_and_last3", "full"
     ] = "last3"
-    max_history_tokens: int = 100_000
+    max_history_tokens: int = 1_000_000
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
     chat_history: Literal["stateless", "rolling", "full"] = "stateless"
     chat_turns_max: int = 3

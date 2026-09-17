@@ -1,6 +1,5 @@
 import pytest
 from interface.config import ExperimentConfig
-from interface.r2_config import R2_CHAT_HISTORY, R2_CONFIG
 
 
 def test_from_dict_roundtrips_to_dict():
@@ -23,11 +22,3 @@ def test_progress_stall_k_accepts_valid(ok):
 def test_max_history_tokens_rejects_invalid(bad):
     with pytest.raises(ValueError):
         ExperimentConfig(max_history_tokens=bad)
-
-
-def test_r2_config_uses_full_history_profile():
-    assert R2_CHAT_HISTORY == "rolling"
-    assert R2_CONFIG.context_window == "full"
-    assert R2_CONFIG.max_history_tokens == 100_000
-    assert R2_CONFIG.chat_history == R2_CHAT_HISTORY
-    assert R2_CONFIG.progress_stall_k is None

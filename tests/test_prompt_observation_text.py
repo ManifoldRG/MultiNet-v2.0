@@ -514,6 +514,16 @@ def test_prompting_variants_share_image_only_user_prompt():
     assert "Last result:" not in standard_text
     assert "Hints:" not in standard_text
 
+def test_step_budget_line_present_in_user_prompt():
+    """Step budget awareness: the user prompt should surface the remaining
+    step count so the model can plan for efficiency. The default maze has
+    max_steps=100 and the initial state is at step_count=0, so the first
+    prompt should read 'Step 1 of 100 (100 remaining).'"""
+    cfg = ExperimentConfig(observation="text_only", context_window="last3")
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, [])
+
+    assert "Step 1 of 100 (100 remaining)." in prompt_text
 
 def test_each_set_has_exactly_one_baseline_equal_to_default():
     # After the fair-default rebase the baseline arm of most sets carries an

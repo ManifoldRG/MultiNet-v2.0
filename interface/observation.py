@@ -34,7 +34,7 @@ ContextWindow = Literal[
 # this package. Four characters per text token plus 256 tokens per image keeps
 # growth bounded; revisit these estimates when exact multimodal tokenization is
 # available.
-_DEFAULT_MAX_HISTORY_TOKENS = 100_000
+_DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
 _IMAGE_HISTORY_TOKEN_ESTIMATE = 256
 
 
