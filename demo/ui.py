@@ -129,7 +129,7 @@ class MiniGridPlayerUI:
         self.show_start_screen = True
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
-        self.settings_editable = False
+        self.settings_editable = True
         self.show_moves_bar = False
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -1083,6 +1083,7 @@ class MiniGridPlayerUI:
 
         y = self._draw_wrapped_text(
             f"observation={session.config.observation} · "
+            f"observation_text_format={session.config.observation_text_format} · "
             f"context_window={session.config.context_window}",
             x, y, self.font_small_bold, COLOR_TEXT, inner_w,
         )

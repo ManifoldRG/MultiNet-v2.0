@@ -386,12 +386,16 @@ def current_observation_text(
     *,
     include_description: bool = False,
     include_facing: bool = False,
+    observation_text_format: str = "coords",
 ) -> str:
     if observation == "image_only":
         return ""
     if not include_description:
         return ""
-    return render_user_observation_text(task_spec, state, include_facing=include_facing)
+    return render_user_observation_text(
+        task_spec, state, include_facing=include_facing,
+        observation_text_format=observation_text_format,
+    )
 
 
 def current_image_blocks(observation: ObservationMode, rgb: np.ndarray | None) -> list[dict]:

@@ -50,6 +50,7 @@ GATE_LINE = (
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
 CURRENT_AGENT_POSITION_LINE = "You are at {position}."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."
+CURRENT_KEYS_COLLECTED_LINE = "Keys collected: {keys}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates):"
 NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, or gates in the current state description.)"
 

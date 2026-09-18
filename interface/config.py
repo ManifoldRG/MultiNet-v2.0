@@ -10,6 +10,7 @@ class ExperimentConfig:
 
     prompting: Literal["minimal", "standard", "verbose", "text_initial_maze"] = "standard"
     observation: Literal["text_only", "image_text", "image_only"] = "image_text"
+    observation_text_format: Literal["coords", "json", "ascii"] = "coords"
     include_current_observation_description: bool = True
     observation_text_includes_facing: bool = True
     context_window: Literal[

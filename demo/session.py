@@ -93,6 +93,7 @@ SETTINGS_AXES: tuple[tuple[str, str, Optional[tuple[str, ...]]], ...] = (
     ("3", "include_current_observation_description", None),
     ("4", "observation_text_includes_facing", None),
     ("5", "action_space", ("egocentric", "cardinal")),
+    ("6", "observation_text_format", ("coords", "json", "ascii")),
 )
 
 
@@ -479,8 +480,12 @@ class MiniGridPlaySession:
         transcript = self._model_transcript()
         sections: list[tuple[str, str]] = []
 
+        fmt = self.config.observation_text_format
         if obs in ("text_only", "image_text"):
-            sections.append(("Initial maze (system prompt)", render_initial_maze_text(self.task_spec)))
+            sections.append(("Initial maze (system prompt)", render_initial_maze_text(
+                self.task_spec, observation_text_format=fmt,
+                include_facing=self.config.observation_text_includes_facing,
+            )))
         else:
             sections.append(
                 ("Initial maze (system prompt)", "(not sent to the model in image_only mode)")
@@ -492,6 +497,7 @@ class MiniGridPlaySession:
             self.state,
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
+            observation_text_format=fmt,
         )
         if obs_text:
             sections.append(("Current observation", obs_text))

@@ -153,10 +153,16 @@ class ExperimentRunner:
         # it with the rendered maze. Otherwise, for text observations append
         # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
         # context for text-only or image+text modes.
+        maze = dict(
+            observation_text_format=self.config.observation_text_format,
+            include_facing=self.config.observation_text_includes_facing,
+        )
         if "{maze_text}" in system_prompt:
-            system_prompt = system_prompt.format(maze_text=render_initial_maze_text(self.task_spec))
+            system_prompt = system_prompt.format(
+                maze_text=render_initial_maze_text(self.task_spec, **maze)
+            )
         elif self.config.observation in ("text_only", "image_text"):
-            maze_text = render_initial_maze_text(self.task_spec)
+            maze_text = render_initial_maze_text(self.task_spec, **maze)
             system_prompt = (
                 system_prompt
                 + "\n\n"
@@ -222,7 +228,11 @@ class ExperimentRunner:
         """The one-shot ICL example blocks (example image + solution), or []."""
         if self.config.in_context_learning == "one_shot":
             from interface.one_shot import one_shot_content_blocks
-            return one_shot_content_blocks(obs)
+            return one_shot_content_blocks(
+                obs,
+                observation_text_format=self.config.observation_text_format,
+                include_facing=self.config.observation_text_includes_facing,
+            )
         return []
 
     def _build_message(
@@ -244,6 +254,7 @@ class ExperimentRunner:
             state,
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
+            observation_text_format=self.config.observation_text_format,
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
