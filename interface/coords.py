@@ -44,8 +44,10 @@ def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:
 
 
 def maze_rows_cols(task_spec: TaskSpecification) -> tuple[int, int]:
+    # ``dimensions`` counts the border wall both backends ring the grid with, so
+    # the playable interior is two smaller on each axis.
     width, height = task_spec.maze.dimensions
-    return height, width
+    return height - 2, width - 2
 
 
 def wall_cells(task_spec: TaskSpecification) -> set[tuple[int, int]]:
