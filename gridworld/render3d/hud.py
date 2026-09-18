@@ -31,6 +31,7 @@ NEEDLE = (228, 58, 50)
 
 _CLOCKWISE = "NESW"
 _CLOCKWISE_INDEX = {3: 0, 0: 1, 1: 2, 2: 3}  # GridState.agent_direction: 0=E 1=S 2=W 3=N
+NORTH = 3  # the "up" a north-up view shows
 
 # Letter strokes in a unit box (x right, y down).
 _GLYPHS = {

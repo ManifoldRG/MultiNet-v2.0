@@ -195,13 +195,26 @@ def test_agent_silhouette_points_where_it_faces(spec, camera, direction):
 
 
 @pytest.mark.parametrize("camera", ALL_CAMERAS)
-def test_compass_is_drawn_only_on_views_that_turn(spec, camera):
-    from gridworld.render3d.hud import COMPASS_CAMERAS, DISC, compass_box
+def test_every_3d_view_carries_a_compass(spec, camera):
+    # Every 3D arm of an ablation should differ only in viewpoint, so all four
+    # cameras draw one; north-up views just always show north at the top.
+    from gridworld.render3d.hud import DISC, compass_box
 
     frame, _, _ = _render(spec, camera, _state())
     top, left, bottom, right = compass_box(RES)
     disc_px = int((frame[top:bottom, left:right] == np.array(DISC, np.uint8)).all(axis=-1).sum())
-    assert (disc_px > 0) == (camera in COMPASS_CAMERAS)
+    assert disc_px > 0
+
+
+@pytest.mark.parametrize("camera", ALL_CAMERAS)
+def test_compass_follows_the_view_not_always_the_agent(spec, camera):
+    from gridworld.render3d.hud import compass_box, turns_with_agent
+
+    top, left, bottom, right = compass_box(RES)
+    east, _, _ = _render(spec, camera, _state(agent_direction=0))
+    north, _, _ = _render(spec, camera, _state(agent_direction=3))
+    box_changed = bool((east[top:bottom, left:right] != north[top:bottom, left:right]).any())
+    assert box_changed == turns_with_agent(camera)
 
 
 def test_agent_hidden_only_in_first_person(spec):

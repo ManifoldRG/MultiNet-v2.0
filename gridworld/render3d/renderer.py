@@ -21,7 +21,7 @@ from .cameras import (  # noqa: E402
     tilt_pose,
     view_wall_height,
 )
-from .hud import draw_compass, turns_with_agent  # noqa: E402
+from .hud import NORTH, draw_compass, turns_with_agent  # noqa: E402
 from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
@@ -124,8 +124,11 @@ class SceneRenderer:
         self._option.geomgroup[HIDDEN_GROUP] = 0
         self._renderer.update_scene(self.data, camera=self._cam, scene_option=self._option)
         frame = self._renderer.render().copy()
-        if self.view_turns_with_agent:
-            frame = draw_compass(frame, int(state.agent_direction))
+        # Every 3D view carries a compass, showing what is up in THIS frame: the
+        # agent's heading where the view turns with it, north otherwise. Arms of
+        # an ablation then differ only in viewpoint.
+        up = int(state.agent_direction) if self.view_turns_with_agent else NORTH
+        frame = draw_compass(frame, up)
         return frame
 
     def close(self) -> None:

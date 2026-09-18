@@ -2268,3 +2268,49 @@ def test_baseline_thinking_fixture_declares_its_unequal_caps():
     path = _FIXTURES / "run_config.conditional_baseline_thinking_claude_kimi_qwen.json"
     rc = load_run_config(path)
     assert rc.get("allow_unequal_max_tokens") is True
+
+
+def test_run_from_config_renders_through_the_3d_backend(tmp_path):
+    """A render block swaps the drawing layer only: same mechanics, its own
+    artifact directory, and frames at the 2D pixel budget."""
+    pytest.importorskip("mujoco")
+    task = default_maze_path("V01_empty_room.json")
+    run_config = {
+        "render": {"backend": "mujoco3d", "camera": "top_down"},
+        "models": {
+            "stub": {"provider": "claude", "model": "stub-model", "tasks": [str(task)]}
+        },
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="cfg3d",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = (
+        artifacts / "runs" / "validation_10_v01_empty_room" / "mujoco3d_top_down_grid"
+        / "stub-model" / "seed_0" / "default"
+    )
+    sidecar = load_json(run_dir / "run_inputs.json")
+    assert sidecar["backend"] == "mujoco3d_top_down_grid"
+    assert sidecar["render"] == {"backend": "mujoco3d", "camera": "top_down", "resolution": "grid"}
+    episode = load_json(run_dir / "episode.json")
+    assert episode["render"]["camera"] == "top_down"
+    assert episode["steps_used"] > 0
+
+    from PIL import Image
+
+    dims = max(task_spec_from_payload(load_json(task)).maze.dimensions)
+    frame = sorted((run_dir / "frames").glob("*.png"))[0]
+    assert Image.open(frame).size == (32 * dims, 32 * dims)

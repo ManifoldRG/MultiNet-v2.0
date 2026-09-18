@@ -31,6 +31,7 @@ from typing import Any, Callable, Iterable, Optional
 from prompting_experiments import CONDITION_SETS, iter_condition_configs
 from scorer import compute_runtime_score, load_scorer_config, score_task_file
 from scorer.config import SCORER_VERSION, ScorerConfig
+from gridworld.render_settings import RenderSettings
 from scorer.io import stable_hash, task_spec_from_payload
 
 from pipeline import episode_metrics, reports
@@ -466,8 +467,10 @@ def _score_suite(
 # --------------------------------------------------------------------------- #
 # Stages 3-4 — runs + runtime score (per model)
 # --------------------------------------------------------------------------- #
-def _run_dir(artifacts_root: Path, task_id: str, model: str, seed: int, condition: str) -> Path:
-    return artifacts_root / "runs" / task_id / "minigrid" / model / f"seed_{seed}" / condition
+def _run_dir(
+    artifacts_root: Path, task_id: str, model: str, seed: int, condition: str, backend: str = "minigrid"
+) -> Path:
+    return artifacts_root / "runs" / task_id / backend / model / f"seed_{seed}" / condition
 
 
 def _run_one_model(
@@ -486,6 +489,7 @@ def _run_one_model(
     prompt_variant: Optional[str] = None,
     base_overrides: Optional[dict] = None,
     phase: Optional[dict[str, Any]] = None,
+    render: Optional["RenderSettings"] = None,
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
     condition_configs = _condition_configs(
@@ -520,6 +524,7 @@ def _run_one_model(
                     base_overrides=base_overrides,
                     model_config=model_config,
                     phase=phase,
+                    render=render,
                     force=force,
                 )
                 if result is None:
@@ -573,6 +578,7 @@ def _prepare_unit_run(
     prompt_variant: str,
     experiment_config: Any,
     conditions: Optional[str] = None,
+    render: Optional["RenderSettings"] = None,
 ) -> _PreparedUnitRun:
     """Resolve the run dir, inputs hash, and the run_inputs/run_score writers for
     one unit. Pure setup — no model call, no scoring happens here.
@@ -588,7 +594,8 @@ def _prepare_unit_run(
         (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
     )
     runtime_spec = _runtime_capped_spec(spec, canonical)
-    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant)
+    render = render or RenderSettings()
+    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant, render.label)
     episode_path = run_dir / "episode.json"
     sidecar_path = run_dir / "run_inputs.json"
     run_score_path = run_dir / "run_score.json"
@@ -602,7 +609,7 @@ def _prepare_unit_run(
         runtime_spec,
         model_name,
         seed,
-        "minigrid",
+        render.label,
         condition_set=conditions,
         prompt_variant=prompt_variant,
         experiment_config=experiment_config,
@@ -618,11 +625,12 @@ def _prepare_unit_run(
             "model_config": _jsonable(model_config or {}),
             "runtime_model_config": _runtime_model_config(model_config),
             "seed": seed,
-            "backend": "minigrid",
+            "backend": render.label,
             "condition": prompt_variant,
             "condition_set": conditions,
             "prompt_variant": prompt_variant,
             "experiment_config": _experiment_config_payload(experiment_config),
+            **({} if render.backend == "minigrid" else {"render": dataclasses.asdict(render)}),
             "runtime_max_steps_cap": {
                 "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
                 "optimal_steps": _canonical_optimal_steps(canonical),
@@ -642,7 +650,8 @@ def _prepare_unit_run(
     ) -> tuple[dict[str, Any], Optional[float]]:
         metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
         enriched = episode_metrics.enrich_run_for_scoring(
-            episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
+            episode, manifest_row, agent_or_model=model_name, seed=seed,
+            backend=render.label, metrics=metrics,
         )
         run_score = compute_runtime_score(
             enriched,
@@ -695,6 +704,7 @@ def _run_one_unit(
     conditions: Optional[str] = None,
     base_overrides: Optional[dict] = None,
     phase: Optional[dict[str, Any]] = None,
+    render: Optional["RenderSettings"] = None,
     force: bool = False,
 ) -> Optional[tuple[dict[str, Any], Optional[float]]]:
     """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
@@ -726,8 +736,10 @@ def _run_one_unit(
         prompt_variant=prompt_variant,
         experiment_config=experiment_config,
         conditions=conditions,
+        render=render,
     )
 
+    render = render or RenderSettings()
     episode = None
     if not force and prep.episode_path.exists() and prep.sidecar_path.exists():
         sidecar = _load_json_object_if_valid(prep.sidecar_path)
@@ -742,7 +754,11 @@ def _run_one_unit(
             seed,
             prep.run_dir,
             max_steps=prep.runtime_spec.max_steps,
-            provenance=_phase_episode_provenance(phase, model_config),
+            provenance={
+                **_phase_episode_provenance(phase, model_config),
+                **({} if render.backend == "minigrid" else {"render": dataclasses.asdict(render)}),
+            },
+            render=render,
         )
         # ``phase`` rides in the run_inputs extras (additive; written AFTER the
         # inputs_hash is computed, so it is recorded but excluded from the hash).
@@ -878,6 +894,11 @@ def run_from_config(
     # ``job_digest`` phase-strip).
     phase = run_config.get("phase")
 
+    # Optional top-level render block: which backend/camera/resolution draws the
+    # frames. Parsed here so a bad block fails before any paid model call; the
+    # 2D default leaves artifact paths and run hashes exactly as they were.
+    render = RenderSettings.from_run_config(run_config)
+
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
     union: dict[str, dict[str, Any]] = {}
@@ -919,6 +940,7 @@ def run_from_config(
             prompt_variant=prompt_variant,
             base_overrides=exp_overlay,
             phase=phase,
+            render=render,
             force=force,
         )
         all_run_rows.extend(rr)
