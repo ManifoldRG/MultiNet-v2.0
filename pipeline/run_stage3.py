@@ -1,6 +1,7 @@
 """Stage 3 — runtime runs on the ``interface/`` stack (Stack A, live models).
 
-Builds a MiniGrid backend + ``ExperimentRunner`` for one task, runs a single
+Builds the state backend (MiniGrid, optionally drawn by the 3D render layer —
+see ``RenderSettings``) + ``ExperimentRunner`` for one task, runs a single
 episode with a live-model agent, and flushes the canonical ``episode.json``
 artifact (plus PNG frames). Baselines are NOT run here — they feed Stage-2
 difficulty/canonical paths via the scorer.
@@ -16,6 +17,7 @@ from typing import Any, Callable, Optional
 from interface.config import ExperimentConfig
 from interface.episode_log import flush_episode_log
 from interface.loader import load_task
+from gridworld.render_settings import RenderSettings
 from interface.runner import build_runner
 from gridworld.task_spec import TaskSpecification
 
@@ -38,15 +40,19 @@ def build_episode_runner(
     seed: int,
     *,
     max_steps: int | None = None,
+    render: RenderSettings | None = None,
 ):
     """Build a configured ``ExperimentRunner`` for one task (no episode run yet).
 
     Shared by the serial ``run_episode`` (below) and the batch-API lockstep worker,
     which drives the runner through an ``EpisodeStepper`` instead of ``runner.run``.
     Keeping the backend/spec/seed/max_steps wiring in one place ensures both paths
-    build an identical runner.
+    build an identical runner. ``render`` selects the backend/camera/resolution
+    that draws the frames (2D MiniGrid by default).
     """
-    backend, spec = load_task(task_source)
+    render = render or RenderSettings()
+    kwargs = render.backend_kwargs(TaskSpecification.from_json(str(task_source)))
+    backend, spec = load_task(task_source, render.backend, **kwargs)
     spec = _spec_with_seed(spec, seed)
     if max_steps is not None and spec.max_steps != max_steps:
         spec = dataclasses.replace(spec, max_steps=int(max_steps))
@@ -63,6 +69,7 @@ def run_episode(
     *,
     max_steps: int | None = None,
     provenance: Optional[dict[str, Any]] = None,
+    render: RenderSettings | None = None,
 ) -> dict[str, Any]:
     """Run one episode and flush ``episode.json`` into ``out_dir``.
 
@@ -74,7 +81,7 @@ def run_episode(
     result so ``flush_episode_log`` persists it on ``episode.json``. It is never
     part of any input hash.
     """
-    runner = build_episode_runner(task_source, config, seed, max_steps=max_steps)
+    runner = build_episode_runner(task_source, config, seed, max_steps=max_steps, render=render)
     result = runner.run(agent, verbose=False, maze_path=str(task_source))
     if provenance:
         for key, value in provenance.items():

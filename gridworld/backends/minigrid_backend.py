@@ -192,6 +192,17 @@ class MiniGridBackend(AbstractGridBackend):
         """
         return self._get_grid_state()
 
+    def door_states(self) -> dict[str, bool]:
+        """Physical open/closed per door, read off the live grid cell (a
+        re-closed door is closed here but stays in GridState.open_doors)."""
+        if self.env is None or self.task_spec is None:
+            return {}
+        states: dict[str, bool] = {}
+        for door in self.task_spec.mechanisms.doors:
+            cell = self.env.grid.get(door.position.x, door.position.y)
+            states[door.id] = bool(getattr(cell, "is_open", False))
+        return states
+
     def _get_grid_state(self) -> GridState:
         """
         Extract GridState from current environment state.

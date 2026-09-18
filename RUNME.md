@@ -70,6 +70,23 @@ python -m scripts.run_pipeline \
   --seeds 0
 ```
 
+### R1-frontier: OpenAI models on the R1 cell (paid)
+
+A separate experimental set: GPT-6 Astra on the same 50-maze panel and the
+same fixed cell (`run_config.r1_frontier.json`, provider `openai`, xhigh
+reasoning, 64k cap, flex tier). `OPENAI_API_KEY` resolves from env, `.env`,
+or line 3 of `api_key.txt`; `python -m deploy.check_api_keys --provider
+openai` round-trips it and prints the key's rate limits (OpenAI reserves the
+64k `max_completion_tokens` against TPM, so the tier bounds concurrency).
+Every config carries a `spend_cap_usd` hard stop.
+
+1. Calibrate: `run_config.r1_frontier_calib_terra.json` (Terra, 5 smoke
+   mazes) and optionally `run_config.r1_frontier_probe_astra.json` (Astra, one
+   maze) over `manifest.r1_smoke_batch.json`.
+2. Project: `python -m scripts.estimate_frontier_cost --artifacts-root <root>`.
+3. Launch: `launch_distributed.sh` with `RUN_CONFIG=gridworld/fixtures/run_config.r1_frontier.json`
+   (one coordinator + one API VM; `API_WORKER_CONCURRENCY` sized to the tier).
+
 ## 4. Scoring
 
 Scoring runs inside the pipeline (`scorer/`): static maze/difficulty scores
@@ -118,6 +135,42 @@ python play_task.py ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_k
 python play_task.py --tasks-dir ogbench/ogbench/procgen/maze_jsons/M1   # browse a family with [ / ]
 python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1
 python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1.json
+```
+
+### 3D render backend
+
+`gridworld/render3d/` + `gridworld/backends/mujoco3d_backend.py` render the
+same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
+actions/scoring, full observability under every camera — it is a render
+layer, not a new environment. A run-config selects it with a top-level
+`"render": {"backend": "mujoco3d", "camera": "chase"}` block (resolution
+defaults to `"grid"`, MiniGrid's 32 px per cell, so a 3D frame costs the same
+image tokens as a 2D one); each camera gets its own artifact directory.
+Install the extra (`mujoco>=3.13`):
+
+```bash
+pip install -e ".[dev,visual,mujoco3d]"
+```
+
+Headless rendering uses `MUJOCO_GL`, which defaults to `osmesa` (software,
+CPU-safe); set `MUJOCO_GL=egl` on GPU machines for speed. Play with it via
+`--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
+`fixed_angled` / `first_person` live). `,` / `.` tilt the camera one level at
+a time from top-down to first person, with the walls rising as it drops; the
+footer shows the level and wall height. `chase` and `first_person` (and every
+tilt level below top-down) turn with the agent and carry a compass; turns
+animate in the demo only.
+
+```bash
+python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1 \
+  --backend mujoco3d --camera chase
+```
+
+To render static frames/contact sheets instead of playing interactively:
+
+```bash
+python -m scripts.render_3d_mazes --manifest gridworld/fixtures/manifest.json \
+  --experiment r1 --camera top_down --camera chase --contact-sheet --out <dir>
 ```
 
 ## Appendix: legacy local/VLM demo harness

@@ -12,3 +12,10 @@ from pathlib import Path
 _REPO_ROOT = str(Path(__file__).resolve().parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
+
+import os
+
+# Headless MuJoCo rendering. Must be set before the first `import mujoco` in
+# the test process; OSMesa works on CPU-only machines (CI). Export
+# MUJOCO_GL=egl yourself for GPU speed.
+os.environ.setdefault("MUJOCO_GL", "osmesa")

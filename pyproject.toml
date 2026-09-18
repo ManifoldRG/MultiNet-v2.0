@@ -30,6 +30,9 @@ visual = [
     "matplotlib",
     "pygame",
 ]
+mujoco3d = [
+    "mujoco>=3.13",
+]
 hf = [
     "torch",
     "torchvision",

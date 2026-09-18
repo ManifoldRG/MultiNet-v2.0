@@ -1,0 +1,138 @@
+{
+  "description": "GPT-6 Astra camera ablation (2026-09-18): six R1-panel mazes played in 2D and in each 3D camera. Four switch mazes (all stalled in the R1-frontier 2D run) probe the switch cliff; two key-door mazes Astra solved in 2D are controls that would catch 3D breaking what already worked. No blind (B-family) maze: colour stripping would confound the viewpoint comparison.",
+  "selection": {
+    "source_set": "r1_balanced_03",
+    "maze_count": 6,
+    "note": "task entries copied verbatim from manifest.r1_balanced_03.json"
+  },
+  "tasks": [
+    {
+      "task_id": "r1_M2_8x8_corridor_sg_0",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_sg_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M2/8x8_corridor_sg_0.json",
+      "expected_mechanisms": [
+        "g1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M2",
+      "rank": 4,
+      "optimal_steps": 26,
+      "path_signature": "S",
+      "path_depth": 1,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:0"
+    },
+    {
+      "task_id": "r1_M2_8x8_corridor_sg_1",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M2/8x8_corridor_sg_1.json",
+      "expected_mechanisms": [
+        "g1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M2",
+      "rank": 7,
+      "optimal_steps": 27,
+      "path_signature": "S",
+      "path_depth": 1,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:1"
+    },
+    {
+      "task_id": "r1_M3_8x8_corridor_kr_sg_1",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_kr_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M3/8x8_corridor_kr_sg_1.json",
+      "expected_mechanisms": [
+        "DR",
+        "g1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M3",
+      "rank": 10,
+      "optimal_steps": 29,
+      "path_signature": "K->S",
+      "path_depth": 2,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:1"
+    },
+    {
+      "task_id": "r1_M2_10x10_corridor_sg_1",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "10x10_corridor_sg_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M2/10x10_corridor_sg_1.json",
+      "expected_mechanisms": [
+        "g1"
+      ],
+      "maze_family": "M",
+      "maze_category": "M2",
+      "rank": 22,
+      "optimal_steps": 44,
+      "path_signature": "S",
+      "path_depth": 1,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "10x10",
+      "comparison_cell": "10x10:corridor:1"
+    },
+    {
+      "task_id": "r1_M1_8x8_corridor_kr_0",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_kr_0",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M1/8x8_corridor_kr_0.json",
+      "expected_mechanisms": [
+        "DR"
+      ],
+      "maze_family": "M",
+      "maze_category": "M1",
+      "rank": 6,
+      "optimal_steps": 27,
+      "path_signature": "K",
+      "path_depth": 1,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:0"
+    },
+    {
+      "task_id": "r1_M5_8x8_corridor_kr_kb_1",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_kr_kb_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M5/8x8_corridor_kr_kb_1.json",
+      "expected_mechanisms": [
+        "DR",
+        "DB"
+      ],
+      "maze_family": "M",
+      "maze_category": "M5",
+      "rank": 12,
+      "optimal_steps": 30,
+      "path_signature": "K->K",
+      "path_depth": 2,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:1"
+    }
+  ]
+}

@@ -42,7 +42,7 @@ except ImportError:
 
 from demo.session import MiniGridPlaySession, ProgressEvent, SETTINGS_AXES
 from demo.sounds import DemoSounds, sfx_for_dispatch
-from demo.fx import DemoFx
+from demo.fx import DemoFx, TurnAnimation
 from demo.compare import R1ResultCatalog, r1_task_id
 from demo.r1_tasks import restrict_to_r1_tasks
 from demo import icons
@@ -180,6 +180,7 @@ class MiniGridPlayerUI:
         # cosmetic -- never touch env state or observations.
         self.sounds = DemoSounds()
         self.fx = DemoFx()
+        self.turn_anim = TurnAnimation()  # 3D views that turn with the agent
         self.r1_catalog = R1ResultCatalog()
         restrict_to_r1_tasks(self.session, self.r1_catalog)
 
@@ -199,6 +200,7 @@ class MiniGridPlayerUI:
     def _reset(self) -> None:
         self.sounds.play("restart")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._checkpoint_trajectory()
         self.session._reset_env()
         self.model_view_scroll = 0
@@ -208,6 +210,7 @@ class MiniGridPlayerUI:
     def _switch_task(self, delta: int) -> None:
         self.sounds.play("navigate")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._load_adjacent_task(delta)
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -224,14 +227,15 @@ class MiniGridPlayerUI:
         events_before = len(session.event_log)
         prev_state = session.state
         prev_rgb = None
-        if session.backend.env is not None and session.config.observation != "text_only":
+        if session.backend.is_configured and session.config.observation != "text_only":
             prev_rgb = session.backend.render()
 
         session._dispatch_token(token)
         self.sounds.play(sfx_for_dispatch(session, events_before))
 
-        if session.backend.env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
+        self.turn_anim.maybe_start(session.backend, prev_state, session.state, now_ms=pygame.time.get_ticks())
         self.fx.trigger(
             now_ms=pygame.time.get_ticks(),
             session=session,
@@ -550,14 +554,17 @@ class MiniGridPlayerUI:
         reads as the centerpiece rather than a flat inset image. Display-only
         FX (nudge / cell flash / fade) are composited here and never touch
         the env's own render buffer."""
-        rgb_array = recolor_walls(self.session.backend.render())
+        turn = self.turn_anim.frame_request(pygame.time.get_ticks())
+        backend = self.session.backend
+        rgb_array = backend.render_turn(*turn) if turn else backend.render()
+        if backend.frame_is_grid_aligned:
+            rgb_array = recolor_walls(rgb_array)
         h, w, _c = rgb_array.shape
         surf = pygame.image.frombuffer(rgb_array.tobytes(), (w, h), "RGB")
         scaled = pygame.transform.smoothscale(surf, (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE))
 
-        env = self.session.backend.env
-        grid_w = env.width if env is not None else 1
-        grid_h = env.height if env is not None else 1
+        spec = self.session.task_spec
+        grid_w, grid_h = spec.maze.dimensions if spec is not None else (1, 1)
         framed, (ox, oy) = self.fx.apply(
             scaled, now_ms=pygame.time.get_ticks(), grid_w=grid_w, grid_h=grid_h,
         )
@@ -612,7 +619,11 @@ class MiniGridPlayerUI:
         # Built from segments and truncated at a whole-segment boundary
         # (rather than a hard character clip) so it degrades gracefully at
         # narrower window widths.
-        segments = ["[ / ] switch task", "Tab settings", "M model view", "Q quit"]
+        segments = ["[ / ] switch task", "Tab settings", "M model view"]
+        if self.session.camera_names:
+            tilt = self.session.tilt_status()
+            segments += ([tilt] if tilt else []) + ["V camera", ", . tilt"]
+        segments.append("Q quit")
         max_width = WINDOW_WIDTH - 28
         text = ""
         for seg in segments:
@@ -624,7 +635,7 @@ class MiniGridPlayerUI:
         self.screen.blit(surf, surf.get_rect(center=(WINDOW_WIDTH // 2, rect.top + 36)))
 
     def _render_main_pane(self) -> None:
-        if self.session.backend.env is None:
+        if not self.session.backend.is_configured:
             placeholder_surf = self.font_main.render(
                 "No environment loaded.", True, COLOR_TEXT_DIM
             )
@@ -1320,6 +1331,18 @@ class MiniGridPlayerUI:
             return None
         if key == pygame.K_RIGHTBRACKET:
             self._switch_task(1)
+            return None
+
+        if key == pygame.K_v and session.camera_names:
+            session.cycle_camera()
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
+            return None
+
+        if key in (pygame.K_COMMA, pygame.K_PERIOD) and session.camera_names:
+            session.step_tilt(-1 if key == pygame.K_COMMA else 1)
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
             return None
 
         if session.episode_done:

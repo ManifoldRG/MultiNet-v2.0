@@ -168,12 +168,16 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
             }
         )
 
+    if not session.backend.frame_is_grid_aligned:
+        # Per-cell effects slice the frame into equal tiles -- meaningless on a
+        # perspective (3D) frame. Keep only the camera bounce.
+        plan = [item for item in plan if item["kind"] == "bounce"]
     return plan
 
 
 def _grid_size(session) -> tuple[int, int]:
-    env = session.backend.env
-    return int(env.width), int(env.height)
+    width, height = session.task_spec.maze.dimensions
+    return int(width), int(height)
 
 
 def _tile_image_b64(
@@ -241,7 +245,8 @@ def effects_for_dispatch(
     """Serialize ``plan_effects`` for the web player (adds tile PNGs)."""
     plan = plan_effects(session, token, prev_state, events_before)
     grid_w, grid_h = _grid_size(session)
-    prev_frame = recolor_walls(prev_rgb) if prev_rgb is not None else None
+    grid_aligned = session.backend.frame_is_grid_aligned
+    prev_frame = recolor_walls(prev_rgb) if (prev_rgb is not None and grid_aligned) else prev_rgb
     post_frame = None
     effects: list[dict] = []
 
@@ -292,6 +297,44 @@ def _sin_pulse(t: float) -> float:
     return math.sin(max(0.0, min(1.0, t)) * math.pi)
 
 
+TURN_ANIM_MS = 250
+
+
+@dataclass
+class TurnAnimation:
+    """Timing for the 3D demo's turn animation: while it runs, the UI draws
+    ``backend.render_turn(direction, fraction)`` instead of the final frame.
+    Display-only: in-between frames are never recorded or sent to a model."""
+
+    _from_direction: Optional[int] = None
+    _start_ms: int = 0
+
+    def maybe_start(self, backend, prev_state, new_state, *, now_ms: int) -> bool:
+        """Start when a 3D view that turns with the agent sees a new heading."""
+        if not getattr(backend, "view_turns_with_agent", False):
+            return False
+        if prev_state is None or new_state is None:
+            return False
+        if int(prev_state.agent_direction) == int(new_state.agent_direction):
+            return False
+        self._from_direction = int(prev_state.agent_direction)
+        self._start_ms = now_ms
+        return True
+
+    def frame_request(self, now_ms: int) -> Optional[tuple[int, float]]:
+        """(from_direction, fraction) while running, else None."""
+        if self._from_direction is None:
+            return None
+        elapsed = now_ms - self._start_ms
+        if elapsed >= TURN_ANIM_MS:
+            self._from_direction = None
+            return None
+        return self._from_direction, max(0, elapsed) / TURN_ANIM_MS
+
+    def clear(self) -> None:
+        self._from_direction = None
+
+
 @dataclass
 class _Clip:
     kind: str
@@ -337,14 +380,13 @@ class DemoFx:
     ) -> None:
         if not self.enabled or pygame is None:
             return
-        env = session.backend.env
-        if env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
 
         # Rapid key-repeat shouldn't stack camera offsets.
         self._clips = [c for c in self._clips if c.kind != "bounce"]
 
-        grid_w, grid_h = int(env.width), int(env.height)
+        grid_w, grid_h = _grid_size(session)
         for item in plan_effects(session, token, prev_state, events_before):
             kind = item["kind"]
             duration = item["durationMs"]
