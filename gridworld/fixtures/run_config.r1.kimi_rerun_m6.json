@@ -5,7 +5,7 @@
  "experiment_config": {
   "prompting": "minimal",
   "observation": "image_only",
-  "context_window": "text_summary_and_last3",
+  "context_window": "text_summary_and_last_n",
   "chat_history": "stateless",
   "in_context_learning": "zero_shot",
   "action_space": "egocentric",

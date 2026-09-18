@@ -89,7 +89,7 @@ class ProgressEvent(NamedTuple):
 # (hotkey, ExperimentConfig attribute, choices | None for a bool toggle)
 SETTINGS_AXES: tuple[tuple[str, str, Optional[tuple[str, ...]]], ...] = (
     ("1", "observation", ("text_only", "image_text", "image_only")),
-    ("2", "context_window", ("current", "last3", "text_summary", "text_summary_and_last3")),
+    ("2", "context_window", ("current", "last_n", "text_summary", "text_summary_and_last_n")),
     ("3", "include_current_observation_description", None),
     ("4", "observation_text_includes_facing", None),
     ("5", "action_space", ("egocentric", "cardinal")),
@@ -509,15 +509,13 @@ class MiniGridPlaySession:
         if obs in ("text_only", "image_text"):
             sections.append(("Last feedback", self.last_feedback))
 
-        hist = history_text(obs, ctx, transcript, self.task_spec)
-        if not hist and ctx == "text_summary_and_last3" and obs == "image_only":
-            # Delivered as a separate leading block ahead of last3 images in
-            # the real prompt (see interface/observation.leading_summary_blocks).
+        hist = history_text(obs, ctx, transcript, self.task_spec, n=self.config.context_n)
+        if not hist and ctx == "text_summary_and_last_n" and obs == "image_only":
             hist = text_summary_history(transcript, self.task_spec)
         if hist:
             sections.append(("History", hist))
 
-        if obs in ("image_only", "image_text") and ctx in ("last3", "text_summary_and_last3"):
+        if obs in ("image_only", "image_text") and ctx in ("last_n", "text_summary_and_last_n"):
             sections.append(
                 (
                     "History (images)",

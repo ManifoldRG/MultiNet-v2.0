@@ -181,7 +181,7 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
         },
     ]
 
-    blocks = history_content_blocks("image_only", "last3", transcript)
+    blocks = history_content_blocks("image_only", "last_n", transcript)
 
     assert blocks[0]["type"] == "text"
     assert blocks[1]["type"] == "image_url"
@@ -295,7 +295,7 @@ def test_text_last3_prompt_includes_recent_history_text():
             "prompt_feedback": "MOVED",
         }
     ]
-    cfg = ExperimentConfig(observation="text_only", context_window="last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="last_n")
 
     prompt_text = _user_prompt_text_with_transcript(
         cfg,
@@ -325,7 +325,7 @@ def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
         }
     ]
     cfg = ExperimentConfig(
-        observation="text_only", context_window="last3", action_space="cardinal"
+        observation="text_only", context_window="last_n", action_space="cardinal"
     )
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
@@ -345,7 +345,7 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
             "prompt_feedback": "MOVED",
         }
     ]
-    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
@@ -370,7 +370,7 @@ def test_image_only_text_summary_and_last3_includes_summary_text_and_last3_image
             "_decision_frame_rgb": frame,
         },
     ]
-    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
@@ -400,7 +400,7 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
             "_decision_frame_rgb": frame,
         },
     ]
-    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 

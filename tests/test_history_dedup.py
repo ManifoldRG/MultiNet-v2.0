@@ -15,6 +15,8 @@ from interface.config import ExperimentConfig
 from interface.runner import build_runner
 from prompting_experiments.prompt_templates.observation import RECENT_HISTORY_HEADER
 
+_RECENT = RECENT_HISTORY_HEADER.format(n=3)
+
 
 class RecordingAgent:
     """Scripted step_by_step agent that keeps every message list it was sent."""
@@ -89,7 +91,7 @@ def test_rolling_chat_turns_do_not_embed_last3_history():
     _run(
         agent,
         observation="text_only",
-        context_window="last3",
+        context_window="last_n",
         chat_history="rolling",
         chat_turns_max=3,
     )
@@ -97,7 +99,7 @@ def test_rolling_chat_turns_do_not_embed_last3_history():
     # In multiturn mode the chat carries the history; no turn may re-embed it.
     for call in agent.calls:
         for text in _texts(call):
-            assert RECENT_HISTORY_HEADER not in text
+            assert _RECENT not in text
 
 
 def test_stateless_still_embeds_last3_history():
@@ -105,11 +107,11 @@ def test_stateless_still_embeds_last3_history():
     _run(
         agent,
         observation="text_only",
-        context_window="last3",
+        context_window="last_n",
         chat_history="stateless",
     )
     late_call_texts = "\n".join(_texts(agent.calls[-1]))
-    assert RECENT_HISTORY_HEADER in late_call_texts
+    assert _RECENT in late_call_texts
 
 
 def test_rolling_chat_normalizes_accepted_legacy_action_delimiter():

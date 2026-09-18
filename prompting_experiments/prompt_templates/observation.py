@@ -1,6 +1,6 @@
 """Observation and history prompt templates."""
 
-RECENT_HISTORY_HEADER = "Recent history (last 3 steps, oldest first):"
+RECENT_HISTORY_HEADER = "Recent history (last {n} steps, oldest first):"
 RECENT_HISTORY_STEP = (
     "Position after: ({row}, {col}), facing {facing}\n"
     "FINAL_OUTPUT: {action}"

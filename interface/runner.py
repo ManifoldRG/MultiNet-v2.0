@@ -248,6 +248,7 @@ class ExperimentRunner:
         # passes with_context_history=False because its turns already carry
         # the history and embedding it again duplicates every observation.
         ctx = self.config.context_window if with_context_history else "current"
+        n = self.config.context_n
         obs_text = current_observation_text(
             obs,
             self.task_spec,
@@ -258,7 +259,7 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript, self.task_spec),
+            history_text(obs, ctx, transcript, self.task_spec, n=n),
             state,
             observation=obs,
             last_feedback=last_feedback,
@@ -280,7 +281,7 @@ class ExperimentRunner:
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
-        hist_blocks = history_content_blocks(obs, ctx, transcript)
+        hist_blocks = history_content_blocks(obs, ctx, transcript, n=n)
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []

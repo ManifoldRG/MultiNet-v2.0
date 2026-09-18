@@ -1,8 +1,9 @@
 """Observation formatting for the NLU interface.
 
-History when ``context_window == "last3"`` (last 3 executed steps, oldest first):
+History when ``context_window`` is ``last_n`` / ``text_summary_and_last_n``
+(last ``context_n`` executed steps, oldest first; default n=3):
 
-* **text_only** — full text history only (position, facing, action, feedback).
+* **text_only** — full text history only (position, facing, action).
 * **image_only** — prior decision-frame PNGs + inventory/action labels (no text history).
 * **image_text** — full text history **and** prior decision-frame PNGs.
 
@@ -26,7 +27,8 @@ from prompting_experiments.prompt_templates import observation as observation_te
 from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3", "text_summary", "text_summary_and_last3"]
+ContextWindow = Literal["current", "last_n", "text_summary", "text_summary_and_last_n"]
+_LAST_N = ("last_n", "text_summary_and_last_n")
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -38,11 +40,11 @@ def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def recent_history_steps(
-    transcript: list[dict[str, Any]], context_window: ContextWindow
+    transcript: list[dict[str, Any]], context_window: ContextWindow, n: int = 3
 ) -> list[dict[str, Any]]:
-    if context_window not in ("last3", "text_summary_and_last3"):
+    if context_window not in _LAST_N:
         return []
-    return history_steps(transcript)[-3:]
+    return history_steps(transcript)[-n:]
 
 
 def history_text(
@@ -50,19 +52,15 @@ def history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
+    n: int = 3,
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
-    if context_window == "text_summary_and_last3":
+    if context_window == "text_summary_and_last_n":
         if observation not in ("text_only", "image_text"):
-            # image_only: the summary is emitted separately (see
-            # leading_summary_blocks) so it can precede the last3 image
-            # blocks in the message content list.
             return ""
-        recent_text = _last3_history_text(context_window, transcript)
+        recent_text = _last_n_history_text(context_window, transcript, n)
         if observation == "image_text":
-            # Same reason: the summary precedes the last3 image blocks, so
-            # it is supplied by leading_summary_blocks instead of here.
             return recent_text
         summary = text_summary_history(transcript, task_spec)
         if not recent_text:
@@ -70,7 +68,7 @@ def history_text(
         return f"{summary}\n\n{recent_text}"
     if observation not in ("text_only", "image_text"):
         return ""
-    return _last3_history_text(context_window, transcript)
+    return _last_n_history_text(context_window, transcript, n)
 
 
 def leading_summary_blocks(
@@ -79,15 +77,8 @@ def leading_summary_blocks(
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
 ) -> list[dict]:
-    """Text-summary content block that must precede the last3 image blocks.
-
-    For ``text_summary_and_last3`` with an image-bearing observation mode,
-    the last3 steps are rendered as separate image blocks (see
-    ``history_content_blocks``) rather than folded into the main prompt
-    text, so the summary has to be surfaced here to keep summary-then-last3
-    ordering in the final message content list.
-    """
-    if context_window != "text_summary_and_last3" or observation not in (
+    """Text-summary content block that must precede the last-n image blocks."""
+    if context_window != "text_summary_and_last_n" or observation not in (
         "image_only",
         "image_text",
     ):
@@ -110,15 +101,16 @@ def _history_record_action(rec: dict[str, Any]) -> str:
     return rec.get("cardinal_action") or rec["action"]
 
 
-def _last3_history_text(
+def _last_n_history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    n: int = 3,
 ) -> str:
-    recs = recent_history_steps(transcript, context_window)
+    recs = recent_history_steps(transcript, context_window, n)
     if not recs:
         return ""
 
-    lines = [observation_templates.RECENT_HISTORY_HEADER]
+    lines = [observation_templates.RECENT_HISTORY_HEADER.format(n=n)]
     for rec in recs:
         row, col = rec["position_after_row_col"]
         lines.append(
@@ -345,10 +337,11 @@ def history_content_blocks(
     observation: ObservationMode,
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    n: int = 3,
 ) -> list[dict]:
     if observation not in ("image_only", "image_text"):
         return []
-    recs = recent_history_steps(transcript, context_window)
+    recs = recent_history_steps(transcript, context_window, n)
     if not recs:
         return []
 

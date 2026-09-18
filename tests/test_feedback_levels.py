@@ -33,7 +33,7 @@ def test_last3_history_does_not_repeat_feedback():
         "prompt_feedback": "MOVED — MOVE_FORWARD: Moved to (1, 2).",
     }]
     prompt = _user_prompt_text_with_transcript(
-        ExperimentConfig(observation="text_only", context_window="last3"),
+        ExperimentConfig(observation="text_only", context_window="last_n"),
         transcript,
     )
     history, _, current = prompt.partition("You are at")
