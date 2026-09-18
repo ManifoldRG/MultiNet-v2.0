@@ -156,10 +156,10 @@ else:
         )
 
     if query_count >= 2:
-        if cfg.context_window == "last3":
+        if cfg.context_window == "last_n":
             checks.append(
                 _check(
-                    "last3 includes prior-step history in later queries",
+                    "last_n includes prior-step history in later queries",
                     _has_step_history(last["user_text"], cfg.observation),
                 )
             )
@@ -231,10 +231,10 @@ def _suite_cases(base: ExperimentConfig, suite: str):
         (replace(base, prompting="standard"), "prompting=standard"),
         (replace(base, prompting="verbose"), "prompting=verbose"),
         (replace(base, context_window="current"), "context=current"),
-        (replace(base, context_window="last3"), "context=last3"),
-        (replace(base, observation="text_only", context_window="last3"), "obs=text_only"),
-        (replace(base, observation="image_text", context_window="last3"), "obs=image_text"),
-        (replace(base, observation="image_only", context_window="last3"), "obs=image_only"),
+        (replace(base, context_window="last_n"), "context=last_n"),
+        (replace(base, observation="text_only", context_window="last_n"), "obs=text_only"),
+        (replace(base, observation="image_text", context_window="last_n"), "obs=image_text"),
+        (replace(base, observation="image_only", context_window="last_n"), "obs=image_only"),
         (replace(base, querying="step_by_step"), "query=step_by_step"),
         (replace(base, querying="subgoal"), "query=subgoal"),
         (replace(base, querying="full_trajectory"), "query=full_trajectory"),
@@ -282,7 +282,7 @@ def run_smoke_suite(
     base = ExperimentConfig(
         prompting="standard",
         observation="image_only",
-        context_window="last3",
+        context_window="last_n",
         querying="step_by_step",
     )
     selected = _suite_cases(base, suite)

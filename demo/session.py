@@ -89,10 +89,12 @@ class ProgressEvent(NamedTuple):
 # (hotkey, ExperimentConfig attribute, choices | None for a bool toggle)
 SETTINGS_AXES: tuple[tuple[str, str, Optional[tuple[str, ...]]], ...] = (
     ("1", "observation", ("text_only", "image_text", "image_only")),
-    ("2", "context_window", ("current", "last3", "text_summary", "text_summary_and_last3")),
+    ("2", "context_window", ("current", "last_n", "text_summary", "text_summary_and_last_n")),
     ("3", "include_current_observation_description", None),
     ("4", "observation_text_includes_facing", None),
     ("5", "action_space", ("egocentric", "cardinal")),
+    ("6", "observation_text_format", ("coords", "json", "ascii")),
+    ("7", "feedback", ("minimal", "standard", "causal")),
 )
 
 
@@ -215,6 +217,7 @@ class MiniGridPlaySession:
         # BFS optimum + R1 step cap from pipeline canonical_paths.
         self.optimal_steps: int = 0
         self.last_action_name: str = ""
+        self.last_feedback: str = "Episode start."
         self.last_dispatched_token: str = ""
         self.step_index: int = 0
 
@@ -321,6 +324,7 @@ class MiniGridPlaySession:
         self._stall = ProgressStallWatchdog(k, self.state) if k else None
         self.total_reward = 0.0
         self.last_action_name = ""
+        self.last_feedback = "Episode start."
         self.last_dispatched_token = ""
         self.step_index = 0
         self.event_log = []
@@ -385,8 +389,10 @@ class MiniGridPlaySession:
         self._record_events(prev_state, self.state, prev_doors)
 
         feedback_text, event_type = format_step_feedback(
-            token, prev_state, self.state, reward, terminated, self.task_spec
+            token, prev_state, self.state, reward, terminated, self.task_spec,
+            level=self.config.feedback,
         )
+        self.last_feedback = feedback_text
         self._record_step(
             token, cardinal_source, prev_state, feedback_text, event_type,
             reward, terminated, truncated, info,
@@ -479,8 +485,12 @@ class MiniGridPlaySession:
         transcript = self._model_transcript()
         sections: list[tuple[str, str]] = []
 
+        fmt = self.config.observation_text_format
         if obs in ("text_only", "image_text"):
-            sections.append(("Initial maze (system prompt)", render_initial_maze_text(self.task_spec)))
+            sections.append(("Initial maze (system prompt)", render_initial_maze_text(
+                self.task_spec, observation_text_format=fmt,
+                include_facing=self.config.observation_text_includes_facing,
+            )))
         else:
             sections.append(
                 ("Initial maze (system prompt)", "(not sent to the model in image_only mode)")
@@ -492,19 +502,21 @@ class MiniGridPlaySession:
             self.state,
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
+            observation_text_format=fmt,
+            stall_remaining=(self._stall.remaining if self._stall else None),
         )
         if obs_text:
             sections.append(("Current observation", obs_text))
+        if obs in ("text_only", "image_text"):
+            sections.append(("Last feedback", self.last_feedback))
 
-        hist = history_text(obs, ctx, transcript, self.task_spec)
-        if not hist and ctx == "text_summary_and_last3" and obs == "image_only":
-            # Delivered as a separate leading block ahead of last3 images in
-            # the real prompt (see interface/observation.leading_summary_blocks).
+        hist = history_text(obs, ctx, transcript, self.task_spec, n=self.config.context_n)
+        if not hist and ctx == "text_summary_and_last_n" and obs == "image_only":
             hist = text_summary_history(transcript, self.task_spec)
         if hist:
             sections.append(("History", hist))
 
-        if obs in ("image_only", "image_text") and ctx in ("last3", "text_summary_and_last3"):
+        if obs in ("image_only", "image_text") and ctx in ("last_n", "text_summary_and_last_n"):
             sections.append(
                 (
                     "History (images)",

@@ -105,7 +105,8 @@ def _rollout_preview_steps(
                 nlu_action_to_int(action)
             )
         step_detail, event_type = format_step_feedback(
-            action, prev_state, state, reward, terminated, runner.task_spec
+            action, prev_state, state, reward, terminated, runner.task_spec,
+            level=runner.config.feedback,
         )
         last_feedback = step_detail
         transcript.append(
@@ -121,8 +122,8 @@ def _rollout_preview_steps(
                 "prompt_feedback": last_feedback,
                 "facing_before": facing_before,
                 "facing_after": agent_facing(state),
-                "position_before": list(position_before),
-                "position_after": list(agent_row_col(state)),
+                "position_before_row_col": list(position_before),
+                "position_after_row_col": list(agent_row_col(state)),
                 "state_before": state_before,
                 "state_after": state_snapshot(state),
                 "reward": reward,
@@ -185,7 +186,8 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
                 nlu_action_to_int(action)
             )
         step_detail, event_type = format_step_feedback(
-            action, prev_state, state, reward, terminated, runner.task_spec
+            action, prev_state, state, reward, terminated, runner.task_spec,
+            level=runner.config.feedback,
         )
         last_feedback = step_detail
         transcript.append(
@@ -201,8 +203,8 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
                 "prompt_feedback": last_feedback,
                 "facing_before": facing_before,
                 "facing_after": agent_facing(state),
-                "position_before": list(position_before),
-                "position_after": list(agent_row_col(state)),
+                "position_before_row_col": list(position_before),
+                "position_after_row_col": list(agent_row_col(state)),
                 "state_before": state_before,
                 "state_after": state_snapshot(state),
                 "reward": reward,

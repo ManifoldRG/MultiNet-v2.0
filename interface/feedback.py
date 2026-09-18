@@ -14,6 +14,7 @@ from interface.coords import (
     key_at_cell,
     switch_at_cell,
     switches_controlling_gate,
+    door_at_cell,
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
@@ -25,6 +26,7 @@ def infer_step_outcome(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    level: str = "causal",
 ) -> tuple[str, str]:
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
@@ -53,24 +55,25 @@ def infer_step_outcome(
             fwd = forward_cell(prev)
             key_color = key_at_cell(task_spec, prev, fwd[0], fwd[1])
             if key_color:
+                tmpl = (
+                    feedback_templates.MOVE_BLOCKED_BY_KEY
+                    if level == "causal"
+                    else feedback_templates.MOVE_BLOCKED_BY_KEY_STANDARD
+                )
                 return (
                     "BLOCKED",
-                    feedback_templates.MOVE_BLOCKED_BY_KEY.format(
-                        key_color=key_color,
-                        position=fwd,
-                    ),
+                    tmpl.format(key_color=key_color, position=fwd),
                 )
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
             if gate and not gate["open"]:
                 controllers = switches_controlling_gate(task_spec, str(gate["id"]))
-                if controllers:
-                    switch_list = ", ".join(controllers)
+                if controllers and level == "causal":
                     return (
                         "BLOCKED",
                         feedback_templates.MOVE_BLOCKED_BY_GATE_WITH_SWITCHES.format(
                             gate_id=gate["id"],
                             position=fwd,
-                            switches=switch_list,
+                            switches=", ".join(controllers),
                         ),
                     )
                 return (
@@ -80,6 +83,18 @@ def infer_step_outcome(
                         position=fwd,
                     ),
                 )
+            door = door_at_cell(task_spec, prev, fwd[0], fwd[1])
+            if door and not door["open"]:
+                color = door["requires_key"]
+                msg = feedback_templates.MOVE_BLOCKED_BY_DOOR.format(color=color, position=fwd)
+                if level == "causal":
+                    hint = (
+                        feedback_templates.DOOR_USE_TOGGLE
+                        if prev.agent_carrying == color
+                        else feedback_templates.DOOR_NEEDS_KEY
+                    )
+                    msg += " " + hint.format(color=color)
+                return "BLOCKED", msg
             return "BLOCKED", feedback_templates.MOVE_BLOCKED_GENERIC
         if terminated and reward > 0 and curr_pos == goal:
             return "DONE", feedback_templates.REACHED_GOAL.format(goal=goal)
@@ -102,7 +117,12 @@ def infer_step_outcome(
             )
         if not prev.agent_carrying:
             return "NOTHING", feedback_templates.NOTHING_TO_DROP
-        return "NOTHING", feedback_templates.DROP_BLOCKED
+        tmpl = (
+            feedback_templates.DROP_BLOCKED
+            if level == "causal"
+            else feedback_templates.DROP_BLOCKED_STANDARD
+        )
+        return "NOTHING", tmpl
 
     if action == "TOGGLE":
         if (
@@ -115,6 +135,8 @@ def infer_step_outcome(
         switch_here = switch_at_cell(task_spec, prev_pos[0], prev_pos[1])
         gate_ahead = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
         if switch_ahead and not switch_here:
+            if level != "causal":
+                return "NOTHING", feedback_templates.TOGGLE_NO_EFFECT_STANDARD
             if switch_ahead["switch_type"] == "hold":
                 return (
                     "NOTHING",
@@ -125,6 +147,8 @@ def infer_step_outcome(
                 feedback_templates.TOGGLE_SWITCH_HINT.format(position=fwd),
             )
         if gate_ahead and not gate_ahead["open"]:
+            if level != "causal":
+                return "NOTHING", feedback_templates.GATE_TOGGLE_STANDARD
             controllers = switches_controlling_gate(task_spec, str(gate_ahead["id"]))
             if controllers:
                 switch_list = ", ".join(controllers)
@@ -137,7 +161,8 @@ def infer_step_outcome(
             return "NOTHING", feedback_templates.GATE_TOGGLE_GENERIC
         return (
             "NOTHING",
-            feedback_templates.TOGGLE_NO_EFFECT,
+            feedback_templates.TOGGLE_NO_EFFECT if level == "causal"
+            else feedback_templates.TOGGLE_NO_EFFECT_STANDARD,
         )
 
     if action == "DONE":
@@ -155,10 +180,13 @@ def format_step_feedback(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    level: str = "causal",
 ) -> tuple[str, str]:
     event_type, event_message = infer_step_outcome(
-        action, prev, curr, reward, terminated, task_spec
+        action, prev, curr, reward, terminated, task_spec, level=level
     )
+    if level == "minimal":
+        return event_type, event_type
     prev_pos = agent_row_col(prev)
     if event_type == "BLOCKED":
         return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type

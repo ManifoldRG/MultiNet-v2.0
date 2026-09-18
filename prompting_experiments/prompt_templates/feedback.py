@@ -10,11 +10,15 @@ MOVE_BLOCKED_BY_KEY = (
     "Keys occupy their cell; you cannot walk onto them. "
     "Face the key and use PICKUP from your current cell."
 )
+MOVE_BLOCKED_BY_KEY_STANDARD = "MOVE_FORWARD blocked by a {key_color} key at {position}."
 MOVE_BLOCKED_BY_GATE_WITH_SWITCHES = (
     "MOVE_FORWARD blocked by closed gate {gate_id} at {position}. "
     "Activate switch(es) {switches} to open it."
 )
 MOVE_BLOCKED_BY_GATE = "MOVE_FORWARD blocked by closed gate {gate_id} at {position}."
+MOVE_BLOCKED_BY_DOOR = "MOVE_FORWARD blocked by a locked {color} door at {position}."
+DOOR_NEEDS_KEY = "It requires the {color} key to open."
+DOOR_USE_TOGGLE = "You are carrying the {color} key; TOGGLE to open it, then MOVE_FORWARD."
 MOVE_BLOCKED_GENERIC = "MOVE_FORWARD blocked by wall or closed door/gate."
 REACHED_GOAL = "Reached goal at {goal}."
 MOVED_TO = "Moved to {position}."
@@ -26,6 +30,7 @@ DROP_BLOCKED = (
     "DROP had no effect: your current cell already contains something. "
     "MOVE_FORWARD to an empty cell, then DROP there."
 )
+DROP_BLOCKED_STANDARD = "DROP had no effect: your current cell already contains something."
 TOGGLED_STATE_CHANGED = "Toggled switch or gate state changed."
 TOGGLE_HOLD_SWITCH_HINT = (
     "TOGGLE had no effect. MOVE_FORWARD onto the switch at {position} "
@@ -35,6 +40,8 @@ TOGGLE_SWITCH_HINT = "TOGGLE had no effect. MOVE_FORWARD onto the switch at {pos
 GATE_TOGGLE_WITH_SWITCHES = "Gates cannot be toggled directly. Activate switch(es) {switches} instead."
 GATE_TOGGLE_GENERIC = "Gates cannot be toggled directly. Activate a linked switch instead."
 TOGGLE_NO_EFFECT = "TOGGLE had no effect. Stand on a switch and TOGGLE, or use PICKUP/keys for doors."
+TOGGLE_NO_EFFECT_STANDARD = "TOGGLE had no effect."
+GATE_TOGGLE_STANDARD = "Gates cannot be toggled directly."
 TASK_COMPLETE = "Task complete at {goal}."
 WRONG_DONE = "DONE called but not at goal {goal}."
 UNKNOWN_ACTION = "Unknown or unsupported action {action}."

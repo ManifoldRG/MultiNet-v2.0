@@ -2,6 +2,7 @@
 
 CURRENT_IMAGE_PLACEHOLDER = "{current_image}"
 NEXT_ACTION_QUESTION = "What is your next action?"
+LAST_FEEDBACK_LINE = "Last feedback: {last_feedback}\n"
 
 ONE_SHOT_EXAMPLE_INTRO = (
     "Example maze and solution "
@@ -23,12 +24,14 @@ STANDARD_IMAGE_ONLY_USER_PROMPT = ( # the standard prompt
 
 TEXT_ONLY_USER_PROMPT = (
     "{current_observation_text}"
+    "{last_feedback_section}"
     f"{NEXT_ACTION_QUESTION}"
 )
 
 IMAGE_TEXT_USER_PROMPT = (
     f"{CURRENT_IMAGE_PLACEHOLDER}\n"
     "{current_observation_text}"
+    "{last_feedback_section}"
     f"{NEXT_ACTION_QUESTION}"
 )
 

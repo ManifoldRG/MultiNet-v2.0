@@ -153,10 +153,16 @@ class ExperimentRunner:
         # it with the rendered maze. Otherwise, for text observations append
         # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
         # context for text-only or image+text modes.
+        maze = dict(
+            observation_text_format=self.config.observation_text_format,
+            include_facing=self.config.observation_text_includes_facing,
+        )
         if "{maze_text}" in system_prompt:
-            system_prompt = system_prompt.format(maze_text=render_initial_maze_text(self.task_spec))
+            system_prompt = system_prompt.format(
+                maze_text=render_initial_maze_text(self.task_spec, **maze)
+            )
         elif self.config.observation in ("text_only", "image_text"):
-            maze_text = render_initial_maze_text(self.task_spec)
+            maze_text = render_initial_maze_text(self.task_spec, **maze)
             system_prompt = (
                 system_prompt
                 + "\n\n"
@@ -222,7 +228,11 @@ class ExperimentRunner:
         """The one-shot ICL example blocks (example image + solution), or []."""
         if self.config.in_context_learning == "one_shot":
             from interface.one_shot import one_shot_content_blocks
-            return one_shot_content_blocks(obs)
+            return one_shot_content_blocks(
+                obs,
+                observation_text_format=self.config.observation_text_format,
+                include_facing=self.config.observation_text_includes_facing,
+            )
         return []
 
     def _build_message(
@@ -232,24 +242,29 @@ class ExperimentRunner:
         transcript: List[dict],
         with_one_shot: bool = True,
         with_context_history: bool = True,
+        stall_remaining: int | None = None,
     ) -> dict:
         obs = self.config.observation
         # "current" disables the in-prompt history sections; multiturn chat
         # passes with_context_history=False because its turns already carry
         # the history and embedding it again duplicates every observation.
         ctx = self.config.context_window if with_context_history else "current"
+        n = self.config.context_n
         obs_text = current_observation_text(
             obs,
             self.task_spec,
             state,
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
+            observation_text_format=self.config.observation_text_format,
+            stall_remaining=stall_remaining,
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript, self.task_spec),
+            history_text(obs, ctx, transcript, self.task_spec, n=n),
             state,
             observation=obs,
+            last_feedback=last_feedback,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
@@ -268,7 +283,7 @@ class ExperimentRunner:
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
-        hist_blocks = history_content_blocks(obs, ctx, transcript)
+        hist_blocks = history_content_blocks(obs, ctx, transcript, n=n)
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []

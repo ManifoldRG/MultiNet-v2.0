@@ -19,7 +19,8 @@ def test_fair_default_baseline() -> None:
     assert c.observation == "image_text"
     assert c.include_current_observation_description is True  # text half of image+text is on
     assert c.observation_text_includes_facing is True
-    assert c.context_window == "last3"
+    assert c.context_window == "last_n"
+    assert c.context_n == 3
     assert c.chat_history == "stateless"  # single-message history is the default mechanism
     assert c.action_space == "egocentric"  # egocentric is the standard interface; cardinal is the arm
     assert c.in_context_learning == "one_shot"
@@ -44,7 +45,7 @@ def test_ablation_arms_flip_from_fair_default() -> None:
 def test_history_mechanism_set() -> None:
     hm = _by_variant("History mechanism")
     assert hm["single_message"].chat_history == "stateless"
-    assert hm["single_message"].context_window == "last3"
+    assert hm["single_message"].context_window == "last_n"
     assert hm["multiturn"].chat_history == "rolling"
     assert hm["multiturn"].context_window == "current"
     assert hm["multiturn"].chat_turns_max == 3
