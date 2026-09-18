@@ -1125,9 +1125,27 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])
         return QwenVLLMAPIAgent(config=cfg), model or cfg.model
+    if provider == "openai":
+        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
+
+        cfg = OpenAIConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        if "timeout" in model_cfg:
+            cfg.timeout = float(model_cfg["timeout"])
+        if "max_attempts" in model_cfg:
+            cfg.max_attempts = int(model_cfg["max_attempts"])
+        if model_cfg.get("spend_cap_usd") is not None:
+            cfg.spend_cap_usd = float(model_cfg["spend_cap_usd"])
+        for key in ("reasoning_effort", "service_tier", "image_detail", "base_url"):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
+        return OpenAIAgent(config=cfg), model or cfg.model
     raise ValueError(
         f"Model {name!r}: unknown provider {provider!r} "
-        "(expected 'claude', 'kimi', 'qwen', or 'qwen_vllm')."
+        "(expected 'claude', 'kimi', 'openai', 'qwen', or 'qwen_vllm')."
     )
 
 
