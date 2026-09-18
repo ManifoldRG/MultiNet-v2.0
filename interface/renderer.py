@@ -286,12 +286,21 @@ def _ascii_grid(
     return grid, legend
 
 
-def _ascii_status(task_spec: TaskSpecification, state: GridState | None) -> list[str]:
+def _ascii_status(
+    task_spec: TaskSpecification,
+    state: GridState | None,
+    remaining: int | None = None,
+    stall_remaining: int | None = None,
+) -> list[str]:
     _, switches = _gate_ids(task_spec)
     collected = state.collected_keys if state else set()
     active = state.active_switches if state else set()
     carrying = inventory_list(state) if state else []
     lines = ["Status:", f"  Carrying: {', '.join(f'{c} key' for c in carrying) or 'nothing'}"]
+    if remaining is not None:
+        lines.append(f"  Moves remaining: {remaining}")
+    if stall_remaining is not None:
+        lines.append(f"  Moves remaining until stall: {stall_remaining}")
     spent = [
         k.color for k in task_spec.mechanisms.keys
         if k.id in collected and k.color not in carrying
@@ -307,13 +316,13 @@ def _ascii_status(task_spec: TaskSpecification, state: GridState | None) -> list
     return lines
 
 
-def _ascii_block(task_spec, state, include_facing: bool) -> str:
+def _ascii_block(task_spec, state, include_facing: bool, remaining=None, stall_remaining=None) -> str:
     grid, legend = _ascii_grid(task_spec, state, include_facing)
     return "\n".join([
         _ASCII_MAP_HEADER, "", *grid, "",
         "Legend:",
         *(f"  {token} = {desc}" for token, desc in legend),
-        "", *_ascii_status(task_spec, state),
+        "", *_ascii_status(task_spec, state, remaining, stall_remaining),
     ])
 
 
@@ -342,26 +351,38 @@ def render_initial_maze_text(
     return "\n".join(_static_layout_lines(task_spec) + _mechanism_lines(task_spec))
 
 
+def _moves_remaining(state) -> int:
+    return state.max_steps - state.step_count
+
+
 def render_user_observation_text(
     task_spec: TaskSpecification,
     state: GridState,
     *,
     include_facing: bool = False,
     observation_text_format: ObservationTextFormat = "coords",
+    stall_remaining: int | None = None,
 ) -> str:
     pos = agent_row_col(state)
     inv = inventory_list(state)
+    remaining = _moves_remaining(state)
     if observation_text_format == "json":
         agent: dict = {"row": pos[0], "col": pos[1]}
         if include_facing:
             agent["facing"] = agent_facing(state)
-        return _dumps({
+        payload = {
             "agent": agent,
             "inventory": inv,
+            "moves_remaining": remaining,
             "map_contents": _mechanism_payload(task_spec, state),
-        })
+        }
+        if stall_remaining is not None:
+            payload["stall_remaining"] = stall_remaining
+        return _dumps(payload)
     if observation_text_format == "ascii":
-        return _ascii_block(task_spec, state, include_facing)
+        return _ascii_block(
+            task_spec, state, include_facing, remaining=remaining, stall_remaining=stall_remaining
+        )
 
     agent_line = (
         observation_templates.CURRENT_AGENT_LINE.format(position=pos, facing=agent_facing(state))
@@ -371,7 +392,10 @@ def render_user_observation_text(
     head = [
         agent_line,
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=", ".join(inv) or "empty"),
+        observation_templates.MOVES_REMAINING_LINE.format(n=remaining),
     ]
+    if stall_remaining is not None:
+        head.append(observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
     collected = [k.color for k in task_spec.mechanisms.keys if k.id in state.collected_keys]
     if collected:
         head.append(observation_templates.CURRENT_KEYS_COLLECTED_LINE.format(keys=", ".join(collected)))

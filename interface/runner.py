@@ -242,6 +242,7 @@ class ExperimentRunner:
         transcript: List[dict],
         with_one_shot: bool = True,
         with_context_history: bool = True,
+        stall_remaining: int | None = None,
     ) -> dict:
         obs = self.config.observation
         # "current" disables the in-prompt history sections; multiturn chat
@@ -256,6 +257,7 @@ class ExperimentRunner:
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
             observation_text_format=self.config.observation_text_format,
+            stall_remaining=stall_remaining,
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,

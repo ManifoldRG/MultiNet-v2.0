@@ -129,6 +129,21 @@ def test_observation_format_image_only_has_no_current_observation_text():
     assert text == ""
     assert "Current situation (this step):" not in text
     assert "You are at" not in text
+    assert "Moves remaining" not in text
+
+
+def test_text_modes_report_move_and_stall_budget():
+    spec, state = _initial_spec_and_state()
+    remaining = state.max_steps - state.step_count
+    text = current_observation_text(
+        "text_only", spec, state, include_description=True, stall_remaining=30
+    )
+    assert f"Moves remaining: {remaining}." in text
+    assert "Moves remaining until stall: 30." in text
+    image_only = current_observation_text(
+        "image_only", spec, state, include_description=True, stall_remaining=30
+    )
+    assert image_only == ""
 
 
 def test_image_only_prompt_puts_inventory_text_after_current_image():

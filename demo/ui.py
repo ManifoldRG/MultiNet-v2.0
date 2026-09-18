@@ -130,7 +130,6 @@ class MiniGridPlayerUI:
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
         self.settings_editable = True
-        self.show_moves_bar = False
         self.model_view_scroll = 0
         self.text_only_scroll = 0
 
@@ -643,6 +642,26 @@ class MiniGridPlayerUI:
     # reference layout. Debug-only info that isn't needed to actually play
     # (raw config axes, manifest metadata) lives in the Tab overlay instead.
 
+    def _draw_budget_bar(
+        self, x: int, y: int, width: int, label: str, remaining: int, total: int,
+        color: tuple | None = None,
+    ) -> int:
+        y = self._draw_status_label(x, y, label)
+        fraction = remaining / total if total else 0.0
+        if color is None:
+            if fraction < 0.3:
+                color = STATUS_MOVES_CRIT
+            elif fraction < 0.5:
+                color = STATUS_MOVES_WARN
+            else:
+                color = STATUS_MOVES_OK
+        count = self.font_main_bold.render(str(remaining), True, color)
+        self.screen.blit(count, (x, y))
+        bar_x = x + count.get_width() + 8
+        bar_w = max(20, width - count.get_width() - 8)
+        self._draw_progress_bar(bar_x, y + (count.get_height() - 10) // 2, bar_w, 10, fraction, color)
+        return y + count.get_height() + 8
+
     def _draw_status_label(self, x: int, y: int, label: str) -> int:
         label_surf = self.font_small_bold.render(" ".join(label.upper()), True, COLOR_TEXT_LABEL)
         self.screen.blit(label_surf, (x, y))
@@ -796,18 +815,13 @@ class MiniGridPlayerUI:
 
         state = session.state
         if state:
-            if self.show_moves_bar:
-                y = self._draw_status_label(x, y, "Moves")
-                remaining = max(0, state.max_steps - state.step_count)
-                fraction = remaining / state.max_steps if state.max_steps else 0.0
-                if fraction < 0.3:
-                    moves_color = STATUS_MOVES_CRIT
-                elif fraction < 0.5:
-                    moves_color = STATUS_MOVES_WARN
-                else:
-                    moves_color = STATUS_MOVES_OK
-                self._draw_progress_bar(x, y, width, 10, fraction, moves_color)
-                y += 10 + 8
+            remaining = state.max_steps - state.step_count
+            y = self._draw_budget_bar(x, y, width, "Moves", remaining, state.max_steps)
+            stall = session._stall
+            if stall:
+                y = self._draw_budget_bar(
+                    x, y, width, "Until stall", stall.remaining, stall.k, STATUS_MOVES_WARN
+                )
 
             direction = state.agent_direction
             dir_name = DIRECTION_NAMES.get(direction, "?").split(" (")[0]

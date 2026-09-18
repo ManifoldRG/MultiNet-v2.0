@@ -179,6 +179,9 @@ class EpisodeStepper:
                     self.transcript,
                     with_one_shot=(self.chat_history == "stateless"),
                     with_context_history=(self.chat_history == "stateless"),
+                    stall_remaining=(
+                        self._stall_watchdog.remaining if self._stall_watchdog else None
+                    ),
                 )
                 has_image = _user_message_has_image(user_message)
                 if self.chat_history == "stateless":

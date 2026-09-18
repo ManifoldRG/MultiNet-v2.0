@@ -503,6 +503,7 @@ class MiniGridPlaySession:
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
             observation_text_format=fmt,
+            stall_remaining=(self._stall.remaining if self._stall else None),
         )
         if obs_text:
             sections.append(("Current observation", obs_text))

@@ -123,7 +123,11 @@ def test_ascii_initial_and_current(spec_state, mid):
     assert legend["s1"] == "toggle switch, controls g1"
     assert legend["g1"] == "closed gate, opened by s1"
     assert "dO" not in legend and "gO" not in legend
-    assert _status(text) == {"Carrying": "nothing", "Switches on": "none"}
+    assert _status(text) == {
+        "Carrying": "nothing",
+        "Moves remaining": str(start.max_steps - start.step_count),
+        "Switches on": "none",
+    }
 
     init = _ascii(spec)
     assert _grid(init)[0][0] == ">"
@@ -140,7 +144,11 @@ def test_ascii_initial_and_current(spec_state, mid):
     assert lg["s1"] == "toggle switch, controls gO"
     assert "g1" not in lg and "currently" not in lg["s1"]
     assert _grid(_ascii(spec, state, include_facing=False))[3][4] == "A"
-    assert _status(mid_text) == {"Carrying": "red key", "Switches on": "s1"}
+    assert _status(mid_text) == {
+        "Carrying": "red key",
+        "Moves remaining": str(state.max_steps - state.step_count),
+        "Switches on": "s1",
+    }
     assert "Doors open" not in _status(mid_text)
     spent = dataclasses.replace(state, agent_carrying=None)
     assert _status(_ascii(spec, spent))["Keys used up"] == "red"
@@ -153,6 +161,8 @@ def test_json_payload(spec_state, mid):
     row, col = agent_row_col(start)
     assert payload["agent"] == {"row": row, "col": col, "facing": "EAST"}
     assert payload["inventory"] == []
+    assert payload["moves_remaining"] == start.max_steps - start.step_count
+    assert "stall_remaining" not in payload
     assert {k["color"] for k in payload["map_contents"]["keys"]} == {"blue", "red"}
 
     contents = _json(spec, state)["map_contents"]
