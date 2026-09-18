@@ -24,6 +24,7 @@ def _section(session, title):
 
 def test_observation_text_format_settings_and_model_view():
     assert ("6", "observation_text_format", ("coords", "json", "ascii")) in SETTINGS_AXES
+    assert ("7", "feedback", ("minimal", "standard", "causal")) in SETTINGS_AXES
     session = _session()
     seen = [session.config.observation_text_format]
     for _ in range(3):

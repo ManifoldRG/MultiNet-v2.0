@@ -94,6 +94,7 @@ SETTINGS_AXES: tuple[tuple[str, str, Optional[tuple[str, ...]]], ...] = (
     ("4", "observation_text_includes_facing", None),
     ("5", "action_space", ("egocentric", "cardinal")),
     ("6", "observation_text_format", ("coords", "json", "ascii")),
+    ("7", "feedback", ("minimal", "standard", "causal")),
 )
 
 
@@ -216,6 +217,7 @@ class MiniGridPlaySession:
         # BFS optimum + R1 step cap from pipeline canonical_paths.
         self.optimal_steps: int = 0
         self.last_action_name: str = ""
+        self.last_feedback: str = "Episode start."
         self.last_dispatched_token: str = ""
         self.step_index: int = 0
 
@@ -322,6 +324,7 @@ class MiniGridPlaySession:
         self._stall = ProgressStallWatchdog(k, self.state) if k else None
         self.total_reward = 0.0
         self.last_action_name = ""
+        self.last_feedback = "Episode start."
         self.last_dispatched_token = ""
         self.step_index = 0
         self.event_log = []
@@ -386,8 +389,10 @@ class MiniGridPlaySession:
         self._record_events(prev_state, self.state, prev_doors)
 
         feedback_text, event_type = format_step_feedback(
-            token, prev_state, self.state, reward, terminated, self.task_spec
+            token, prev_state, self.state, reward, terminated, self.task_spec,
+            level=self.config.feedback,
         )
+        self.last_feedback = feedback_text
         self._record_step(
             token, cardinal_source, prev_state, feedback_text, event_type,
             reward, terminated, truncated, info,
@@ -501,6 +506,8 @@ class MiniGridPlaySession:
         )
         if obs_text:
             sections.append(("Current observation", obs_text))
+        if obs in ("text_only", "image_text"):
+            sections.append(("Last feedback", self.last_feedback))
 
         hist = history_text(obs, ctx, transcript, self.task_spec)
         if not hist and ctx == "text_summary_and_last3" and obs == "image_only":

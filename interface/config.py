@@ -22,6 +22,7 @@ class ExperimentConfig:
     max_parse_retries: int = 3
     in_context_learning: Literal["zero_shot", "one_shot"] = "one_shot"
     action_space: Literal["egocentric", "cardinal"] = "egocentric"
+    feedback: Literal["minimal", "standard", "causal"] = "causal"
     progress_stall_k: Optional[int] = None
 
     def __post_init__(self) -> None:

@@ -127,7 +127,6 @@ def _last3_history_text(
                 col=int(col),
                 facing=rec["facing_after"],
                 action=_history_record_action(rec),
-                feedback=rec["prompt_feedback"],
             )
         )
     return "\n".join(lines)

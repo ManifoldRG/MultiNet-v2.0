@@ -105,7 +105,8 @@ def _rollout_preview_steps(
                 nlu_action_to_int(action)
             )
         step_detail, event_type = format_step_feedback(
-            action, prev_state, state, reward, terminated, runner.task_spec
+            action, prev_state, state, reward, terminated, runner.task_spec,
+            level=runner.config.feedback,
         )
         last_feedback = step_detail
         transcript.append(
@@ -185,7 +186,8 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
                 nlu_action_to_int(action)
             )
         step_detail, event_type = format_step_feedback(
-            action, prev_state, state, reward, terminated, runner.task_spec
+            action, prev_state, state, reward, terminated, runner.task_spec,
+            level=runner.config.feedback,
         )
         last_feedback = step_detail
         transcript.append(

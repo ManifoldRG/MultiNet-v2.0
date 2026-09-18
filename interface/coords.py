@@ -110,6 +110,22 @@ def switch_at_cell(
     return None
 
 
+def door_at_cell(
+    task_spec: TaskSpecification,
+    state: GridState,
+    row: int,
+    col: int,
+) -> dict[str, str | bool] | None:
+    for door in task_spec.mechanisms.doors:
+        if to_row_col(door.position) == (row, col):
+            return {
+                "id": door.id,
+                "open": door.id in state.open_doors,
+                "requires_key": door.requires_key,
+            }
+    return None
+
+
 def gate_at_cell(
     task_spec: TaskSpecification,
     state: GridState,

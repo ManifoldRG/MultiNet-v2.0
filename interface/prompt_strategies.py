@@ -30,12 +30,14 @@ class MinimalPromptStrategy:
         state: GridState,
         *,
         observation: str = "image_only",
+        last_feedback: str = "",
     ) -> str:
         return _build_user_prompt(
             observation=observation,
             obs_text=obs_text,
             history_text=history_text,
             state=state,
+            last_feedback=last_feedback,
         )
 
 
@@ -93,12 +95,19 @@ def _build_user_prompt(
     obs_text: str,
     history_text: str,
     state: GridState,
+    last_feedback: str = "",
 ) -> str:
     inventory = ", ".join(inventory_list(state)) or "empty"
+    last_feedback_section = (
+        ""
+        if observation == "image_only" or not last_feedback
+        else user_templates.LAST_FEEDBACK_LINE.format(last_feedback=last_feedback)
+    )
     fields = {
         "current_image": user_templates.CURRENT_IMAGE_PLACEHOLDER,
         "inventory": inventory,
         "current_observation_text": _text_section(obs_text),
+        "last_feedback_section": last_feedback_section,
     }
     if observation == "text_only":
         prompt = user_templates.TEXT_ONLY_USER_PROMPT.format(**fields)

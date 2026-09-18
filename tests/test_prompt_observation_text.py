@@ -305,10 +305,8 @@ def test_text_last3_prompt_includes_recent_history_text():
     assert "Recent history (last 3 steps, oldest first):" in prompt_text
     assert "Position after: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
-    assert "Feedback: MOVED" in prompt_text
-    assert "What is your next action?" in prompt_text
-    assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
-    assert "Last result: Episode start." not in prompt_text
+    assert "Feedback:" not in prompt_text
+    assert "Last feedback: Episode start." in prompt_text
 
 
 def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
@@ -356,7 +354,7 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
     assert "Recent history (last 3 steps, oldest first):" in prompt_text
     assert "Position after: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
-    assert "Feedback: MOVED" in prompt_text
+    assert "Feedback:" not in prompt_text
     assert "What is your next action?" in prompt_text
 
 

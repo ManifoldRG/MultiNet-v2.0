@@ -261,6 +261,7 @@ class ExperimentRunner:
             history_text(obs, ctx, transcript, self.task_spec),
             state,
             observation=obs,
+            last_feedback=last_feedback,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
