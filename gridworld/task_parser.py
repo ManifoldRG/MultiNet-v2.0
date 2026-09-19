@@ -268,6 +268,7 @@ class TaskParser:
                 teleporter.position_a.x, teleporter.position_a.y,
                 teleporter.position_b.x, teleporter.position_b.y,
                 teleporter.bidirectional,
+                color=teleporter.color,
             )
 
         # Set agent position (overwrite anything at start position)

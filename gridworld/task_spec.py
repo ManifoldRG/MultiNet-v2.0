@@ -121,21 +121,43 @@ class BlockSpec:
         )
 
 
+def _position_from(value) -> Position:
+    if isinstance(value, list):
+        return Position.from_list(value)
+    return Position.from_dict(value)
+
+
 @dataclass
 class TeleporterSpec:
-    """Teleporter pair specification."""
+    """Portal pair: stepping on A lands on B (and vice versa if bidirectional).
+
+    JSON may use ``portals`` or the older ``teleporters`` key. Endpoint pairs
+    accept ``position_a``/``position_b``, ``from``/``to``, or ``cells``.
+    """
     id: str
     position_a: Position
     position_b: Position
     bidirectional: bool = True
+    color: str = "purple"
 
     @classmethod
     def from_dict(cls, d: dict) -> "TeleporterSpec":
+        if "position_a" in d and "position_b" in d:
+            pos_a, pos_b = d["position_a"], d["position_b"]
+        elif "from" in d and "to" in d:
+            pos_a, pos_b = d["from"], d["to"]
+        elif "cells" in d and len(d["cells"]) == 2:
+            pos_a, pos_b = d["cells"]
+        else:
+            raise KeyError(
+                "Portal/teleporter requires position_a/position_b, from/to, or cells"
+            )
         return cls(
             id=d["id"],
-            position_a=Position.from_list(d["position_a"]) if isinstance(d["position_a"], list) else Position.from_dict(d["position_a"]),
-            position_b=Position.from_list(d["position_b"]) if isinstance(d["position_b"], list) else Position.from_dict(d["position_b"]),
-            bidirectional=d.get("bidirectional", True)
+            position_a=_position_from(pos_a),
+            position_b=_position_from(pos_b),
+            bidirectional=d.get("bidirectional", True),
+            color=d.get("color", "purple"),
         )
 
 
@@ -195,9 +217,37 @@ class MechanismSet:
             switches=[SwitchSpec.from_dict(s) for s in d.get("switches", [])],
             gates=[GateSpec.from_dict(g) for g in d.get("gates", [])],
             blocks=[BlockSpec.from_dict(b) for b in d.get("blocks", [])],
-            teleporters=[TeleporterSpec.from_dict(t) for t in d.get("teleporters", [])],
+            teleporters=_portal_specs_from_dict(d),
             hazards=[HazardSpec.from_dict(h) for h in d.get("hazards", [])],
         )
+
+    @property
+    def portals(self) -> list[TeleporterSpec]:
+        return self.teleporters
+
+
+def _portal_specs_from_dict(d: dict) -> list[TeleporterSpec]:
+    """Accept ``portals`` (preferred) and/or the older ``teleporters`` key."""
+    specs: list[TeleporterSpec] = []
+    seen: set[str] = set()
+    for key in ("portals", "teleporters"):
+        for item in d.get(key) or []:
+            spec = TeleporterSpec.from_dict(item)
+            if spec.id in seen:
+                continue
+            seen.add(spec.id)
+            specs.append(spec)
+    return specs
+
+
+def _portal_to_dict(t: TeleporterSpec) -> dict:
+    return {
+        "id": t.id,
+        "position_a": [t.position_a.x, t.position_a.y],
+        "position_b": [t.position_b.x, t.position_b.y],
+        "bidirectional": t.bidirectional,
+        "color": t.color,
+    }
 
 
 @dataclass
@@ -405,7 +455,8 @@ class TaskSpecification:
                 "switches": [{"id": s.id, "position": pos_to_list(s.position), "controls": s.controls, "color": s.color, "switch_type": s.switch_type, "initial_state": s.initial_state} for s in self.mechanisms.switches],
                 "gates": [{"id": g.id, "position": pos_to_list(g.position), "initial_state": g.initial_state, "color": g.color} for g in self.mechanisms.gates],
                 "blocks": [{"id": b.id, "position": pos_to_list(b.position), "pushable": b.pushable, "color": b.color} for b in self.mechanisms.blocks],
-                "teleporters": [{"id": t.id, "position_a": pos_to_list(t.position_a), "position_b": pos_to_list(t.position_b), "bidirectional": t.bidirectional} for t in self.mechanisms.teleporters],
+                "teleporters": [_portal_to_dict(t) for t in self.mechanisms.teleporters],
+                "portals": [_portal_to_dict(t) for t in self.mechanisms.teleporters],
                 "hazards": [{"id": h.id, "position": pos_to_list(h.position), "hazard_type": h.hazard_type} for h in self.mechanisms.hazards],
             },
             "rules": {

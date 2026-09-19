@@ -34,6 +34,7 @@ MINIGRID_COLORS = {
     "purple": "purple",
     "grey": "grey",
     "gray": "grey",
+    "cyan": "blue",
 }
 
 SWITCH_RENDER_COLORS = {
@@ -45,6 +46,7 @@ SWITCH_RENDER_COLORS = {
     "grey": np.array([100, 100, 100]),
     "gray": np.array([100, 100, 100]),
     "white": np.array([255, 255, 255]),
+    "cyan": np.array([0, 220, 220]),
 }
 
 
@@ -151,15 +153,12 @@ class Gate(Door):
 
 
 class TeleporterObj(Ball):
-    """
-    Teleporter endpoint object.
-    When the agent steps on it, they are teleported to the partner endpoint.
-    Rendered as a ball with special portal appearance.
-    """
+    """Portal endpoint. Stepping on it lands the agent on the partner cell."""
 
     def __init__(self, color: str = "purple", teleporter_id: str = "",
                  partner: "TeleporterObj | None" = None, cooldown_max: int = 1):
-        super().__init__(color)
+        self.visual_color = color
+        super().__init__(MINIGRID_COLORS.get(color, "purple"))
         self.teleporter_id = teleporter_id
         self.partner: TeleporterObj | None = partner
         self.cooldown = 0
@@ -170,6 +169,16 @@ class TeleporterObj(Ball):
 
     def can_pickup(self):
         return False
+
+    def render(self, img):
+        color = SWITCH_RENDER_COLORS.get(self.visual_color, SWITCH_RENDER_COLORS["purple"])
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.42), color)
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.26), np.array([20, 20, 35]))
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.12), color)
+
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, abs(hash(self.visual_color)) % 6)
 
 
 class PushableBlock(Box):

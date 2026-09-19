@@ -339,6 +339,8 @@ def _forward_successor(
         return
 
     next_pos = ctx.teleporters.get(front, front)
+    # Warp is one hop: landing on the partner pad does not fire again until
+    # the agent leaves that cell and steps back onto it.
     active_switches = _active_switches_after_move(ctx, state, next_pos)
     yield Transition(
         action=int(MiniGridActions.MOVE_FORWARD),
