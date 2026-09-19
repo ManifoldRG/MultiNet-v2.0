@@ -271,6 +271,9 @@ class TaskParser:
                 color=teleporter.color,
             )
 
+        for kill in spec.mechanisms.kill_cells:
+            env.place_kill_cell(kill.x, kill.y)
+
         # Set agent position (overwrite anything at start position)
         # This is done last to ensure the agent always spawns at the correct location,
         # even if the task specification accidentally placed another object there

@@ -425,9 +425,11 @@ def compute_difficulty(
     blocks_count = len(m.blocks)
     teleporters_count = len(m.teleporters)
     hazards_count = len(m.hazards)
+    kill_cells_count = len(m.kill_cells)
     mechanism_count = (
         keys_count + doors_count + switches_count
         + gates_count + blocks_count + teleporters_count + hazards_count
+        + kill_cells_count
     )
 
     type_flags = [
@@ -438,6 +440,7 @@ def compute_difficulty(
         blocks_count > 0,
         teleporters_count > 0,
         hazards_count > 0,
+        kill_cells_count > 0,
     ]
     mechanism_types = sum(type_flags)
 

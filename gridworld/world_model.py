@@ -100,6 +100,7 @@ class TaskPlanningContext:
         }
         self.blocks = {block.position.to_tuple() for block in spec.mechanisms.blocks}
         self.hazards = {hazard.position.to_tuple() for hazard in spec.mechanisms.hazards}
+        self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
         self.teleporters = {}
         for teleporter in spec.mechanisms.teleporters:
             pos_a = teleporter.position_a.to_tuple()
@@ -186,8 +187,6 @@ def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transi
             ),
         )
 
-    # DROP is off for R1 scoring (drop_available=False). The demo turns it on:
-    # the key lands in the agent's current cell and can be picked up again.
     if ctx.drop_available and state.carrying_key is not None and _can_drop_here(ctx, state):
         key_id = state.carrying_key
         x, y = state.agent_pos
@@ -287,7 +286,7 @@ def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
         return False
     if pos in ctx.switches_by_pos or pos in ctx.doors_by_pos or pos in ctx.gates_by_pos:
         return False
-    if pos in ctx.teleporters or pos == ctx.goal:
+    if pos in ctx.teleporters or pos in ctx.kill_cells or pos == ctx.goal:
         return False
     return _key_id_at(state, pos) is None
 
@@ -339,8 +338,14 @@ def _forward_successor(
         return
 
     next_pos = ctx.teleporters.get(front, front)
-    # Warp is one hop: landing on the partner pad does not fire again until
-    # the agent leaves that cell and steps back onto it.
+    if next_pos in ctx.kill_cells:
+        yield Transition(
+            action=int(MiniGridActions.MOVE_FORWARD),
+            label="kill_reset",
+            next_state=ctx.initial_state(),
+        )
+        return
+
     active_switches = _active_switches_after_move(ctx, state, next_pos)
     yield Transition(
         action=int(MiniGridActions.MOVE_FORWARD),

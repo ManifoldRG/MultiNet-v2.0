@@ -181,6 +181,19 @@ class TeleporterObj(Ball):
         return (obj_type, color_idx, abs(hash(self.visual_color)) % 6)
 
 
+class KillCell(Lava):
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, 4)
+
+    def render(self, img):
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.48), np.array([90, 12, 12]))
+        fill_coords(img, point_in_circle(0.5, 0.42, 0.30), np.array([230, 230, 230]))
+        fill_coords(img, point_in_circle(0.38, 0.38, 0.08), np.array([20, 20, 20]))
+        fill_coords(img, point_in_circle(0.62, 0.38, 0.08), np.array([20, 20, 20]))
+        fill_coords(img, point_in_circle(0.5, 0.58, 0.06), np.array([20, 20, 20]))
+
+
 class PushableBlock(Box):
     """
     A block that can be pushed by the agent.
@@ -368,6 +381,9 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.teleporters[f"{teleporter_id}_b"] = tp_b
         self.put_obj(tp_a, x_a, y_a)
         self.put_obj(tp_b, x_b, y_b)
+
+    def place_kill_cell(self, x: int, y: int):
+        self.put_obj(KillCell(), x, y)
 
     def place_goal(self, x: int, y: int):
         """Place the goal at the given position."""

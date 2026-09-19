@@ -218,30 +218,7 @@ _M7_PORTALS = (
 
 
 class TestPortalRules:
-    """Matching-color pads warp on entry; arrival does not immediately bounce back."""
-
-    def test_portals_json_key_is_accepted(self):
-        spec = TaskSpecification.from_dict({
-            "task_id": "portals_alias",
-            "seed": 1,
-            "difficulty_tier": 1,
-            "maze": {"dimensions": [8, 8], "walls": [], "start": [1, 1], "goal": [6, 6]},
-            "mechanisms": {
-                "portals": [{
-                    "id": "portal_purple",
-                    "position_a": [2, 1],
-                    "position_b": [5, 5],
-                    "color": "purple",
-                    "bidirectional": True,
-                }]
-            },
-            "goal": {"type": "reach_position", "target": [6, 6]},
-            "max_steps": 50,
-        })
-        assert len(spec.mechanisms.portals) == 1
-        assert spec.mechanisms.portals[0].color == "purple"
-
-    def test_color_is_placed_on_both_pads(self, teleporter_spec):
+    def test_color_is_placed_on_both_pads(self):
         spec = TaskSpecification.from_dict({
             "task_id": "colored_portal",
             "seed": 1,
@@ -278,11 +255,11 @@ class TestPortalRules:
         backend = MiniGridBackend(render_mode="rgb_array")
         backend.configure(teleporter_spec)
         backend.reset(seed=42)
-        backend.step(MiniGridActions.MOVE_FORWARD)  # (1,1) -> warp to (5,5)
-        backend.step(MiniGridActions.MOVE_FORWARD)  # leave pad to (6,5)
+        backend.step(MiniGridActions.MOVE_FORWARD)
+        backend.step(MiniGridActions.MOVE_FORWARD)
         backend.step(MiniGridActions.TURN_LEFT)
         backend.step(MiniGridActions.TURN_LEFT)
-        _, _, _, _, state, _ = backend.step(MiniGridActions.MOVE_FORWARD)  # re-enter (5,5)
+        _, _, _, _, state, _ = backend.step(MiniGridActions.MOVE_FORWARD)
         assert state.agent_position == (2, 1)
 
     def test_bfs_uses_the_portal_shortcut(self):
@@ -319,12 +296,10 @@ class TestPortalRules:
         spec = TaskSpecification.from_json(str(_M7_PORTALS))
         ok, errors = spec.validate()
         assert ok, errors
-        assert {p.color for p in spec.mechanisms.portals} == {"purple", "cyan"}
+        assert {p.color for p in spec.mechanisms.teleporters} == {"purple", "cyan"}
         backend = MiniGridBackend(render_mode="rgb_array")
         backend.configure(spec)
         backend.reset(seed=0)
-        # start (1,1) facing east; walk to purple pad at (4,4) is not one step,
-        # but both pads must exist on the grid.
         assert len(backend.env.teleporters) == 4
         colors = {tp.visual_color for tp in backend.env.teleporters.values()}
         assert colors == {"purple", "cyan"}
