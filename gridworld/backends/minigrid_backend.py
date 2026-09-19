@@ -36,6 +36,7 @@ class MiniGridBackend(AbstractGridBackend):
         self.parser = TaskParser(render_mode=render_mode)
         self.env: Optional[CustomMiniGridEnv] = None
         self._last_obs = None
+        self.drop_available = False
 
     def configure(self, task_spec: TaskSpecification) -> None:
         """
@@ -84,6 +85,7 @@ class MiniGridBackend(AbstractGridBackend):
         # CRITICAL: parser.parse() internally calls env.reset() and populates the grid.
         # We must NOT call reset() again here or it will wipe out all objects!
         self.env = self.parser.parse(self.task_spec, seed=seed)
+        self.env.drop_available = self.drop_available
 
         # Generate observation (env is already reset and populated by parser)
         obs = self.env.gen_obs()

@@ -14,6 +14,8 @@ from typing import Optional
 
 import numpy as np
 
+from demo.fx import portal_transition
+
 try:
     import pygame
 except ImportError:  # pragma: no cover - pygame is required by the UI already
@@ -185,6 +187,24 @@ def _build_library() -> dict[str, Optional["pygame.mixer.Sound"]]:
         _sine(980, 50, volume=0.2, attack=0.02, release=0.8),
     )
 
+    n_warp = max(1, int(SAMPLE_RATE * 180 / 1000.0))
+    warp_freq = np.linspace(420.0, 1080.0, n_warp, dtype=np.float32)
+    warp_phase = 2.0 * math.pi * np.cumsum(warp_freq) / SAMPLE_RATE
+    warp = _mix(
+        (np.sin(warp_phase) * 0.45 * _envelope(n_warp, 0.04, 0.5)).astype(np.float32),
+        _sine(1240, 90, volume=0.28, attack=0.05, release=0.65),
+        _lowpass(_noise(90, volume=0.12, attack=0.02, release=0.7, seed=8), 0.28),
+    )
+
+    n_kill = max(1, int(SAMPLE_RATE * 280 / 1000.0))
+    kill_freq = np.linspace(480.0, 70.0, n_kill, dtype=np.float32)
+    kill_phase = 2.0 * math.pi * np.cumsum(kill_freq) / SAMPLE_RATE
+    kill = _mix(
+        (np.sin(kill_phase) * 0.5 * _envelope(n_kill, 0.03, 0.5)).astype(np.float32),
+        _sine(70, 260, volume=0.55, attack=0.02, release=0.55),
+        _lowpass(_noise(220, volume=0.28, attack=0.02, release=0.65, seed=9), 0.12),
+    )
+
     return {
         "step": _to_sound(step),
         "turn": _to_sound(turn),
@@ -196,10 +216,12 @@ def _build_library() -> dict[str, Optional["pygame.mixer.Sound"]]:
         "success": _to_sound(success),
         "restart": _to_sound(whoosh),
         "navigate": _to_sound(navigate),
+        "warp": _to_sound(warp),
+        "kill": _to_sound(kill),
     }
 
 
-def sfx_for_dispatch(session, events_before: int) -> str:
+def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
     """Pick one short UI clip for the action that just ran.
 
     Prefers semantic Progress milestones (pickup / door / switch) when they
@@ -210,6 +232,10 @@ def sfx_for_dispatch(session, events_before: int) -> str:
     """
     if session.episode_done and session.episode_success:
         return "success"
+
+    hit = portal_transition(session, session.last_dispatched_token, prev_state)
+    if hit is not None:
+        return hit[0]
 
     for event in reversed(session.event_log[events_before:]):
         if event.icon == "key":
