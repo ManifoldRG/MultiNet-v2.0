@@ -22,6 +22,7 @@ from minigrid.utils.rendering import fill_coords, point_in_circle
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
+from .world_model import PlannerState, TaskPlanningContext, apply, successors
 
 
 # Color mapping for MiniGrid
@@ -214,6 +215,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         agent_view_size: int = 7,
         highlight: bool = True,
         agent_pov: bool = False,
+        drop_available: bool = False,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos
@@ -221,6 +223,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.goal_pos = goal_pos
         self._custom_mission_text = mission_text  # Store our custom mission text
         self.task_spec = task_spec
+        self.drop_available = drop_available
+        self._planning_ctx: TaskPlanningContext | None = None
 
         # Mechanism tracking
         self.key_objects: dict[str, Key] = {}
@@ -501,184 +505,115 @@ class CustomMiniGridEnv(MiniGridEnv):
             return 0, False, truncated, info
         return reward, terminated, truncated, info
 
-    def step(self, action: int):
-        """Execute one step in the environment with custom mechanics."""
-        action = int(action)
-        # Get the position in front of the agent
-        fwd_pos = self.front_pos
-        fwd_cell = self.grid.get(*fwd_pos)
-        current_cell = self.grid.get(*self.agent_pos)
-
-        # A key is picked up only from the agent's current cell: the agent must
-        # overlap the GroundKey first (MOVE_FORWARD onto it), then PICKUP. This
-        # matches system.py ("pick up a key while standing in the same cell"),
-        # the current-cell switch mechanic, and the same-cell baseline solver
-        # (gridworld/baselines.py).
-        if action == self.actions.pickup:
-            info: dict = {}
-            if isinstance(current_cell, Key):
-                if self.carrying is None:
-                    self.carrying = current_cell
-                    key_id = getattr(current_cell, "key_id", None)
-                    if key_id is not None:
-                        self.collected_keys.add(key_id)
-                    self.grid.set(*self.agent_pos, None)
-                else:
-                    info = {"invalid_action": True}
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, info)
-            return obs, reward, terminated, truncated, info
-
-        # DROP puts the held key in the agent's CURRENT cell, mirroring the
-        # same-cell PICKUP above, so drop and pickup are exact inverses at one
-        # action each. MiniGridEnv.step would drop into the forward cell, which is
-        # both asymmetric with our pickup and fails when the agent faces a wall —
-        # exactly the corner an agent stuck with a decoy key tends to be in. So
-        # DROP is handled here and never delegated to super().
-        if action == self.actions.drop:
-            info = {}
-            if self.carrying is not None and current_cell is None:
-                dropped = self.carrying
-                self.grid.set(*self.agent_pos, dropped)
-                dropped.cur_pos = tuple(self.agent_pos)
-                self.carrying = None
-                key_id = getattr(dropped, "key_id", None)
-                if key_id is not None:
-                    self.collected_keys.discard(key_id)
-            else:
-                info = {"invalid_action": True}
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(
-                0, False, truncated, info
+    def _planning_context(self) -> TaskPlanningContext:
+        if self.task_spec is None:
+            raise RuntimeError("CustomMiniGridEnv.step requires a task_spec")
+        if (
+            self._planning_ctx is None
+            or self._planning_ctx.spec is not self.task_spec
+            or self._planning_ctx.drop_available != self.drop_available
+        ):
+            self._planning_ctx = TaskPlanningContext(
+                self.task_spec, drop_available=self.drop_available
             )
-            return obs, reward, terminated, truncated, info
+        return self._planning_ctx
 
-        # Switches are activated from the agent's current cell, matching the validator.
-        if action == self.actions.toggle and isinstance(current_cell, Switch):
-            if not current_cell.activate():
-                self.step_count += 1
-                truncated = self.step_count >= self.max_steps
-                obs = self.gen_obs()
-                reward, terminated, truncated, info = self._finalize_step_result(
-                    0, False, truncated, {"invalid_action": True}
-                )
-                return obs, reward, terminated, truncated, info
-            self._refresh_gates()
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
+    def _read_planner_state(self, ctx: TaskPlanningContext) -> PlannerState:
+        carrying_key = None
+        if self.carrying is not None:
+            carrying_key = getattr(self.carrying, "key_id", None)
+        open_doors = set()
+        for pos, door in ctx.doors_by_pos.items():
+            cell = self.grid.get(*pos)
+            if isinstance(cell, Door) and not isinstance(cell, Gate):
+                if cell.is_open or not cell.is_locked:
+                    open_doors.add(door["id"])
+        key_positions = []
+        for x in range(self.width):
+            for y in range(self.height):
+                cell = self.grid.get(x, y)
+                if isinstance(cell, Key):
+                    key_id = getattr(cell, "key_id", None)
+                    if key_id is not None:
+                        key_positions.append((key_id, x, y))
+        return PlannerState(
+            agent_pos=tuple(self.agent_pos),
+            agent_dir=int(self.agent_dir),
+            carrying_key=carrying_key,
+            collected_keys=frozenset(self.collected_keys),
+            active_switches=frozenset(
+                sid for sid, sw in self.switches.items() if sw.is_active
+            ),
+            used_switches=frozenset(
+                sid for sid, sw in self.switches.items() if getattr(sw, "used", False)
+            ),
+            open_gates=frozenset(gid for gid, gate in self.gates.items() if gate.is_open),
+            open_doors=frozenset(open_doors),
+            key_positions=frozenset(key_positions),
+        )
 
-        if action == self.actions.forward and isinstance(fwd_cell, Key) and self._cell_can_overlap(fwd_cell):
-            self.agent_pos = (int(fwd_pos[0]), int(fwd_pos[1]))
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            self._update_hold_switches()
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
+    def _write_planner_state(self, ctx: TaskPlanningContext, state: PlannerState) -> None:
+        self.agent_pos = (int(state.agent_pos[0]), int(state.agent_pos[1]))
+        self.agent_dir = int(state.agent_dir)
+        self.collected_keys = set(state.collected_keys)
 
-        # Handle key consumption when unlocking doors
-        if action == self.actions.toggle and isinstance(fwd_cell, Door) and not isinstance(fwd_cell, Gate):
-            if fwd_cell.is_locked and self.carrying is not None:
-                if isinstance(self.carrying, Key) and self.carrying.color == fwd_cell.color:
-                    # Key matches - unlock the door
-                    fwd_cell.is_locked = False
-                    fwd_cell.is_open = True
+        for sid, switch in self.switches.items():
+            switch.is_active = sid in state.active_switches
+            switch.used = sid in state.used_switches
+        for gid, gate in self.gates.items():
+            gate.is_open = gid in state.open_gates
+        for pos, door in ctx.doors_by_pos.items():
+            cell = self.grid.get(*pos)
+            if isinstance(cell, Door) and not isinstance(cell, Gate):
+                is_open = door["id"] in state.open_doors
+                cell.is_open = is_open
+                cell.is_locked = not is_open
 
-                    # Check if key should be consumed
-                    if self.task_spec and self.task_spec.rules.key_consumption:
-                        self.carrying = None  # Consume the key
+        for x in range(self.width):
+            for y in range(self.height):
+                cell = self.grid.get(x, y)
+                if isinstance(cell, Key):
+                    self.grid.set(x, y, None)
 
-                    # Return after handling
-                    self.step_count += 1
-                    truncated = self.step_count >= self.max_steps
-                    obs = self.gen_obs()
-                    reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-                    return obs, reward, terminated, truncated, info
+        self.carrying = None
+        for key_id, x, y in state.key_positions:
+            obj = self.key_objects.get(key_id)
+            if obj is None:
+                continue
+            self.grid.set(x, y, obj)
+            if hasattr(obj, "cur_pos"):
+                obj.cur_pos = (x, y)
+        if state.carrying_key is not None:
+            self.carrying = self.key_objects.get(state.carrying_key)
 
-        # Handle gate toggle attempt (gates can only be opened by switches, not directly)
-        if action == self.actions.toggle and isinstance(fwd_cell, Gate):
-            # No-op: gates are not directly toggleable
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
+    def step(self, action: int):
+        """Advance the live env by applying the R1 rulebook, then observing."""
+        action = int(action)
+        if self.task_spec is None:
+            return super().step(action)
 
-        # Handle block pushing
-        if action == self.actions.forward and isinstance(fwd_cell, PushableBlock):
-            # Calculate position behind the block
-            dir_vec = self.dir_vec
-            behind_block_pos = (fwd_pos[0] + dir_vec[0], fwd_pos[1] + dir_vec[1])
+        ctx = self._planning_context()
+        before = self._read_planner_state(ctx)
+        after = apply(ctx, before, action)
+        legal = any(t.action == action for t in successors(ctx, before))
+        self._write_planner_state(ctx, after)
 
-            # Check if we can push the block
-            behind_cell = self.grid.get(*behind_block_pos)
-            if behind_cell is None or self._cell_can_overlap(behind_cell):
-                # Push the block
-                self.grid.set(*fwd_pos, None)
-                self.grid.set(*behind_block_pos, fwd_cell)
-                # Agent moves forward
-                self.agent_pos = fwd_pos
+        info: dict = {}
+        if not legal and action != int(self.actions.done):
+            # Turns are always legal. Everything else that apply treats as a
+            # no-op is an invalid action (bump wall, empty pickup, gated DROP).
+            if action not in (
+                int(self.actions.left),
+                int(self.actions.right),
+            ):
+                info["invalid_action"] = True
 
-                # Check step count and return
-                self.step_count += 1
-
-                if self.step_count >= self.max_steps:
-                    truncated = True
-                else:
-                    truncated = False
-
-                obs = self.gen_obs()
-                reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-                return obs, reward, terminated, truncated, info
-
-        # Handle gate blocking
-        if action == self.actions.forward and isinstance(fwd_cell, Gate) and not fwd_cell.is_open:
-            # Can't move through closed gate
-            self.step_count += 1
-            if self.step_count >= self.max_steps:
-                truncated = True
-            else:
-                truncated = False
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
-
-        # Default behavior
-        obs, reward, terminated, truncated, info = super().step(action)
-        if action == self.actions.forward:
-            self._update_hold_switches()
-
-        # Tick teleporter cooldowns
-        for tp in self.teleporters.values():
-            if tp.cooldown > 0:
-                tp.cooldown -= 1
-
-        # Check if agent landed on a teleporter after moving forward
-        if action == self.actions.forward:
-            cell = self.grid.get(*self.agent_pos)
-            if isinstance(cell, TeleporterObj) and cell.partner is not None and cell.cooldown == 0:
-                # Find partner position
-                for x in range(self.width):
-                    for y in range(self.height):
-                        if self.grid.get(x, y) is cell.partner:
-                            self.agent_pos = (x, y)
-                            # Set cooldown on destination to prevent immediate bounce-back
-                            cell.partner.cooldown = cell.partner.cooldown_max
-                            # Regenerate observation after teleport
-                            obs = self.gen_obs()
-                            break
-                    else:
-                        continue
-                    break
-
-        reward, terminated, truncated, info = self._finalize_step_result(reward, terminated, truncated, info)
+        self.step_count += 1
+        truncated = self.step_count >= self.max_steps
+        obs = self.gen_obs()
+        reward, terminated, truncated, info = self._finalize_step_result(
+            0, False, truncated, info
+        )
         return obs, reward, terminated, truncated, info
 
     def get_mission_text(self) -> str:
