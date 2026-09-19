@@ -274,6 +274,9 @@ class TaskParser:
         for kill in spec.mechanisms.kill_cells:
             env.place_kill_cell(kill.x, kill.y)
 
+        for frozen in spec.mechanisms.frozen_tiles:
+            env.place_frozen_tile(frozen.x, frozen.y)
+
         # Set agent position (overwrite anything at start position)
         # This is done last to ensure the agent always spawns at the correct location,
         # even if the task specification accidentally placed another object there

@@ -17,8 +17,8 @@ disable_gymnasium_env_plugins()
 # Import from gymnasium's minigrid package (no naming conflict after rename to gridworld/)
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
-from minigrid.core.world_object import WorldObj, Key, Door, Goal, Wall, Lava, Box, Ball
-from minigrid.utils.rendering import fill_coords, point_in_circle
+from minigrid.core.world_object import WorldObj, Key, Door, Goal, Wall, Lava, Box, Ball, Floor
+from minigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
@@ -194,6 +194,18 @@ class KillCell(Lava):
         fill_coords(img, point_in_circle(0.5, 0.58, 0.06), np.array([20, 20, 20]))
 
 
+class FrozenTile(Floor):
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, 5)
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([214, 232, 246]))
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.16), np.array([255, 255, 255]))
+        fill_coords(img, point_in_circle(0.28, 0.32, 0.07), np.array([245, 252, 255]))
+        fill_coords(img, point_in_circle(0.70, 0.62, 0.06), np.array([245, 252, 255]))
+
+
 class PushableBlock(Box):
     """
     A block that can be pushed by the agent.
@@ -255,6 +267,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.gates: dict[str, Gate] = {}
         self.blocks: dict[str, PushableBlock] = {}
         self.teleporters: dict[str, TeleporterObj] = {}
+        self.freeze_remaining = 0
         self.switch_gate_map: dict[str, list[str]] = {}  # switch_id -> [gate_ids]
         self.gate_initial_state: dict[str, bool] = {}
 
@@ -293,6 +306,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.explored_cells = set()
         self.key_objects.clear()
         self.collected_keys.clear()
+        self.freeze_remaining = 0
 
         # If we have a task spec, it will be populated after _gen_grid by the parser
         # For now, set basic start/goal if provided
@@ -384,6 +398,9 @@ class CustomMiniGridEnv(MiniGridEnv):
 
     def place_kill_cell(self, x: int, y: int):
         self.put_obj(KillCell(), x, y)
+
+    def place_frozen_tile(self, x: int, y: int):
+        self.put_obj(FrozenTile(), x, y)
 
     def place_goal(self, x: int, y: int):
         """Place the goal at the given position."""
@@ -575,12 +592,14 @@ class CustomMiniGridEnv(MiniGridEnv):
             open_gates=frozenset(gid for gid, gate in self.gates.items() if gate.is_open),
             open_doors=frozenset(open_doors),
             key_positions=frozenset(key_positions),
+            freeze_remaining=int(self.freeze_remaining),
         )
 
     def _write_planner_state(self, ctx: TaskPlanningContext, state: PlannerState) -> None:
         self.agent_pos = (int(state.agent_pos[0]), int(state.agent_pos[1]))
         self.agent_dir = int(state.agent_dir)
         self.collected_keys = set(state.collected_keys)
+        self.freeze_remaining = int(state.freeze_remaining)
 
         for sid, switch in self.switches.items():
             switch.is_active = sid in state.active_switches

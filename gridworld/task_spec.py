@@ -189,6 +189,8 @@ class MechanismSet:
     teleporters: list[TeleporterSpec] = field(default_factory=list)
     hazards: list[HazardSpec] = field(default_factory=list)
     kill_cells: list[Position] = field(default_factory=list)
+    frozen_tiles: list[Position] = field(default_factory=list)
+    freeze_steps: int = 5
 
     @classmethod
     def from_dict(cls, d: dict) -> "MechanismSet":
@@ -201,6 +203,8 @@ class MechanismSet:
             teleporters=[TeleporterSpec.from_dict(t) for t in d.get("teleporters", [])],
             hazards=[HazardSpec.from_dict(h) for h in d.get("hazards", [])],
             kill_cells=[Position.from_list(p) for p in d.get("death_portals", [])],
+            frozen_tiles=[Position.from_list(p) for p in d.get("frozen_tiles", [])],
+            freeze_steps=d.get("freeze_steps", 5),
         )
 
 
@@ -418,6 +422,8 @@ class TaskSpecification:
                 } for t in self.mechanisms.teleporters],
                 "hazards": [{"id": h.id, "position": pos_to_list(h.position), "hazard_type": h.hazard_type} for h in self.mechanisms.hazards],
                 "death_portals": [pos_to_list(p) for p in self.mechanisms.kill_cells],
+                "frozen_tiles": [pos_to_list(p) for p in self.mechanisms.frozen_tiles],
+                "freeze_steps": self.mechanisms.freeze_steps,
             },
             "rules": {
                 "key_consumption": self.rules.key_consumption,
@@ -593,6 +599,10 @@ class TaskSpecification:
         for kill in self.mechanisms.kill_cells:
             check_position(kill, "Kill cell")
             register_position(kill, "Kill cell")
+
+        for frozen in self.mechanisms.frozen_tiles:
+            check_position(frozen, "Frozen tile")
+            register_position(frozen, "Frozen tile")
 
         # Check door-key color consistency
         key_colors = {k.color for k in self.mechanisms.keys}

@@ -36,6 +36,7 @@ class PlannerState:
     open_gates: frozenset[str]
     open_doors: frozenset[str]
     key_positions: frozenset[tuple[str, int, int]] = frozenset()
+    freeze_remaining: int = 0
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,8 @@ class TaskPlanningContext:
         self.blocks = {block.position.to_tuple() for block in spec.mechanisms.blocks}
         self.hazards = {hazard.position.to_tuple() for hazard in spec.mechanisms.hazards}
         self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
+        self.frozen_tiles = {cell.to_tuple() for cell in spec.mechanisms.frozen_tiles}
+        self.freeze_steps = spec.mechanisms.freeze_steps
         self.teleporters = {}
         for teleporter in spec.mechanisms.teleporters:
             pos_a = teleporter.position_a.to_tuple()
@@ -162,6 +165,12 @@ def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> Planner
 
 def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
     """Generate legal R1 actions from a world state."""
+    if state.freeze_remaining > 0:
+        thawed = replace(state, freeze_remaining=state.freeze_remaining - 1)
+        for action in MiniGridActions:
+            yield Transition(int(action), "freeze", thawed)
+        return
+
     yield Transition(
         action=int(MiniGridActions.TURN_LEFT),
         label="turn_left",
@@ -286,7 +295,7 @@ def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
         return False
     if pos in ctx.switches_by_pos or pos in ctx.doors_by_pos or pos in ctx.gates_by_pos:
         return False
-    if pos in ctx.teleporters or pos in ctx.kill_cells or pos == ctx.goal:
+    if pos in ctx.teleporters or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos == ctx.goal:
         return False
     return _key_id_at(state, pos) is None
 
@@ -347,6 +356,7 @@ def _forward_successor(
         return
 
     active_switches = _active_switches_after_move(ctx, state, next_pos)
+    freeze_remaining = ctx.freeze_steps if next_pos in ctx.frozen_tiles else 0
     yield Transition(
         action=int(MiniGridActions.MOVE_FORWARD),
         label="move_forward",
@@ -355,6 +365,7 @@ def _forward_successor(
             agent_pos=next_pos,
             active_switches=active_switches,
             open_gates=ctx.recompute_open_gates(active_switches),
+            freeze_remaining=freeze_remaining,
         ),
     )
 
