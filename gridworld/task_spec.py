@@ -191,9 +191,12 @@ class MechanismSet:
     kill_cells: list[Position] = field(default_factory=list)
     frozen_tiles: list[Position] = field(default_factory=list)
     freeze_steps: int = 5
+    rotating_tiles: list[Position] = field(default_factory=list)
+    rotating_initial_directions: list[int] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> "MechanismSet":
+        rotating_tiles = [Position.from_list(p) for p in d.get("rotating_tiles", [])]
         return cls(
             keys=[KeySpec.from_dict(k) for k in d.get("keys", [])],
             doors=[DoorSpec.from_dict(door) for door in d.get("doors", [])],
@@ -205,6 +208,10 @@ class MechanismSet:
             kill_cells=[Position.from_list(p) for p in d.get("death_portals", [])],
             frozen_tiles=[Position.from_list(p) for p in d.get("frozen_tiles", [])],
             freeze_steps=d.get("freeze_steps", 5),
+            rotating_tiles=rotating_tiles,
+            rotating_initial_directions=list(
+                d.get("rotating_initial_directions", [0] * len(rotating_tiles))
+            ),
         )
 
 
@@ -424,6 +431,8 @@ class TaskSpecification:
                 "death_portals": [pos_to_list(p) for p in self.mechanisms.kill_cells],
                 "frozen_tiles": [pos_to_list(p) for p in self.mechanisms.frozen_tiles],
                 "freeze_steps": self.mechanisms.freeze_steps,
+                "rotating_tiles": [pos_to_list(p) for p in self.mechanisms.rotating_tiles],
+                "rotating_initial_directions": list(self.mechanisms.rotating_initial_directions),
             },
             "rules": {
                 "key_consumption": self.rules.key_consumption,
@@ -603,6 +612,10 @@ class TaskSpecification:
         for frozen in self.mechanisms.frozen_tiles:
             check_position(frozen, "Frozen tile")
             register_position(frozen, "Frozen tile")
+
+        for rotating in self.mechanisms.rotating_tiles:
+            check_position(rotating, "Rotating tile")
+            register_position(rotating, "Rotating tile")
 
         # Check door-key color consistency
         key_colors = {k.color for k in self.mechanisms.keys}

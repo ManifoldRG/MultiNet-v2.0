@@ -15,10 +15,17 @@ from .bootstrap import disable_gymnasium_env_plugins
 disable_gymnasium_env_plugins()
 
 # Import from gymnasium's minigrid package (no naming conflict after rename to gridworld/)
+from minigrid.core.constants import TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import WorldObj, Key, Door, Goal, Wall, Lava, Box, Ball, Floor
-from minigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
+from minigrid.utils.rendering import (
+    fill_coords,
+    highlight_img,
+    point_in_circle,
+    point_in_rect,
+    point_in_triangle,
+)
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
@@ -194,6 +201,43 @@ class KillCell(Lava):
         fill_coords(img, point_in_circle(0.5, 0.58, 0.06), np.array([20, 20, 20]))
 
 
+class RotatingTile(Floor):
+    TIPS = (
+        ((0.22, 0.22), (0.22, 0.78), (0.82, 0.50)),
+        ((0.22, 0.22), (0.78, 0.22), (0.50, 0.82)),
+        ((0.78, 0.22), (0.78, 0.78), (0.18, 0.50)),
+        ((0.22, 0.78), (0.78, 0.78), (0.50, 0.18)),
+    )
+
+    def __init__(self, direction: int = 0):
+        super().__init__()
+        self.direction = int(direction)
+
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, self.direction % 4)
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([255, 168, 64]))
+        a, b, c = self.TIPS[self.direction % 4]
+        fill_coords(img, point_in_triangle(a, b, c), np.array([40, 28, 16]))
+
+
+_AGENT_TRI = (
+    ((0.12, 0.19), (0.87, 0.50), (0.12, 0.81)),
+    ((0.19, 0.12), (0.81, 0.12), (0.50, 0.87)),
+    ((0.88, 0.19), (0.88, 0.81), (0.13, 0.50)),
+    ((0.19, 0.88), (0.81, 0.88), (0.50, 0.13)),
+)
+
+
+def _paint_compact_agent(img, agent_dir: int, scale: float = 0.4):
+    a, b, c = _AGENT_TRI[agent_dir % 4]
+    def inset(p):
+        return (0.5 + (p[0] - 0.5) * scale, 0.5 + (p[1] - 0.5) * scale)
+    fill_coords(img, point_in_triangle(inset(a), inset(b), inset(c)), np.array([255, 0, 0]))
+
+
 class FrozenTile(Floor):
     def encode(self):
         obj_type, color_idx, _state = super().encode()
@@ -268,6 +312,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.blocks: dict[str, PushableBlock] = {}
         self.teleporters: dict[str, TeleporterObj] = {}
         self.freeze_remaining = 0
+        self.rotators: list[RotatingTile] = []
         self.switch_gate_map: dict[str, list[str]] = {}  # switch_id -> [gate_ids]
         self.gate_initial_state: dict[str, bool] = {}
 
@@ -307,6 +352,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.key_objects.clear()
         self.collected_keys.clear()
         self.freeze_remaining = 0
+        self.rotators = []
 
         # If we have a task spec, it will be populated after _gen_grid by the parser
         # For now, set basic start/goal if provided
@@ -401,6 +447,11 @@ class CustomMiniGridEnv(MiniGridEnv):
 
     def place_frozen_tile(self, x: int, y: int):
         self.put_obj(FrozenTile(), x, y)
+
+    def place_rotating_tile(self, x: int, y: int, direction: int = 0):
+        tile = RotatingTile(direction)
+        self.rotators.append(tile)
+        self.put_obj(tile, x, y)
 
     def place_goal(self, x: int, y: int):
         """Place the goal at the given position."""
@@ -593,6 +644,7 @@ class CustomMiniGridEnv(MiniGridEnv):
             open_doors=frozenset(open_doors),
             key_positions=frozenset(key_positions),
             freeze_remaining=int(self.freeze_remaining),
+            rotator_dirs=tuple(int(tile.direction) for tile in self.rotators),
         )
 
     def _write_planner_state(self, ctx: TaskPlanningContext, state: PlannerState) -> None:
@@ -600,6 +652,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.agent_dir = int(state.agent_dir)
         self.collected_keys = set(state.collected_keys)
         self.freeze_remaining = int(state.freeze_remaining)
+        for tile, direction in zip(self.rotators, state.rotator_dirs):
+            tile.direction = int(direction)
 
         for sid, switch in self.switches.items():
             switch.is_active = sid in state.active_switches
@@ -659,6 +713,22 @@ class CustomMiniGridEnv(MiniGridEnv):
             0, False, truncated, info
         )
         return obs, reward, terminated, truncated, info
+
+    def get_frame(self, highlight: bool = True, tile_size: int = TILE_PIXELS, agent_pov: bool = False):
+        img = super().get_frame(highlight, tile_size, agent_pov)
+        if agent_pov:
+            return img
+        ax, ay = int(self.agent_pos[0]), int(self.agent_pos[1])
+        cell = self.grid.get(ax, ay)
+        if not isinstance(cell, RotatingTile):
+            return img
+        th, tw = img.shape[0] // self.height, img.shape[1] // self.width
+        tile = img[ay * th : (ay + 1) * th, ax * tw : (ax + 1) * tw]
+        cell.render(tile)
+        _paint_compact_agent(tile, int(self.agent_dir))
+        if highlight:
+            highlight_img(tile)
+        return img
 
     def get_mission_text(self) -> str:
         """Return the mission text."""

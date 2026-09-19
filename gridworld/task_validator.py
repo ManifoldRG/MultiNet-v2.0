@@ -427,10 +427,11 @@ def compute_difficulty(
     hazards_count = len(m.hazards)
     kill_cells_count = len(m.kill_cells)
     frozen_tiles_count = len(m.frozen_tiles)
+    rotating_tiles_count = len(m.rotating_tiles)
     mechanism_count = (
         keys_count + doors_count + switches_count
         + gates_count + blocks_count + teleporters_count + hazards_count
-        + kill_cells_count + frozen_tiles_count
+        + kill_cells_count + frozen_tiles_count + rotating_tiles_count
     )
 
     type_flags = [
@@ -443,6 +444,7 @@ def compute_difficulty(
         hazards_count > 0,
         kill_cells_count > 0,
         frozen_tiles_count > 0,
+        rotating_tiles_count > 0,
     ]
     mechanism_types = sum(type_flags)
 

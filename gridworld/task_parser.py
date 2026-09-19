@@ -277,6 +277,12 @@ class TaskParser:
         for frozen in spec.mechanisms.frozen_tiles:
             env.place_frozen_tile(frozen.x, frozen.y)
 
+        for tile, direction in zip(
+            spec.mechanisms.rotating_tiles,
+            spec.mechanisms.rotating_initial_directions,
+        ):
+            env.place_rotating_tile(tile.x, tile.y, direction)
+
         # Set agent position (overwrite anything at start position)
         # This is done last to ensure the agent always spawns at the correct location,
         # even if the task specification accidentally placed another object there

@@ -37,6 +37,7 @@ class PlannerState:
     open_doors: frozenset[str]
     key_positions: frozenset[tuple[str, int, int]] = frozenset()
     freeze_remaining: int = 0
+    rotator_dirs: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,9 @@ class TaskPlanningContext:
         self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
         self.frozen_tiles = {cell.to_tuple() for cell in spec.mechanisms.frozen_tiles}
         self.freeze_steps = spec.mechanisms.freeze_steps
+        self.rotating_list = [cell.to_tuple() for cell in spec.mechanisms.rotating_tiles]
+        self.rotating_set = set(self.rotating_list)
+        self.rotating_index = {pos: i for i, pos in enumerate(self.rotating_list)}
         self.teleporters = {}
         for teleporter in spec.mechanisms.teleporters:
             pos_a = teleporter.position_a.to_tuple()
@@ -141,6 +145,7 @@ class TaskPlanningContext:
                 (key.id, key.position.x, key.position.y)
                 for key in self.spec.mechanisms.keys
             ),
+            rotator_dirs=tuple(self.spec.mechanisms.rotating_initial_directions),
         )
 
     def recompute_open_gates(self, active_switches: frozenset[str]) -> frozenset[str]:
@@ -166,11 +171,51 @@ def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> Planner
 def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
     """Generate legal R1 actions from a world state."""
     if state.freeze_remaining > 0:
-        thawed = replace(state, freeze_remaining=state.freeze_remaining - 1)
+        thawed = replace(
+            state,
+            freeze_remaining=state.freeze_remaining - 1,
+            rotator_dirs=_spin(state.rotator_dirs),
+        )
         for action in MiniGridActions:
             yield Transition(int(action), "freeze", thawed)
         return
 
+    if state.agent_pos in ctx.rotating_set:
+        for transition in _idle_successors(ctx, state):
+            if transition.action == int(MiniGridActions.MOVE_FORWARD):
+                continue
+            yield Transition(
+                transition.action,
+                transition.label,
+                _settle(transition.next_state),
+            )
+        for action in MiniGridActions:
+            if action in (
+                MiniGridActions.TURN_LEFT,
+                MiniGridActions.TURN_RIGHT,
+                MiniGridActions.MOVE_FORWARD,
+            ):
+                continue
+            yield Transition(int(action), "rotate_wait", _settle(state))
+        yield Transition(
+            int(MiniGridActions.MOVE_FORWARD),
+            "rotate",
+            _rotator_force(ctx, state),
+        )
+        return
+
+    for transition in _idle_successors(ctx, state):
+        if transition.label == "kill_reset":
+            yield transition
+            continue
+        yield Transition(
+            transition.action,
+            transition.label,
+            _settle(transition.next_state),
+        )
+
+
+def _idle_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
     yield Transition(
         action=int(MiniGridActions.TURN_LEFT),
         label="turn_left",
@@ -295,7 +340,7 @@ def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
         return False
     if pos in ctx.switches_by_pos or pos in ctx.doors_by_pos or pos in ctx.gates_by_pos:
         return False
-    if pos in ctx.teleporters or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos == ctx.goal:
+    if pos in ctx.teleporters or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_set or pos == ctx.goal:
         return False
     return _key_id_at(state, pos) is None
 
@@ -337,13 +382,7 @@ def _forward_successor(
     state: PlannerState,
     front: tuple[int, int],
 ) -> Iterable[Transition]:
-    if (
-        front in ctx.walls
-        or front in ctx.hazards
-        or front in ctx.blocks
-        or _has_closed_door(ctx, state, front)
-        or _has_closed_gate(ctx, state, front)
-    ):
+    if _blocked(ctx, state, front):
         return
 
     next_pos = ctx.teleporters.get(front, front)
@@ -355,19 +394,51 @@ def _forward_successor(
         )
         return
 
-    active_switches = _active_switches_after_move(ctx, state, next_pos)
-    freeze_remaining = ctx.freeze_steps if next_pos in ctx.frozen_tiles else 0
     yield Transition(
         action=int(MiniGridActions.MOVE_FORWARD),
         label="move_forward",
-        next_state=replace(
-            state,
-            agent_pos=next_pos,
-            active_switches=active_switches,
-            open_gates=ctx.recompute_open_gates(active_switches),
-            freeze_remaining=freeze_remaining,
-        ),
+        next_state=_moved(ctx, state, next_pos),
     )
+
+
+def _blocked(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, int]) -> bool:
+    return (
+        pos in ctx.walls
+        or pos in ctx.hazards
+        or pos in ctx.blocks
+        or _has_closed_door(ctx, state, pos)
+        or _has_closed_gate(ctx, state, pos)
+    )
+
+
+def _moved(ctx: TaskPlanningContext, state: PlannerState, next_pos: tuple[int, int]) -> PlannerState:
+    active_switches = _active_switches_after_move(ctx, state, next_pos)
+    return replace(
+        state,
+        agent_pos=next_pos,
+        active_switches=active_switches,
+        open_gates=ctx.recompute_open_gates(active_switches),
+        freeze_remaining=ctx.freeze_steps if next_pos in ctx.frozen_tiles else 0,
+    )
+
+
+def _spin(dirs: tuple[int, ...]) -> tuple[int, ...]:
+    return tuple((d + 1) % len(DIRECTION_VECTORS) for d in dirs)
+
+
+def _settle(state: PlannerState) -> PlannerState:
+    return replace(state, rotator_dirs=_spin(state.rotator_dirs))
+
+
+def _rotator_force(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
+    dx, dy = DIRECTION_VECTORS[state.rotator_dirs[ctx.rotating_index[state.agent_pos]]]
+    dest = (state.agent_pos[0] + dx, state.agent_pos[1] + dy)
+    if _blocked(ctx, state, dest):
+        return _settle(state)
+    next_pos = ctx.teleporters.get(dest, dest)
+    if next_pos in ctx.kill_cells:
+        return ctx.initial_state()
+    return _settle(_moved(ctx, state, next_pos))
 
 
 def _active_switches_after_move(
