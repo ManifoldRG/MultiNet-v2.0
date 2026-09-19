@@ -76,6 +76,32 @@ def test_blocked_arrow_keeps_you_on_the_tile():
     assert state.agent_pos == (2, 1)
 
 
+def test_toggle_opens_a_door_from_a_rotator():
+    spec = _spec(
+        mechanisms={
+            "rotating_tiles": [[2, 1]],
+            "rotating_initial_directions": [0],
+            "keys": [{"id": "kB", "position": [1, 1], "color": "blue"}],
+            "doors": [{
+                "id": "DB",
+                "position": [3, 1],
+                "requires_key": "blue",
+                "initial_state": "locked",
+            }],
+        }
+    )
+    ctx = TaskPlanningContext(spec)
+    state = ctx.initial_state()
+    state = apply(ctx, state, MiniGridActions.PICKUP)
+    state = apply(ctx, state, MiniGridActions.MOVE_FORWARD)
+    assert state.agent_pos == (2, 1)
+    assert state.carrying_key == "kB"
+    state = apply(ctx, state, MiniGridActions.TOGGLE)
+    assert state.agent_pos == (2, 1)
+    assert "DB" in state.open_doors
+    assert state.carrying_key is None
+
+
 def test_bfs_can_cross_a_rotator():
     path = plan_bfs_path(_spec())
     assert path.success

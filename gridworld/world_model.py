@@ -181,12 +181,18 @@ def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transi
         return
 
     if state.agent_pos in ctx.rotating_index:
+        used = {int(MiniGridActions.MOVE_FORWARD)}
+        for t in _idle_successors(ctx, state):
+            if t.action == int(MiniGridActions.MOVE_FORWARD):
+                continue
+            used.add(t.action)
+            ns = t.next_state if t.label == "kill_reset" else _settle(t.next_state)
+            yield Transition(t.action, t.label, ns)
         waited = _settle(state)
         for action in MiniGridActions:
-            if action == MiniGridActions.MOVE_FORWARD:
-                yield Transition(int(action), "rotate", _ride(ctx, state))
-            else:
+            if int(action) not in used:
                 yield Transition(int(action), "rotate_wait", waited)
+        yield Transition(int(MiniGridActions.MOVE_FORWARD), "rotate", _ride(ctx, state))
         return
 
     for t in _idle_successors(ctx, state):

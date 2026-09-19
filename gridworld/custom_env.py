@@ -36,6 +36,7 @@ MINIGRID_COLORS = {
     "grey": "grey",
     "gray": "grey",
     "cyan": "blue",
+    "brown": "grey",
 }
 
 SWITCH_RENDER_COLORS = {
@@ -235,7 +236,7 @@ class PushableBlock(Box):
     """
 
     def __init__(self, color: str = "grey", block_id: str = ""):
-        super().__init__(color)
+        super().__init__(MINIGRID_COLORS[color])
         self.block_id = block_id
         self.pushable = True
 
