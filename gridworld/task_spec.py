@@ -196,7 +196,6 @@ class MechanismSet:
 
     @classmethod
     def from_dict(cls, d: dict) -> "MechanismSet":
-        rotating_tiles = [Position.from_list(p) for p in d.get("rotating_tiles", [])]
         return cls(
             keys=[KeySpec.from_dict(k) for k in d.get("keys", [])],
             doors=[DoorSpec.from_dict(door) for door in d.get("doors", [])],
@@ -208,10 +207,8 @@ class MechanismSet:
             kill_cells=[Position.from_list(p) for p in d.get("death_portals", [])],
             frozen_tiles=[Position.from_list(p) for p in d.get("frozen_tiles", [])],
             freeze_steps=d.get("freeze_steps", 5),
-            rotating_tiles=rotating_tiles,
-            rotating_initial_directions=list(
-                d.get("rotating_initial_directions", [0] * len(rotating_tiles))
-            ),
+            rotating_tiles=[Position.from_list(p) for p in d.get("rotating_tiles", [])],
+            rotating_initial_directions=list(d.get("rotating_initial_directions", [])),
         )
 
 

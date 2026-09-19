@@ -105,9 +105,9 @@ class TaskPlanningContext:
         self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
         self.frozen_tiles = {cell.to_tuple() for cell in spec.mechanisms.frozen_tiles}
         self.freeze_steps = spec.mechanisms.freeze_steps
-        self.rotating_list = [cell.to_tuple() for cell in spec.mechanisms.rotating_tiles]
-        self.rotating_set = set(self.rotating_list)
-        self.rotating_index = {pos: i for i, pos in enumerate(self.rotating_list)}
+        self.rotating_index = {
+            cell.to_tuple(): i for i, cell in enumerate(spec.mechanisms.rotating_tiles)
+        }
         self.teleporters = {}
         for teleporter in spec.mechanisms.teleporters:
             pos_a = teleporter.position_a.to_tuple()
@@ -180,39 +180,18 @@ def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transi
             yield Transition(int(action), "freeze", thawed)
         return
 
-    if state.agent_pos in ctx.rotating_set:
-        for transition in _idle_successors(ctx, state):
-            if transition.action == int(MiniGridActions.MOVE_FORWARD):
-                continue
-            yield Transition(
-                transition.action,
-                transition.label,
-                _settle(transition.next_state),
-            )
+    if state.agent_pos in ctx.rotating_index:
+        waited = _settle(state)
         for action in MiniGridActions:
-            if action in (
-                MiniGridActions.TURN_LEFT,
-                MiniGridActions.TURN_RIGHT,
-                MiniGridActions.MOVE_FORWARD,
-            ):
-                continue
-            yield Transition(int(action), "rotate_wait", _settle(state))
-        yield Transition(
-            int(MiniGridActions.MOVE_FORWARD),
-            "rotate",
-            _rotator_force(ctx, state),
-        )
+            if action == MiniGridActions.MOVE_FORWARD:
+                yield Transition(int(action), "rotate", _ride(ctx, state))
+            else:
+                yield Transition(int(action), "rotate_wait", waited)
         return
 
-    for transition in _idle_successors(ctx, state):
-        if transition.label == "kill_reset":
-            yield transition
-            continue
-        yield Transition(
-            transition.action,
-            transition.label,
-            _settle(transition.next_state),
-        )
+    for t in _idle_successors(ctx, state):
+        ns = t.next_state if t.label == "kill_reset" else _settle(t.next_state)
+        yield Transition(t.action, t.label, ns)
 
 
 def _idle_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
@@ -340,7 +319,7 @@ def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
         return False
     if pos in ctx.switches_by_pos or pos in ctx.doors_by_pos or pos in ctx.gates_by_pos:
         return False
-    if pos in ctx.teleporters or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_set or pos == ctx.goal:
+    if pos in ctx.teleporters or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_index or pos == ctx.goal:
         return False
     return _key_id_at(state, pos) is None
 
@@ -430,7 +409,7 @@ def _settle(state: PlannerState) -> PlannerState:
     return replace(state, rotator_dirs=_spin(state.rotator_dirs))
 
 
-def _rotator_force(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
+def _ride(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
     dx, dy = DIRECTION_VECTORS[state.rotator_dirs[ctx.rotating_index[state.agent_pos]]]
     dest = (state.agent_pos[0] + dx, state.agent_pos[1] + dy)
     if _blocked(ctx, state, dest):

@@ -260,8 +260,6 @@ class TaskParser:
         for hazard in spec.mechanisms.hazards:
             env.place_hazard(hazard.position.x, hazard.position.y, hazard.hazard_type)
 
-        # Place teleporters
-        # Teleporters come in pairs (A, B). Stepping on A teleports agent to B (and vice versa if bidirectional)
         for teleporter in spec.mechanisms.teleporters:
             env.place_teleporter(
                 teleporter.id,
