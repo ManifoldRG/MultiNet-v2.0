@@ -59,7 +59,7 @@ def recent_history_steps(
         used_tokens = 0
         for step in reversed(steps):
             step_tokens = _history_step_token_estimate(step, observation)
-            if selected and used_tokens + step_tokens > max_history_tokens:
+            if used_tokens + step_tokens > max_history_tokens:
                 break
             selected.append(step)
             used_tokens += step_tokens

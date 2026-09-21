@@ -268,7 +268,7 @@ class ExperimentRunner:
             step_budget_line = (
                 f"Step {steps_used + 1} of {max_steps} ({remaining} remaining)."
         )
-            prompt_text = f"{step_budget_line}\n\n{prompt_text}"
+            prompt_text = f"{step_budget_line}\n{prompt_text}"
 
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
