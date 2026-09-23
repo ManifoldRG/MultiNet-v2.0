@@ -136,8 +136,9 @@ class SceneRenderer:
         self._renderer.update_scene(self.data, camera=self._cam, scene_option=self._option)
         frame = self._renderer.render().copy()
         # Every 3D view carries a compass, showing what is up in THIS frame: the
-        # agent's heading where the view turns with it, north otherwise. Arms of
-        # an ablation then differ only in viewpoint.
+        # agent's heading where the view turns with it, north otherwise. The
+        # views that turn with the agent also carry the ride glyph while it
+        # stands on a rotating tile (north-up views see the arrow itself).
         up = int(state.agent_direction) if self.view_turns_with_agent else NORTH
         frame = draw_compass(frame, up)
         if self.view_turns_with_agent:

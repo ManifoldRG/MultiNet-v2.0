@@ -52,6 +52,9 @@ SWITCH_RENDER_COLORS = {
 }
 
 
+PORTAL_COLOUR_STATE = {name: i for i, name in enumerate(sorted(SWITCH_RENDER_COLORS))}
+
+
 class Switch(Ball):
     """
     Switch object that can control gates.
@@ -179,8 +182,11 @@ class TeleporterObj(Ball):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.12), color)
 
     def encode(self):
+        # The state slot keys MiniGrid's process-wide tile cache, so it must be
+        # deterministic and distinct per visual colour (cyan and blue share the
+        # MiniGrid colour index; a string-hash state varied with PYTHONHASHSEED).
         obj_type, color_idx, _state = super().encode()
-        return (obj_type, color_idx, abs(hash(self.visual_color)) % 6)
+        return (obj_type, color_idx, PORTAL_COLOUR_STATE[self.visual_color])
 
 
 class KillCell(Lava):

@@ -36,8 +36,8 @@ SKULL_TILT = 25.0  # degrees the face looks up, so top-down still sees the socke
 # convention: 1-based, row southward), on four faces of the beacon so every
 # cardinal approach reads it. Seven-segment digits from thin boxes.
 SIGN_Z = 1.05
-SIGN_RADIUS = 0.16
-SIGN_CHAR_W = 0.13
+SIGN_MARGIN = 0.03  # the four boards form a closed box around the beacon: each
+SIGN_CHAR_W = 0.13  # face sits half a label's width (plus margin) from the axis
 SIGN_CHAR_H = 0.18
 SNOW_BANK_HEIGHT = 0.18  # a drift, well under the eye; not a wall
 ROTATOR_TABLE_TOP = 0.06
@@ -237,6 +237,12 @@ _DIGIT_SEGMENTS = {
     "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg",
     "5": "acdfg", "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg",
 }
+# Non-digit glyphs as (u0, v0, u1, v1) strokes: ',' and the destination arrow '>'
+# (a shaft and a stepped head, axis-aligned boxes only).
+_GLYPH_STROKES = {
+    ",": [(0.35, 0.0, 0.45, 0.18)],
+    ">": [(0.05, 0.47, 0.6, 0.53), (0.55, 0.25, 0.65, 0.75), (0.65, 0.35, 0.75, 0.65), (0.75, 0.45, 0.85, 0.55)],
+}
 # Face -> (outward normal, viewer's right vector) for a viewer looking at that face.
 _SIGN_FACES = {"n": ((0, 1), (-1, 0)), "e": ((1, 0), (0, 1)), "s": ((0, -1), (1, 0)), "w": ((-1, 0), (0, -1))}
 
@@ -248,33 +254,32 @@ def to_row_col(pos) -> tuple[int, int]:
 
 
 def portal_sign_label(spec: TaskSpecification, tp, end: str) -> str | None:
-    """'row,col' of where stepping on this end lands you; None for a one-way exit."""
+    """'>row,col' of where stepping on this end lands you; None for a one-way exit."""
     if end == "a":
         partner = tp.position_b
     elif tp.bidirectional:
         partner = tp.position_a
     else:
         return None
-    return ",".join(str(v) for v in to_row_col(partner))
+    return ">" + ",".join(str(v) for v in to_row_col(partner))
 
 
 def _sign(prefix, cx, cy, label: str) -> list[str]:
     n = len(label)
     width = n * SIGN_CHAR_W
     thick = 0.006
+    dist = width / 2 + SIGN_MARGIN  # face distance from the beacon axis
+    half_w = dist - 0.01  # boards meet at the corners without crossing
     out = []
     for face, ((nx, ny), (ux, uy)) in _SIGN_FACES.items():
-        px, py = cx + nx * SIGN_RADIUS, cy + ny * SIGN_RADIUS
-        plate_size = (width / 2 + 0.02, 0.01, SIGN_CHAR_H / 2 + 0.02) if ny else (0.01, width / 2 + 0.02, SIGN_CHAR_H / 2 + 0.02)
+        px, py = cx + nx * dist, cy + ny * dist
+        plate_size = (half_w, 0.01, SIGN_CHAR_H / 2 + 0.02) if ny else (0.01, half_w, SIGN_CHAR_H / 2 + 0.02)
         out.append(_geom(f"{prefix}:sign:{face}:plate", "box", (px, py, SIGN_Z), plate_size, palette.SIGN_PLATE))
-        px, py = px + nx * 0.012, py + ny * 0.012  # segments sit just in front of the plate
+        px, py = px + nx * 0.012, py + ny * 0.012  # strokes sit just in front of the plate
         k = 0
         for i, ch in enumerate(label):
             u_left = -width / 2 + i * SIGN_CHAR_W
-            if ch == ",":
-                strokes = [(0.35, 0.0, 0.45, 0.18)]
-            else:
-                strokes = [_SEGMENTS[seg] for seg in _DIGIT_SEGMENTS[ch]]
+            strokes = _GLYPH_STROKES[ch] if ch in _GLYPH_STROKES else [_SEGMENTS[seg] for seg in _DIGIT_SEGMENTS[ch]]
             for u0, v0, u1, v1 in strokes:
                 cu = u_left + (u0 + u1) / 2 * SIGN_CHAR_W
                 cv = SIGN_Z + ((v0 + v1) / 2 - 0.5) * SIGN_CHAR_H

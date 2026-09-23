@@ -125,8 +125,8 @@ class SceneState:
         ax, ay, _ = cell_center(*state.agent_position)
         for i, mocap_id in self._skulls.items():
             sx, sy, _ = cell_center(*self.index.kill_cells[i])
-            yaw = math.atan2(ay - sy, ax - sx) if (ax, ay) != (sx, sy) else 0.0
-            data.mocap_quat[mocap_id] = _yaw_pitch_quat(yaw, math.radians(SKULL_TILT))
+            bearing = math.atan2(ay - sy, ax - sx) if (ax, ay) != (sx, sy) else 0.0
+            data.mocap_quat[mocap_id] = _yaw_pitch_quat(bearing, math.radians(SKULL_TILT))
         data.mocap_pos[self._agent] = (ax, ay, 0.0)
         half = math.radians(DIRECTION_YAW[int(state.agent_direction)] if yaw is None else yaw) / 2.0
         data.mocap_quat[self._agent] = (math.cos(half), 0.0, 0.0, math.sin(half))

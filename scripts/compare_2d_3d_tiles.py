@@ -11,6 +11,7 @@ row per tile (portal end, kill cell, frozen tile, rotating tile) showing the
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import glob
 import json
 import sys
@@ -67,19 +68,29 @@ def facing_pose(spec: TaskSpecification, cell: tuple[int, int]) -> tuple[tuple[i
     raise ValueError(f"no free neighbour of {cell} in {spec.task_id!r}")
 
 
-def _initial_doors(spec: TaskSpecification) -> dict[str, bool]:
-    return {d.id: d.initial_state == "open" for d in spec.mechanisms.doors}
-
-
-def _render_2d(spec: TaskSpecification, tile_size: int) -> Image.Image:
+def initial_state(spec: TaskSpecification) -> GridState:
+    """The episode's reset state (keys on the floor, initial switches and gates)."""
     from gridworld.backends.minigrid_backend import MiniGridBackend
 
     backend = MiniGridBackend(render_mode="rgb_array")
     try:
         backend.configure(spec)
-        backend.reset(seed=spec.seed)
+        _frame, state, _info = backend.reset(seed=spec.seed)
+        return state
+    finally:
+        backend.close()
+
+
+def _render_2d(spec: TaskSpecification, tile_size: int) -> tuple[Image.Image, GridState, dict[str, bool]]:
+    from gridworld.backends.minigrid_backend import MiniGridBackend
+
+    backend = MiniGridBackend(render_mode="rgb_array")
+    try:
+        backend.configure(spec)
+        _frame, state, _info = backend.reset(seed=spec.seed)
         backend.env.tile_size = tile_size
-        return Image.fromarray(backend.env.get_frame(highlight=False, tile_size=tile_size))
+        frame = Image.fromarray(backend.env.get_frame(highlight=False, tile_size=tile_size))
+        return frame, state, backend.door_states()
     finally:
         backend.close()
 
@@ -112,11 +123,9 @@ def compare_maze(path: Path, out_dir: Path, *, resolution: int, tile_size: int) 
     spec = TaskSpecification.from_json(str(path))
     maze_dir = out_dir / spec.task_id
     (maze_dir / "tiles").mkdir(parents=True, exist_ok=True)
-    doors = _initial_doors(spec)
     rotators = tuple(int(d) for d in spec.mechanisms.rotating_initial_directions)
-    start = GridState(agent_position=spec.maze.start.to_tuple(), agent_direction=0)
 
-    frame_2d = _render_2d(spec, tile_size)
+    frame_2d, start, doors = _render_2d(spec, tile_size)  # the same reset state feeds both renderers
     frame_2d.save(maze_dir / "topdown_2d.png")
     top = SceneRenderer(spec, camera="top_down", resolution=resolution)
     try:
@@ -131,7 +140,7 @@ def compare_maze(path: Path, out_dir: Path, *, resolution: int, tile_size: int) 
     try:
         for entry in tile_catalog(spec):
             viewer, direction = facing_pose(spec, entry.cell)
-            state = GridState(agent_position=viewer, agent_direction=direction)
+            state = dataclasses.replace(start, agent_position=viewer, agent_direction=direction)
             fp = Image.fromarray(eye.render(state, doors, rotators=rotators))
             x, y = entry.cell
             glyph = frame_2d.crop((x * tile_size, y * tile_size, (x + 1) * tile_size, (y + 1) * tile_size))

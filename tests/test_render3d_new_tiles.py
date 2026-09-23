@@ -380,9 +380,9 @@ def test_portal_sign_names_the_partner_cell_in_prompt_row_col():
 
     spec = _spec()
     tp = spec.mechanisms.teleporters[0]  # (3,1) <-> (7,3)
-    assert portal_sign_label(spec, tp, "a") == "3,7"  # lands on (x=7, y=3)
-    assert portal_sign_label(spec, tp, "b") == "1,3"
-    assert portal_sign_label(spec, tp, "a") == ",".join(str(v) for v in to_row_col(tp.position_b))
+    assert portal_sign_label(spec, tp, "a") == ">3,7"  # lands on (x=7, y=3)
+    assert portal_sign_label(spec, tp, "b") == ">1,3"
+    assert portal_sign_label(spec, tp, "a") == ">" + ",".join(str(v) for v in to_row_col(tp.position_b))
 
 
 def test_one_way_portal_exit_has_no_sign():
@@ -413,3 +413,123 @@ def test_portal_sign_is_visible_and_differs_between_partners_first_person():
     a, _, _ = _render(spec, "first_person", facing)
     b, _, _ = _render(_spec(d), "first_person", facing)
     assert int(np.any(a != b, axis=-1).sum()) >= MIN_CHANGED_PX
+
+
+# --- second Astra review (2026-09-23) --------------------------------------------
+
+
+@pytest.mark.parametrize("direction", [0, 1, 2, 3])
+def test_agent_heading_survives_a_skull_in_the_scene(direction):
+    """The skull's bearing must not leak into the agent's yaw (review MAJOR 1)."""
+    import math
+
+    import mujoco
+
+    from gridworld.render3d.cameras import DIRECTION_YAW
+    from gridworld.render3d.renderer import SceneRenderer
+
+    renderer = SceneRenderer(_spec(), camera="top_down", resolution=64)
+    try:
+        renderer.render(_state(agent_position=(1, 2), agent_direction=direction), NO_DOORS)
+        body = mujoco.mj_name2id(renderer.model, mujoco.mjtObj.mjOBJ_BODY, "agent")
+        front = renderer.data.xmat[body].reshape(3, 3) @ np.array([1.0, 0.0, 0.0])
+        yaw = math.degrees(math.atan2(front[1], front[0]))
+        assert abs((yaw - DIRECTION_YAW[direction] + 180) % 360 - 180) < 1.0
+        # and an explicit animation yaw is honoured too
+        renderer.render(_state(agent_position=(1, 2), agent_direction=direction), NO_DOORS, yaw=-45.0)
+        front = renderer.data.xmat[body].reshape(3, 3) @ np.array([1.0, 0.0, 0.0])
+        assert abs((math.degrees(math.atan2(front[1], front[0])) + 45.0 + 180) % 360 - 180) < 1.0
+    finally:
+        renderer.close()
+
+
+def _sign_spec(label_cells):
+    """TILES with the purple pair moved so its A end's sign reads a 2-digit,2-digit label."""
+    d = copy.deepcopy(TILES)
+    d["maze"]["dimensions"] = [20, 20]
+    d["maze"]["walls"] = []
+    d["maze"]["goal"] = [18, 18]
+    d["goal"]["target"] = [18, 18]
+    d["mechanisms"] = {"teleporters": [{"id": "tp", "position_a": [10, 10], "position_b": list(label_cells), "color": "purple"}]}
+    return _spec(d)
+
+
+def test_sign_plates_do_not_cut_through_each_other():
+    """Review MAJOR 2: with a long label the four boards crossed and hid digits."""
+    model, _ = _model(_sign_spec((14, 12)))  # label "12,14" (row 12, col 14)
+    plates = {f: model.geom(f"portal:tp:a:sign:{f}:plate") for f in "nesw"}
+    boxes = {}
+    for f, g in plates.items():
+        lo = np.array(g.pos) - np.array(g.size)
+        hi = np.array(g.pos) + np.array(g.size)
+        boxes[f] = (lo, hi)
+    for a in "nesw":
+        for b in "nesw":
+            if a >= b:
+                continue
+            (alo, ahi), (blo, bhi) = boxes[a], boxes[b]
+            overlap = np.all(alo < bhi - 1e-6) and np.all(blo < ahi - 1e-6)
+            assert not overlap, (a, b)
+
+
+def test_sign_label_is_fully_readable_from_every_approach():
+    """Each face shows about the same number of text pixels from one cell away
+    (text pixels = what changes when the strokes are hidden)."""
+    pytest.importorskip("mujoco")
+    import mujoco
+
+    from gridworld.render3d.renderer import SceneRenderer
+    from gridworld.render3d.scene import HIDDEN_GROUP
+
+    spec = _sign_spec((14, 12))
+    renderer = SceneRenderer(spec, camera="first_person", resolution=RES)
+    try:
+        model = renderer.model
+        strokes = [i for i in range(model.ngeom) if ":sign:" in model.geom(i).name and not model.geom(i).name.endswith(":plate")]
+        counts = []
+        for viewer, direction in (((9, 10), 0), ((10, 9), 1), ((11, 10), 2), ((10, 11), 3)):
+            st = _state(agent_position=viewer, agent_direction=direction)
+            shown = renderer.render(st, NO_DOORS, rotators=())
+            home = model.geom_group[strokes].copy()
+            model.geom_group[strokes] = HIDDEN_GROUP
+            hidden = renderer.render(st, NO_DOORS, rotators=())
+            model.geom_group[strokes] = home
+            counts.append(int(np.any(shown != hidden, axis=-1).sum()))
+    finally:
+        renderer.close()
+    assert min(counts) > 150, counts
+    assert max(counts) <= 1.25 * min(counts), counts
+
+
+def test_sign_has_a_destination_arrow_before_the_digits():
+    from gridworld.render3d.scene import portal_sign_label
+
+    spec = _spec()
+    assert portal_sign_label(spec, spec.mechanisms.teleporters[0], "a") == ">3,7"
+    model, _ = _model(spec)
+    assert _geoms(model, "portal:tp:a:sign:n:")  # renders without a KeyError on '>'
+
+
+def test_2d_portal_encode_is_deterministic_and_colour_specific():
+    """Review MAJOR 4: hash()-based state collided across processes and colours."""
+    pytest.importorskip("minigrid")
+    from gridworld.custom_env import TeleporterObj
+
+    cyan, blue, purple = (TeleporterObj(color=c).encode() for c in ("cyan", "blue", "purple"))
+    assert cyan != blue and cyan != purple and blue != purple
+    assert TeleporterObj(color="cyan").encode() == cyan
+    # stable across interpreter runs: no hash() anywhere in the encoding
+    import inspect
+
+    assert "hash(" not in inspect.getsource(TeleporterObj.encode)
+
+
+def test_compare_script_starts_from_the_reset_state():
+    """Review MINOR: keys and initial switch/gate state must be in the frames."""
+    pytest.importorskip("mujoco")
+    pytest.importorskip("minigrid")
+    from render3d_test_utils import MECHANISMS
+    from scripts.compare_2d_3d_tiles import initial_state
+
+    state = initial_state(TaskSpecification.from_dict(MECHANISMS))
+    assert state.key_positions == {"k1": (2, 1)}
