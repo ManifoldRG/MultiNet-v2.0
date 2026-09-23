@@ -231,6 +231,8 @@ def _ascii_grid(
         row, col = to_row_col(door.position)
         if door.id in open_doors:
             place(row, col, "dO", "unlocked door")
+        elif door.requires_key.lower() in ("grey", "gray"):
+            place(row, col, "d", f"{door.initial_state} door")
         else:
             place(row, col, f"d{door.requires_key[0].upper()}",
                   f"{door.initial_state} door, needs the {door.requires_key} key")

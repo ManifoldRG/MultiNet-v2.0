@@ -26,6 +26,7 @@ def test_fair_default_baseline() -> None:
     assert c.in_context_learning == "one_shot"
     assert c.querying == "step_by_step"
     assert c.chat_turns_max == 3
+    assert c.feedback == "minimal"
 
 
 def test_ablation_arms_flip_from_fair_default() -> None:

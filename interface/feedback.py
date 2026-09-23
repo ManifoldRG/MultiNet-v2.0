@@ -28,7 +28,7 @@ def infer_step_outcome(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
-    level: Literal["minimal", "standard", "causal"] = "causal",
+    level: Literal["minimal", "standard", "causal"] = "minimal",
 ) -> tuple[str, str]:
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
@@ -170,7 +170,7 @@ def format_step_feedback(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
-    level: Literal["minimal", "standard", "causal"] = "causal",
+    level: Literal["minimal", "standard", "causal"] = "minimal",
 ) -> tuple[str, str]:
     event_type, event_message = infer_step_outcome(
         action, prev, curr, reward, terminated, task_spec, level=level
