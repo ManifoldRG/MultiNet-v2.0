@@ -76,9 +76,13 @@ def test_2d_session_has_no_cameras(tmp_path):
 def test_physical_door_log_follows_backend_door_states(tmp_path, backend):
     session = make_play_session(tmp_path, backend)
     try:
-        for token in ["MOVE_FORWARD", "PICKUP", "TOGGLE", "TOGGLE"]:  # unlock, then re-close
+        for token in ["MOVE_FORWARD", "PICKUP"]:
             session._dispatch_token(token)
         assert session._physical_door_states() == {"d1": False}
+        session._dispatch_token("TOGGLE")  # unlock
+        assert session._physical_door_states() == {"d1": True}
+        session._dispatch_token("TOGGLE")  # PR #57 rulebook: no re-close
+        assert session._physical_door_states() == {"d1": True}
     finally:
         session.close()
 
