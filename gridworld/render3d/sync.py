@@ -17,6 +17,8 @@ from . import palette
 from .cameras import DIRECTION_YAW, cell_center
 from .scene import HIDDEN_GROUP, KEY_HEIGHT, ROTATOR_ARROW_LIFT, SKULL_TILT, SceneIndex
 
+LIFTED_ARROW_ALPHA = 0.55
+
 
 def _yaw_pitch_quat(yaw: float, pitch_up: float) -> tuple[float, float, float, float]:
     """Quaternion (w, x, y, z) turning +x to ``yaw`` about z, then raising it by ``pitch_up``."""
@@ -96,6 +98,9 @@ class SceneState:
                 self._show(geom_ids, d == shown)
                 for gid in geom_ids:
                     self.model.geom_pos[gid][2] = self._home_pos[gid][2] + lift
+                    # lifted over the wedge, the arrow goes translucent so the
+                    # agent's heading stays readable underneath it
+                    self.model.geom_rgba[gid][3] = LIFTED_ARROW_ALPHA if lift else 1.0
         for door_id, (closed, opened) in self._doors.items():
             is_open = bool(door_states.get(door_id, False))
             self._show(closed, not is_open)

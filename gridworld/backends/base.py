@@ -316,6 +316,11 @@ class AbstractGridBackend(ABC):
         not part of GridState, so renderers read it here. Default: none."""
         return ()
 
+    def freeze_remaining(self) -> int:
+        """Actions still swallowed by a frozen tile (PR #57: every action is a
+        no-op while > 0). Not part of GridState; renderers read it here."""
+        return 0
+
     @property
     def frame_is_grid_aligned(self) -> bool:
         """True when frames are a top-down image of equal-size cell tiles, so

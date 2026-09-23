@@ -22,7 +22,7 @@ from .cameras import (  # noqa: E402
     tilt_pose,
     view_wall_height,
 )
-from .hud import NORTH, draw_compass, turns_with_agent  # noqa: E402
+from .hud import NORTH, draw_compass, draw_frost, draw_ride_arrow, turns_with_agent  # noqa: E402
 from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
@@ -100,10 +100,12 @@ class SceneRenderer:
         door_states: dict[str, bool],
         *,
         rotators: tuple[int, ...] | None = None,
+        freeze: int = 0,
         yaw: float | None = None,
     ) -> np.ndarray:
         """``rotators``: each rotating tile's current direction (spec order;
-        None = initial). ``yaw`` (degrees) overrides the heading's yaw for the
+        None = initial). ``freeze``: actions still swallowed by a frozen tile
+        (frost overlay). ``yaw`` (degrees) overrides the heading's yaw for the
         agent and the views that turn with it (frames partway through a turn)."""
         self._sync.apply(self.data, state, door_states, rotators=rotators, yaw=yaw)
         where = dict(
@@ -138,7 +140,22 @@ class SceneRenderer:
         # an ablation then differ only in viewpoint.
         up = int(state.agent_direction) if self.view_turns_with_agent else NORTH
         frame = draw_compass(frame, up)
+        if self.view_turns_with_agent:
+            ride = self._ride_direction(state, rotators)
+            if ride is not None:
+                frame = draw_ride_arrow(frame, (ride - int(state.agent_direction)) % 4)
+        if freeze > 0:
+            frame = draw_frost(frame, int(freeze), int(self.spec.mechanisms.freeze_steps))
         return frame
+
+    def _ride_direction(self, state: GridState, rotators: tuple[int, ...] | None) -> int | None:
+        """The arrow direction of the rotating tile under the agent, if any."""
+        cell = tuple(int(v) for v in state.agent_position)
+        if cell not in self.index.rotator_cells:
+            return None
+        i = self.index.rotator_cells.index(cell)
+        dirs = self.index.rotator_initial if rotators is None else rotators
+        return int(dirs[i]) if i < len(dirs) else None
 
     def close(self) -> None:
         # Explicit close avoids EGL "Exception ignored" noise at interpreter exit.

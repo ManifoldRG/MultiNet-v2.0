@@ -81,6 +81,7 @@ class Mujoco3DBackend(AbstractGridBackend):
     def _frame_for(self, state: GridState) -> np.ndarray:
         doors = self.state_backend.door_states()
         rotators = self.state_backend.rotator_directions()
+        freeze = self.state_backend.freeze_remaining()
         # Everything the frame depends on; a matching key reuses the cached frame
         # (the pygame UI calls render() every tick).
         key = (
@@ -92,11 +93,12 @@ class Mujoco3DBackend(AbstractGridBackend):
             frozenset((k, tuple(int(c) for c in v)) for k, v in state.key_positions.items()),
             frozenset(doors.items()),
             rotators,
+            freeze,
             self._camera,
             self._tilt,
         )
         if self._frame is None or key != self._frame_key:
-            self._frame = self._renderer.render(state, doors, rotators=rotators)
+            self._frame = self._renderer.render(state, doors, rotators=rotators, freeze=freeze)
             self._frame_key = key
         return self._frame
 
@@ -117,6 +119,7 @@ class Mujoco3DBackend(AbstractGridBackend):
             shown,
             self.state_backend.door_states(),
             rotators=self.state_backend.rotator_directions(),
+            freeze=self.state_backend.freeze_remaining(),
             yaw=start + fraction * delta,
         )
 
@@ -157,6 +160,9 @@ class Mujoco3DBackend(AbstractGridBackend):
 
     def rotator_directions(self) -> tuple[int, ...]:
         return self.state_backend.rotator_directions()
+
+    def freeze_remaining(self) -> int:
+        return self.state_backend.freeze_remaining()
 
     @property
     def frame_is_grid_aligned(self) -> bool:

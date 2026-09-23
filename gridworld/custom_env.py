@@ -709,6 +709,22 @@ class CustomMiniGridEnv(MiniGridEnv):
             )
             a, b, c = tris[self.agent_dir]
             fill_coords(tile, point_in_triangle(a, b, c), np.array([255, 0, 0]))
+        if self.freeze_remaining > 0:
+            # Iced over: the agent tile frosts on step-on and each swallowed
+            # action thins it, until the thaw frame is plain (3D: hud.draw_frost).
+            t = img.shape[0] // self.height
+            tile = img[ay * t:(ay + 1) * t, ax * t:(ax + 1) * t]
+            total = max(1, int(getattr(self.task_spec.mechanisms, "freeze_steps", 5)) if self.task_spec else 5)
+            frac = min(1.0, self.freeze_remaining / total)
+            alpha = 0.25 + 0.6 * frac
+            frost = np.array([214, 232, 246], dtype=float)
+            iced = (tile.astype(float) * (1.0 - alpha) + frost * alpha).round().astype(np.uint8)
+            n_cracks = round((1.0 - frac) * 4)
+            for k in range(n_cracks):  # diagonal cracks appear as it thaws
+                for i in range(t):
+                    j = (i + k * (t // 4)) % t
+                    iced[i, j] = (58, 82, 110)
+            tile[:] = iced
         return img
 
     def get_mission_text(self) -> str:
