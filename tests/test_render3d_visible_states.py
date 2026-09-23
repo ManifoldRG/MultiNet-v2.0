@@ -55,9 +55,14 @@ def _changed_px(a, b, region) -> int:
     return int(np.any(a[region] != b[region], axis=-1).sum())
 
 
-def _cyan_px(frame) -> int:
+def _agent_mask(frame):
+    # The agent's pure red (palette.AGENT); the red key (0.86, 0.18, 0.16) keeps g > 25.
     img = frame.astype(int)
-    return int(((img[..., 1] > 120) & (img[..., 2] > 120) & (img[..., 0] < 90)).sum())
+    return (img[..., 0] > 150) & (img[..., 1] < 25) & (img[..., 2] < 25)
+
+
+def _agent_px(frame) -> int:
+    return int(_agent_mask(frame).sum())
 
 
 @pytest.mark.parametrize("camera", ["top_down", "chase"])
@@ -176,7 +181,7 @@ def test_goal_pad_lands_where_project_predicts(spec, camera):
 @pytest.mark.parametrize("direction", [0, 1, 2, 3])
 def test_agent_silhouette_points_where_it_faces(spec, camera, direction):
     # The agent reads like MiniGrid's triangle: along its facing, the front
-    # half of its cyan shape is much narrower than the back half, in every
+    # half of its red shape is much narrower than the back half, in every
     # overhead-ish view (a disc has equal halves).
     frame, pose, _ = _render(spec, camera, _state(agent_position=(3, 2), agent_direction=direction))
     centre = np.array(to_pixel(project(pose, cell_center(3, 2, 0.15)), RES))
@@ -185,9 +190,7 @@ def test_agent_silhouette_points_where_it_faces(spec, camera, direction):
         to_pixel(project(pose, (3.5 + 0.3 * math.cos(yaw), -2.5 + 0.3 * math.sin(yaw), 0.15)), RES)
     )
     axis = (ahead - centre) / np.linalg.norm(ahead - centre)
-    img = frame.astype(int)
-    cyan = (img[..., 1] > 120) & (img[..., 2] > 120) & (img[..., 0] < 90)
-    points = np.argwhere(cyan).astype(float)
+    points = np.argwhere(_agent_mask(frame)).astype(float)
     along, across = points @ axis, points @ np.array([-axis[1], axis[0]])
     front = along > (along.max() + along.min()) / 2
     width = lambda sel: across[sel].max() - across[sel].min()  # noqa: E731
@@ -220,8 +223,8 @@ def test_compass_follows_the_view_not_always_the_agent(spec, camera):
 def test_agent_hidden_only_in_first_person(spec):
     top, _, _ = _render(spec, "top_down", _state())
     first, _, _ = _render(spec, "first_person", _state())
-    assert _cyan_px(top) > 0
-    assert _cyan_px(first) == 0
+    assert _agent_px(top) > 0
+    assert _agent_px(first) == 0
 
 
 def test_render_is_deterministic_and_well_formed(spec):

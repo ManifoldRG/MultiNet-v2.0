@@ -31,6 +31,14 @@ PORTAL_RING_TOP = 0.14
 PORTAL_BEACON_TOP = 10.0  # sweep 2026-09-23: with 1.0 walls, 10 reaches diagonals to ten cells
 PORTAL_BEACON_ALPHA = 0.45
 SKULL_RADIUS = 0.20
+SKULL_TILT = 25.0  # degrees the face looks up, so top-down still sees the sockets
+# Portal coordinate sign: the partner cell as prompt "row,col" (interface/coords.py
+# convention: 1-based, row southward), on four faces of the beacon so every
+# cardinal approach reads it. Seven-segment digits from thin boxes.
+SIGN_Z = 1.05
+SIGN_RADIUS = 0.16
+SIGN_CHAR_W = 0.13
+SIGN_CHAR_H = 0.18
 SNOW_BANK_HEIGHT = 0.18  # a drift, well under the eye; not a wall
 ROTATOR_TABLE_TOP = 0.06
 ROTATOR_ARROW_BASE = ROTATOR_TABLE_TOP
@@ -130,6 +138,8 @@ class SceneIndex:
     key_bodies: dict[str, str]
     carried: dict[str, tuple[str, ...]]
     agent_body: str = "agent"
+    kill_bodies: dict[int, str] = field(default_factory=dict)  # kill cell index -> skull mocap body
+    kill_cells: tuple[tuple[int, int], ...] = ()
     # rotating tile index (spec order) -> geom names of its arrow, per direction
     rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
     rotator_initial: tuple[int, ...] = ()
@@ -194,21 +204,86 @@ def _portal_end(prefix, cx, cy, colour) -> list[str]:
     ]
 
 
-def _kill_cell(prefix, cx, cy) -> list[str]:
-    # A skull floating at eye level over the 2D dark-red disc. Sockets sit in
-    # the four diagonal quadrants so two face every cardinal approach; the
-    # nose on top keeps the top-down view a face like the 2D glyph.
-    z = EYE_HEIGHT
+def _kill_cell(prefix, cx, cy) -> tuple[str, str]:
+    """(floor disc geom, skull mocap body). The skull floats at eye level over
+    the 2D dark-red disc and turns to face the agent each frame (sync.py):
+    two sockets, a nasal cavity and a toothed jaw on its +x face."""
+    disc = _disc(f"{prefix}:disc", cx, cy, 0.48, 0.0, 0.02, palette.KILL_DISC)
+    r = SKULL_RADIUS
     parts = [
-        _disc(f"{prefix}:disc", cx, cy, 0.48, 0.0, 0.02, palette.KILL_DISC),
-        _geom(f"{prefix}:cranium", "sphere", (cx, cy, z), (SKULL_RADIUS,), palette.SKULL),
-        _geom(f"{prefix}:jaw", "box", (cx, cy, z - SKULL_RADIUS - 0.03), (0.13, 0.11, 0.05), palette.SKULL),
-        _geom(f"{prefix}:nose", "sphere", (cx, cy, z + SKULL_RADIUS - 0.02), (0.05,), palette.SKULL_DARK),
+        _geom(f"{prefix}:cranium", "sphere", (0, 0, 0), (r,), palette.SKULL),
+        _geom(f"{prefix}:socket0", "sphere", (0.145, 0.085, 0.04), (0.075,), palette.SKULL_DARK),
+        _geom(f"{prefix}:socket1", "sphere", (0.145, -0.085, 0.04), (0.075,), palette.SKULL_DARK),
+        _geom(f"{prefix}:nasal", "box", (0.19, 0, -0.05), (0.02, 0.025, 0.035), palette.SKULL_DARK),
+        _geom(f"{prefix}:jaw", "box", (0.06, 0, -0.20), (0.13, 0.12, 0.045), palette.SKULL),
     ]
-    d = SKULL_RADIUS * 0.68
-    for i, (sx, sy) in enumerate(((-1, 1), (1, 1), (1, -1), (-1, -1))):
-        parts.append(_geom(f"{prefix}:socket{i}", "sphere", (cx + sx * d, cy + sy * d, z + 0.05), (0.065,), palette.SKULL_DARK))
-    return parts
+    for i, y in enumerate((-0.075, -0.025, 0.025, 0.075)):
+        parts.append(_geom(f"{prefix}:tooth{i}", "box", (0.19, y, -0.155), (0.005, 0.012, 0.03), palette.SKULL_DARK))
+    body = (
+        f'<body name={quoteattr(prefix)} mocap="true" pos="{_fmt((cx, cy, EYE_HEIGHT))}">'
+        + "".join(parts)
+        + "</body>"
+    )
+    return disc, body
+
+
+# Seven-segment layout: (u0, v0, u1, v1) per segment in a unit char box (u right, v up).
+_SEGMENTS = {
+    "a": (0.1, 0.95, 0.9, 0.95), "b": (0.9, 0.5, 0.9, 0.95), "c": (0.9, 0.05, 0.9, 0.5),
+    "d": (0.1, 0.05, 0.9, 0.05), "e": (0.1, 0.05, 0.1, 0.5), "f": (0.1, 0.5, 0.1, 0.95),
+    "g": (0.1, 0.5, 0.9, 0.5),
+}
+_DIGIT_SEGMENTS = {
+    "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg",
+    "5": "acdfg", "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg",
+}
+# Face -> (outward normal, viewer's right vector) for a viewer looking at that face.
+_SIGN_FACES = {"n": ((0, 1), (-1, 0)), "e": ((1, 0), (0, 1)), "s": ((0, -1), (1, 0)), "w": ((-1, 0), (0, -1))}
+
+
+def to_row_col(pos) -> tuple[int, int]:
+    """Prompt coordinates (interface/coords.py): (row, col) = (y, x); the border
+    wall is row/col 0, so interior cells count from 1."""
+    return int(pos.y), int(pos.x)
+
+
+def portal_sign_label(spec: TaskSpecification, tp, end: str) -> str | None:
+    """'row,col' of where stepping on this end lands you; None for a one-way exit."""
+    if end == "a":
+        partner = tp.position_b
+    elif tp.bidirectional:
+        partner = tp.position_a
+    else:
+        return None
+    return ",".join(str(v) for v in to_row_col(partner))
+
+
+def _sign(prefix, cx, cy, label: str) -> list[str]:
+    n = len(label)
+    width = n * SIGN_CHAR_W
+    thick = 0.006
+    out = []
+    for face, ((nx, ny), (ux, uy)) in _SIGN_FACES.items():
+        px, py = cx + nx * SIGN_RADIUS, cy + ny * SIGN_RADIUS
+        plate_size = (width / 2 + 0.02, 0.01, SIGN_CHAR_H / 2 + 0.02) if ny else (0.01, width / 2 + 0.02, SIGN_CHAR_H / 2 + 0.02)
+        out.append(_geom(f"{prefix}:sign:{face}:plate", "box", (px, py, SIGN_Z), plate_size, palette.SIGN_PLATE))
+        px, py = px + nx * 0.012, py + ny * 0.012  # segments sit just in front of the plate
+        k = 0
+        for i, ch in enumerate(label):
+            u_left = -width / 2 + i * SIGN_CHAR_W
+            if ch == ",":
+                strokes = [(0.35, 0.0, 0.45, 0.18)]
+            else:
+                strokes = [_SEGMENTS[seg] for seg in _DIGIT_SEGMENTS[ch]]
+            for u0, v0, u1, v1 in strokes:
+                cu = u_left + (u0 + u1) / 2 * SIGN_CHAR_W
+                cv = SIGN_Z + ((v0 + v1) / 2 - 0.5) * SIGN_CHAR_H
+                hu = max(abs(u1 - u0) / 2 * SIGN_CHAR_W, thick)
+                hv = max(abs(v1 - v0) / 2 * SIGN_CHAR_H, thick)
+                size = (hu, thick, hv) if ny else (thick, hu, hv)
+                out.append(_geom(f"{prefix}:sign:{face}:{k}", "box", (px + ux * cu, py + uy * cu, cv), size, palette.SIGN_TEXT))
+                k += 1
+    return out
 
 
 def _frozen_tile(prefix, cx, cy) -> list[str]:
@@ -309,9 +384,17 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         for end, pos in (("a", tp.position_a), ("b", tp.position_b)):
             cx, cy, _ = cell_center(pos.x, pos.y)
             world += _portal_end(f"portal:{tp.id}:{end}", cx, cy, colour)
+            label = portal_sign_label(spec, tp, end)
+            if label is not None:
+                world += _sign(f"portal:{tp.id}:{end}", cx, cy, label)
+    kill_bodies: dict[int, str] = {}
+    skull_bodies: list[str] = []
     for i, cell in enumerate(mech.kill_cells):
         cx, cy, _ = cell_center(cell.x, cell.y)
-        world += _kill_cell(f"kill:{i}", cx, cy)
+        disc, body = _kill_cell(f"kill:{i}", cx, cy)
+        world.append(disc)
+        skull_bodies.append(body)
+        kill_bodies[i] = f"kill:{i}"
     for i, cell in enumerate(mech.frozen_tiles):
         cx, cy, _ = cell_center(cell.x, cell.y)
         world += _frozen_tile(f"frozen:{i}", cx, cy)
@@ -381,6 +464,7 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
     <light directional="true" pos="0 0 10" dir="0.3 0.4 -1" diffuse="0.5 0.5 0.5" specular="0 0 0" castshadow="false"/>
     {newline.join(world)}
     {newline.join(bodies)}
+    {newline.join(skull_bodies)}
     {agent}
   </worldbody>
 </mujoco>"""
@@ -401,5 +485,7 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         rotator_arrows=rotator_arrows,
         rotator_initial=tuple(int(d) for d in mech.rotating_initial_directions),
         rotator_cells=tuple((p.x, p.y) for p in mech.rotating_tiles),
+        kill_bodies=kill_bodies,
+        kill_cells=tuple((p.x, p.y) for p in mech.kill_cells),
     )
     return xml, index

@@ -25,7 +25,9 @@ FLOOR: RGBA = (0.82, 0.82, 0.80, 1.0)
 GRID_LINE: RGBA = (0.52, 0.53, 0.57, 1.0)
 WALL: RGBA = (0.23, 0.24, 0.31, 1.0)
 GOAL: RGBA = (0.20, 0.80, 0.35, 1.0)
-AGENT: RGBA = (0.10, 0.85, 0.90, 1.0)
+AGENT: RGBA = (1.0, 0.04, 0.04, 1.0)  # MiniGrid's red triangle; no spec colour is this pure
+SIGN_PLATE: RGBA = (0.08, 0.08, 0.10, 1.0)
+SIGN_TEXT: RGBA = (0.97, 0.97, 0.95, 1.0)
 SWITCH_PLATE: RGBA = (0.20, 0.20, 0.22, 1.0)
 
 

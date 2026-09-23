@@ -53,7 +53,7 @@ def test_renderer_hides_the_agent_for_both_eyes():
         r = SceneRenderer(spec, camera=camera, resolution=128)
         try:
             frame = r.render(state, {"d1": False}).astype(int)
-            cyan = ((frame[..., 1] > 120) & (frame[..., 2] > 120) & (frame[..., 0] < 90)).sum()
-            assert cyan == 0, camera  # no wedge in the eye's own frame
+            red = ((frame[..., 0] > 150) & (frame[..., 1] < 25) & (frame[..., 2] < 25)).sum()
+            assert red == 0, camera  # no wedge in the eye's own frame
         finally:
             r.close()

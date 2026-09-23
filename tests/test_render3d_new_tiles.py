@@ -127,21 +127,15 @@ def test_portal_is_a_floor_ring_with_a_translucent_beacon_above_the_walls():
     assert float(beacon.size[0]) <= float(model.geom("portal:tp:a:dot").size[0]) + 1e-6  # core stays visible from above
 
 
-def test_skull_floats_at_eye_level_with_sockets_on_every_approach():
+def test_skull_floats_at_eye_level_over_the_floor_disc():
     import mujoco
 
     from gridworld.render3d.cameras import EYE_HEIGHT
 
     model, _ = _model(_spec())
-    cranium = model.geom("kill:0:cranium")
-    assert int(cranium.type[0]) == int(mujoco.mjtGeom.mjGEOM_SPHERE)
-    assert abs(float(cranium.pos[2]) - EYE_HEIGHT) <= 0.15
-    sockets = _geoms(model, "kill:0:socket")
-    assert len(sockets) == 4
-    cx, cy = cranium.pos[0], cranium.pos[1]
-    # one socket in each diagonal quadrant, so two face any cardinal approach
-    quadrants = {(float(g.pos[0]) > cx, float(g.pos[1]) > cy) for g in sockets}
-    assert len(quadrants) == 4
+    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "kill:0")
+    assert abs(float(model.body_pos[body][2]) - EYE_HEIGHT) <= 1e-6
+    assert int(model.geom("kill:0:cranium").type[0]) == int(mujoco.mjtGeom.mjGEOM_SPHERE)
     assert model.geom("kill:0:disc").id >= 0  # the dark-red floor mark stays
 
 
@@ -162,8 +156,8 @@ def test_frozen_tile_is_a_low_snow_bank():
 def test_portal_pair_shares_its_colour_and_each_end_is_drawn():
     model, _ = _model(_spec())
     names = {model.geom(i).name for i in range(model.ngeom)}
-    a = {n for n in names if n.startswith("portal:tc:a:")}
-    b = {n for n in names if n.startswith("portal:tc:b:")}
+    a = {n for n in names if n.startswith("portal:tc:a:") and ":sign:" not in n}
+    b = {n for n in names if n.startswith("portal:tc:b:") and ":sign:" not in n}
     assert a and b and len(a) == len(b)
     cyan = palette.rgba("cyan")
     assert any(np.allclose(model.geom(n).rgba, cyan, atol=1e-3) for n in a)
@@ -334,3 +328,88 @@ def test_arrow_sits_on_the_tile_once_the_agent_leaves():
         assert renderer.model.geom_pos[arrow][2] == pytest.approx(home)
     finally:
         renderer.close()
+
+
+# --- round 3 (Sean 2026-09-23): red agent, a skull that faces you, portal coordinates ---
+
+
+def test_agent_is_2d_red_so_no_spec_colour_can_match_it():
+    r, g, b, _ = palette.AGENT
+    assert r > 0.85 and g < 0.25 and b < 0.25
+
+
+def test_skull_is_a_mocap_body_with_a_front_face():
+    import mujoco
+
+    model, index = _model(_spec())
+    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "kill:0")
+    assert body >= 0 and model.body_mocapid[body] >= 0
+    assert index.kill_bodies == {0: "kill:0"}
+    sockets = _geoms(model, "kill:0:socket")
+    assert len(sockets) == 2
+    for s in sockets:
+        assert float(s.pos[0]) > 0.1  # on the +x (front) face of the cranium
+    assert model.geom("kill:0:nasal").id >= 0 and model.geom("kill:0:jaw").id >= 0
+    assert len(_geoms(model, "kill:0:tooth")) >= 3
+
+
+@pytest.mark.parametrize("agent_cell, expect_yaw", [((3, 1), 180.0), ((7, 1), 0.0), ((5, 3), -90.0)])
+def test_skull_turns_to_face_the_agent(agent_cell, expect_yaw):
+    import math
+
+    import mujoco
+
+    from gridworld.render3d.renderer import SceneRenderer
+
+    renderer = SceneRenderer(_spec(), camera="top_down", resolution=64)
+    try:
+        renderer.render(_state(agent_position=agent_cell), NO_DOORS)
+        body = mujoco.mj_name2id(renderer.model, mujoco.mjtObj.mjOBJ_BODY, "kill:0")
+        xmat = renderer.data.xmat[body].reshape(3, 3)
+        front = xmat @ np.array([1.0, 0.0, 0.0])  # body +x in world
+        yaw = math.degrees(math.atan2(front[1], front[0]))
+        assert abs((yaw - expect_yaw + 180) % 360 - 180) < 1.0
+        assert front[2] > 0.3  # face tilted up so top-down still sees the sockets
+    finally:
+        renderer.close()
+
+
+def test_portal_sign_names_the_partner_cell_in_prompt_row_col():
+    from gridworld.render3d.scene import portal_sign_label
+    from interface.coords import to_row_col
+
+    spec = _spec()
+    tp = spec.mechanisms.teleporters[0]  # (3,1) <-> (7,3)
+    assert portal_sign_label(spec, tp, "a") == "3,7"  # lands on (x=7, y=3)
+    assert portal_sign_label(spec, tp, "b") == "1,3"
+    assert portal_sign_label(spec, tp, "a") == ",".join(str(v) for v in to_row_col(tp.position_b))
+
+
+def test_one_way_portal_exit_has_no_sign():
+    from gridworld.render3d.scene import portal_sign_label
+
+    d = copy.deepcopy(TILES)
+    d["mechanisms"]["teleporters"][0]["bidirectional"] = False
+    spec = _spec(d)
+    assert portal_sign_label(spec, spec.mechanisms.teleporters[0], "b") is None
+    model, _ = _model(spec)
+    assert _geoms(model, "portal:tp:a:sign:") and not _geoms(model, "portal:tp:b:sign:")
+
+
+def test_portal_sign_faces_all_four_approaches_above_the_ring():
+    model, _ = _model(_spec())
+    for face in "nesw":
+        geoms = _geoms(model, f"portal:tp:a:sign:{face}:")
+        assert geoms, face
+        assert all(0.7 <= float(g.pos[2]) <= 1.4 for g in geoms)
+
+
+def test_portal_sign_is_visible_and_differs_between_partners_first_person():
+    pytest.importorskip("mujoco")
+    spec = _spec()
+    d = copy.deepcopy(TILES)
+    d["mechanisms"]["teleporters"][0]["position_b"] = [8, 3]  # partner moves -> different digits
+    facing = _state(agent_position=(2, 1), agent_direction=0)  # one cell west of tp:a, facing it
+    a, _, _ = _render(spec, "first_person", facing)
+    b, _, _ = _render(_spec(d), "first_person", facing)
+    assert int(np.any(a != b, axis=-1).sum()) >= MIN_CHANGED_PX

@@ -15,7 +15,15 @@ from gridworld.backends.base import GridState
 
 from . import palette
 from .cameras import DIRECTION_YAW, cell_center
-from .scene import HIDDEN_GROUP, KEY_HEIGHT, ROTATOR_ARROW_LIFT, SceneIndex
+from .scene import HIDDEN_GROUP, KEY_HEIGHT, ROTATOR_ARROW_LIFT, SKULL_TILT, SceneIndex
+
+
+def _yaw_pitch_quat(yaw: float, pitch_up: float) -> tuple[float, float, float, float]:
+    """Quaternion (w, x, y, z) turning +x to ``yaw`` about z, then raising it by ``pitch_up``."""
+    cy, sy = math.cos(yaw / 2), math.sin(yaw / 2)
+    cp, sp = math.cos(-pitch_up / 2), math.sin(-pitch_up / 2)  # negative y-rotation lifts +x
+    # q = qz(yaw) * qy(-pitch)
+    return (cy * cp, -sy * sp, cy * sp, sy * cp)
 
 
 class SceneState:
@@ -59,6 +67,7 @@ class SceneState:
         self._rotators = {
             i: tuple(ids(names) for names in arrows) for i, arrows in index.rotator_arrows.items()
         }
+        self._skulls = {i: mocap(body) for i, body in index.kill_bodies.items()}
         self._agent = mocap(index.agent_body)
 
     def _show(self, geom_ids, visible: bool) -> None:
@@ -109,6 +118,10 @@ class SceneState:
         for colour, geom_ids in self._carried.items():
             self._show(geom_ids, colour == carrying)
         ax, ay, _ = cell_center(*state.agent_position)
+        for i, mocap_id in self._skulls.items():
+            sx, sy, _ = cell_center(*self.index.kill_cells[i])
+            yaw = math.atan2(ay - sy, ax - sx) if (ax, ay) != (sx, sy) else 0.0
+            data.mocap_quat[mocap_id] = _yaw_pitch_quat(yaw, math.radians(SKULL_TILT))
         data.mocap_pos[self._agent] = (ax, ay, 0.0)
         half = math.radians(DIRECTION_YAW[int(state.agent_direction)] if yaw is None else yaw) / 2.0
         data.mocap_quat[self._agent] = (math.cos(half), 0.0, 0.0, math.sin(half))
