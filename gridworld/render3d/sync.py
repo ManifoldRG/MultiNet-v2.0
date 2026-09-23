@@ -25,6 +25,9 @@ class SceneState:
         self.model = model
         self.index = index
         self._home_group = model.geom_group.copy()
+        # Compiled positions: a mesh geom's pos carries the compiler's
+        # centre-of-mass offset, so lifts add to it rather than replace it.
+        self._home_pos = model.geom_pos.copy()
 
         def ids(names) -> tuple[int, ...]:
             out = []
@@ -83,7 +86,7 @@ class SceneState:
             for d, geom_ids in enumerate(arrows):
                 self._show(geom_ids, d == shown)
                 for gid in geom_ids:
-                    self.model.geom_pos[gid][2] = lift
+                    self.model.geom_pos[gid][2] = self._home_pos[gid][2] + lift
         for door_id, (closed, opened) in self._doors.items():
             is_open = bool(door_states.get(door_id, False))
             self._show(closed, not is_open)

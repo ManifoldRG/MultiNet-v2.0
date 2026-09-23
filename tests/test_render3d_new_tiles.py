@@ -103,13 +103,60 @@ def test_scene_indexes_one_arrow_per_direction_per_rotator():
             assert names and all(model.geom(n).id >= 0 for n in names)
 
 
-def test_rotator_arrow_has_height_and_portal_rises_off_the_floor():
+def _geoms(model, prefix):
+    return [model.geom(i) for i in range(model.ngeom) if model.geom(i).name.startswith(prefix)]
+
+
+def test_rotator_arrow_rides_on_a_raised_turntable():
     model, index = _model(_spec())
     arrow_top = max(_top(model, model.geom(n)) for n in index.rotator_arrows[0][0])
-    assert arrow_top >= 0.05
-    portal_geoms = [model.geom(i) for i in range(model.ngeom) if model.geom(i).name.startswith("portal:tp:")]
-    assert portal_geoms
-    assert max(_top(model, g) for g in portal_geoms) >= 0.10
+    assert arrow_top >= 0.10
+    table = model.geom("rotator:0:table")
+    assert _top(model, table) >= 0.05 and float(table.size[0]) >= 0.40
+
+
+def test_portal_is_a_floor_ring_with_a_translucent_beacon_above_the_walls():
+    from gridworld.render3d.cameras import DEFAULT_WALL_HEIGHT
+
+    model, _ = _model(_spec())
+    ring = model.geom("portal:tp:a:ring")
+    assert 0.08 <= _top(model, ring) <= 0.25 and float(ring.rgba[3]) == 1.0
+    beacon = model.geom("portal:tp:a:beacon")
+    assert _top(model, beacon) >= DEFAULT_WALL_HEIGHT["first_person"] + 1.0
+    assert 0.2 <= float(beacon.rgba[3]) <= 0.7
+    assert float(beacon.size[0]) <= float(model.geom("portal:tp:a:dot").size[0]) + 1e-6  # core stays visible from above
+
+
+def test_skull_floats_at_eye_level_with_sockets_on_every_approach():
+    import mujoco
+
+    from gridworld.render3d.cameras import EYE_HEIGHT
+
+    model, _ = _model(_spec())
+    cranium = model.geom("kill:0:cranium")
+    assert int(cranium.type[0]) == int(mujoco.mjtGeom.mjGEOM_SPHERE)
+    assert abs(float(cranium.pos[2]) - EYE_HEIGHT) <= 0.15
+    sockets = _geoms(model, "kill:0:socket")
+    assert len(sockets) == 4
+    cx, cy = cranium.pos[0], cranium.pos[1]
+    # one socket in each diagonal quadrant, so two face any cardinal approach
+    quadrants = {(float(g.pos[0]) > cx, float(g.pos[1]) > cy) for g in sockets}
+    assert len(quadrants) == 4
+    assert model.geom("kill:0:disc").id >= 0  # the dark-red floor mark stays
+
+
+def test_frozen_tile_is_a_low_snow_bank():
+    import mujoco
+
+    from gridworld.render3d.cameras import DEFAULT_WALL_HEIGHT
+
+    model, _ = _model(_spec())
+    bank = model.geom("frozen:0:bank")
+    assert int(bank.type[0]) == int(mujoco.mjtGeom.mjGEOM_ELLIPSOID)
+    top = float(bank.pos[2] + bank.size[2])
+    assert 0.10 <= top <= DEFAULT_WALL_HEIGHT["first_person"] * 0.2  # a drift, not a wall
+    assert float(bank.size[0]) >= 0.40 and float(bank.size[1]) >= 0.40
+    assert len(_geoms(model, "frozen:0:")) >= 2
 
 
 def test_portal_pair_shares_its_colour_and_each_end_is_drawn():
@@ -280,9 +327,10 @@ def test_arrow_sits_on_the_tile_once_the_agent_leaves():
     renderer = SceneRenderer(_spec(), camera="top_down", resolution=64)
     try:
         arrow = mujoco.mj_name2id(renderer.model, mujoco.mjtObj.mjOBJ_GEOM, "rotator:0:arrow0")
+        home = float(renderer.model.geom_pos[arrow][2])  # the compiler's mesh centre offset
         renderer.render(_state(agent_position=(4, 2)), NO_DOORS, rotators=(0, 3))
-        assert renderer.model.geom_pos[arrow][2] == pytest.approx(ROTATOR_ARROW_LIFT)
+        assert renderer.model.geom_pos[arrow][2] == pytest.approx(home + ROTATOR_ARROW_LIFT)
         renderer.render(_state(agent_position=(3, 2)), NO_DOORS, rotators=(0, 3))
-        assert renderer.model.geom_pos[arrow][2] == pytest.approx(0.0)
+        assert renderer.model.geom_pos[arrow][2] == pytest.approx(home)
     finally:
         renderer.close()

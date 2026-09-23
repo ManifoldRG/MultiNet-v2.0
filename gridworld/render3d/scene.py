@@ -14,7 +14,7 @@ from xml.sax.saxutils import quoteattr
 from gridworld.task_spec import TaskSpecification
 
 from . import palette
-from .cameras import cell_center
+from .cameras import EYE_HEIGHT, cell_center
 
 KEY_HEIGHT = 0.10
 CARRIED_KEY_HEIGHT = 0.62
@@ -22,12 +22,19 @@ AGENT_GROUP = 3  # agent geoms; hidden in first_person via MjvOption.geomgroup
 HIDDEN_GROUP = 5  # geoms of the inactive state; the renderer never draws this group
 KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
 
-# PR #57 tiles. Glyph layout copies custom_env.py (2D), lifted off the floor so
-# the first-person eye can see them: portal rings and rotator arrows are short
-# solids, the skull and frost marks thin discs stacked in 2D's paint order.
+# PR #57 tiles as objects, not floor decals (Sean, 2026-09-23): each keeps the
+# 2D glyph's top-down silhouette and colours (custom_env.py) but means
+# something at eye level -- a floating skull, a snow bank you wade through, a
+# pool of light with a beacon, a turntable. Heights are in wall units (walls
+# are 1.4 in first person, the eye sits at 0.55).
 PORTAL_RING_TOP = 0.14
-ROTATOR_ARROW_BASE = 0.024  # top of the orange slab
-ROTATOR_ARROW_TOP = 0.10
+PORTAL_BEACON_TOP = 3.0  # visible over the walls from across the maze
+PORTAL_BEACON_ALPHA = 0.45
+SKULL_RADIUS = 0.20
+SNOW_BANK_HEIGHT = 0.18  # a drift, well under the eye; not a wall
+ROTATOR_TABLE_TOP = 0.06
+ROTATOR_ARROW_BASE = ROTATOR_TABLE_TOP
+ROTATOR_ARROW_TOP = 0.14
 # While the agent stands on a rotator its arrow rises this far, clear of the
 # wedge (top 0.28): top-down draws it over the agent, the eye sees its tip.
 ROTATOR_ARROW_LIFT = 0.30
@@ -174,34 +181,44 @@ def _disc(name, cx, cy, radius, z_bottom, z_top, rgba) -> str:
 
 
 def _portal_end(prefix, cx, cy, colour) -> list[str]:
-    # 2D: colour ring r.42, dark core r.26, colour dot r.12 -- each a step taller
-    # so the top-down view shows the same concentric glyph.
+    # A pool of light: the 2D concentric glyph (colour ring, dark core, colour
+    # dot) as a thick floor ring, and a translucent column no wider than the
+    # dot rising from it, so top-down still shows the core and first person
+    # sees a beacon over the walls -- the partner's beacon is the same colour.
+    r, g, b, _ = colour
     return [
         _disc(f"{prefix}:ring", cx, cy, 0.42, 0.0, PORTAL_RING_TOP, colour),
         _disc(f"{prefix}:core", cx, cy, 0.26, 0.0, PORTAL_RING_TOP + 0.01, palette.PORTAL_CORE),
         _disc(f"{prefix}:dot", cx, cy, 0.12, 0.0, PORTAL_RING_TOP + 0.02, colour),
+        _disc(f"{prefix}:beacon", cx, cy, 0.12, PORTAL_RING_TOP + 0.02, PORTAL_BEACON_TOP, (r, g, b, PORTAL_BEACON_ALPHA)),
     ]
 
 
 def _kill_cell(prefix, cx, cy) -> list[str]:
-    # 2D: dark-red disc r.48; white skull r.30 centred a little north; two eyes
-    # and a nose. The skull has some height so it reads from the eye view.
-    return [
+    # A skull floating at eye level over the 2D dark-red disc. Sockets sit in
+    # the four diagonal quadrants so two face every cardinal approach; the
+    # nose on top keeps the top-down view a face like the 2D glyph.
+    z = EYE_HEIGHT
+    parts = [
         _disc(f"{prefix}:disc", cx, cy, 0.48, 0.0, 0.02, palette.KILL_DISC),
-        _disc(f"{prefix}:skull", cx, cy + 0.08, 0.30, 0.0, 0.08, palette.SKULL),
-        _disc(f"{prefix}:eye0", cx - 0.12, cy + 0.12, 0.08, 0.08, 0.09, palette.SKULL_DARK),
-        _disc(f"{prefix}:eye1", cx + 0.12, cy + 0.12, 0.08, 0.08, 0.09, palette.SKULL_DARK),
-        _disc(f"{prefix}:nose", cx, cy - 0.08, 0.06, 0.08, 0.09, palette.SKULL_DARK),
+        _geom(f"{prefix}:cranium", "sphere", (cx, cy, z), (SKULL_RADIUS,), palette.SKULL),
+        _geom(f"{prefix}:jaw", "box", (cx, cy, z - SKULL_RADIUS - 0.03), (0.13, 0.11, 0.05), palette.SKULL),
+        _geom(f"{prefix}:nose", "sphere", (cx, cy, z + SKULL_RADIUS - 0.02), (0.05,), palette.SKULL_DARK),
     ]
+    d = SKULL_RADIUS * 0.68
+    for i, (sx, sy) in enumerate(((-1, 1), (1, 1), (1, -1), (-1, -1))):
+        parts.append(_geom(f"{prefix}:socket{i}", "sphere", (cx + sx * d, cy + sy * d, z + 0.05), (0.065,), palette.SKULL_DARK))
+    return parts
 
 
 def _frozen_tile(prefix, cx, cy) -> list[str]:
-    # 2D: pale-blue tile, white spot r.16, two flecks.
+    # A snow bank: a low drift filling the cell with two smaller lumps, so it
+    # reads as something to wade through rather than a block to walk around.
+    h = SNOW_BANK_HEIGHT
     return [
-        _geom(f"{prefix}:slab", "box", (cx, cy, 0.012), (0.46, 0.46, 0.012), palette.FROZEN_TILE),
-        _disc(f"{prefix}:spot", cx, cy, 0.16, 0.024, 0.034, palette.FROZEN_SPOT),
-        _disc(f"{prefix}:fleck0", cx - 0.22, cy + 0.18, 0.07, 0.024, 0.034, palette.FROZEN_FLECK),
-        _disc(f"{prefix}:fleck1", cx + 0.20, cy - 0.12, 0.06, 0.024, 0.034, palette.FROZEN_FLECK),
+        _geom(f"{prefix}:bank", "ellipsoid", (cx, cy, 0.02), (0.46, 0.44, h - 0.02), palette.FROZEN_TILE),
+        _geom(f"{prefix}:lump0", "ellipsoid", (cx + 0.12, cy - 0.10, 0.08), (0.24, 0.20, 0.12), palette.FROZEN_SPOT),
+        _geom(f"{prefix}:lump1", "ellipsoid", (cx - 0.18, cy + 0.14, 0.06), (0.16, 0.14, 0.09), palette.FROZEN_FLECK),
     ]
 
 
@@ -302,7 +319,9 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
     rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = {}
     for i, cell in enumerate(mech.rotating_tiles):
         cx, cy, _ = cell_center(cell.x, cell.y)
-        world.append(_geom(f"rotator:{i}:slab", "box", (cx, cy, 0.012), (0.46, 0.46, 0.012), palette.ROTATOR_TILE))
+        # A turntable: raised orange disc on a slightly wider, darker rim.
+        world.append(_disc(f"rotator:{i}:rim", cx, cy, 0.48, 0.0, ROTATOR_TABLE_TOP * 0.5, palette.dim(palette.ROTATOR_TILE, 0.6)))
+        world.append(_disc(f"rotator:{i}:table", cx, cy, 0.44, 0.0, ROTATOR_TABLE_TOP, palette.ROTATOR_TILE))
         arrows = []
         for d in range(len(ROTATOR_ARROWS)):
             name = f"rotator:{i}:arrow{d}"
