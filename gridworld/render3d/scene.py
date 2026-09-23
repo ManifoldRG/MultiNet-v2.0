@@ -23,12 +23,12 @@ HIDDEN_GROUP = 5  # geoms of the inactive state; the renderer never draws this g
 KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
 
 # PR #57 tiles as objects, not floor decals (Sean, 2026-09-23): each keeps the
-# 2D glyph's top-down silhouette and colours (custom_env.py) but means
-# something at eye level -- a floating skull, a snow bank you wade through, a
-# pool of light with a beacon, a turntable. Heights are in wall units (walls
-# are 1.4 in first person, the eye sits at 0.55).
+# 2D glyph's colours and top-down motif (custom_env.py) but means something
+# at eye level -- a floating skull, a snow bank you wade through, a pool of
+# light with a beacon, a turntable. Heights are in wall units (first-person
+# walls are 1.0, 1.4 in the narrow preset; the eye sits at 0.55).
 PORTAL_RING_TOP = 0.14
-PORTAL_BEACON_TOP = 3.0  # visible over the walls from across the maze
+PORTAL_BEACON_TOP = 10.0  # sweep 2026-09-23: with 1.0 walls, 10 reaches diagonals to ten cells
 PORTAL_BEACON_ALPHA = 0.45
 SKULL_RADIUS = 0.20
 SNOW_BANK_HEIGHT = 0.18  # a drift, well under the eye; not a wall

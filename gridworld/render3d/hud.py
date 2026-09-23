@@ -13,7 +13,7 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-COMPASS_CAMERAS: tuple[str, ...] = ("chase", "first_person")
+COMPASS_CAMERAS: tuple[str, ...] = ("chase", "first_person", "first_person_narrow")
 
 
 def turns_with_agent(camera: str, tilt: int | None = None) -> bool:

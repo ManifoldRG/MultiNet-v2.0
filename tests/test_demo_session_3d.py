@@ -52,11 +52,11 @@ def test_3d_frame_and_camera_cycle_are_display_only(tmp_path):
         assert session.backend.frame_is_grid_aligned is False
         # rendered at the demo panel size, not stretched from 512
         assert session.backend.render().shape == (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE, 3)
-        assert session.camera_names == ("top_down", "chase", "fixed_angled", "first_person")
+        assert session.camera_names == ("top_down", "chase", "fixed_angled", "first_person", "first_person_narrow")
         assert session.cycle_camera() == "chase"
         assert session.backend.camera == "chase"
         assert session.state.step_count == 0 and len(session.transcript) == 1
-        for _ in range(3):
+        for _ in range(4):
             session.cycle_camera()
         assert session.backend.camera == "top_down"
     finally:
@@ -133,7 +133,7 @@ def test_tilt_steps_from_the_current_preset_clamps_and_is_display_only(tmp_path)
         last = session.backend.tilt_levels - 1
         assert session.tilt_status() is None
         assert session.step_tilt(+1) == 3  # chase sits at level 2
-        assert session.tilt_status() == f"Tilt 3/{last} · walls 0.8"
+        assert session.tilt_status() == f"Tilt 3/{last} · walls 0.7"
         assert session.step_tilt(-1) == 2
         for _ in range(last + 2):
             session.step_tilt(-1)

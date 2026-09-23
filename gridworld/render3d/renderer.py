@@ -13,6 +13,7 @@ from gridworld.backends.base import GridState  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 
 from .cameras import (  # noqa: E402
+    EYE_PRESETS,
     PRESETS,
     TILT_LEVELS,
     CameraPose,
@@ -113,10 +114,10 @@ class SceneRenderer:
         )
         if self._tilt is None:
             pose = pose_for(self._camera, wall_height=self.index.wall_height, **where)
-            eye_view = self._camera == "first_person"
+            eye_view = self._camera in EYE_PRESETS
         else:
             pose = tilt_pose(self._tilt, **where)
-            eye_view = TILT_LEVELS[self._tilt].preset == "first_person"
+            eye_view = TILT_LEVELS[self._tilt].preset in EYE_PRESETS
         self.last_pose = pose
         # Free-camera projection is model-global: set it per frame.
         self.model.vis.global_.orthographic = int(pose.orthographic)

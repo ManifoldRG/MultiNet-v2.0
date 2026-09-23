@@ -168,7 +168,7 @@ def test_registry_wraps_minigrid_by_default():
     backend = get_backend("mujoco3d", camera="chase", resolution=RES)
     assert isinstance(backend.state_backend, MiniGridBackend)
     assert backend.camera == "chase"
-    assert backend.camera_names == ("top_down", "chase", "fixed_angled", "first_person")
+    assert backend.camera_names == ("top_down", "chase", "fixed_angled", "first_person", "first_person_narrow")
     assert backend.frame_is_grid_aligned is False
     assert backend.observation_shape == (RES, RES, 3)
 
@@ -205,7 +205,7 @@ def test_view_turns_with_agent_only_on_heading_following_cameras():
         backend.set_camera(camera)
         if backend.view_turns_with_agent:
             turning.add(camera)
-    assert turning == {"chase", "first_person"}
+    assert turning == {"chase", "first_person", "first_person_narrow"}
 
 
 def test_tilt_is_display_only_and_steps_through_every_level():

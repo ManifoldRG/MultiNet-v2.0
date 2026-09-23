@@ -77,7 +77,7 @@ def test_each_mechanism_state_is_visibly_distinct(spec, camera, mechanism):
     assert _changed_px(frame_a, frame_b, _cell_region(pose, cell, wall_height)) >= MIN_CHANGED_PX
 
 
-ALL_CAMERAS = ["top_down", "chase", "fixed_angled", "first_person"]
+ALL_CAMERAS = ["top_down", "chase", "fixed_angled", "first_person", "first_person_narrow"]
 # One mechanism flips per case; the key case uses a used-up key (not carried),
 # so nothing but the key's own cell may change.
 LOCAL_CHANGES = {
@@ -242,7 +242,7 @@ def test_set_camera_rebuilds_for_new_wall_height(spec):
         assert renderer.index.wall_height == pytest.approx(0.4)
         renderer.set_camera("first_person")
         assert renderer.camera == "first_person"
-        assert renderer.index.wall_height == pytest.approx(1.4)
+        assert renderer.index.wall_height == pytest.approx(1.0)
         assert renderer.render(_state(), CLOSED).shape == (64, 64, 3)
     finally:
         renderer.close()
