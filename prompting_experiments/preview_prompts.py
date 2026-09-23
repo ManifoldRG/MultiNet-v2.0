@@ -44,6 +44,18 @@ def _missing_dependency_message(exc: ModuleNotFoundError) -> str:
     )
 
 
+def _stall_watchdog(runner, state):
+    k = runner.config.progress_stall_k
+    if not k:
+        return None
+    from interface.progress_watchdog import ProgressStallWatchdog
+    return ProgressStallWatchdog(k, state)
+
+
+def _stall_remaining(watchdog) -> int | None:
+    return watchdog.remaining if watchdog else None
+
+
 def _rollout_preview_steps(
     runner,
     state,
@@ -51,7 +63,7 @@ def _rollout_preview_steps(
     seed: int,
     *,
     move_only: bool = False,
-) -> tuple[Any, str, list[dict]]:
+) -> tuple[Any, str, list[dict], int | None]:
     from interface.actions_map import nlu_action_to_int
     from interface.coords import agent_facing, agent_row_col
     from interface.episode_log import state_snapshot
@@ -66,6 +78,7 @@ def _rollout_preview_steps(
     ]
     last_feedback = feedback_templates.INITIAL_FEEDBACK
     transcript: list[dict] = []
+    watchdog = _stall_watchdog(runner, state)
 
     for step_index in range(1, steps + 1):
         action = rng.choice(actions)
@@ -136,13 +149,15 @@ def _rollout_preview_steps(
                 "_post_step_rgb": runner.last_rgb,
             }
         )
+        if watchdog is not None:
+            watchdog.observe(state)
         if terminated or truncated:
             break
 
-    return state, last_feedback, transcript
+    return state, last_feedback, transcript, _stall_remaining(watchdog)
 
 
-def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str, list[dict]]:
+def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str, list[dict], int | None]:
     from interface.actions_map import nlu_action_to_int
     from interface.coords import agent_facing, agent_row_col
     from interface.episode_log import state_snapshot
@@ -150,6 +165,7 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
 
     last_feedback = feedback_templates.INITIAL_FEEDBACK
     transcript: list[dict] = []
+    watchdog = _stall_watchdog(runner, state)
 
     for step_index, action in enumerate(actions, start=1):
         position_before = agent_row_col(state)
@@ -217,10 +233,12 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
                 "_post_step_rgb": runner.last_rgb,
             }
         )
+        if watchdog is not None:
+            watchdog.observe(state)
         if terminated or truncated:
             break
 
-    return state, last_feedback, transcript
+    return state, last_feedback, transcript, _stall_remaining(watchdog)
 
 
 def _prompt_preview(
@@ -242,7 +260,7 @@ def _prompt_preview(
     spec.max_steps = max_steps
     runner = build_runner(config, backend, spec)
     runner.last_rgb, state, _reset_info = backend.reset(seed=spec.seed)
-    state, last_feedback, transcript = _rollout_preview_steps(
+    state, last_feedback, transcript, stall_remaining = _rollout_preview_steps(
         runner,
         state,
         preview_steps,
@@ -253,6 +271,7 @@ def _prompt_preview(
         state,
         last_feedback,
         transcript,
+        stall_remaining=stall_remaining,
     )
     return system_prompt, _content_to_text(user_message.get("content"))
 
@@ -277,11 +296,14 @@ def _one_shot_text_summary_preview(config) -> tuple[int, str, str]:
     backend.configure(spec)
     runner = build_runner(config, backend, spec)
     runner.last_rgb, state, _reset_info = backend.reset(seed=spec.seed)
-    state, last_feedback, transcript = _solution_preview_steps(runner, state, actions)
+    state, last_feedback, transcript, stall_remaining = _solution_preview_steps(
+        runner, state, actions
+    )
     system_prompt, user_message = runner.build_prompt_message(
         state,
         last_feedback,
         transcript,
+        stall_remaining=stall_remaining,
     )
     # Ensure the replay actually reached the goal in the live environment
     # Prefer calling `check_goal()` if the state is a native MultiGrid state,

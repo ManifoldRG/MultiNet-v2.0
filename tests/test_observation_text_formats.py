@@ -98,7 +98,13 @@ def test_coords_default_and_collected_key(spec_state, mid):
     )
     assert "Keys collected" not in render_user_observation_text(spec, start, include_facing=True)
     coords = render_user_observation_text(spec, state, include_facing=True)
-    assert "Keys collected: red." in coords
+    assert "Your inventory: red." in coords
+    assert "Keys collected" not in coords
+    assert "Keys used up" not in coords
+    spent = dataclasses.replace(state, agent_carrying=None)
+    spent_coords = render_user_observation_text(spec, spent, include_facing=True)
+    assert "Keys used up: red." in spent_coords
+    assert "Your inventory: empty." in spent_coords
     assert {k["color"]: k["status"] for k in _json(spec, state)["map_contents"]["keys"]}["red"] == "carried"
     assert _status(_ascii(spec, state))["Carrying"] == "red key"
 
@@ -120,8 +126,8 @@ def test_ascii_initial_and_current(spec_state, mid):
     assert grid[2][3] == "dB" and grid[3][6] == "dR"
     assert grid[7][7] == "s1" and grid[4][9] == "g1"
     assert legend["kB"] == "blue key"
-    assert legend["s1"] == "toggle switch, controls g1"
-    assert legend["g1"] == "closed gate, opened by s1"
+    assert legend["s1"] == "closed switch"
+    assert legend["g1"] == "closed gate"
     assert "dO" not in legend and "gO" not in legend
     assert _status(text) == {
         "Carrying": "nothing",
@@ -138,11 +144,11 @@ def test_ascii_initial_and_current(spec_state, mid):
 
     mid_text = _ascii(spec, state)
     g, lg = _grid(mid_text), _legend(mid_text)
-    assert g[2][3] == "dO" and g[4][9] == "gO" and g[3][6] == "dR"
+    assert g[2][3] == "dO" and g[4][9] == "g1" and g[3][6] == "dR"
     assert g[3][4] == "v" and g[4][4] == "." and g[7][1] == "kB"
-    assert lg["dO"] == "open door (passable)"
-    assert lg["s1"] == "toggle switch, controls gO"
-    assert "g1" not in lg and "currently" not in lg["s1"]
+    assert lg["dO"] == "unlocked door"
+    assert lg["s1"] == "open switch"
+    assert lg["g1"] == "open gate"
     assert _grid(_ascii(spec, state, include_facing=False))[3][4] == "A"
     assert _status(mid_text) == {
         "Carrying": "red key",
@@ -152,6 +158,11 @@ def test_ascii_initial_and_current(spec_state, mid):
     assert "Doors open" not in _status(mid_text)
     spent = dataclasses.replace(state, agent_carrying=None)
     assert _status(_ascii(spec, spent))["Keys used up"] == "red"
+    standing = dataclasses.replace(start, agent_position=(2, 8))
+    standing_text = _ascii(spec, standing)
+    assert _grid(standing_text)[7][1] == ">"
+    assert _legend(standing_text)[">"] == "you, facing EAST"
+    assert _legend(standing_text)["kB"] == "blue key (you are standing on it)"
 
 
 def test_json_payload(spec_state, mid):
@@ -162,7 +173,7 @@ def test_json_payload(spec_state, mid):
     assert payload["agent"] == {"row": row, "col": col, "facing": "EAST"}
     assert payload["inventory"] == []
     assert payload["moves_remaining"] == start.max_steps - start.step_count
-    assert "stall_remaining" not in payload
+    assert "stall" not in payload
     assert {k["color"] for k in payload["map_contents"]["keys"]} == {"blue", "red"}
 
     contents = _json(spec, state)["map_contents"]

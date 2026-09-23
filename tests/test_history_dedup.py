@@ -99,7 +99,7 @@ def test_rolling_chat_turns_do_not_embed_last3_history():
     # In multiturn mode the chat carries the history; no turn may re-embed it.
     for call in agent.calls:
         for text in _texts(call):
-            assert _RECENT not in text
+            assert "Recent history (last " not in text
 
 
 def test_stateless_still_embeds_last3_history():

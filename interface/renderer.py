@@ -13,6 +13,7 @@ from PIL import Image
 from interface.coords import (
     agent_facing,
     agent_row_col,
+    compact_ids,
     goal_row_col,
     inventory_list,
     live_key_position,
@@ -91,17 +92,17 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
             )
         )
 
+    gates, switches = compact_ids(task_spec)
     for switch in task_spec.mechanisms.switches:
         row, col = to_row_col(switch.position)
         on_off = "on" if switch.id in active else switch.initial_state
-        controls = ", ".join(switch.controls)
         parts.append(
             observation_templates.SWITCH_LINE.format(
+                switch_id=switches[switch.id],
                 switch_type=switch.switch_type,
                 row=row,
                 col=col,
                 state=on_off,
-                controls=controls,
             )
         )
 
@@ -110,7 +111,7 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
         cur = "open" if gate.id in open_gates else gate.initial_state
         parts.append(
             observation_templates.GATE_LINE.format(
-                gate_id=gate.id,
+                gate_id=gates[gate.id],
                 row=row,
                 col=col,
                 state=cur,
@@ -159,6 +160,7 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
     open_doors = state.open_doors if state else set()
     active = state.active_switches if state else set()
     open_gates = state.open_gates if state else set()
+    gates, switches = compact_ids(task_spec)
     return {
         "keys": [_key_status(key, state) for key in task_spec.mechanisms.keys],
         "doors": [
@@ -172,17 +174,17 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
         ],
         "switches": [
             {
+                "id": switches[switch.id],
                 "switch_type": switch.switch_type,
                 "row": to_row_col(switch.position)[0],
                 "col": to_row_col(switch.position)[1],
                 "status": "on" if switch.id in active else switch.initial_state,
-                "controls": list(switch.controls),
             }
             for switch in task_spec.mechanisms.switches
         ],
         "gates": [
             {
-                "id": gate.id,
+                "id": gates[gate.id],
                 "row": to_row_col(gate.position)[0],
                 "col": to_row_col(gate.position)[1],
                 "status": "open" if gate.id in open_gates else gate.initial_state,
@@ -193,12 +195,6 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
     }
 
 
-def _gate_ids(task_spec: TaskSpecification) -> tuple[dict[str, int], dict[str, int]]:
-    gates = {g.id: i for i, g in enumerate(task_spec.mechanisms.gates, start=1)}
-    switches = {s.id: min(gates[g] for g in s.controls) for s in task_spec.mechanisms.switches}
-    return gates, switches
-
-
 def _ascii_grid(
     task_spec: TaskSpecification,
     state: GridState | None,
@@ -206,9 +202,10 @@ def _ascii_grid(
 ) -> tuple[list[str], list[tuple[str, str]]]:
     rows, cols = maze_rows_cols(task_spec)
     walls = wall_cells(task_spec)
-    gates, switches = _gate_ids(task_spec)
+    gates, switches = compact_ids(task_spec)
     open_doors = state.open_doors if state else set()
     open_gates = state.open_gates if state else set()
+    active = state.active_switches if state else set()
     collected = state.collected_keys if state else set()
     cells: dict[tuple[int, int], tuple[str, str]] = {}
 
@@ -219,44 +216,48 @@ def _ascii_grid(
         pos, facing = agent_row_col(state), agent_facing(state)
     else:
         pos, facing = to_row_col(task_spec.maze.start), "EAST"
-    place(*pos, _FACING[facing] if include_facing else "A",
-          f"you, facing {facing}" if include_facing else "you")
     place(*goal_row_col(task_spec), "G", "the goal")
 
     for key in task_spec.mechanisms.keys:
         if key.id in collected:
             continue
         row, col = to_row_col(live_key_position(key, state) if state else key.position)
-        place(row, col, f"k{key.color[0].upper()}", f"{key.color} key")
+        if key.color.lower() in ("grey", "gray"):
+            place(row, col, "k", "key")
+        else:
+            place(row, col, f"k{key.color[0].upper()}", f"{key.color} key")
 
     for door in task_spec.mechanisms.doors:
         row, col = to_row_col(door.position)
         if door.id in open_doors:
-            place(row, col, "dO", "open door (passable)")
+            place(row, col, "dO", "unlocked door")
         else:
             place(row, col, f"d{door.requires_key[0].upper()}",
                   f"{door.initial_state} door, needs the {door.requires_key} key")
 
-    gate_token = {
-        g.id: "gO" if g.id in open_gates else f"g{gates[g.id]}"
-        for g in task_spec.mechanisms.gates
-    }
     for gate in task_spec.mechanisms.gates:
         row, col = to_row_col(gate.position)
-        if gate.id in open_gates:
-            place(row, col, "gO", "open gate (passable)")
-        else:
-            openers = ", ".join(
-                f"s{switches[s.id]}" for s in task_spec.mechanisms.switches
-                if gate.id in s.controls
-            )
-            place(row, col, gate_token[gate.id], f"closed gate, opened by {openers}")
+        place(
+            row,
+            col,
+            gates[gate.id],
+            "open gate" if gate.id in open_gates else "closed gate",
+        )
 
     for switch in task_spec.mechanisms.switches:
         row, col = to_row_col(switch.position)
-        place(row, col, f"s{switches[switch.id]}",
-              f"{switch.switch_type} switch, controls "
-              + ", ".join(gate_token[g] for g in switch.controls))
+        on = switch.id in active if state else switch.initial_state == "on"
+        place(
+            row,
+            col,
+            switches[switch.id],
+            "open switch" if on else "closed switch",
+        )
+
+    agent_token = _FACING[facing] if include_facing else "A"
+    agent_desc = f"you, facing {facing}" if include_facing else "you"
+    under = cells.get(pos)
+    cells[pos] = (agent_token, agent_desc)
 
     grid, legend = [], []
     used_wall = used_open = False
@@ -283,7 +284,22 @@ def _ascii_grid(
             if entry and entry[0] not in seen:
                 seen.add(entry[0])
                 legend.append(entry)
+    if under:
+        token, desc = under
+        standing = f"{desc} (you are standing on it)"
+        legend = [(t, standing if t == token else d) for t, d in legend]
+        if token not in seen:
+            legend.append((token, standing))
     return grid, legend
+
+
+def _spent_key_colors(task_spec: TaskSpecification, state: GridState | None) -> list[str]:
+    collected = state.collected_keys if state else set()
+    carrying = inventory_list(state) if state else []
+    return [
+        k.color for k in task_spec.mechanisms.keys
+        if k.id in collected and k.color not in carrying
+    ]
 
 
 def _ascii_status(
@@ -292,24 +308,20 @@ def _ascii_status(
     remaining: int | None = None,
     stall_remaining: int | None = None,
 ) -> list[str]:
-    _, switches = _gate_ids(task_spec)
-    collected = state.collected_keys if state else set()
+    _, switches = compact_ids(task_spec)
     active = state.active_switches if state else set()
     carrying = inventory_list(state) if state else []
     lines = ["Status:", f"  Carrying: {', '.join(f'{c} key' for c in carrying) or 'nothing'}"]
     if remaining is not None:
         lines.append(f"  Moves remaining: {remaining}")
     if stall_remaining is not None:
-        lines.append(f"  Moves remaining until stall: {stall_remaining}")
-    spent = [
-        k.color for k in task_spec.mechanisms.keys
-        if k.id in collected and k.color not in carrying
-    ]
+        lines.append("  " + observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
+    spent = _spent_key_colors(task_spec, state)
     if spent:
         lines.append(f"  Keys used up: {', '.join(spent)}")
     if task_spec.mechanisms.switches:
         on = [
-            f"s{switches[s.id]}" for s in task_spec.mechanisms.switches
+            switches[s.id] for s in task_spec.mechanisms.switches
             if (s.id in active if state else s.initial_state == "on")
         ]
         lines.append(f"  Switches on: {', '.join(on) or 'none'}")
@@ -377,7 +389,9 @@ def render_user_observation_text(
             "map_contents": _mechanism_payload(task_spec, state),
         }
         if stall_remaining is not None:
-            payload["stall_remaining"] = stall_remaining
+            payload["stall"] = observation_templates.STALL_REMAINING_LINE.format(
+                n=stall_remaining
+            )
         return _dumps(payload)
     if observation_text_format == "ascii":
         return _ascii_block(
@@ -396,9 +410,9 @@ def render_user_observation_text(
     ]
     if stall_remaining is not None:
         head.append(observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
-    collected = [k.color for k in task_spec.mechanisms.keys if k.id in state.collected_keys]
-    if collected:
-        head.append(observation_templates.CURRENT_KEYS_COLLECTED_LINE.format(keys=", ".join(collected)))
+    spent = _spent_key_colors(task_spec, state)
+    if spent:
+        head.append(observation_templates.CURRENT_KEYS_USED_UP_LINE.format(keys=", ".join(spent)))
     head += ["", observation_templates.CURRENT_MAP_CONTENTS_HEADER]
     head += _mechanism_lines(task_spec, state) or [observation_templates.NO_MECHANISMS_LINE]
     return "\n".join(head)

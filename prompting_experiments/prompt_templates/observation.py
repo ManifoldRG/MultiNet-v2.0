@@ -3,7 +3,13 @@
 RECENT_HISTORY_HEADER = "Recent history (last {n} steps, oldest first):"
 RECENT_HISTORY_STEP = (
     "Position after: ({row}, {col}), facing {facing}\n"
-    "FINAL_OUTPUT: {action}"
+    "FINAL_OUTPUT: {action}\n"
+    "Feedback: {feedback}"
+)
+RECENT_HISTORY_SNAPSHOT_STEP = (
+    "{snapshot}\n"
+    "FINAL_OUTPUT: {action}\n"
+    "Feedback: {feedback}"
 )
 
 TEXT_SUMMARY_START = "You started at ({row}, {col}) facing {facing}."
@@ -38,8 +44,7 @@ DOOR_LINE = (
     " It requires the {requires_key} key to open."
 )
 SWITCH_LINE = (
-    "There is a {switch_type} switch at ({row},{col}) (currently {state})."
-    " It controls: {controls}."
+    "There is a {switch_type} switch ({switch_id}) at ({row},{col}) (currently {state})."
 )
 GATE_LINE = (
     "There is a gate ({gate_id}) at ({row},{col})."
@@ -50,8 +55,13 @@ CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
 CURRENT_AGENT_POSITION_LINE = "You are at {position}."
 CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."
 MOVES_REMAINING_LINE = "Moves remaining: {n}."
-STALL_REMAINING_LINE = "Moves remaining until stall: {n}."
-CURRENT_KEYS_COLLECTED_LINE = "Keys collected: {keys}."
+STALL_REMAINING_LINE = (
+    "Moves remaining until stall: {n}. "
+    "If you make no progress for that many steps, the episode ends. "
+    "Progress is a new cell, pickup/drop, or a door/gate/switch/block change; "
+    "turning in place does not count."
+)
+CURRENT_KEYS_USED_UP_LINE = "Keys used up: {keys}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates):"
 NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, or gates in the current state description.)"
 

@@ -141,6 +141,12 @@ def gate_at_cell(
     return None
 
 
+def compact_ids(task_spec: TaskSpecification) -> tuple[dict[str, str], dict[str, str]]:
+    gates = {g.id: f"g{i}" for i, g in enumerate(task_spec.mechanisms.gates, start=1)}
+    switches = {s.id: f"s{i}" for i, s in enumerate(task_spec.mechanisms.switches, start=1)}
+    return gates, switches
+
+
 def switches_controlling_gate(task_spec: TaskSpecification, gate_id: str) -> list[str]:
     return [
         switch.id

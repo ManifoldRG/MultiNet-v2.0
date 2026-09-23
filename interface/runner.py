@@ -147,6 +147,7 @@ class ExperimentRunner:
         state,
         last_feedback: str,
         transcript: List[dict],
+        stall_remaining: int | None = None,
     ) -> tuple[str, dict]:
         system_prompt = self.prompt.build_system_prompt()
         # If the system prompt includes the `{maze_text}` placeholder, format
@@ -172,6 +173,11 @@ class ExperimentRunner:
             state,
             last_feedback,
             transcript,
+            stall_remaining=(
+                stall_remaining
+                if stall_remaining is not None
+                else self.config.progress_stall_k
+            ),
         )
 
     def run(
@@ -244,6 +250,7 @@ class ExperimentRunner:
         with_context_history: bool = True,
         stall_remaining: int | None = None,
     ) -> dict:
+        del last_feedback
         obs = self.config.observation
         # "current" disables the in-prompt history sections; multiturn chat
         # passes with_context_history=False because its turns already carry
@@ -261,10 +268,17 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript, self.task_spec, n=n),
+            history_text(
+                obs,
+                ctx,
+                transcript,
+                self.task_spec,
+                n=n,
+                observation_text_format=self.config.observation_text_format,
+                include_facing=self.config.observation_text_includes_facing,
+            ),
             state,
             observation=obs,
-            last_feedback=last_feedback,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:

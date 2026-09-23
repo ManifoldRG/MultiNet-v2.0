@@ -1,4 +1,4 @@
-"""Last-step feedback lives on the current user turn, with 3 verbosity levels."""
+"""Last-n history includes per-step why; the current turn does not."""
 
 from __future__ import annotations
 
@@ -13,32 +13,33 @@ from tests.test_prompt_observation_text import (
 )
 
 
-def test_last_feedback_is_on_the_current_turn_for_text_modes():
+def test_last_feedback_is_not_on_the_current_turn():
     text = _initial_user_prompt_text(ExperimentConfig(observation="text_only"))
     image_text = _initial_user_prompt_text(ExperimentConfig(observation="image_text"))
     image_only = _initial_user_prompt_text(ExperimentConfig(observation="image_only"))
 
-    assert "Last feedback: Episode start." in text
-    assert "Last feedback: Episode start." in image_text
+    assert "Last feedback:" not in text
+    assert "Last feedback:" not in image_text
     assert "Last feedback:" not in image_only
 
 
-def test_last3_history_does_not_repeat_feedback():
+def test_last_n_history_includes_step_feedback():
     transcript = [{
         "kind": "step",
         "event_type": "MOVED",
         "position_after_row_col": (1, 2),
         "facing_after": "EAST",
         "action": "MOVE_FORWARD",
-        "prompt_feedback": "MOVED — MOVE_FORWARD: Moved to (1, 2).",
+        "prompt_feedback": "MOVED — MOVE_FORWARD: Moved.",
     }]
     prompt = _user_prompt_text_with_transcript(
         ExperimentConfig(observation="text_only", context_window="last_n"),
         transcript,
     )
     history, _, current = prompt.partition("You are at")
-    assert "Feedback:" not in history
-    assert "Last feedback: Episode start." in current or "Last feedback: Episode start." in prompt
+    assert "Feedback: MOVED — MOVE_FORWARD: Moved." in history
+    assert "Last feedback:" not in current
+    assert "Last feedback:" not in prompt
 
 
 def test_feedback_levels_on_a_closed_gate():

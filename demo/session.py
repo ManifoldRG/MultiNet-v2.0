@@ -507,10 +507,16 @@ class MiniGridPlaySession:
         )
         if obs_text:
             sections.append(("Current observation", obs_text))
-        if obs in ("text_only", "image_text"):
-            sections.append(("Last feedback", self.last_feedback))
 
-        hist = history_text(obs, ctx, transcript, self.task_spec, n=self.config.context_n)
+        hist = history_text(
+            obs,
+            ctx,
+            transcript,
+            self.task_spec,
+            n=self.config.context_n,
+            observation_text_format=fmt,
+            include_facing=self.config.observation_text_includes_facing,
+        )
         if not hist and ctx == "text_summary_and_last_n" and obs == "image_only":
             hist = text_summary_history(transcript, self.task_spec)
         if hist:
