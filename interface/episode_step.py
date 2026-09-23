@@ -179,6 +179,9 @@ class EpisodeStepper:
                     self.transcript,
                     with_one_shot=(self.chat_history == "stateless"),
                     with_context_history=(self.chat_history == "stateless"),
+                    stall_remaining=(
+                        self._stall_watchdog.remaining if self._stall_watchdog else None
+                    ),
                 )
                 has_image = _user_message_has_image(user_message)
                 if self.chat_history == "stateless":
@@ -238,7 +241,8 @@ class EpisodeStepper:
                 action_int = nlu_action_to_int(action)
             except ValueError:
                 step_detail, event_type = format_step_feedback(
-                    action, prev_state, prev_state, 0.0, False, self.task_spec
+                    action, prev_state, prev_state, 0.0, False, self.task_spec,
+                    level=self.config.feedback,
                 )
                 self.last_feedback = step_detail
                 self.consecutive_failures += 1
@@ -281,7 +285,8 @@ class EpisodeStepper:
             )
             self.state = state
             step_detail, event_type = format_step_feedback(
-                action, prev_state, state, reward, terminated, self.task_spec
+                action, prev_state, state, reward, terminated, self.task_spec,
+                level=self.config.feedback,
             )
             self.last_feedback = step_detail
 

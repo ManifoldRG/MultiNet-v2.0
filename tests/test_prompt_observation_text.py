@@ -129,6 +129,23 @@ def test_observation_format_image_only_has_no_current_observation_text():
     assert text == ""
     assert "Current situation (this step):" not in text
     assert "You are at" not in text
+    assert "Moves remaining" not in text
+
+
+def test_text_modes_report_move_and_stall_budget():
+    spec, state = _initial_spec_and_state()
+    remaining = state.max_steps - state.step_count
+    text = current_observation_text(
+        "text_only", spec, state, include_description=True, stall_remaining=30
+    )
+    assert f"Moves remaining: {remaining}." in text
+    assert "Moves remaining until stall: 30." in text
+    assert "If you make no progress for that many steps, the episode ends." in text
+    assert "turning in place does not count" in text
+    image_only = current_observation_text(
+        "image_only", spec, state, include_description=True, stall_remaining=30
+    )
+    assert image_only == ""
 
 
 def test_image_only_prompt_puts_inventory_text_after_current_image():
@@ -181,7 +198,7 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
         },
     ]
 
-    blocks = history_content_blocks("image_only", "last3", transcript)
+    blocks = history_content_blocks("image_only", "last_n", transcript)
 
     assert blocks[0]["type"] == "text"
     assert blocks[1]["type"] == "image_url"
@@ -295,20 +312,18 @@ def test_text_last3_prompt_includes_recent_history_text():
             "prompt_feedback": "MOVED",
         }
     ]
-    cfg = ExperimentConfig(observation="text_only", context_window="last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="last_n")
 
     prompt_text = _user_prompt_text_with_transcript(
         cfg,
         transcript,
     )
 
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "Recent history (last 1 steps, oldest first):" in prompt_text
     assert "Position after: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
-    assert "What is your next action?" in prompt_text
-    assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
-    assert "Last result: Episode start." not in prompt_text
+    assert "Last feedback:" not in prompt_text
 
 
 def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
@@ -327,7 +342,7 @@ def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
         }
     ]
     cfg = ExperimentConfig(
-        observation="text_only", context_window="last3", action_space="cardinal"
+        observation="text_only", context_window="last_n", action_space="cardinal"
     )
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
@@ -347,16 +362,17 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
             "prompt_feedback": "MOVED",
         }
     ]
-    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
     assert "Activity summary:" in prompt_text
     assert "first you passed (1, 2)" in prompt_text
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "Recent history (last 1 steps, oldest first):" in prompt_text
     assert "Position after: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
+    assert "Last feedback:" not in prompt_text
     assert "What is your next action?" in prompt_text
 
 
@@ -372,7 +388,7 @@ def test_image_only_text_summary_and_last3_includes_summary_text_and_last3_image
             "_decision_frame_rgb": frame,
         },
     ]
-    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
@@ -402,14 +418,14 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
             "_decision_frame_rgb": frame,
         },
     ]
-    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
     assert "Activity summary:" in prompt_text
     assert "first you passed (1, 2)" in prompt_text
     assert "Recent steps (oldest first):" in prompt_text
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "Recent history (last 1 steps, oldest first):" in prompt_text
     # Both the image label and text recap represent the prior model action
     # using exactly the same delimiter required for the next action.
     assert prompt_text.count("FINAL_OUTPUT: MOVE_FORWARD") == 2
@@ -417,7 +433,7 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
     # text recap) in the message content.
     summary_idx = prompt_text.index("Activity summary:")
     assert summary_idx < prompt_text.index("Recent steps (oldest first):")
-    assert summary_idx < prompt_text.index("Recent history (last 3 steps, oldest first):")
+    assert summary_idx < prompt_text.index("Recent history (last 1 steps, oldest first):")
 
 
 def test_observation_format_image_only_differs_from_image_text_default():

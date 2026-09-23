@@ -327,8 +327,7 @@ class TestDropFeedback:
 
         assert event == "DROP"
         assert "red" in message.lower()
-        # dropped in the agent's own cell (x,y)=(2,1) -> (row,col)=(1,2)
-        assert "(1,2)" in message.replace(" ", "")
+        assert "(" not in message
 
     def test_drop_with_empty_hands_reports_nothing(self, backend):
         from interface.feedback import infer_step_outcome
