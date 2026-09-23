@@ -12,6 +12,8 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+
+import pytest
 from typing import List, Optional
 
 import interface.agents.anthropic_batch as batch_mod
@@ -391,3 +393,75 @@ def test_generate_batch_reuses_build_request_body(monkeypatch):
     assert params["max_tokens"] == 64000
     # Opus 4.8 rejects sampling params -> body must omit temperature.
     assert "temperature" not in params
+
+
+# --- low-credit wait at batch creation --------------------------------------
+
+_LOW_CREDIT_BODY = json.dumps(
+    {
+        "type": "error",
+        "error": {
+            "type": "invalid_request_error",
+            "message": "Your credit balance is too low to access the Anthropic API.",
+        },
+    }
+)
+
+
+def _http_400(body: str) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        "https://api.anthropic.com/v1/messages/batches", 400, "Bad Request", {},
+        io.BytesIO(body.encode("utf-8")),
+    )
+
+
+class _CreateFailsFirst(_ScriptedURLopen):
+    """Batch create raises the given 400 body `fail_times` times, then succeeds."""
+
+    def __init__(self, *, fail_times: int, body: str = _LOW_CREDIT_BODY, **kw):
+        super().__init__(**kw)
+        self.fail_times = fail_times
+        self.body = body
+
+    def __call__(self, req, timeout=None):
+        if req.get_method() == "POST" and req.full_url.endswith("/v1/messages/batches"):
+            if self.fail_times > 0:
+                self.fail_times -= 1
+                self.calls.append(("POST", req.full_url))
+                raise _http_400(self.body)
+        return super().__call__(req, timeout)
+
+
+def test_low_credit_create_waits_for_refill_then_succeeds(monkeypatch):
+    responder = _CreateFailsFirst(
+        fail_times=2,
+        status_sequence=["ended"],
+        results_jsonl=_jsonl(_succeeded("a", "MOVE_FORWARD")),
+    )
+    _patch(monkeypatch, responder)
+    results = run_message_batch([{"custom_id": "a", "params": {}}], api_key="k")
+    assert results["a"]["type"] == "succeeded"
+    assert responder.count("POST", "/v1/messages/batches") == 3
+
+
+def test_low_credit_create_gives_up_after_wait(monkeypatch):
+    responder = _CreateFailsFirst(fail_times=10**6, status_sequence=["ended"])
+    _patch(monkeypatch, responder)
+    with pytest.raises(batch_mod.AnthropicBatchHTTPError) as info:
+        run_message_batch(
+            [{"custom_id": "a", "params": {}}], api_key="k", credit_wait_s=0.0
+        )
+    assert info.value.code == 400
+    assert responder.count("POST", "/v1/messages/batches") == 1
+
+
+def test_other_400_on_create_is_not_retried(monkeypatch):
+    responder = _CreateFailsFirst(
+        fail_times=1,
+        body='{"error": {"message": "max_tokens: too large"}}',
+        status_sequence=["ended"],
+    )
+    _patch(monkeypatch, responder)
+    with pytest.raises(RuntimeError, match="Anthropic Batches HTTP 400"):
+        run_message_batch([{"custom_id": "a", "params": {}}], api_key="k")
+    assert responder.count("POST", "/v1/messages/batches") == 1

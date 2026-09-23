@@ -1,0 +1,32 @@
+{
+  "description": "R1-frontier: Claude Opus 5.5 on the R1 balanced_03 panel (50 mazes) plus the R1-era S4/D3 pair (52 tasks), the R1 fixed cell verbatim (minimal/image_only/text_summary_and_last3+stateless/zero_shot/egocentric, step_by_step, progress_stall_k=30). Same harness as the GPT-6 Astra run (branch exp/astra-harness-probes lineage, DROP in the action list). Model settings mirror R1's Claude Opus 4.8 entry: effort=xhigh, 64k cap, Message Batches API through the lockstep worker (API_WORKER_ROLE=lockstep-worker).",
+  "manifest": "gridworld/fixtures/manifest.r1_frontier_opus55.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_model_params": "Opus 5.5 rejects sampling params (never sent) and cannot disable thinking; enable_thinking=true sends adaptive thinking with display=summarized so thinking summaries are logged, and effort=xhigh is set explicitly (the Opus 5.5 API default is medium). max_tokens 64000 = R1's Claude cap and Astra's max_completion_tokens. Batch pricing ($2 in / $10 out per 1M, 50% of $4/$20). max_in_flight=64 >= lockstep working set (API_WORKER_CONCURRENCY=52). The coordinator must serve with STALE_AFTER_SECONDS >= batch_deadline_s + cancel grace + low-credit wait (7200+300+3600 -> 12600).",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "claude_opus55": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "max_tokens": 64000,
+      "timeout": 600,
+      "group": "claude-api",
+      "worker_count": 1,
+      "max_in_flight": 64,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": true,
+      "effort": "xhigh"
+    }
+  }
+}
