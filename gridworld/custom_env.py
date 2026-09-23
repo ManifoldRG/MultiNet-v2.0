@@ -272,7 +272,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         agent_view_size: int = 7,
         highlight: bool = True,
         agent_pov: bool = False,
-        drop_available: bool = False,
+        drop_available: bool = True,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos

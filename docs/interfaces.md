@@ -21,7 +21,7 @@ Required top-level fields:
 
 Optional top-level fields:
 
-- `version: str = "1.0"`
+- `version: str = "1.1"`
 - `description: str = ""`
 - `mechanisms: MechanismSet = {}`
 - `rules: Rules = {}`

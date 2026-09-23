@@ -23,6 +23,7 @@ from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.custom_env import Key
 from gridworld.task_spec import TaskSpecification
 from interface import coords
+from interface.observation import render_user_observation_text
 
 
 def _spec(**overrides):
@@ -213,6 +214,24 @@ class TestDroppedKeyIsObservable:
         spec = _spec()
         assert coords.key_at_cell(spec, state, 1, 2) == "red"
 
+    def test_dropped_key_is_observed_at_a_non_spec_cell(self, backend):
+        """The observation must follow the live key, not the spec position."""
+        _pick_up_the_key(backend)
+        backend.env.step(MiniGridActions.MOVE_FORWARD)
+        backend.env.step(MiniGridActions.DROP)
+        state = backend.get_state()
+        spec = _spec()
+
+        assert coords.key_at_cell(spec, state, 1, 3) == "red"
+        assert coords.key_at_cell(spec, state, 1, 2) is None, (
+            "the key's spec cell is empty after the drop moved it"
+        )
+
+        text = render_user_observation_text(spec, state)
+        compact = text.replace(" ", "")
+        assert "red key" in text.lower()
+        assert "(1,3)" in compact, "listed at its current cell"
+
 
 class TestKeyPositionsSerialization:
     """episode.json state snapshots must record where a dropped key sits."""
@@ -402,13 +421,7 @@ class TestDropTextSummary:
 
 
 class TestPlannerIgnoresDrop:
-    """R1 scoring BFS keeps DROP off (drop_available=False).
-
-    The demo turns DROP on so a held key can be placed on the current cell and
-    picked up again. Scoring must not do that: exploring DROP would multiply
-    the state space by cells**keys. Default plan_bfs_path therefore omits the
-    edge, so optimal_steps and beatability stay on the R1 numbers.
-    """
+    """DROP is in the graph, but no fixture maze's shortest path uses it."""
 
     def test_planner_emits_no_drop_actions(self):
         from gridworld.baselines import plan_bfs_path

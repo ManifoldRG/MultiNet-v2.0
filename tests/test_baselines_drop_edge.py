@@ -35,12 +35,6 @@ def _carrying_decoy(ctx):
     )
 
 
-def test_no_drop_edge_by_default():
-    ctx = TaskPlanningContext(_spec())
-    labels = [t.label for t in _successors(ctx, _carrying_decoy(ctx))]
-    assert not any(l.startswith("drop:") for l in labels)
-
-
 def test_drop_edge_when_enabled():
     ctx = TaskPlanningContext(_spec(), drop_available=True)
     state = _carrying_decoy(ctx)
@@ -65,7 +59,7 @@ def test_optimal_cost_is_unchanged_by_the_drop_edge():
     from gridworld.baselines import plan_bfs_path
 
     spec = _spec()
-    without = plan_bfs_path(spec)
+    without = plan_bfs_path(spec, drop_available=False)
     with_drop = plan_bfs_path(spec, drop_available=True)
     # The brief's test compares path length via len(); PlannedPath is a plain
     # dataclass with no __len__, so we compare the actual action-count field

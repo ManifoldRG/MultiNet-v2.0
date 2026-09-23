@@ -325,7 +325,7 @@ class TaskSpecification:
     dependency_chain: Optional[DependencyChain] = None
     distractors: Optional[list[Distractor]] = None
     metadata: Optional[dict[str, Any]] = None
-    version: str = "1.0"
+    version: str = "1.1"
     description: str = ""  # Human-readable task description
 
     @classmethod
@@ -382,7 +382,7 @@ class TaskSpecification:
             dependency_chain=dependency_chain,
             distractors=distractors,
             metadata=metadata,
-            version=d.get("version", "1.0"),
+            version=d.get("version", "1.1"),
             description=d.get("description", "")
         )
 
@@ -610,6 +610,10 @@ class TaskSpecification:
             check_position(frozen, "Frozen tile")
             register_position(frozen, "Frozen tile")
 
+        if len(self.mechanisms.rotating_tiles) != len(self.mechanisms.rotating_initial_directions):
+            errors.append(
+                "rotating_tiles and rotating_initial_directions have different lengths"
+            )
         for rotating in self.mechanisms.rotating_tiles:
             check_position(rotating, "Rotating tile")
             register_position(rotating, "Rotating tile")

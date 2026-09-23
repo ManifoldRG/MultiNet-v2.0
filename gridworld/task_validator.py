@@ -23,7 +23,7 @@ from .world_model import (
 class TaskValidator:
     """Validate that a task is beatable by BFS over the R1 action graph."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
+    def __init__(self, spec: TaskSpecification, *, drop_available: bool = True):
         self.spec = spec
         self.ctx = TaskPlanningContext(spec, drop_available=drop_available)
         self.goal = self.ctx.goal
@@ -58,9 +58,10 @@ class TaskValidator:
             self.ctx,
             initial_state,
             lambda st: st.agent_pos == target,
+            max_states=max_states,
         )
         if end is None:
-            return False, None, min(states_explored, max_states)
+            return False, None, states_explored
 
         state = initial_state
         path = [state.agent_pos]
@@ -392,7 +393,7 @@ def compute_difficulty(
         validation_result = task_validator.validate()
     is_beatable, solution, message = validation_result
 
-    if bfs_path is None:
+    if is_beatable and bfs_path is None:
         from gridworld.baselines import plan_bfs_path
 
         bfs_path = plan_bfs_path(spec)

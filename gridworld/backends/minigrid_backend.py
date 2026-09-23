@@ -36,7 +36,7 @@ class MiniGridBackend(AbstractGridBackend):
         self.parser = TaskParser(render_mode=render_mode)
         self.env: Optional[CustomMiniGridEnv] = None
         self._last_obs = None
-        self.drop_available = False
+        self.drop_available = True
 
     def configure(self, task_spec: TaskSpecification) -> None:
         """

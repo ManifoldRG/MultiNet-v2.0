@@ -105,7 +105,7 @@ def _bfs_actions(spec: TaskSpecification) -> list[int]:
 
 
 def _bfs_actions_with_stats(
-    spec: TaskSpecification, *, drop_available: bool = False
+    spec: TaskSpecification, *, drop_available: bool = True
 ) -> tuple[list[int], int]:
     ctx = TaskPlanningContext(spec, drop_available=drop_available)
     actions, _, states_explored = shortest_plan(
@@ -140,7 +140,7 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
 
 
 def trace_planned_actions(
-    spec: TaskSpecification, actions: list[int], *, drop_available: bool = False
+    spec: TaskSpecification, actions: list[int], *, drop_available: bool = True
 ) -> PlannedPath:
     """Replay planner actions through the R1 graph without running a backend."""
     ctx = TaskPlanningContext(spec, drop_available=drop_available)
@@ -187,7 +187,7 @@ def plan_greedy_actions(spec: TaskSpecification) -> list[int]:
     return _greedy_actions(spec)
 
 
-def plan_bfs_path(spec: TaskSpecification, *, drop_available: bool = False) -> PlannedPath:
+def plan_bfs_path(spec: TaskSpecification, *, drop_available: bool = True) -> PlannedPath:
     """Return the BFS baseline plan plus replayed positions."""
     actions, states_explored = _bfs_actions_with_stats(spec, drop_available=drop_available)
     path = trace_planned_actions(spec, actions, drop_available=drop_available)
