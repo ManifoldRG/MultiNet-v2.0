@@ -53,6 +53,9 @@ class SceneState:
         self._keys = {
             key_id: (mocap(body), body_geoms(body)) for key_id, body in index.key_bodies.items()
         }
+        self._rotators = {
+            i: tuple(ids(names) for names in arrows) for i, arrows in index.rotator_arrows.items()
+        }
         self._agent = mocap(index.agent_body)
 
     def _show(self, geom_ids, visible: bool) -> None:
@@ -60,9 +63,23 @@ class SceneState:
             self.model.geom_group[gid] = self._home_group[gid] if visible else HIDDEN_GROUP
 
     def apply(
-        self, data: mujoco.MjData, state: GridState, door_states: dict[str, bool], *, yaw: float | None = None
+        self,
+        data: mujoco.MjData,
+        state: GridState,
+        door_states: dict[str, bool],
+        *,
+        rotators: tuple[int, ...] | None = None,
+        yaw: float | None = None,
     ) -> None:
-        """``yaw`` (degrees) overrides the agent's heading yaw (turn animation)."""
+        """``rotators``: current direction of each rotating tile in spec order
+        (None: the spec's initial directions). ``yaw`` (degrees) overrides the
+        agent's heading yaw (turn animation)."""
+        if rotators is None:
+            rotators = self.index.rotator_initial
+        for i, arrows in self._rotators.items():
+            shown = int(rotators[i]) if i < len(rotators) else None
+            for d, geom_ids in enumerate(arrows):
+                self._show(geom_ids, d == shown)
         for door_id, (closed, opened) in self._doors.items():
             is_open = bool(door_states.get(door_id, False))
             self._show(closed, not is_open)

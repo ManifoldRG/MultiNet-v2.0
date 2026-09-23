@@ -80,6 +80,7 @@ class Mujoco3DBackend(AbstractGridBackend):
 
     def _frame_for(self, state: GridState) -> np.ndarray:
         doors = self.state_backend.door_states()
+        rotators = self.state_backend.rotator_directions()
         # Everything the frame depends on; a matching key reuses the cached frame
         # (the pygame UI calls render() every tick).
         key = (
@@ -90,11 +91,12 @@ class Mujoco3DBackend(AbstractGridBackend):
             frozenset(state.open_gates),
             frozenset((k, tuple(int(c) for c in v)) for k, v in state.key_positions.items()),
             frozenset(doors.items()),
+            rotators,
             self._camera,
             self._tilt,
         )
         if self._frame is None or key != self._frame_key:
-            self._frame = self._renderer.render(state, doors)
+            self._frame = self._renderer.render(state, doors, rotators=rotators)
             self._frame_key = key
         return self._frame
 
@@ -111,7 +113,12 @@ class Mujoco3DBackend(AbstractGridBackend):
         start = DIRECTION_YAW[int(from_direction)]
         delta = (DIRECTION_YAW[int(state.agent_direction)] - start + 180.0) % 360.0 - 180.0
         shown = state if fraction >= 0.5 else dataclasses.replace(state, agent_direction=int(from_direction))
-        return self._renderer.render(shown, self.state_backend.door_states(), yaw=start + fraction * delta)
+        return self._renderer.render(
+            shown,
+            self.state_backend.door_states(),
+            rotators=self.state_backend.rotator_directions(),
+            yaw=start + fraction * delta,
+        )
 
     @property
     def view_turns_with_agent(self) -> bool:
@@ -147,6 +154,9 @@ class Mujoco3DBackend(AbstractGridBackend):
 
     def door_states(self) -> dict[str, bool]:
         return self.state_backend.door_states()
+
+    def rotator_directions(self) -> tuple[int, ...]:
+        return self.state_backend.rotator_directions()
 
     @property
     def frame_is_grid_aligned(self) -> bool:

@@ -8,7 +8,7 @@ placed on (objects overwrite walls there).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from xml.sax.saxutils import quoteattr
 
 from gridworld.task_spec import TaskSpecification
@@ -22,6 +22,21 @@ AGENT_GROUP = 3  # agent geoms; hidden in first_person via MjvOption.geomgroup
 HIDDEN_GROUP = 5  # geoms of the inactive state; the renderer never draws this group
 KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
 
+# PR #57 tiles. Glyph layout copies custom_env.py (2D), lifted off the floor so
+# the first-person eye can see them: portal rings and rotator arrows are short
+# solids, the skull and frost marks thin discs stacked in 2D's paint order.
+PORTAL_RING_TOP = 0.14
+ROTATOR_ARROW_BASE = 0.024  # top of the orange slab
+ROTATOR_ARROW_TOP = 0.10
+# Arrow outline per direction (0=E 1=S 2=W 3=N) in cell-relative world units,
+# from the 2D triangles: image (u, v) -> (u - 0.5, 0.5 - v).
+ROTATOR_ARROWS: tuple[tuple[tuple[float, float], ...], ...] = (
+    ((-0.28, 0.28), (-0.28, -0.28), (0.32, 0.0)),
+    ((-0.28, 0.28), (0.28, 0.28), (0.0, -0.32)),
+    ((0.28, 0.28), (0.28, -0.28), (-0.32, 0.0)),
+    ((-0.28, -0.28), (0.28, -0.28), (0.0, 0.32)),
+)
+
 
 class UnsupportedSpecError(ValueError):
     """The spec uses a feature the 3D renderer cannot draw faithfully."""
@@ -34,8 +49,6 @@ def check_supported(spec: TaskSpecification) -> None:
         problems.append("blocks")
     if mech.hazards:
         problems.append("hazards")
-    if mech.teleporters:
-        problems.append("teleporters")
     if spec.goal.goal_type != "reach_position":
         problems.append(f"goal_type={spec.goal.goal_type!r}")
     if spec.rules.observability != "full":
@@ -50,6 +63,7 @@ def check_supported(spec: TaskSpecification) -> None:
         + [door.requires_key for door in mech.doors]
         + [switch.color for switch in mech.switches]
         + [gate.color for gate in mech.gates]
+        + [tp.color for tp in mech.teleporters]
     )
     bad_colours: list[str] = []
     for name in colour_names:
@@ -84,6 +98,10 @@ def wall_cells(spec: TaskSpecification) -> frozenset[tuple[int, int]]:
     occupied = {tuple(spec.resolved_goal())}
     for group in (mech.keys, mech.doors, mech.gates, mech.switches):
         occupied |= {(m.position.x, m.position.y) for m in group}
+    for tp in mech.teleporters:
+        occupied |= {(tp.position_a.x, tp.position_a.y), (tp.position_b.x, tp.position_b.y)}
+    for group in (mech.kill_cells, mech.frozen_tiles, mech.rotating_tiles):
+        occupied |= {(p.x, p.y) for p in group}
     return frozenset(walls - occupied)
 
 
@@ -102,6 +120,9 @@ class SceneIndex:
     key_bodies: dict[str, str]
     carried: dict[str, tuple[str, ...]]
     agent_body: str = "agent"
+    # rotating tile index (spec order) -> geom names of its arrow, per direction
+    rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
+    rotator_initial: tuple[int, ...] = ()
 
 
 def _fmt(values) -> str:
@@ -141,6 +162,52 @@ def _size(across_x: bool, across: float, along: float, half_z: float) -> tuple[f
 
 def _offset(across_x: bool, d: float) -> tuple[float, float]:
     return (d, 0.0) if across_x else (0.0, d)
+
+
+def _disc(name, cx, cy, radius, z_bottom, z_top, rgba) -> str:
+    half = (z_top - z_bottom) / 2.0
+    return _geom(name, "cylinder", (cx, cy, z_bottom + half), (radius, half), rgba)
+
+
+def _portal_end(prefix, cx, cy, colour) -> list[str]:
+    # 2D: colour ring r.42, dark core r.26, colour dot r.12 -- each a step taller
+    # so the top-down view shows the same concentric glyph.
+    return [
+        _disc(f"{prefix}:ring", cx, cy, 0.42, 0.0, PORTAL_RING_TOP, colour),
+        _disc(f"{prefix}:core", cx, cy, 0.26, 0.0, PORTAL_RING_TOP + 0.01, palette.PORTAL_CORE),
+        _disc(f"{prefix}:dot", cx, cy, 0.12, 0.0, PORTAL_RING_TOP + 0.02, colour),
+    ]
+
+
+def _kill_cell(prefix, cx, cy) -> list[str]:
+    # 2D: dark-red disc r.48; white skull r.30 centred a little north; two eyes
+    # and a nose. The skull has some height so it reads from the eye view.
+    return [
+        _disc(f"{prefix}:disc", cx, cy, 0.48, 0.0, 0.02, palette.KILL_DISC),
+        _disc(f"{prefix}:skull", cx, cy + 0.08, 0.30, 0.0, 0.08, palette.SKULL),
+        _disc(f"{prefix}:eye0", cx - 0.12, cy + 0.12, 0.08, 0.08, 0.09, palette.SKULL_DARK),
+        _disc(f"{prefix}:eye1", cx + 0.12, cy + 0.12, 0.08, 0.08, 0.09, palette.SKULL_DARK),
+        _disc(f"{prefix}:nose", cx, cy - 0.08, 0.06, 0.08, 0.09, palette.SKULL_DARK),
+    ]
+
+
+def _frozen_tile(prefix, cx, cy) -> list[str]:
+    # 2D: pale-blue tile, white spot r.16, two flecks.
+    return [
+        _geom(f"{prefix}:slab", "box", (cx, cy, 0.012), (0.46, 0.46, 0.012), palette.FROZEN_TILE),
+        _disc(f"{prefix}:spot", cx, cy, 0.16, 0.024, 0.034, palette.FROZEN_SPOT),
+        _disc(f"{prefix}:fleck0", cx - 0.22, cy + 0.18, 0.07, 0.024, 0.034, palette.FROZEN_FLECK),
+        _disc(f"{prefix}:fleck1", cx + 0.20, cy - 0.12, 0.06, 0.024, 0.034, palette.FROZEN_FLECK),
+    ]
+
+
+def _arrow_mesh(direction: int) -> str:
+    """Vertices of the arrow prism for ``direction`` (convex hull of 6 points)."""
+    return "  ".join(
+        f"{x} {y} {z}"
+        for z in (ROTATOR_ARROW_BASE, ROTATOR_ARROW_TOP)
+        for x, y in ROTATOR_ARROWS[direction]
+    )
 
 
 def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int) -> tuple[str, SceneIndex]:
@@ -216,6 +283,35 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         switch_off[sw.id] = (off,)
         switch_on[sw.id] = (on, halo)
 
+    for tp in mech.teleporters:
+        colour = palette.rgba(tp.color)
+        for end, pos in (("a", tp.position_a), ("b", tp.position_b)):
+            cx, cy, _ = cell_center(pos.x, pos.y)
+            world += _portal_end(f"portal:{tp.id}:{end}", cx, cy, colour)
+    for i, cell in enumerate(mech.kill_cells):
+        cx, cy, _ = cell_center(cell.x, cell.y)
+        world += _kill_cell(f"kill:{i}", cx, cy)
+    for i, cell in enumerate(mech.frozen_tiles):
+        cx, cy, _ = cell_center(cell.x, cell.y)
+        world += _frozen_tile(f"frozen:{i}", cx, cy)
+
+    rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = {}
+    for i, cell in enumerate(mech.rotating_tiles):
+        cx, cy, _ = cell_center(cell.x, cell.y)
+        world.append(_geom(f"rotator:{i}:slab", "box", (cx, cy, 0.012), (0.46, 0.46, 0.012), palette.ROTATOR_TILE))
+        arrows = []
+        for d in range(len(ROTATOR_ARROWS)):
+            name = f"rotator:{i}:arrow{d}"
+            world.append(
+                f'<geom name={quoteattr(name)} type="mesh" mesh="rotator_arrow_{d}" pos="{_fmt((cx, cy, 0.0))}" '
+                f'rgba="{_fmt(palette.ROTATOR_ARROW)}" group="0" contype="0" conaffinity="0"/>'
+            )
+            arrows.append((name,))
+        rotator_arrows[i] = tuple(arrows)
+    arrow_meshes = "".join(
+        f'<mesh name="rotator_arrow_{d}" vertex="{_arrow_mesh(d)}"/>' for d in range(len(ROTATOR_ARROWS))
+    )
+
     bodies: list[str] = []
     key_bodies: dict[str, str] = {}
     for key in mech.keys:
@@ -256,6 +352,7 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
   </visual>
   <asset>
     <mesh name="agent_wedge" vertex="{wedge}"/>
+    {arrow_meshes}
   </asset>
   <worldbody>
     <light directional="true" pos="0 0 10" dir="0.3 0.4 -1" diffuse="0.5 0.5 0.5" specular="0 0 0" castshadow="false"/>
@@ -278,5 +375,7 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         gate_open=gate_open,
         key_bodies=key_bodies,
         carried=carried,
+        rotator_arrows=rotator_arrows,
+        rotator_initial=tuple(int(d) for d in mech.rotating_initial_directions),
     )
     return xml, index

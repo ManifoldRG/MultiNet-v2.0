@@ -93,10 +93,18 @@ class SceneRenderer:
         self._tilt = level
         self._rebuild_if_wall_height_changed()
 
-    def render(self, state: GridState, door_states: dict[str, bool], *, yaw: float | None = None) -> np.ndarray:
-        """``yaw`` (degrees) overrides the heading's yaw for the agent and the
-        views that turn with it (frames partway through a turn)."""
-        self._sync.apply(self.data, state, door_states, yaw=yaw)
+    def render(
+        self,
+        state: GridState,
+        door_states: dict[str, bool],
+        *,
+        rotators: tuple[int, ...] | None = None,
+        yaw: float | None = None,
+    ) -> np.ndarray:
+        """``rotators``: each rotating tile's current direction (spec order;
+        None = initial). ``yaw`` (degrees) overrides the heading's yaw for the
+        agent and the views that turn with it (frames partway through a turn)."""
+        self._sync.apply(self.data, state, door_states, rotators=rotators, yaw=yaw)
         where = dict(
             agent_cell=tuple(state.agent_position),
             direction=int(state.agent_direction),

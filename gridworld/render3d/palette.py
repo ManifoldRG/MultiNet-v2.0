@@ -17,6 +17,7 @@ _SPEC_RGB: dict[str, tuple[float, float, float]] = {
     "grey": (0.58, 0.58, 0.62),
     "black": (0.10, 0.10, 0.12),
     "white": (0.95, 0.95, 0.95),
+    "cyan": (0.0, 0.86, 0.86),  # MiniGrid's SWITCH_RENDER_COLORS cyan
 }
 
 # Scene fixtures (not spec colours).
@@ -26,6 +27,22 @@ WALL: RGBA = (0.23, 0.24, 0.31, 1.0)
 GOAL: RGBA = (0.20, 0.80, 0.35, 1.0)
 AGENT: RGBA = (0.10, 0.85, 0.90, 1.0)
 SWITCH_PLATE: RGBA = (0.20, 0.20, 0.22, 1.0)
+
+
+def _rgb255(r: int, g: int, b: int) -> RGBA:
+    return (r / 255.0, g / 255.0, b / 255.0, 1.0)
+
+
+# PR #57 tiles: the MiniGrid glyph colours (custom_env.py), so 2D and 3D match.
+PORTAL_CORE: RGBA = _rgb255(20, 20, 35)
+KILL_DISC: RGBA = _rgb255(90, 12, 12)
+SKULL: RGBA = _rgb255(230, 230, 230)
+SKULL_DARK: RGBA = _rgb255(20, 20, 20)
+ROTATOR_TILE: RGBA = _rgb255(255, 168, 64)
+ROTATOR_ARROW: RGBA = _rgb255(40, 28, 16)
+FROZEN_TILE: RGBA = _rgb255(214, 232, 246)
+FROZEN_SPOT: RGBA = _rgb255(255, 255, 255)
+FROZEN_FLECK: RGBA = _rgb255(245, 252, 255)
 
 
 def normalize(name: str) -> str:
