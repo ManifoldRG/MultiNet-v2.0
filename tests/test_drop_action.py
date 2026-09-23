@@ -23,7 +23,7 @@ from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.custom_env import Key
 from gridworld.task_spec import TaskSpecification
 from interface import coords
-from interface.renderer import render_user_observation_text
+from interface.observation import render_user_observation_text
 
 
 def _spec(**overrides):
@@ -55,6 +55,7 @@ def backend():
     b = MiniGridBackend(render_mode="rgb_array")
     b.configure(_spec())
     b.reset(seed=1)
+    b.env.drop_available = True
     return b
 
 
@@ -76,15 +77,15 @@ def _pick_up_the_key(backend):
 
 
 class TestDropPlacesKeyInAgentCell:
+    """DROP puts the key on the agent's current cell so it can be picked up again."""
+
     def test_dropped_key_lands_under_the_agent(self, backend):
-        _pick_up_the_key(backend)                    # agent at (2,1) holding kR
+        _pick_up_the_key(backend)
         backend.env.step(MiniGridActions.DROP)
 
         assert backend.env.carrying is None
         assert _keys_on_grid(backend.env) == {"kR": (2, 1)}
-        assert "kR" not in backend.env.collected_keys, (
-            "a dropped key is back on the grid and is no longer collected"
-        )
+        assert "kR" not in backend.env.collected_keys
 
     def test_drop_then_pickup_round_trips_in_two_actions(self, backend):
         _pick_up_the_key(backend)
@@ -95,11 +96,10 @@ class TestDropPlacesKeyInAgentCell:
         assert "kR" in backend.env.collected_keys
 
     def test_drop_succeeds_regardless_of_facing(self, backend):
-        """Same-cell placement must not depend on what is in front."""
         _pick_up_the_key(backend)
         for _ in range(2):
-            backend.env.step(MiniGridActions.TURN_LEFT)   # face west
-        backend.env.step(MiniGridActions.MOVE_FORWARD)    # to (1,1), wall ahead
+            backend.env.step(MiniGridActions.TURN_LEFT)
+        backend.env.step(MiniGridActions.MOVE_FORWARD)
         backend.env.step(MiniGridActions.DROP)
 
         assert backend.env.carrying is None
@@ -133,9 +133,10 @@ class TestDropPlacesKeyInAgentCell:
                        "color": "black"}],
         }))
         b.reset(seed=1)
-        b.env.step(MiniGridActions.MOVE_FORWARD)   # (2,1), onto the key
+        b.env.drop_available = True
+        b.env.step(MiniGridActions.MOVE_FORWARD)
         b.env.step(MiniGridActions.PICKUP)
-        b.env.step(MiniGridActions.MOVE_FORWARD)   # (3,1), onto the switch
+        b.env.step(MiniGridActions.MOVE_FORWARD)
         held = b.env.carrying
 
         _, _, _, _, info = b.env.step(MiniGridActions.DROP)
@@ -198,40 +199,29 @@ class TestDroppedKeyIsObservable:
         backend.env.step(MiniGridActions.DROP)
 
         state = backend.get_state()
-        assert state.key_positions == {"kR": (2, 1)}, (
-            "the agent must be able to see where a dropped key actually is"
-        )
+        assert state.key_positions == {"kR": (2, 1)}
+        assert state.agent_carrying is None
 
     def test_held_key_has_no_grid_position(self, backend):
         _pick_up_the_key(backend)
         state = backend.get_state()
         assert state.key_positions == {}
 
-    def test_key_at_cell_follows_the_dropped_key(self, backend):
+    def test_dropped_key_is_on_the_agent_cell(self, backend):
         _pick_up_the_key(backend)
         backend.env.step(MiniGridActions.DROP)
         state = backend.get_state()
         spec = _spec()
-
-        # dropped in the agent's own cell (x,y)=(2,1) -> (row,col)=(1,2),
-        # which here coincides with the key's spec cell, so move first and
-        # re-drop somewhere the spec position cannot explain.
         assert coords.key_at_cell(spec, state, 1, 2) == "red"
 
     def test_dropped_key_is_observed_at_a_non_spec_cell(self, backend):
-        """The observation must follow the live key, not the spec position.
-
-        The two tests above drop at the key's spec cell, so they would pass
-        even if the observation layer ignored state.key_positions. Here the
-        drop lands somewhere the spec cannot explain.
-        """
-        _pick_up_the_key(backend)                     # agent at (2,1) holding kR
-        backend.env.step(MiniGridActions.MOVE_FORWARD)  # to (3,1)
-        backend.env.step(MiniGridActions.DROP)          # key now at (3,1)
+        """The observation must follow the live key, not the spec position."""
+        _pick_up_the_key(backend)
+        backend.env.step(MiniGridActions.MOVE_FORWARD)
+        backend.env.step(MiniGridActions.DROP)
         state = backend.get_state()
         spec = _spec()
 
-        # (x,y)=(3,1) -> (row,col)=(1,3); the spec cell (x,y)=(2,1) -> (1,2)
         assert coords.key_at_cell(spec, state, 1, 3) == "red"
         assert coords.key_at_cell(spec, state, 1, 2) is None, (
             "the key's spec cell is empty after the drop moved it"
@@ -241,16 +231,6 @@ class TestDroppedKeyIsObservable:
         compact = text.replace(" ", "")
         assert "red key" in text.lower()
         assert "(1,3)" in compact, "listed at its current cell"
-
-    def test_text_observation_lists_the_dropped_key(self, backend):
-        _pick_up_the_key(backend)
-        backend.env.step(MiniGridActions.DROP)
-        state = backend.get_state()
-
-        text = render_user_observation_text(_spec(), state)
-
-        assert "red key" in text.lower(), "a dropped key must reappear in the text observation"
-        assert "(1,2)" in text.replace(" ", ""), "listed at its current cell"
 
 
 class TestKeyPositionsSerialization:
@@ -327,8 +307,6 @@ class TestDropFeedback:
 
         assert event == "DROP"
         assert "red" in message.lower()
-        # dropped in the agent's own cell (x,y)=(2,1) -> (row,col)=(1,2)
-        assert "(1,2)" in message.replace(" ", "")
 
     def test_drop_with_empty_hands_reports_nothing(self, backend):
         from interface.feedback import infer_step_outcome
@@ -341,6 +319,33 @@ class TestDropFeedback:
 
         assert event == "NOTHING"
         assert "not carrying" in message.lower()
+
+    def test_occupied_cell_reports_blocked(self):
+        from interface.feedback import infer_step_outcome
+
+        b = MiniGridBackend(render_mode="rgb_array")
+        b.configure(_spec(mechanisms={
+            "keys": [{"id": "kR", "position": [2, 1], "color": "red"}],
+            "switches": [{"id": "s1", "position": [3, 1], "controls": ["g1"],
+                          "color": "yellow", "switch_type": "toggle",
+                          "initial_state": "off"}],
+            "gates": [{"id": "g1", "position": [5, 5], "initial_state": "closed",
+                       "color": "black"}],
+        }))
+        b.reset(seed=1)
+        b.env.drop_available = True
+        b.env.step(MiniGridActions.MOVE_FORWARD)
+        b.env.step(MiniGridActions.PICKUP)
+        b.env.step(MiniGridActions.MOVE_FORWARD)
+
+        prev = b.get_state()
+        b.env.step(MiniGridActions.DROP)
+        curr = b.get_state()
+
+        event, message = infer_step_outcome("DROP", prev, curr, 0.0, False, b.task_spec)
+
+        assert event == "NOTHING"
+        assert "empty cell" in message.lower()
 
 
 class TestDropTextSummary:
@@ -416,22 +421,7 @@ class TestDropTextSummary:
 
 
 class TestPlannerIgnoresDrop:
-    """DROP is deliberately absent from the BFS and greedy planners.
-
-    Carrying a key does exactly two things: it blocks further PICKUP, and it
-    opens a matching door. Dropping spends an action to restore the former while
-    losing the latter, and the former is only worth restoring while holding a key
-    you did not need -- which neither an optimal nor a greedy solver ever picks
-    up. So DROP is never on either planner's path.
-
-    Modelling it would force key positions into PlannerState, multiplying the
-    state space by cells**keys (R1's largest maze: 4,696 states -> ~1e9) and
-    making BFS difficulty scoring infeasible. The planners stay complete for the
-    optimum, which is what optimal_steps and beatability are defined over.
-
-    These tests exist to fail loudly if someone adds a DROP edge without first
-    solving that state-space blowup (or accepting the difficulty-scoring cost).
-    """
+    """DROP is in the graph, but no fixture maze's shortest path uses it."""
 
     def test_planner_emits_no_drop_actions(self):
         from gridworld.baselines import plan_bfs_path

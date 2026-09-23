@@ -135,7 +135,7 @@ Deferred to implementation. FOSS preferred; **Snakemake** is the leading candida
 ```
 TaskSpecification
 ├── task_id : str               # unique identifier
-├── version : str               # schema version (currently "1.0")
+├── version : str               # schema version (currently "1.1")
 ├── seed : int                  # deterministic-replay seed
 ├── difficulty_tier : int       # positive integer; coarse organizing label only
 ├── description : str           # optional human-readable text
@@ -197,7 +197,7 @@ Enforced by `TaskSpecification.validate()`:
 
 ### 3.4 Versioning
 
-- `version` field on every JSON file; current value `"1.0"`.
+- `version` field on every JSON file; current value `"1.1"` (new mechanism keys: `death_portals`, freeze, rotate). Existing maze files keep the version they already declare.
 - Bumps follow semver: minor bump for backwards-compatible field additions, major bump for breaking changes.
 - The pipeline's `producer_version` headers on artifacts record both schema version and code version.
 

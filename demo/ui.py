@@ -228,7 +228,7 @@ class MiniGridPlayerUI:
             prev_rgb = session.backend.render()
 
         session._dispatch_token(token)
-        self.sounds.play(sfx_for_dispatch(session, events_before))
+        self.sounds.play(sfx_for_dispatch(session, events_before, prev_state))
 
         if session.backend.env is None or prev_state is None:
             return
