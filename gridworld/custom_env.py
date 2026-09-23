@@ -15,13 +15,15 @@ from .bootstrap import disable_gymnasium_env_plugins
 disable_gymnasium_env_plugins()
 
 # Import from gymnasium's minigrid package (no naming conflict after rename to gridworld/)
+from minigrid.core.constants import TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
-from minigrid.core.world_object import WorldObj, Key, Door, Goal, Wall, Lava, Box, Ball
-from minigrid.utils.rendering import fill_coords, point_in_circle
+from minigrid.core.world_object import WorldObj, Key, Door, Goal, Wall, Lava, Box, Ball, Floor
+from minigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect, point_in_triangle
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
+from .world_model import PlannerState, TaskPlanningContext, apply, successors
 
 
 # Color mapping for MiniGrid
@@ -33,6 +35,8 @@ MINIGRID_COLORS = {
     "purple": "purple",
     "grey": "grey",
     "gray": "grey",
+    "cyan": "blue",
+    "brown": "grey",
 }
 
 SWITCH_RENDER_COLORS = {
@@ -44,7 +48,11 @@ SWITCH_RENDER_COLORS = {
     "grey": np.array([100, 100, 100]),
     "gray": np.array([100, 100, 100]),
     "white": np.array([255, 255, 255]),
+    "cyan": np.array([0, 220, 220]),
 }
+
+
+PORTAL_COLOUR_STATE = {name: i for i, name in enumerate(sorted(SWITCH_RENDER_COLORS))}
 
 
 class Switch(Ball):
@@ -150,15 +158,12 @@ class Gate(Door):
 
 
 class TeleporterObj(Ball):
-    """
-    Teleporter endpoint object.
-    When the agent steps on it, they are teleported to the partner endpoint.
-    Rendered as a ball with special portal appearance.
-    """
+    """Portal endpoint. Stepping on it lands the agent on the partner cell."""
 
     def __init__(self, color: str = "purple", teleporter_id: str = "",
                  partner: "TeleporterObj | None" = None, cooldown_max: int = 1):
-        super().__init__(color)
+        self.visual_color = color
+        super().__init__(MINIGRID_COLORS[color])
         self.teleporter_id = teleporter_id
         self.partner: TeleporterObj | None = partner
         self.cooldown = 0
@@ -170,6 +175,65 @@ class TeleporterObj(Ball):
     def can_pickup(self):
         return False
 
+    def render(self, img):
+        color = SWITCH_RENDER_COLORS[self.visual_color]
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.42), color)
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.26), np.array([20, 20, 35]))
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.12), color)
+
+    def encode(self):
+        # The state slot keys MiniGrid's process-wide tile cache, so it must be
+        # deterministic and distinct per visual colour (cyan and blue share the
+        # MiniGrid colour index; a string-hash state varied with PYTHONHASHSEED).
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, PORTAL_COLOUR_STATE[self.visual_color])
+
+
+class KillCell(Lava):
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, 4)
+
+    def render(self, img):
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.48), np.array([90, 12, 12]))
+        fill_coords(img, point_in_circle(0.5, 0.42, 0.30), np.array([230, 230, 230]))
+        fill_coords(img, point_in_circle(0.38, 0.38, 0.08), np.array([20, 20, 20]))
+        fill_coords(img, point_in_circle(0.62, 0.38, 0.08), np.array([20, 20, 20]))
+        fill_coords(img, point_in_circle(0.5, 0.58, 0.06), np.array([20, 20, 20]))
+
+
+class RotatingTile(Floor):
+    def __init__(self, direction: int = 0):
+        super().__init__()
+        self.direction = direction
+
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, self.direction)
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([255, 168, 64]))
+        tips = (
+            ((0.22, 0.22), (0.22, 0.78), (0.82, 0.50)),
+            ((0.22, 0.22), (0.78, 0.22), (0.50, 0.82)),
+            ((0.78, 0.22), (0.78, 0.78), (0.18, 0.50)),
+            ((0.22, 0.78), (0.78, 0.78), (0.50, 0.18)),
+        )
+        a, b, c = tips[self.direction]
+        fill_coords(img, point_in_triangle(a, b, c), np.array([40, 28, 16]))
+
+
+class FrozenTile(Floor):
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, 5)
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([214, 232, 246]))
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.16), np.array([255, 255, 255]))
+        fill_coords(img, point_in_circle(0.28, 0.32, 0.07), np.array([245, 252, 255]))
+        fill_coords(img, point_in_circle(0.70, 0.62, 0.06), np.array([245, 252, 255]))
+
 
 class PushableBlock(Box):
     """
@@ -178,7 +242,7 @@ class PushableBlock(Box):
     """
 
     def __init__(self, color: str = "grey", block_id: str = ""):
-        super().__init__(color)
+        super().__init__(MINIGRID_COLORS[color])
         self.block_id = block_id
         self.pushable = True
 
@@ -214,6 +278,7 @@ class CustomMiniGridEnv(MiniGridEnv):
         agent_view_size: int = 7,
         highlight: bool = True,
         agent_pov: bool = False,
+        drop_available: bool = False,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos
@@ -221,6 +286,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.goal_pos = goal_pos
         self._custom_mission_text = mission_text  # Store our custom mission text
         self.task_spec = task_spec
+        self.drop_available = drop_available
+        self._planning_ctx: TaskPlanningContext | None = None
 
         # Mechanism tracking
         self.key_objects: dict[str, Key] = {}
@@ -229,6 +296,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.gates: dict[str, Gate] = {}
         self.blocks: dict[str, PushableBlock] = {}
         self.teleporters: dict[str, TeleporterObj] = {}
+        self.freeze_remaining = 0
+        self.rotators: list[RotatingTile] = []
         self.switch_gate_map: dict[str, list[str]] = {}  # switch_id -> [gate_ids]
         self.gate_initial_state: dict[str, bool] = {}
 
@@ -267,6 +336,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.explored_cells = set()
         self.key_objects.clear()
         self.collected_keys.clear()
+        self.freeze_remaining = 0
+        self.rotators = []
 
         # If we have a task spec, it will be populated after _gen_grid by the parser
         # For now, set basic start/goal if provided
@@ -355,6 +426,17 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.teleporters[f"{teleporter_id}_b"] = tp_b
         self.put_obj(tp_a, x_a, y_a)
         self.put_obj(tp_b, x_b, y_b)
+
+    def place_kill_cell(self, x: int, y: int):
+        self.put_obj(KillCell(), x, y)
+
+    def place_frozen_tile(self, x: int, y: int):
+        self.put_obj(FrozenTile(), x, y)
+
+    def place_rotating_tile(self, x: int, y: int, direction: int = 0):
+        tile = RotatingTile(direction)
+        self.rotators.append(tile)
+        self.put_obj(tile, x, y)
 
     def place_goal(self, x: int, y: int):
         """Place the goal at the given position."""
@@ -501,185 +583,155 @@ class CustomMiniGridEnv(MiniGridEnv):
             return 0, False, truncated, info
         return reward, terminated, truncated, info
 
-    def step(self, action: int):
-        """Execute one step in the environment with custom mechanics."""
-        action = int(action)
-        # Get the position in front of the agent
-        fwd_pos = self.front_pos
-        fwd_cell = self.grid.get(*fwd_pos)
-        current_cell = self.grid.get(*self.agent_pos)
-
-        # A key is picked up only from the agent's current cell: the agent must
-        # overlap the GroundKey first (MOVE_FORWARD onto it), then PICKUP. This
-        # matches system.py ("pick up a key while standing in the same cell"),
-        # the current-cell switch mechanic, and the same-cell baseline solver
-        # (gridworld/baselines.py).
-        if action == self.actions.pickup:
-            info: dict = {}
-            if isinstance(current_cell, Key):
-                if self.carrying is None:
-                    self.carrying = current_cell
-                    key_id = getattr(current_cell, "key_id", None)
-                    if key_id is not None:
-                        self.collected_keys.add(key_id)
-                    self.grid.set(*self.agent_pos, None)
-                else:
-                    info = {"invalid_action": True}
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, info)
-            return obs, reward, terminated, truncated, info
-
-        # DROP puts the held key in the agent's CURRENT cell, mirroring the
-        # same-cell PICKUP above, so drop and pickup are exact inverses at one
-        # action each. MiniGridEnv.step would drop into the forward cell, which is
-        # both asymmetric with our pickup and fails when the agent faces a wall —
-        # exactly the corner an agent stuck with a decoy key tends to be in. So
-        # DROP is handled here and never delegated to super().
-        if action == self.actions.drop:
-            info = {}
-            if self.carrying is not None and current_cell is None:
-                dropped = self.carrying
-                self.grid.set(*self.agent_pos, dropped)
-                dropped.cur_pos = tuple(self.agent_pos)
-                self.carrying = None
-                key_id = getattr(dropped, "key_id", None)
-                if key_id is not None:
-                    self.collected_keys.discard(key_id)
-            else:
-                info = {"invalid_action": True}
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(
-                0, False, truncated, info
+    def _planning_context(self) -> TaskPlanningContext:
+        if self.task_spec is None:
+            raise RuntimeError("CustomMiniGridEnv.step requires a task_spec")
+        if (
+            self._planning_ctx is None
+            or self._planning_ctx.spec is not self.task_spec
+            or self._planning_ctx.drop_available != self.drop_available
+        ):
+            self._planning_ctx = TaskPlanningContext(
+                self.task_spec, drop_available=self.drop_available
             )
-            return obs, reward, terminated, truncated, info
+        return self._planning_ctx
 
-        # Switches are activated from the agent's current cell, matching the validator.
-        if action == self.actions.toggle and isinstance(current_cell, Switch):
-            if not current_cell.activate():
-                self.step_count += 1
-                truncated = self.step_count >= self.max_steps
-                obs = self.gen_obs()
-                reward, terminated, truncated, info = self._finalize_step_result(
-                    0, False, truncated, {"invalid_action": True}
-                )
-                return obs, reward, terminated, truncated, info
-            self._refresh_gates()
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
+    def _read_planner_state(self, ctx: TaskPlanningContext) -> PlannerState:
+        carrying_key = None
+        if self.carrying is not None:
+            carrying_key = getattr(self.carrying, "key_id", None)
+        open_doors = set()
+        for pos, door in ctx.doors_by_pos.items():
+            cell = self.grid.get(*pos)
+            if isinstance(cell, Door) and not isinstance(cell, Gate):
+                if cell.is_open or not cell.is_locked:
+                    open_doors.add(door["id"])
+        key_positions = []
+        for x in range(self.width):
+            for y in range(self.height):
+                cell = self.grid.get(x, y)
+                if isinstance(cell, Key):
+                    key_id = getattr(cell, "key_id", None)
+                    if key_id is not None:
+                        key_positions.append((key_id, x, y))
+        return PlannerState(
+            agent_pos=tuple(self.agent_pos),
+            agent_dir=int(self.agent_dir),
+            carrying_key=carrying_key,
+            collected_keys=frozenset(self.collected_keys),
+            active_switches=frozenset(
+                sid for sid, sw in self.switches.items() if sw.is_active
+            ),
+            used_switches=frozenset(
+                sid for sid, sw in self.switches.items() if getattr(sw, "used", False)
+            ),
+            open_gates=frozenset(gid for gid, gate in self.gates.items() if gate.is_open),
+            open_doors=frozenset(open_doors),
+            key_positions=frozenset(key_positions),
+            freeze_remaining=int(self.freeze_remaining),
+        rotator_dirs=tuple(tile.direction for tile in self.rotators),
+        )
 
-        if action == self.actions.forward and isinstance(fwd_cell, Key) and self._cell_can_overlap(fwd_cell):
-            self.agent_pos = (int(fwd_pos[0]), int(fwd_pos[1]))
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            self._update_hold_switches()
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
+    def _write_planner_state(self, ctx: TaskPlanningContext, state: PlannerState) -> None:
+        self.agent_pos = (int(state.agent_pos[0]), int(state.agent_pos[1]))
+        self.agent_dir = int(state.agent_dir)
+        self.collected_keys = set(state.collected_keys)
+        self.freeze_remaining = int(state.freeze_remaining)
+        for tile, direction in zip(self.rotators, state.rotator_dirs):
+            tile.direction = direction
 
-        # Handle key consumption when unlocking doors
-        if action == self.actions.toggle and isinstance(fwd_cell, Door) and not isinstance(fwd_cell, Gate):
-            if fwd_cell.is_locked and self.carrying is not None:
-                if isinstance(self.carrying, Key) and self.carrying.color == fwd_cell.color:
-                    # Key matches - unlock the door
-                    fwd_cell.is_locked = False
-                    fwd_cell.is_open = True
+        for sid, switch in self.switches.items():
+            switch.is_active = sid in state.active_switches
+            switch.used = sid in state.used_switches
+        for gid, gate in self.gates.items():
+            gate.is_open = gid in state.open_gates
+        for pos, door in ctx.doors_by_pos.items():
+            cell = self.grid.get(*pos)
+            if isinstance(cell, Door) and not isinstance(cell, Gate):
+                is_open = door["id"] in state.open_doors
+                cell.is_open = is_open
+                cell.is_locked = not is_open
 
-                    # Check if key should be consumed
-                    if self.task_spec and self.task_spec.rules.key_consumption:
-                        self.carrying = None  # Consume the key
+        for x in range(self.width):
+            for y in range(self.height):
+                cell = self.grid.get(x, y)
+                if isinstance(cell, Key):
+                    self.grid.set(x, y, None)
 
-                    # Return after handling
-                    self.step_count += 1
-                    truncated = self.step_count >= self.max_steps
-                    obs = self.gen_obs()
-                    reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-                    return obs, reward, terminated, truncated, info
+        self.carrying = None
+        for key_id, x, y in state.key_positions:
+            obj = self.key_objects.get(key_id)
+            if obj is None:
+                continue
+            self.grid.set(x, y, obj)
+            if hasattr(obj, "cur_pos"):
+                obj.cur_pos = (x, y)
+        if state.carrying_key is not None:
+            self.carrying = self.key_objects.get(state.carrying_key)
 
-        # Handle gate toggle attempt (gates can only be opened by switches, not directly)
-        if action == self.actions.toggle and isinstance(fwd_cell, Gate):
-            # No-op: gates are not directly toggleable
-            self.step_count += 1
-            truncated = self.step_count >= self.max_steps
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
+    def step(self, action: int):
+        """Advance the live env by applying the R1 rulebook, then observing."""
+        action = int(action)
+        if self.task_spec is None:
+            return super().step(action)
 
-        # Handle block pushing
-        if action == self.actions.forward and isinstance(fwd_cell, PushableBlock):
-            # Calculate position behind the block
-            dir_vec = self.dir_vec
-            behind_block_pos = (fwd_pos[0] + dir_vec[0], fwd_pos[1] + dir_vec[1])
+        ctx = self._planning_context()
+        before = self._read_planner_state(ctx)
+        after = apply(ctx, before, action)
+        legal = any(t.action == action for t in successors(ctx, before))
+        self._write_planner_state(ctx, after)
 
-            # Check if we can push the block
-            behind_cell = self.grid.get(*behind_block_pos)
-            if behind_cell is None or self._cell_can_overlap(behind_cell):
-                # Push the block
-                self.grid.set(*fwd_pos, None)
-                self.grid.set(*behind_block_pos, fwd_cell)
-                # Agent moves forward
-                self.agent_pos = fwd_pos
+        info: dict = {}
+        if not legal and action != int(self.actions.done):
+            # Turns are always legal. Everything else that apply treats as a
+            # no-op is an invalid action (bump wall, empty pickup, gated DROP).
+            if action not in (
+                int(self.actions.left),
+                int(self.actions.right),
+            ):
+                info["invalid_action"] = True
 
-                # Check step count and return
-                self.step_count += 1
-
-                if self.step_count >= self.max_steps:
-                    truncated = True
-                else:
-                    truncated = False
-
-                obs = self.gen_obs()
-                reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-                return obs, reward, terminated, truncated, info
-
-        # Handle gate blocking
-        if action == self.actions.forward and isinstance(fwd_cell, Gate) and not fwd_cell.is_open:
-            # Can't move through closed gate
-            self.step_count += 1
-            if self.step_count >= self.max_steps:
-                truncated = True
-            else:
-                truncated = False
-            obs = self.gen_obs()
-            reward, terminated, truncated, info = self._finalize_step_result(0, False, truncated, {})
-            return obs, reward, terminated, truncated, info
-
-        # Default behavior
-        obs, reward, terminated, truncated, info = super().step(action)
-        if action == self.actions.forward:
-            self._update_hold_switches()
-
-        # Tick teleporter cooldowns
-        for tp in self.teleporters.values():
-            if tp.cooldown > 0:
-                tp.cooldown -= 1
-
-        # Check if agent landed on a teleporter after moving forward
-        if action == self.actions.forward:
-            cell = self.grid.get(*self.agent_pos)
-            if isinstance(cell, TeleporterObj) and cell.partner is not None and cell.cooldown == 0:
-                # Find partner position
-                for x in range(self.width):
-                    for y in range(self.height):
-                        if self.grid.get(x, y) is cell.partner:
-                            self.agent_pos = (x, y)
-                            # Set cooldown on destination to prevent immediate bounce-back
-                            cell.partner.cooldown = cell.partner.cooldown_max
-                            # Regenerate observation after teleport
-                            obs = self.gen_obs()
-                            break
-                    else:
-                        continue
-                    break
-
-        reward, terminated, truncated, info = self._finalize_step_result(reward, terminated, truncated, info)
+        self.step_count += 1
+        truncated = self.step_count >= self.max_steps
+        obs = self.gen_obs()
+        reward, terminated, truncated, info = self._finalize_step_result(
+            0, False, truncated, info
+        )
         return obs, reward, terminated, truncated, info
+
+    def get_frame(self, highlight: bool = True, tile_size: int = TILE_PIXELS, agent_pov: bool = False):
+        img = super().get_frame(highlight, tile_size, agent_pov)
+        ax, ay = self.agent_pos
+        cell = self.grid.get(ax, ay)
+        if isinstance(cell, RotatingTile):
+            t = img.shape[0] // self.height
+            tile = img[ay * t:(ay + 1) * t, ax * t:(ax + 1) * t]
+            cell.render(tile)
+            tris = (
+                ((0.32, 0.35), (0.68, 0.50), (0.32, 0.65)),
+                ((0.35, 0.32), (0.65, 0.32), (0.50, 0.68)),
+                ((0.68, 0.35), (0.68, 0.65), (0.32, 0.50)),
+                ((0.35, 0.68), (0.65, 0.68), (0.50, 0.32)),
+            )
+            a, b, c = tris[self.agent_dir]
+            fill_coords(tile, point_in_triangle(a, b, c), np.array([255, 0, 0]))
+        if self.freeze_remaining > 0:
+            # Iced over: the agent tile frosts on step-on and each swallowed
+            # action thins it, until the thaw frame is plain (3D: hud.draw_frost).
+            t = img.shape[0] // self.height
+            tile = img[ay * t:(ay + 1) * t, ax * t:(ax + 1) * t]
+            total = max(1, int(getattr(self.task_spec.mechanisms, "freeze_steps", 5)) if self.task_spec else 5)
+            frac = min(1.0, self.freeze_remaining / total)
+            alpha = 0.25 + 0.6 * frac
+            frost = np.array([214, 232, 246], dtype=float)
+            iced = (tile.astype(float) * (1.0 - alpha) + frost * alpha).round().astype(np.uint8)
+            n_cracks = round((1.0 - frac) * 4)
+            for k in range(n_cracks):  # diagonal cracks appear as it thaws
+                for i in range(t):
+                    j = (i + k * (t // 4)) % t
+                    iced[i, j] = (58, 82, 110)
+            tile[:] = iced
+        return img
 
     def get_mission_text(self) -> str:
         """Return the mission text."""

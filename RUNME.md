@@ -155,7 +155,10 @@ pip install -e ".[dev,visual,mujoco3d]"
 Headless rendering uses `MUJOCO_GL`, which defaults to `osmesa` (software,
 CPU-safe); set `MUJOCO_GL=egl` on GPU machines for speed. Play with it via
 `--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
-`fixed_angled` / `first_person` live). `,` / `.` tilt the camera one level at
+`fixed_angled` / `first_person` / `first_person_narrow` live; `first_person` is
+the wide eye, fovy 110 with 1.0 walls so portal beacons show, and
+`first_person_narrow` the 2026-09-18 ablation eye, fovy 90 with 1.4 walls).
+`,` / `.` tilt the camera one level at
 a time from top-down to first person, with the walls rising as it drops; the
 footer shows the level and wall height. `chase` and `first_person` (and every
 tilt level below top-down) turn with the agent and carry a compass; turns

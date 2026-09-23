@@ -16,25 +16,35 @@ from dataclasses import dataclass
 
 import numpy as np
 
-PRESETS: tuple[str, ...] = ("top_down", "chase", "fixed_angled", "first_person")
+PRESETS: tuple[str, ...] = ("top_down", "chase", "fixed_angled", "first_person", "first_person_narrow")
 DEFAULT_WALL_HEIGHT: dict[str, float] = {
     "top_down": 0.4,
     "chase": 0.6,
     "fixed_angled": 0.6,
-    "first_person": 1.4,
+    "first_person": 1.0,
+    "first_person_narrow": 1.4,
 }
 
 # GridState.agent_direction (0=E, 1=S, 2=W, 3=N) -> world yaw in degrees.
 DIRECTION_YAW: dict[int, float] = {0: 0.0, 1: -90.0, 2: 180.0, 3: 90.0}
 
 PERSPECTIVE_FOVY = 45.0  # MuJoCo's default free-camera fovy (degrees)
-FIRST_PERSON_FOVY = 90.0
+# Eye presets: (fovy, elevation). first_person is the wide eye from the
+# 2026-09-23 beacon-visibility sweep (fovy 110 / pitch -5 / walls 1.0: a portal
+# beacon in view from 58% of poses in the dense mazes, diagonals to ten cells,
+# own tile edge still in frame; fovy > 110 drops a beacon under 4 px at ten
+# cells). first_person_narrow is the 2026-09-18 camera-ablation eye, kept as
+# an ablation arm.
+EYE_PRESETS: dict[str, tuple[float, float]] = {
+    "first_person": (110.0, -5.0),
+    "first_person_narrow": (90.0, -12.0),
+}
+FIRST_PERSON_FOVY, FIRST_PERSON_ELEVATION = EYE_PRESETS["first_person"]
 FIT_MARGIN = 0.06  # fraction of the half-frame kept clear around the maze
 FIT_TOLERANCE = 1e-9  # float-rounding slack: a corner placed exactly on the margin still fits
 CHASE_ELEVATION = -68.0  # playtest: -55 left the maze small in frame (53% vs 65%)
 FIXED_ELEVATION = -50.0
 EYE_HEIGHT = 0.55
-FIRST_PERSON_ELEVATION = -12.0
 FIRST_PERSON_FORWARD = 0.1  # eye sits slightly ahead of the agent centre
 
 
@@ -150,10 +160,10 @@ TILT_LEVELS: tuple[TiltLevel, ...] = (
     TiltLevel(0.4, preset="top_down"),
     TiltLevel(0.5, elevation=-80.0),
     TiltLevel(0.6, preset="chase"),
-    TiltLevel(0.8, elevation=-50.0, distance=7.0),
-    TiltLevel(1.0, elevation=-38.0, distance=5.0),
-    TiltLevel(1.2, elevation=-25.0, distance=4.0),
-    TiltLevel(1.4, preset="first_person"),
+    TiltLevel(0.7, elevation=-50.0, distance=7.0),
+    TiltLevel(0.8, elevation=-38.0, distance=5.0),
+    TiltLevel(0.9, elevation=-25.0, distance=4.0),
+    TiltLevel(DEFAULT_WALL_HEIGHT["first_person"], preset="first_person"),
 )
 TILT_LOOK_AHEAD = 2.0  # cells ahead of the agent the close levels aim at
 
@@ -245,11 +255,10 @@ def pose_for(
         distance = _chase_distance(width, height, wall_height)
         return CameraPose(centre, distance, yaw, CHASE_ELEVATION, False, PERSPECTIVE_FOVY)
 
-    # first_person: the free camera sits exactly at the eye (lookat - distance*forward).
-    forward, _, _ = basis(yaw, FIRST_PERSON_ELEVATION)
+    # eye presets: the free camera sits exactly at the eye (lookat - distance*forward).
+    fovy, elevation = EYE_PRESETS[preset]
+    forward, _, _ = basis(yaw, elevation)
     eye = np.array([ax + FIRST_PERSON_FORWARD * fx, ay + FIRST_PERSON_FORWARD * fy, EYE_HEIGHT])
     distance = 0.5
     lookat = eye + distance * forward
-    return CameraPose(
-        tuple(float(c) for c in lookat), distance, yaw, FIRST_PERSON_ELEVATION, False, FIRST_PERSON_FOVY
-    )
+    return CameraPose(tuple(float(c) for c in lookat), distance, yaw, elevation, False, fovy)

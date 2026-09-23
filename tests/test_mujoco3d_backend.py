@@ -81,7 +81,7 @@ def test_full_corpus_bfs_replays_identically_through_wrapper(path):
     _assert_lockstep(spec, plan_bfs_path(spec).actions)
 
 
-def test_corridor_reaches_goal_and_reclosed_door_is_drawn_closed():
+def test_corridor_reaches_goal_and_toggling_an_open_door_changes_nothing():
     spec = TaskSpecification.from_dict(CORRIDOR)
     backend = get_backend("mujoco3d", resolution=RES)
     backend.configure(spec)
@@ -89,11 +89,13 @@ def test_corridor_reaches_goal_and_reclosed_door_is_drawn_closed():
     try:
         for action in (A.MOVE_FORWARD, A.PICKUP):
             backend.step(int(action))
+        closed = backend.render().copy()
         opened = backend.step(int(A.TOGGLE))[0].copy()
-        reclosed, _r, _t, _u, state, _i = backend.step(int(A.TOGGLE))
-        assert backend.door_states() == {"d1": False} and "d1" in state.open_doors
-        assert not np.array_equal(opened, reclosed)
-        backend.step(int(A.TOGGLE))  # reopen
+        assert not np.array_equal(closed, opened)
+        # PR #57 rulebook: TOGGLE on an open door is a no-op, so the frame is reused.
+        again, _r, _t, _u, state, _i = backend.step(int(A.TOGGLE))
+        assert backend.door_states() == {"d1": True} and "d1" in state.open_doors
+        assert np.array_equal(opened, again)
         for _ in range(3):
             *_, state, _info = backend.step(int(A.MOVE_FORWARD))
         assert state.goal_reached
@@ -109,7 +111,7 @@ def test_render_is_cached_until_state_or_camera_changes(monkeypatch):
         calls = []
         real_render = backend._renderer.render
         monkeypatch.setattr(
-            backend._renderer, "render", lambda s, d: calls.append(1) or real_render(s, d)
+            backend._renderer, "render", lambda s, d, **kw: calls.append(1) or real_render(s, d, **kw)
         )
         first, second = backend.render(), backend.render()
         assert first is second and calls == []  # reset already rendered this state
@@ -166,7 +168,7 @@ def test_registry_wraps_minigrid_by_default():
     backend = get_backend("mujoco3d", camera="chase", resolution=RES)
     assert isinstance(backend.state_backend, MiniGridBackend)
     assert backend.camera == "chase"
-    assert backend.camera_names == ("top_down", "chase", "fixed_angled", "first_person")
+    assert backend.camera_names == ("top_down", "chase", "fixed_angled", "first_person", "first_person_narrow")
     assert backend.frame_is_grid_aligned is False
     assert backend.observation_shape == (RES, RES, 3)
 
@@ -203,7 +205,7 @@ def test_view_turns_with_agent_only_on_heading_following_cameras():
         backend.set_camera(camera)
         if backend.view_turns_with_agent:
             turning.add(camera)
-    assert turning == {"chase", "first_person"}
+    assert turning == {"chase", "first_person", "first_person_narrow"}
 
 
 def test_tilt_is_display_only_and_steps_through_every_level():

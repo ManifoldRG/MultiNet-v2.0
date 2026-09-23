@@ -310,6 +310,17 @@ class AbstractGridBackend(ABC):
         open_ids = self.get_state().open_doors
         return {door.id: door.id in open_ids for door in self.task_spec.mechanisms.doors}
 
+    def rotator_directions(self) -> tuple[int, ...]:
+        """Current direction (0=E 1=S 2=W 3=N) of each rotating tile, in the
+        spec's ``rotating_tiles`` order. The phase spins every legal step and is
+        not part of GridState, so renderers read it here. Default: none."""
+        return ()
+
+    def freeze_remaining(self) -> int:
+        """Actions still swallowed by a frozen tile (PR #57: every action is a
+        no-op while > 0). Not part of GridState; renderers read it here."""
+        return 0
+
     @property
     def frame_is_grid_aligned(self) -> bool:
         """True when frames are a top-down image of equal-size cell tiles, so
