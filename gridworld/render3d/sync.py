@@ -15,7 +15,7 @@ from gridworld.backends.base import GridState
 
 from . import palette
 from .cameras import DIRECTION_YAW, cell_center
-from .scene import HIDDEN_GROUP, KEY_HEIGHT, SceneIndex
+from .scene import HIDDEN_GROUP, KEY_HEIGHT, ROTATOR_ARROW_LIFT, SceneIndex
 
 
 class SceneState:
@@ -76,10 +76,14 @@ class SceneState:
         agent's heading yaw (turn animation)."""
         if rotators is None:
             rotators = self.index.rotator_initial
+        agent_cell = tuple(int(v) for v in state.agent_position)
         for i, arrows in self._rotators.items():
             shown = int(rotators[i]) if i < len(rotators) else None
+            lift = ROTATOR_ARROW_LIFT if self.index.rotator_cells[i] == agent_cell else 0.0
             for d, geom_ids in enumerate(arrows):
                 self._show(geom_ids, d == shown)
+                for gid in geom_ids:
+                    self.model.geom_pos[gid][2] = lift
         for door_id, (closed, opened) in self._doors.items():
             is_open = bool(door_states.get(door_id, False))
             self._show(closed, not is_open)

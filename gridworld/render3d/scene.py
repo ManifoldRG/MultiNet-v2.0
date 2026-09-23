@@ -28,6 +28,9 @@ KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
 PORTAL_RING_TOP = 0.14
 ROTATOR_ARROW_BASE = 0.024  # top of the orange slab
 ROTATOR_ARROW_TOP = 0.10
+# While the agent stands on a rotator its arrow rises this far, clear of the
+# wedge (top 0.28): top-down draws it over the agent, the eye sees its tip.
+ROTATOR_ARROW_LIFT = 0.30
 # Arrow outline per direction (0=E 1=S 2=W 3=N) in cell-relative world units,
 # from the 2D triangles: image (u, v) -> (u - 0.5, 0.5 - v).
 ROTATOR_ARROWS: tuple[tuple[tuple[float, float], ...], ...] = (
@@ -123,6 +126,7 @@ class SceneIndex:
     # rotating tile index (spec order) -> geom names of its arrow, per direction
     rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
     rotator_initial: tuple[int, ...] = ()
+    rotator_cells: tuple[tuple[int, int], ...] = ()
 
 
 def _fmt(values) -> str:
@@ -377,5 +381,6 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         carried=carried,
         rotator_arrows=rotator_arrows,
         rotator_initial=tuple(int(d) for d in mech.rotating_initial_directions),
+        rotator_cells=tuple((p.x, p.y) for p in mech.rotating_tiles),
     )
     return xml, index

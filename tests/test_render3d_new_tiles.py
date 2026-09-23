@@ -257,3 +257,32 @@ def test_first_person_sees_the_tile_ahead():
     bare["maze"]["walls"] = []
     facing_floor, _, _ = _render(_spec(bare), "first_person", _state(agent_position=(4, 1), agent_direction=0), rotators=())
     assert int(np.any(facing_kill != facing_floor, axis=-1).sum()) >= 200
+
+
+@pytest.mark.parametrize("camera", ["top_down", "first_person"])
+def test_arrow_lifts_above_the_agent_standing_on_it(camera):
+    """Facing the same way as the arrow, the wedge would hide it; the arrow
+    rises above the wedge so top-down draws it on top and the eye sees its tip."""
+    pytest.importorskip("mujoco")
+    spec = _spec()
+    on_tile = _state(agent_position=(4, 2), agent_direction=0)
+    east, pose, wall_height = _render(spec, camera, on_tile, rotators=(0, 3))
+    west, _, _ = _render(spec, camera, on_tile, rotators=(2, 3))
+    region = _cell_region(pose, (4, 2), wall_height) if camera == "top_down" else (slice(0, RES), slice(0, RES))
+    assert _changed_px(east, west, region) >= MIN_CHANGED_PX
+
+
+def test_arrow_sits_on_the_tile_once_the_agent_leaves():
+    mujoco = pytest.importorskip("mujoco")
+    from gridworld.render3d.renderer import SceneRenderer
+    from gridworld.render3d.scene import ROTATOR_ARROW_LIFT
+
+    renderer = SceneRenderer(_spec(), camera="top_down", resolution=64)
+    try:
+        arrow = mujoco.mj_name2id(renderer.model, mujoco.mjtObj.mjOBJ_GEOM, "rotator:0:arrow0")
+        renderer.render(_state(agent_position=(4, 2)), NO_DOORS, rotators=(0, 3))
+        assert renderer.model.geom_pos[arrow][2] == pytest.approx(ROTATOR_ARROW_LIFT)
+        renderer.render(_state(agent_position=(3, 2)), NO_DOORS, rotators=(0, 3))
+        assert renderer.model.geom_pos[arrow][2] == pytest.approx(0.0)
+    finally:
+        renderer.close()
