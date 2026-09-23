@@ -163,7 +163,7 @@ async def game_action(game_id: str, body: ActionBody) -> dict:
             if session.backend.is_configured:
                 prev_rgb = np.asarray(session.backend.render(), dtype=np.uint8)
             session._dispatch_token(action)
-            sfx = sfx_for_dispatch(session, events_before)
+            sfx = sfx_for_dispatch(session, events_before, prev_state)
             effects = effects_for_dispatch(
                 session, action, prev_state, events_before, prev_rgb=prev_rgb
             )

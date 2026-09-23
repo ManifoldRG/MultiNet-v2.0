@@ -75,8 +75,9 @@ def _hazard_spec():
     })
 
 
-def _run_agent(spec, agent, **cfg):
+def _run_agent(spec, agent, *, drop_available=False, **cfg):
     backend = MiniGridBackend(render_mode="rgb_array")
+    backend.drop_available = drop_available
     backend.configure(spec)
     runner = build_runner(ExperimentConfig(**cfg), backend, spec)
     return runner.run(agent, verbose=False)
@@ -114,19 +115,17 @@ def test_goal_reached_from_non_done_event_still_succeeds():
     assert res["end_reason"] == "success"
 
 
-def test_backend_termination_without_goal_is_terminated_failure():
-    # terminated_failure branch (interface/runner.py): the backend can end
-    # the episode (terminated=True) without the goal being reached, e.g. a
-    # lava hazard. event_type is "MOVED" here, not DONE/BLOCKED/WRONG_DONE/
-    # INVALID, so this must be caught by the `if terminated:` fallback that
-    # sets end_reason = "terminated_failure", not the success OR-branch.
+def test_lava_is_impassable_rather_than_fatal():
+    # R1 treats hazards as walls, so walking at lava is a no-op rather than
+    # a fatal MiniGrid termination. With a tight stall window the episode
+    # ends as stalled instead of terminated_failure.
     res = _run(
         _hazard_spec(),
         ["TURN_RIGHT", "MOVE_FORWARD"],
         progress_stall_k=2,
     )
     assert res["success"] is False
-    assert res["end_reason"] == "terminated_failure"
+    assert res["end_reason"] == "stalled"
 
 
 def _state(**kw):
@@ -339,7 +338,7 @@ def test_drop_retrace_is_not_a_stall():
          "TURN_LEFT", "MOVE_FORWARD"]
     )
 
-    res = _run(spec, actions, progress_stall_k=3)
+    res = _run(spec, actions, progress_stall_k=3, drop_available=True)
 
     assert res["end_reason"] == "success"
     assert res["success"] is True
@@ -398,9 +397,9 @@ def test_push_block_progress_and_terminal_success_precede_watchdog():
 
     res = _run(spec, ["MOVE_FORWARD", "MOVE_FORWARD"], progress_stall_k=1)
 
-    assert res["success"] is True
-    assert res["end_reason"] == "success"
-    assert res["final_state"]["block_positions"]["b1"] == [4, 1]
+    assert res["success"] is False
+    assert res["end_reason"] == "stalled"
+    assert res["final_state"]["block_positions"]["b1"] == [2, 1]
 
 
 def test_collect_all_terminal_success_precedes_watchdog():

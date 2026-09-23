@@ -123,19 +123,21 @@ class BlockSpec:
 
 @dataclass
 class TeleporterSpec:
-    """Teleporter pair specification."""
+    """Portal pair: stepping on A lands on B (and vice versa if bidirectional)."""
     id: str
     position_a: Position
     position_b: Position
     bidirectional: bool = True
+    color: str = "purple"
 
     @classmethod
     def from_dict(cls, d: dict) -> "TeleporterSpec":
         return cls(
             id=d["id"],
-            position_a=Position.from_list(d["position_a"]) if isinstance(d["position_a"], list) else Position.from_dict(d["position_a"]),
-            position_b=Position.from_list(d["position_b"]) if isinstance(d["position_b"], list) else Position.from_dict(d["position_b"]),
-            bidirectional=d.get("bidirectional", True)
+            position_a=Position.from_list(d["position_a"]),
+            position_b=Position.from_list(d["position_b"]),
+            bidirectional=d.get("bidirectional", True),
+            color=d.get("color", "purple"),
         )
 
 
@@ -186,6 +188,11 @@ class MechanismSet:
     blocks: list[BlockSpec] = field(default_factory=list)
     teleporters: list[TeleporterSpec] = field(default_factory=list)
     hazards: list[HazardSpec] = field(default_factory=list)
+    kill_cells: list[Position] = field(default_factory=list)
+    frozen_tiles: list[Position] = field(default_factory=list)
+    freeze_steps: int = 5
+    rotating_tiles: list[Position] = field(default_factory=list)
+    rotating_initial_directions: list[int] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> "MechanismSet":
@@ -197,6 +204,11 @@ class MechanismSet:
             blocks=[BlockSpec.from_dict(b) for b in d.get("blocks", [])],
             teleporters=[TeleporterSpec.from_dict(t) for t in d.get("teleporters", [])],
             hazards=[HazardSpec.from_dict(h) for h in d.get("hazards", [])],
+            kill_cells=[Position.from_list(p) for p in d.get("death_portals", [])],
+            frozen_tiles=[Position.from_list(p) for p in d.get("frozen_tiles", [])],
+            freeze_steps=d.get("freeze_steps", 5),
+            rotating_tiles=[Position.from_list(p) for p in d.get("rotating_tiles", [])],
+            rotating_initial_directions=list(d.get("rotating_initial_directions", [])),
         )
 
 
@@ -405,8 +417,19 @@ class TaskSpecification:
                 "switches": [{"id": s.id, "position": pos_to_list(s.position), "controls": s.controls, "color": s.color, "switch_type": s.switch_type, "initial_state": s.initial_state} for s in self.mechanisms.switches],
                 "gates": [{"id": g.id, "position": pos_to_list(g.position), "initial_state": g.initial_state, "color": g.color} for g in self.mechanisms.gates],
                 "blocks": [{"id": b.id, "position": pos_to_list(b.position), "pushable": b.pushable, "color": b.color} for b in self.mechanisms.blocks],
-                "teleporters": [{"id": t.id, "position_a": pos_to_list(t.position_a), "position_b": pos_to_list(t.position_b), "bidirectional": t.bidirectional} for t in self.mechanisms.teleporters],
+                "teleporters": [{
+                    "id": t.id,
+                    "position_a": pos_to_list(t.position_a),
+                    "position_b": pos_to_list(t.position_b),
+                    "bidirectional": t.bidirectional,
+                    "color": t.color,
+                } for t in self.mechanisms.teleporters],
                 "hazards": [{"id": h.id, "position": pos_to_list(h.position), "hazard_type": h.hazard_type} for h in self.mechanisms.hazards],
+                "death_portals": [pos_to_list(p) for p in self.mechanisms.kill_cells],
+                "frozen_tiles": [pos_to_list(p) for p in self.mechanisms.frozen_tiles],
+                "freeze_steps": self.mechanisms.freeze_steps,
+                "rotating_tiles": [pos_to_list(p) for p in self.mechanisms.rotating_tiles],
+                "rotating_initial_directions": list(self.mechanisms.rotating_initial_directions),
             },
             "rules": {
                 "key_consumption": self.rules.key_consumption,
@@ -578,6 +601,18 @@ class TaskSpecification:
             check_position(teleporter.position_b, f"Teleporter {teleporter.id} endpoint B")
             register_position(teleporter.position_a, f"Teleporter {teleporter.id} endpoint A")
             register_position(teleporter.position_b, f"Teleporter {teleporter.id} endpoint B")
+
+        for kill in self.mechanisms.kill_cells:
+            check_position(kill, "Kill cell")
+            register_position(kill, "Kill cell")
+
+        for frozen in self.mechanisms.frozen_tiles:
+            check_position(frozen, "Frozen tile")
+            register_position(frozen, "Frozen tile")
+
+        for rotating in self.mechanisms.rotating_tiles:
+            check_position(rotating, "Rotating tile")
+            register_position(rotating, "Rotating tile")
 
         # Check door-key color consistency
         key_colors = {k.color for k in self.mechanisms.keys}

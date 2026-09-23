@@ -214,6 +214,9 @@ class MiniGridPlaySession:
         if camera is not None:
             backend_kwargs["camera"] = camera
         self.backend = get_backend(backend, **backend_kwargs)
+        # DROP is a demo-only action today; the 3D backend delegates mechanics
+        # to its state backend, so the flag goes there.
+        getattr(self.backend, "state_backend", self.backend).drop_available = True
 
         # Episode state
         self.state: Optional[GridState] = None
@@ -465,9 +468,14 @@ class MiniGridPlaySession:
             self.event_log.append(
                 ProgressEvent("Dropped the ", f"{color} key", "", color, "key")
             )
-            feedback_text = f"You drop the {color}. (human-only action)"
+            feedback_text = f"You drop the {color} on this cell."
+        elif prev_state.agent_carrying:
+            feedback_text = (
+                "Can't drop here — this cell already has something. "
+                "Step to an empty cell, then drop."
+            )
         else:
-            feedback_text = "Nothing to drop. (human-only action)"
+            feedback_text = "Nothing to drop."
         self._record_step(
             "DROP", None, prev_state, feedback_text, "DROPPED",
             reward, terminated, truncated, info,
