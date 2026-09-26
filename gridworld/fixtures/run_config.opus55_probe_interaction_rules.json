@@ -1,0 +1,32 @@
+{
+  "description": "Claude Opus 5.5 harness Probe 4: + the interaction-rules paragraph on the smallest switch maze. Same model settings as run_config.r1_frontier_opus55.json (effort xhigh, 64k, adaptive thinking with display summarized), same R1 cell except the prompting variant; mirrors the 2026-09-14 GPT-6 Astra probes (run_config.astra_probe_*.json).",
+  "manifest": "gridworld/fixtures/manifest.astra_probe_switch.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_probe": "Local single-process probe (scripts.run_pipeline --run-config), so requests go through the live Messages API, not Message Batches: same model and parameters as the main run, standard price, and thinking summaries returned reliably.",
+  "experiment_config": {
+    "prompting": "minimal_interaction_rules",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "claude_opus55": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "max_tokens": 64000,
+      "timeout": 600,
+      "group": "claude-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ],
+      "enable_thinking": true,
+      "effort": "xhigh"
+    }
+  }
+}

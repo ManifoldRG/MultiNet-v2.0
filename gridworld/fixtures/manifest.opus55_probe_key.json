@@ -1,0 +1,30 @@
+{
+  "description": "Opus 5.5 harness probe 6 (2026-09-26): the 8x8 key maze where Claude Opus 5.5 looped on adjacent-cell PICKUP in the R1-frontier run (Opus 4.8 and GPT-6 Astra solved it). Task entry copied verbatim from manifest.r1_balanced_03.json.",
+  "selection": {
+    "source_set": "r1_balanced_03",
+    "maze_count": 1
+  },
+  "tasks": [
+    {
+      "task_id": "r1_M1_8x8_corridor_kr_1",
+      "experiment": "r1",
+      "condition": "M",
+      "variant": "8x8_corridor_kr_1",
+      "source": "ogbench/ogbench/procgen/maze_jsons/M1/8x8_corridor_kr_1.json",
+      "expected_mechanisms": [
+        "DR"
+      ],
+      "maze_family": "M",
+      "maze_category": "M1",
+      "rank": 8,
+      "optimal_steps": 28,
+      "path_signature": "K",
+      "path_depth": 1,
+      "distractor_count": 0,
+      "five_option": false,
+      "topology": "corridor",
+      "grid": "8x8",
+      "comparison_cell": "8x8:corridor:1"
+    }
+  ]
+}
