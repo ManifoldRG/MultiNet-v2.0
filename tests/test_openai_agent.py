@@ -242,3 +242,11 @@ def test_factory_builds_openai_agent_from_run_config(monkeypatch):
 
 def test_module_default_model_is_astra():
     assert openai_agent.DEFAULT_OPENAI_MODEL == "gpt-6-astra"
+
+
+def test_gpt6_sol_flex_price_is_one_fifth_of_astra():
+    # Pricing page fetched 2026-09-26: Sol flex $1 / $0.10 / $5 per 1M tokens.
+    from interface.agents.openai_agent import price_for
+    assert price_for("gpt-6-sol", "flex") == (1.00, 0.10, 5.00)
+    astra = price_for("gpt-6-astra", "flex")
+    assert all(abs(a / 5 - s) < 1e-9 for a, s in zip(astra, price_for("gpt-6-sol", "flex")))

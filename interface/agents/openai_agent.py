@@ -46,6 +46,9 @@ _AGENT_NAME = "OpenAI agent"
 # input) surcharges never apply to this benchmark's ~1K-token prompts.
 OPENAI_PRICES: Dict[str, Dict[str, Tuple[float, float, float]]] = {
     "gpt-6-astra": {"default": (10.00, 1.00, 50.00), "flex": (5.00, 0.50, 25.00)},
+    # gpt-6-sol / gpt-6-luna: same pricing page, fetched 2026-09-26.
+    "gpt-6-sol": {"default": (2.00, 0.20, 10.00), "flex": (1.00, 0.10, 5.00)},
+    "gpt-6-luna": {"default": (0.10, 0.01, 0.50), "flex": (0.05, 0.005, 0.25)},
     "gpt-5.6-sol": {"default": (4.00, 0.40, 20.00), "flex": (2.00, 0.20, 10.00)},
     "gpt-5.6-terra": {"default": (2.00, 0.20, 12.00), "flex": (1.00, 0.10, 6.00)},
     "gpt-5.6-luna": {"default": (0.20, 0.02, 1.20), "flex": (0.10, 0.01, 0.60)},
