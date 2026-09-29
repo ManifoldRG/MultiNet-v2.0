@@ -421,7 +421,7 @@ class TestDropTextSummary:
 
 
 class TestPlannerIgnoresDrop:
-    """DROP is in the graph, but no fixture maze's shortest path uses it."""
+    """BFS leaves DROP out of the graph so key-placement does not explode search."""
 
     def test_planner_emits_no_drop_actions(self):
         from gridworld.baselines import plan_bfs_path

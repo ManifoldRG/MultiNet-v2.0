@@ -52,7 +52,7 @@ class Transition:
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = True):
+    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
         self.spec = spec
         self.drop_available = drop_available
         self.width, self.height = spec.maze.dimensions

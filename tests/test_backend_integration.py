@@ -124,9 +124,9 @@ def test_gate_color_is_preserved_in_task_spec_and_multigrid():
     assert multigrid.env.state.objects["g1"].color == "black"
 
 
-def test_doors_and_gates_may_replace_wall_cells():
+def test_validate_rejects_doors_and_gates_on_wall_cells():
     spec = TaskSpecification.from_dict({
-        "task_id": "barriers_replace_walls",
+        "task_id": "barriers_on_walls",
         "seed": 4,
         "difficulty_tier": 2,
         "maze": {
@@ -145,28 +145,11 @@ def test_doors_and_gates_may_replace_wall_cells():
         "max_steps": 40,
     })
 
-    assert spec.validate()[0] is True
-
-    minigrid = MiniGridBackend(render_mode="rgb_array")
-    minigrid.configure(spec)
-    minigrid.reset(seed=4)
-    assert minigrid.env.grid.get(3, 1).type == "door"
-    assert minigrid.env.grid.get(4, 2).type == "door"
-
-    multigrid = MultiGridBackend(tiling="square", render_mode="rgb_array")
-    multigrid.configure(spec)
-    multigrid.reset(seed=4)
-    barrier_cells = {
-        obj.cell_id
-        for obj in multigrid.env.state.objects.values()
-        if obj.id in {"d1", "g1"}
-    }
-    wall_cells = {
-        obj.cell_id
-        for obj in multigrid.env.state.objects.values()
-        if obj.obj_type == "wall"
-    }
-    assert barrier_cells.isdisjoint(wall_cells)
+    ok, errors = spec.validate()
+    assert ok is False
+    joined = "\n".join(errors)
+    assert "Door d1 position (3, 1) is a wall" in joined
+    assert "Gate g1 position (4, 2) is a wall" in joined
 
 
 def test_minigrid_replays_validator_same_cell_switch_plan():

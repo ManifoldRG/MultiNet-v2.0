@@ -23,7 +23,7 @@ from .world_model import (
 class TaskValidator:
     """Validate that a task is beatable by BFS over the R1 action graph."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = True):
+    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
         self.spec = spec
         self.ctx = TaskPlanningContext(spec, drop_available=drop_available)
         self.goal = self.ctx.goal

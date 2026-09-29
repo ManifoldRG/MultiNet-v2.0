@@ -524,10 +524,10 @@ class TaskSpecification:
         }
         wall_positions = explicit_wall_positions | border_positions
 
-        def check_position(pos: Position, name: str, *, allow_wall: bool = False) -> None:
+        def check_position(pos: Position, name: str) -> None:
             if not in_bounds(pos):
                 errors.append(f"{name} position {pos.to_tuple()} out of bounds")
-            elif not allow_wall and pos.to_tuple() in wall_positions:
+            elif pos.to_tuple() in wall_positions:
                 errors.append(f"{name} position {pos.to_tuple()} is a wall")
 
         # Check start and canonical maze goal positions.
@@ -572,7 +572,7 @@ class TaskSpecification:
 
         for door in self.mechanisms.doors:
             register_id(door.id, f"Door {door.id}")
-            check_position(door.position, f"Door {door.id}", allow_wall=True)
+            check_position(door.position, f"Door {door.id}")
             register_position(door.position, f"Door {door.id}")
 
         for switch in self.mechanisms.switches:
@@ -582,7 +582,7 @@ class TaskSpecification:
 
         for gate in self.mechanisms.gates:
             register_id(gate.id, f"Gate {gate.id}")
-            check_position(gate.position, f"Gate {gate.id}", allow_wall=True)
+            check_position(gate.position, f"Gate {gate.id}")
             register_position(gate.position, f"Gate {gate.id}")
 
         for block in self.mechanisms.blocks:
