@@ -43,18 +43,56 @@ def _post_chat_completions(
         "max_tokens": max_tokens,
         "temperature": 0.0 if temperature <= 0 else temperature,
     }
-    if enable_thinking is not None:
+
+    # Only attach chat_template_kwargs for non-OpenAI endpoints (e.g. local vLLM)
+    if enable_thinking is not None and "api.openai.com" not in base_url:
         body["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+
     if extra_body:
         body.update(extra_body)
 
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+
     raw = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(_chat_url(base_url), data=raw, headers=headers, method="POST")
     effective_timeout = timeout or 180.0
     t0 = time.perf_counter()
+
+    # Issue request with retry handling
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=effective_timeout) as resp:
+                res_bytes = resp.read()
+                latency_s = time.perf_counter() - t0
+                res_data = json.loads(res_bytes.decode("utf-8"))
+
+                # Extract response text
+                choice = res_data.get("choices", [{}])[0]
+                content = choice.get("message", {}).get("content", "") or ""
+
+                usage = normalize_token_usage(res_data.get("usage"))
+                if usage is None or int(usage.get("total_tokens", 0) or 0) <= 0:
+                    raise ValueError(
+                        "Qwen vLLM response missing positive token telemetry; "
+                        "usage must include a positive total_tokens value."
+                    )
+
+                stop_reason = (res_data.get("choices") or [{}])[0].get("finish_reason")
+                return Reply(
+                    text=content,
+                    usage=usage,
+                    thinking=None,
+                    stop_reason=stop_reason,
+                    token_truncated=detect_token_truncated(stop_reason, usage, max_tokens),
+                )
+        except Exception as e:
+            last_err = e
+            time.sleep(1.0 * (attempt + 1))
+
+    raise RuntimeError(f"API request failed after {max_attempts} attempts: {last_err}")
 
     def _do_request() -> dict[str, Any]:
         with urllib.request.urlopen(req, timeout=effective_timeout) as response:

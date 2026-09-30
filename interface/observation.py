@@ -55,11 +55,14 @@ def recent_history_steps(
 ) -> list[dict[str, Any]]:
     if context_window == "full":
         steps = history_steps(transcript)
+        if not steps:
+            return []
         selected: list[dict[str, Any]] = []
         used_tokens = 0
         for step in reversed(steps):
             step_tokens = _history_step_token_estimate(step, observation)
-            if used_tokens + step_tokens > max_history_tokens:
+            # Preserves at least the newest step before enforcing token limits
+            if selected and (used_tokens + step_tokens > max_history_tokens):
                 break
             selected.append(step)
             used_tokens += step_tokens

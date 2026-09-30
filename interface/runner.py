@@ -72,6 +72,18 @@ def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
         pass
 
 
+def _require_positive_token_telemetry(reply: object) -> None:
+    """Fail fast when a model response reaches the runner without usable usage."""
+    if not hasattr(reply, "usage"):
+        raise ValueError("agent response missing usage telemetry")
+    usage = getattr(reply, "usage")
+    if not isinstance(usage, dict):
+        raise ValueError("agent response missing usage telemetry")
+    total_tokens = int(usage.get("total_tokens", 0) or 0)
+    if total_tokens <= 0:
+        raise ValueError("agent response missing positive token telemetry")
+
+
 def _replace_current_question(prompt_text: str, question: str) -> str:
     standard_question = user_templates.NEXT_ACTION_QUESTION
     before, match, after = prompt_text.rpartition(standard_question)
@@ -197,6 +209,7 @@ class ExperimentRunner:
                         usage=getattr(agent, "last_usage", None),
                         thinking=getattr(agent, "last_thinking", None),
                     )
+                _require_positive_token_telemetry(reply)
                 stepper.apply_reply(reply)
             except Exception as exc:  # noqa: BLE001 — never lose paid work
                 # Episode artifacts are only written after this method returns
@@ -267,8 +280,9 @@ class ExperimentRunner:
             remaining = max(0, max_steps - steps_used)
             step_budget_line = (
                 f"Step {steps_used + 1} of {max_steps} ({remaining} remaining)."
-        )
-            prompt_text = f"{step_budget_line}\n{prompt_text}"
+            )
+            # Appended after prompt_text to preserve leading image and observation blocks
+            prompt_text = f"{prompt_text}\n\n{step_budget_line}"
 
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:

@@ -258,7 +258,7 @@ def test_pending_validation10_condition_run_configs_load_and_resolve_all_tasks()
     expected_variant_counts = {
         "Prompt": 3,
         "Observation format": 3,
-        "Context window": 4,
+        "Context window": 5,
         "Querying strategy": 3,
     }
 
