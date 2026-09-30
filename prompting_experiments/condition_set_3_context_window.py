@@ -11,6 +11,7 @@ CONDITION_SET = ConditionSet(
         "Standard 0 history: current observation only",
         "Last 3 executed steps",
         "Current observation + text summary of prior actions",
+        "All frames since episode start, token-budgeted",
     ),
     decision="Compare current-state-only prompting against recent history.",
     variants={
@@ -36,6 +37,14 @@ CONDITION_SET = ConditionSet(
             name="text_summary_and_last3",
             description="One-sentence summary of all prior mechanism events/path waypoints, in one stateless message, and last three executed steps rendered as 3 images-each with the action taken in that step.",
             config_overrides={"context_window": "text_summary_and_last3", "chat_history": "stateless"},
+            preview_steps=10,
+            preview_rollout_seed=5,
+            preview_move_only=True,
+        ),
+        "full": Variant(
+            name="full",
+            description="All frames since episode start, token-budgeted (drops oldest first, current frame always kept).",
+            config_overrides={"context_window": "full", "chat_history": "stateless"},
             preview_steps=10,
             preview_rollout_seed=5,
             preview_move_only=True,

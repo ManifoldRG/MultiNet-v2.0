@@ -33,6 +33,12 @@ class FirstQueryUsageReplayAgent(UsageReplayAgent):
                 "output_tokens": 2,
                 "total_tokens": 10,
             }
+        else:
+            self.last_usage = {
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "total_tokens": 2,
+            }
         return f"FINAL_OUTPUT: {next(self._actions)}"
 
 
@@ -98,4 +104,4 @@ def test_runner_clears_stale_usage_between_queries():
     query_records = [item for item in result["transcript"] if item.get("kind") == "query"]
 
     assert query_records[0]["usage"]["total_tokens"] == 10
-    assert "usage" not in query_records[1]
+    assert query_records[1]["usage"]["total_tokens"] == 2

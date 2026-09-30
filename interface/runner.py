@@ -72,6 +72,18 @@ def _reset_agent_usage(agent: Callable[[List[dict]], str]) -> None:
         pass
 
 
+def _require_positive_token_telemetry(reply: object) -> None:
+    """Fail fast when a model response reaches the runner without usable usage."""
+    if not hasattr(reply, "usage"):
+        raise ValueError("agent response missing usage telemetry")
+    usage = getattr(reply, "usage")
+    if not isinstance(usage, dict):
+        raise ValueError("agent response missing usage telemetry")
+    total_tokens = int(usage.get("total_tokens", 0) or 0)
+    if total_tokens <= 0:
+        raise ValueError("agent response missing positive token telemetry")
+
+
 def _replace_current_question(prompt_text: str, question: str) -> str:
     standard_question = user_templates.NEXT_ACTION_QUESTION
     before, match, after = prompt_text.rpartition(standard_question)
@@ -197,6 +209,7 @@ class ExperimentRunner:
                         usage=getattr(agent, "last_usage", None),
                         thinking=getattr(agent, "last_thinking", None),
                     )
+                _require_positive_token_telemetry(reply)
                 stepper.apply_reply(reply)
             except Exception as exc:  # noqa: BLE001 — never lose paid work
                 # Episode artifacts are only written after this method returns
@@ -247,10 +260,30 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript, self.task_spec),
+            history_text(
+                obs,
+                ctx,
+                transcript,
+                self.task_spec,
+                self.config.max_history_tokens,
+            ),
             state,
             observation=obs,
         )
+        
+        # Step budget awareness: tell the model how many steps it has taken and
+        # how many remain. max_steps is the 3x BFS optimal cap set by the pipeline
+        # before the run; see pipeline/run_stage3.py.
+        steps_used = getattr(state, "step_count", 0)
+        max_steps = getattr(self.task_spec, "max_steps", None)
+        if max_steps is not None:
+            remaining = max(0, max_steps - steps_used)
+            step_budget_line = (
+                f"Step {steps_used + 1} of {max_steps} ({remaining} remaining)."
+            )
+            # Appended after prompt_text to preserve leading image and observation blocks
+            prompt_text = f"{prompt_text}\n\n{step_budget_line}"
+
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)
@@ -268,7 +301,9 @@ class ExperimentRunner:
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
-        hist_blocks = history_content_blocks(obs, ctx, transcript)
+        hist_blocks = history_content_blocks(
+            obs, ctx, transcript, self.config.max_history_tokens
+        )
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []
