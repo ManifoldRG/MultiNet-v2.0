@@ -71,7 +71,7 @@ def _post_chat_completions(
 
                 # Extract response text
                 choice = res_data.get("choices", [{}])[0]
-                content = choice.get("message", {}).get("content", "") or ""
+                content = str(choice.get("message", {}).get("content") or "").strip()
 
                 usage = normalize_token_usage(res_data.get("usage"))
                 if usage is None or int(usage.get("total_tokens", 0) or 0) <= 0:
