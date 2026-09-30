@@ -96,7 +96,7 @@ QUERY 2/37  before=(1, 2) facing=EAST  carrying='-'  model will emit FINAL_OUTPU
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 1 steps, oldest first):
-Position after: (1, 2), facing EAST
+Position before: (1, 1), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -120,10 +120,10 @@ QUERY 3/37  before=(1, 2) facing=EAST  carrying='-'  model will emit FINAL_OUTPU
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 2 steps, oldest first):
-Position after: (1, 2), facing EAST
+Position before: (1, 1), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (1, 2), facing EAST
+Position before: (1, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
 
@@ -147,13 +147,13 @@ QUERY 4/37  before=(1, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (1, 2), facing EAST
+Position before: (1, 1), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (1, 2), facing EAST
+Position before: (1, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (1, 2), facing SOUTH
+Position before: (1, 2), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -177,13 +177,13 @@ QUERY 5/37  before=(1, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (1, 2), facing EAST
+Position before: (1, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (1, 2), facing SOUTH
+Position before: (1, 2), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (1, 2), facing SOUTH
+Position before: (1, 2), facing SOUTH
 FINAL_OUTPUT: PICKUP
 Feedback: NOTHING
 
@@ -207,13 +207,13 @@ QUERY 6/37  before=(2, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (1, 2), facing SOUTH
+Position before: (1, 2), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (1, 2), facing SOUTH
+Position before: (1, 2), facing SOUTH
 FINAL_OUTPUT: PICKUP
 Feedback: NOTHING
-Position after: (2, 2), facing SOUTH
+Position before: (1, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -237,13 +237,13 @@ QUERY 7/37  before=(3, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (1, 2), facing SOUTH
+Position before: (1, 2), facing SOUTH
 FINAL_OUTPUT: PICKUP
 Feedback: NOTHING
-Position after: (2, 2), facing SOUTH
+Position before: (1, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing SOUTH
+Position before: (2, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -267,13 +267,13 @@ QUERY 8/37  before=(3, 2) facing=EAST  carrying='-'  model will emit FINAL_OUTPU
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (2, 2), facing SOUTH
+Position before: (1, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing SOUTH
+Position before: (2, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
 
@@ -297,13 +297,13 @@ QUERY 9/37  before=(3, 2) facing=EAST  carrying='-'  model will emit FINAL_OUTPU
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing SOUTH
+Position before: (2, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
 
@@ -327,13 +327,13 @@ QUERY 10/37  before=(3, 2) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: NOTHING
 
@@ -357,13 +357,13 @@ QUERY 11/37  before=(3, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: NOTHING
-Position after: (3, 2), facing SOUTH
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -387,13 +387,13 @@ QUERY 12/37  before=(4, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: NOTHING
-Position after: (3, 2), facing SOUTH
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (4, 2), facing SOUTH
+Position before: (3, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -417,13 +417,13 @@ QUERY 13/37  before=(5, 2) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing SOUTH
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (4, 2), facing SOUTH
+Position before: (3, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 2), facing SOUTH
+Position before: (4, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -447,13 +447,13 @@ QUERY 14/37  before=(5, 2) facing=WEST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 2), facing SOUTH
+Position before: (3, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 2), facing SOUTH
+Position before: (4, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 2), facing WEST
+Position before: (5, 2), facing SOUTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -477,13 +477,13 @@ QUERY 15/37  before=(5, 1) facing=WEST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 2), facing SOUTH
+Position before: (4, 2), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 2), facing WEST
+Position before: (5, 2), facing SOUTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (5, 1), facing WEST
+Position before: (5, 2), facing WEST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -507,13 +507,13 @@ QUERY 16/37  before=(5, 1) facing=WEST  carrying='blue'  model will emit FINAL_O
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 2), facing WEST
+Position before: (5, 2), facing SOUTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (5, 1), facing WEST
+Position before: (5, 2), facing WEST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 1), facing WEST
+Position before: (5, 1), facing WEST
 FINAL_OUTPUT: PICKUP
 Feedback: PICKUP
 
@@ -536,13 +536,13 @@ QUERY 17/37  before=(5, 1) facing=SOUTH  carrying='blue'  model will emit FINAL_
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 1), facing WEST
+Position before: (5, 2), facing WEST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 1), facing WEST
+Position before: (5, 1), facing WEST
 FINAL_OUTPUT: PICKUP
 Feedback: PICKUP
-Position after: (5, 1), facing SOUTH
+Position before: (5, 1), facing WEST
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
 
@@ -565,13 +565,13 @@ QUERY 18/37  before=(5, 1) facing=EAST  carrying='blue'  model will emit FINAL_O
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 1), facing WEST
+Position before: (5, 1), facing WEST
 FINAL_OUTPUT: PICKUP
 Feedback: PICKUP
-Position after: (5, 1), facing SOUTH
+Position before: (5, 1), facing WEST
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (5, 1), facing EAST
+Position before: (5, 1), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
 
@@ -594,13 +594,13 @@ QUERY 19/37  before=(5, 2) facing=EAST  carrying='blue'  model will emit FINAL_O
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 1), facing SOUTH
+Position before: (5, 1), facing WEST
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (5, 1), facing EAST
+Position before: (5, 1), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (5, 2), facing EAST
+Position before: (5, 1), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -623,13 +623,13 @@ QUERY 20/37  before=(5, 2) facing=NORTH  carrying='blue'  model will emit FINAL_
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 1), facing EAST
+Position before: (5, 1), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (5, 2), facing EAST
+Position before: (5, 1), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 2), facing NORTH
+Position before: (5, 2), facing EAST
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
 
@@ -652,13 +652,13 @@ QUERY 21/37  before=(4, 2) facing=NORTH  carrying='blue'  model will emit FINAL_
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 2), facing EAST
+Position before: (5, 1), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 2), facing NORTH
+Position before: (5, 2), facing EAST
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (4, 2), facing NORTH
+Position before: (5, 2), facing NORTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -681,13 +681,13 @@ QUERY 22/37  before=(3, 2) facing=NORTH  carrying='blue'  model will emit FINAL_
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 2), facing NORTH
+Position before: (5, 2), facing EAST
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (4, 2), facing NORTH
+Position before: (5, 2), facing NORTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing NORTH
+Position before: (4, 2), facing NORTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -710,13 +710,13 @@ QUERY 23/37  before=(3, 2) facing=EAST  carrying='blue'  model will emit FINAL_O
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 2), facing NORTH
+Position before: (5, 2), facing NORTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing NORTH
+Position before: (4, 2), facing NORTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing NORTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -739,13 +739,13 @@ QUERY 24/37  before=(3, 2) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing NORTH
+Position before: (4, 2), facing NORTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing NORTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: OPENED
 
@@ -769,13 +769,13 @@ QUERY 25/37  before=(3, 3) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing NORTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: OPENED
-Position after: (3, 3), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -799,13 +799,13 @@ QUERY 26/37  before=(3, 4) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 2), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: OPENED
-Position after: (3, 3), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 4), facing EAST
+Position before: (3, 3), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -829,13 +829,13 @@ QUERY 27/37  before=(3, 5) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 3), facing EAST
+Position before: (3, 2), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 4), facing EAST
+Position before: (3, 3), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 5), facing EAST
+Position before: (3, 4), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -859,13 +859,13 @@ QUERY 28/37  before=(3, 5) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 4), facing EAST
+Position before: (3, 3), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 5), facing EAST
+Position before: (3, 4), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 5), facing EAST
+Position before: (3, 5), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
 
@@ -889,13 +889,13 @@ QUERY 29/37  before=(3, 5) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 5), facing EAST
+Position before: (3, 4), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (3, 5), facing EAST
+Position before: (3, 5), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (3, 5), facing SOUTH
+Position before: (3, 5), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -919,13 +919,13 @@ QUERY 30/37  before=(4, 5) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 5), facing EAST
+Position before: (3, 5), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (3, 5), facing SOUTH
+Position before: (3, 5), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (4, 5), facing SOUTH
+Position before: (3, 5), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -949,13 +949,13 @@ QUERY 31/37  before=(4, 5) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (3, 5), facing SOUTH
+Position before: (3, 5), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (4, 5), facing SOUTH
+Position before: (3, 5), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
 
@@ -979,13 +979,13 @@ QUERY 32/37  before=(4, 5) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 5), facing SOUTH
+Position before: (3, 5), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
 
@@ -1009,13 +1009,13 @@ QUERY 33/37  before=(4, 5) facing=EAST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing SOUTH
 FINAL_OUTPUT: TURN_LEFT
 Feedback: TURNED
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: NOTHING
 
@@ -1039,13 +1039,13 @@ QUERY 34/37  before=(4, 5) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: BLOCKED
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: NOTHING
-Position after: (4, 5), facing SOUTH
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -1069,13 +1069,13 @@ QUERY 35/37  before=(5, 5) facing=SOUTH  carrying='-'  model will emit FINAL_OUT
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 5), facing EAST
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: TOGGLE
 Feedback: NOTHING
-Position after: (4, 5), facing SOUTH
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (5, 5), facing SOUTH
+Position before: (4, 5), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -1099,13 +1099,13 @@ QUERY 36/37  before=(5, 5) facing=WEST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (4, 5), facing SOUTH
+Position before: (4, 5), facing EAST
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (5, 5), facing SOUTH
+Position before: (4, 5), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 5), facing WEST
+Position before: (5, 5), facing SOUTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
 
@@ -1129,13 +1129,13 @@ QUERY 37/37  before=(5, 4) facing=WEST  carrying='-'  model will emit FINAL_OUTP
 ----------------------------------------------------------------------------------------
 [user]
 Recent history (last 3 steps, oldest first):
-Position after: (5, 5), facing SOUTH
+Position before: (4, 5), facing SOUTH
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
-Position after: (5, 5), facing WEST
+Position before: (5, 5), facing SOUTH
 FINAL_OUTPUT: TURN_RIGHT
 Feedback: TURNED
-Position after: (5, 4), facing WEST
+Position before: (5, 5), facing WEST
 FINAL_OUTPUT: MOVE_FORWARD
 Feedback: MOVED
 
@@ -1180,7 +1180,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1207,7 +1207,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1241,7 +1241,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1267,7 +1267,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1301,7 +1301,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1326,7 +1326,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1352,7 +1352,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1386,7 +1386,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1411,7 +1411,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1436,7 +1436,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1462,7 +1462,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1496,7 +1496,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1521,7 +1521,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1546,7 +1546,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1572,7 +1572,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1606,7 +1606,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1631,7 +1631,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1656,7 +1656,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1682,7 +1682,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1716,7 +1716,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1741,7 +1741,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1766,7 +1766,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1792,7 +1792,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1826,7 +1826,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1851,7 +1851,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1876,7 +1876,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1902,7 +1902,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1936,7 +1936,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1961,7 +1961,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -1986,7 +1986,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2012,7 +2012,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2046,7 +2046,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2071,7 +2071,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2096,7 +2096,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2122,7 +2122,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2156,7 +2156,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2181,7 +2181,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2206,7 +2206,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2232,7 +2232,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2266,7 +2266,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2291,7 +2291,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2316,7 +2316,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2341,7 +2341,7 @@ kB .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   v = you, facing SOUTH
   g1 = closed gate
   kB = blue key
@@ -2376,7 +2376,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2401,7 +2401,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2425,7 +2425,7 @@ kB .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   v = you, facing SOUTH
   g1 = closed gate
   kB = blue key
@@ -2451,7 +2451,7 @@ kB v  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   v = you, facing SOUTH
@@ -2486,7 +2486,7 @@ Legend:
   # = wall
   . = open floor
   v = you, facing SOUTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   s1 = off switch
@@ -2510,7 +2510,7 @@ kB .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   v = you, facing SOUTH
   g1 = closed gate
   kB = blue key
@@ -2535,7 +2535,7 @@ kB v  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   v = you, facing SOUTH
@@ -2561,7 +2561,7 @@ kB <  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   < = you, facing WEST
@@ -2595,7 +2595,7 @@ kB .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   v = you, facing SOUTH
   g1 = closed gate
   kB = blue key
@@ -2620,7 +2620,7 @@ kB v  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   v = you, facing SOUTH
@@ -2645,7 +2645,7 @@ kB <  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   < = you, facing WEST
@@ -2671,7 +2671,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2705,7 +2705,7 @@ kB v  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   v = you, facing SOUTH
@@ -2730,7 +2730,7 @@ kB <  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   < = you, facing WEST
@@ -2755,7 +2755,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2781,7 +2781,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2814,7 +2814,7 @@ kB <  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   kB = blue key
   < = you, facing WEST
@@ -2839,7 +2839,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2864,7 +2864,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2889,7 +2889,7 @@ v  .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   v = you, facing SOUTH
   s1 = off switch
@@ -2922,7 +2922,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2947,7 +2947,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -2971,7 +2971,7 @@ v  .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   v = you, facing SOUTH
   s1 = off switch
@@ -2996,7 +2996,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3029,7 +3029,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   < = you, facing WEST
   s1 = off switch
@@ -3053,7 +3053,7 @@ v  .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   v = you, facing SOUTH
   s1 = off switch
@@ -3077,7 +3077,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3102,7 +3102,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3135,7 +3135,7 @@ v  .  #  s1 .  #  .  .
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   v = you, facing SOUTH
   s1 = off switch
@@ -3159,7 +3159,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3183,7 +3183,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3208,7 +3208,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   ^ = you, facing NORTH
   s1 = off switch
@@ -3241,7 +3241,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3265,7 +3265,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3289,7 +3289,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   ^ = you, facing NORTH
   s1 = off switch
@@ -3314,7 +3314,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   ^ = you, facing NORTH
   g1 = closed gate
   s1 = off switch
@@ -3347,7 +3347,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   > = you, facing EAST
   s1 = off switch
@@ -3371,7 +3371,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   ^ = you, facing NORTH
   s1 = off switch
@@ -3395,7 +3395,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   ^ = you, facing NORTH
   g1 = closed gate
   s1 = off switch
@@ -3421,7 +3421,7 @@ Legend:
   # = wall
   . = open floor
   ^ = you, facing NORTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3453,7 +3453,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   ^ = you, facing NORTH
   s1 = off switch
@@ -3477,7 +3477,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   ^ = you, facing NORTH
   g1 = closed gate
   s1 = off switch
@@ -3502,7 +3502,7 @@ Legend:
   # = wall
   . = open floor
   ^ = you, facing NORTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3527,7 +3527,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3559,7 +3559,7 @@ Map. Every cell is a two-character token and tokens are separated by a space, so
 Legend:
   # = wall
   . = open floor
-  dB = locked door
+  dB = locked blue door
   ^ = you, facing NORTH
   g1 = closed gate
   s1 = off switch
@@ -3584,7 +3584,7 @@ Legend:
   # = wall
   . = open floor
   ^ = you, facing NORTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3608,7 +3608,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3667,7 +3667,7 @@ Legend:
   # = wall
   . = open floor
   ^ = you, facing NORTH
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3691,7 +3691,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal
@@ -3775,7 +3775,7 @@ Legend:
   # = wall
   . = open floor
   > = you, facing EAST
-  dB = locked door
+  dB = locked blue door
   g1 = closed gate
   s1 = off switch
   G = the goal

@@ -169,11 +169,11 @@ def _history_step_text(
                 feedback=feedback,
             )
         return f"FINAL_OUTPUT: {action}\nFeedback: {feedback}"
-    row, col = rec["position_after_row_col"]
+    row, col = rec["position_before_row_col"]
     return observation_templates.RECENT_HISTORY_STEP.format(
         row=int(row),
         col=int(col),
-        facing=rec["facing_after"],
+        facing=rec["facing_before"],
         action=action,
         feedback=feedback,
     )

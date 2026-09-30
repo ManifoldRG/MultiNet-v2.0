@@ -305,6 +305,8 @@ def test_text_last3_prompt_includes_recent_history_text():
         {
             "kind": "step",
             "event_type": "VALID",
+            "position_before_row_col": (1, 2),
+            "facing_before": "EAST",
             "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
@@ -319,7 +321,7 @@ def test_text_last3_prompt_includes_recent_history_text():
     )
 
     assert "Recent history (last 1 steps, oldest first):" in prompt_text
-    assert "Position after: (1, 2), facing EAST" in prompt_text
+    assert "Position before: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
     assert "Last feedback:" not in prompt_text
@@ -333,6 +335,8 @@ def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
         {
             "kind": "step",
             "event_type": "TURNED",
+            "position_before_row_col": (1, 2),
+            "facing_before": "WEST",
             "position_after_row_col": (1, 2),
             "facing_after": "WEST",
             "action": "TURN_RIGHT",
@@ -355,6 +359,8 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
         {
             "kind": "step",
             "event_type": "MOVED",
+            "position_before_row_col": (1, 2),
+            "facing_before": "EAST",
             "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
@@ -368,7 +374,7 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
     assert "Activity summary:" in prompt_text
     assert "first you passed (1, 2)" in prompt_text
     assert "Recent history (last 1 steps, oldest first):" in prompt_text
-    assert "Position after: (1, 2), facing EAST" in prompt_text
+    assert "Position before: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
     assert "Last feedback:" not in prompt_text
@@ -409,6 +415,8 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
         {
             "kind": "step",
             "event_type": "MOVED",
+            "position_before_row_col": (1, 2),
+            "facing_before": "EAST",
             "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",

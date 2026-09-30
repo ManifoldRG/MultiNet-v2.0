@@ -27,6 +27,8 @@ def test_last_n_history_includes_step_feedback():
     transcript = [{
         "kind": "step",
         "event_type": "MOVED",
+        "position_before_row_col": (1, 2),
+        "facing_before": "EAST",
         "position_after_row_col": (1, 2),
         "facing_after": "EAST",
         "action": "MOVE_FORWARD",
