@@ -155,7 +155,7 @@ def _history_step_text(
     action = _history_record_action(rec)
     feedback = rec["prompt_feedback"]
     if observation_text_format in ("ascii", "json") and task_spec is not None:
-        snap = rec.get("state_after")
+        snap = rec.get("state_before")
         if isinstance(snap, dict) and "agent_position" in snap:
             snapshot = render_user_observation_text(
                 task_spec,

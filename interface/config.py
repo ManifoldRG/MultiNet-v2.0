@@ -49,4 +49,10 @@ class ExperimentConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentConfig":
+        d = dict(d)
+        w = d.get("context_window")
+        if w == "last3":
+            d["context_window"] = "last_n"
+        elif w == "text_summary_and_last3":
+            d["context_window"] = "text_summary_and_last_n"
         return cls(**d)

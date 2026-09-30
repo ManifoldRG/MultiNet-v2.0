@@ -166,7 +166,7 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
         "doors": [
             {
                 "status": "open" if door.id in open_doors else door.initial_state,
-                "requires_key": door.requires_key,
+                "color": door.requires_key,
                 "row": to_row_col(door.position)[0],
                 "col": to_row_col(door.position)[1],
             }
@@ -199,7 +199,7 @@ def _ascii_grid(
     task_spec: TaskSpecification,
     state: GridState | None,
     include_facing: bool,
-) -> tuple[list[str], list[tuple[str, str]]]:
+) -> tuple[list[str], list[tuple[str, str]], tuple[str, str] | None]:
     rows, cols = maze_rows_cols(task_spec)
     walls = wall_cells(task_spec)
     gates, switches = compact_ids(task_spec)
@@ -235,7 +235,7 @@ def _ascii_grid(
             place(row, col, "d", f"{door.initial_state} door")
         else:
             place(row, col, f"d{door.requires_key[0].upper()}",
-                  f"{door.initial_state} door, needs the {door.requires_key} key")
+                  f"{door.initial_state} door")
 
     for gate in task_spec.mechanisms.gates:
         row, col = to_row_col(gate.position)
@@ -253,7 +253,7 @@ def _ascii_grid(
             row,
             col,
             switches[switch.id],
-            "open switch" if on else "closed switch",
+            "on switch" if on else "off switch",
         )
 
     agent_token = _FACING[facing] if include_facing else "A"
@@ -286,13 +286,7 @@ def _ascii_grid(
             if entry and entry[0] not in seen:
                 seen.add(entry[0])
                 legend.append(entry)
-    if under:
-        token, desc = under
-        standing = f"{desc} (you are standing on it)"
-        legend = [(t, standing if t == token else d) for t, d in legend]
-        if token not in seen:
-            legend.append((token, standing))
-    return grid, legend
+    return grid, legend, under
 
 
 def _spent_key_colors(task_spec: TaskSpecification, state: GridState | None) -> list[str]:
@@ -309,11 +303,14 @@ def _ascii_status(
     state: GridState | None,
     remaining: int | None = None,
     stall_remaining: int | None = None,
+    standing: tuple[str, str] | None = None,
 ) -> list[str]:
     _, switches = compact_ids(task_spec)
     active = state.active_switches if state else set()
     carrying = inventory_list(state) if state else []
     lines = ["Status:", f"  Carrying: {', '.join(f'{c} key' for c in carrying) or 'nothing'}"]
+    if standing:
+        lines.append(f"  Standing on: {standing[1]}")
     if remaining is not None:
         lines.append(f"  Moves remaining: {remaining}")
     if stall_remaining is not None:
@@ -331,12 +328,14 @@ def _ascii_status(
 
 
 def _ascii_block(task_spec, state, include_facing: bool, remaining=None, stall_remaining=None) -> str:
-    grid, legend = _ascii_grid(task_spec, state, include_facing)
+    grid, legend, under = _ascii_grid(task_spec, state, include_facing)
     return "\n".join([
         _ASCII_MAP_HEADER, "", *grid, "",
         "Legend:",
         *(f"  {token} = {desc}" for token, desc in legend),
-        "", *_ascii_status(task_spec, state, remaining, stall_remaining),
+        "", *_ascii_status(
+            task_spec, state, remaining, stall_remaining, standing=under,
+        ),
     ])
 
 

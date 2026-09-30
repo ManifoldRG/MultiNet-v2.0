@@ -250,7 +250,6 @@ class ExperimentRunner:
         with_context_history: bool = True,
         stall_remaining: int | None = None,
     ) -> dict:
-        del last_feedback
         obs = self.config.observation
         # "current" disables the in-prompt history sections; multiturn chat
         # passes with_context_history=False because its turns already carry
@@ -283,6 +282,13 @@ class ExperimentRunner:
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)
+        if last_feedback.startswith("Could not parse"):
+            question = prompt_question or user_templates.NEXT_ACTION_QUESTION
+            before, match, after = prompt_text.rpartition(question)
+            prompt_text = (
+                f"{before}{last_feedback}\n\n{match}{after}"
+                if match else f"{prompt_text}\n\n{last_feedback}"
+            )
         prompt_text = _append_after_current_question(
             prompt_text,
             self.querying.final_output_instruction(),

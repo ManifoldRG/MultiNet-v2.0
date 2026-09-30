@@ -126,7 +126,7 @@ def test_ascii_initial_and_current(spec_state, mid):
     assert grid[2][3] == "dB" and grid[3][6] == "dR"
     assert grid[7][7] == "s1" and grid[4][9] == "g1"
     assert legend["kB"] == "blue key"
-    assert legend["s1"] == "closed switch"
+    assert legend["s1"] == "off switch"
     assert legend["g1"] == "closed gate"
     assert "dO" not in legend and "gO" not in legend
     assert _status(text) == {
@@ -147,7 +147,7 @@ def test_ascii_initial_and_current(spec_state, mid):
     assert g[2][3] == "dO" and g[4][9] == "g1" and g[3][6] == "dR"
     assert g[3][4] == "v" and g[4][4] == "." and g[7][1] == "kB"
     assert lg["dO"] == "unlocked door"
-    assert lg["s1"] == "open switch"
+    assert lg["s1"] == "on switch"
     assert lg["g1"] == "open gate"
     assert _grid(_ascii(spec, state, include_facing=False))[3][4] == "A"
     assert _status(mid_text) == {
@@ -162,7 +162,8 @@ def test_ascii_initial_and_current(spec_state, mid):
     standing_text = _ascii(spec, standing)
     assert _grid(standing_text)[7][1] == ">"
     assert _legend(standing_text)[">"] == "you, facing EAST"
-    assert _legend(standing_text)["kB"] == "blue key (you are standing on it)"
+    assert "kB" not in _legend(standing_text)
+    assert _status(standing_text)["Standing on"] == "blue key"
 
 
 def test_json_payload(spec_state, mid):

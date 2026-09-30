@@ -116,7 +116,7 @@ class EpisodeStepper:
         self.step_index = 0
         self.current_query_index = 0
         self.action_queue_index = 0
-        self.end_reason = "max_steps"
+        self.end_reason = "in_progress"
         self.initial_state = state_snapshot(state)
 
         k = self.config.progress_stall_k
@@ -358,6 +358,7 @@ class EpisodeStepper:
                 self._finished = True
                 return None
 
+        self.end_reason = "max_steps"
         self._finished = True
         return None
 

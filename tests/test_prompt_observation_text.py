@@ -140,8 +140,7 @@ def test_text_modes_report_move_and_stall_budget():
     )
     assert f"Moves remaining: {remaining}." in text
     assert "Moves remaining until stall: 30." in text
-    assert "If you make no progress for that many steps, the episode ends." in text
-    assert "turning in place does not count" in text
+    assert "the episode will be terminated due to a stall" in text
     image_only = current_observation_text(
         "image_only", spec, state, include_description=True, stall_remaining=30
     )

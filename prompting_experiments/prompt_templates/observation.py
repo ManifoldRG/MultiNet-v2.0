@@ -39,10 +39,7 @@ GOAL_LINE = "The goal is at {goal}."
 WALLS_LINE = "The following cells are walls: {walls}."
 
 KEY_LINE = "There is a {color} key at ({row},{col})."
-DOOR_LINE = (
-    "There is a {status} {requires_key} door at ({row},{col})."
-    " It requires the {requires_key} key to open."
-)
+DOOR_LINE = "There is a {status} {requires_key} door at ({row},{col})."
 SWITCH_LINE = (
     "There is a {switch_type} switch ({switch_id}) at ({row},{col}) (currently {state})."
 )
@@ -57,9 +54,8 @@ CURRENT_INVENTORY_LINE = "Your inventory: {inventory}."
 MOVES_REMAINING_LINE = "Moves remaining: {n}."
 STALL_REMAINING_LINE = (
     "Moves remaining until stall: {n}. "
-    "If you make no progress for that many steps, the episode ends. "
-    "Progress is a new cell, pickup/drop, or a door/gate/switch/block change; "
-    "turning in place does not count."
+    "If you make no progress and there is no state change in the environment "
+    "for that many steps, the episode will be terminated due to a stall."
 )
 CURRENT_KEYS_USED_UP_LINE = "Keys used up: {keys}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates):"
