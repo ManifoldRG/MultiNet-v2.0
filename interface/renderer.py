@@ -229,13 +229,15 @@ def _ascii_grid(
 
     for door in task_spec.mechanisms.doors:
         row, col = to_row_col(door.position)
+        color = "grey" if door.requires_key.lower() in ("grey", "gray") else door.requires_key
         if door.id in open_doors:
-            place(row, col, "dO", "unlocked door")
-        elif door.requires_key.lower() in ("grey", "gray"):
+            token = "o" if color == "grey" else f"o{door.requires_key[0].upper()}"
+            place(row, col, token, f"unlocked {color} door")
+        elif color == "grey":
             place(row, col, "d", f"{door.initial_state} grey door")
         else:
             place(row, col, f"d{door.requires_key[0].upper()}",
-                  f"{door.initial_state} {door.requires_key} door")
+                  f"{door.initial_state} {color} door")
 
     for gate in task_spec.mechanisms.gates:
         row, col = to_row_col(gate.position)

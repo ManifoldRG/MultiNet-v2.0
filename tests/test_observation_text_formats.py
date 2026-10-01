@@ -144,9 +144,9 @@ def test_ascii_initial_and_current(spec_state, mid):
 
     mid_text = _ascii(spec, state)
     g, lg = _grid(mid_text), _legend(mid_text)
-    assert g[2][3] == "dO" and g[4][9] == "g1" and g[3][6] == "dR"
+    assert g[2][3] == "oB" and g[4][9] == "g1" and g[3][6] == "dR"
     assert g[3][4] == "v" and g[4][4] == "." and g[7][1] == "kB"
-    assert lg["dO"] == "unlocked door"
+    assert lg["oB"] == "unlocked blue door"
     assert lg["s1"] == "on switch"
     assert lg["g1"] == "open gate"
     assert _grid(_ascii(spec, state, include_facing=False))[3][4] == "A"
