@@ -98,7 +98,7 @@ def test_stateless_history_still_has_one_shot_example():
         observation="image_text",
         in_context_learning="one_shot",
         chat_history="stateless",
-        context_window="last3",
+        context_window="last_n",
     )
     for q in _queries(result):
         assert _user_turns_with_one_shot(q["agent_messages"]) == 1
