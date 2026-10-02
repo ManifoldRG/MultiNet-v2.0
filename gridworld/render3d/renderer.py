@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
+from .gl import default_mujoco_gl
 
-os.environ.setdefault("MUJOCO_GL", "osmesa")  # must precede `import mujoco`
+default_mujoco_gl()  # must precede `import mujoco`
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
