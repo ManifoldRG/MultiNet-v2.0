@@ -71,3 +71,16 @@ def test_compass_is_for_the_views_that_turn_with_the_agent():
     assert turns_with_agent("chase") and not turns_with_agent("top_down")
     # a demo tilt level overrides the preset: only level 0 (top-down) stays north-up
     assert not turns_with_agent("chase", tilt=0) and turns_with_agent("top_down", tilt=1)
+
+
+@pytest.mark.parametrize("resolution, dims", [(8, (14, 14)), (16, (14, 14)), (16, (13, 3)), (8, (8, 8))])
+def test_top_down_corner_box_too_small_for_a_compass_draws_none(resolution, dims):
+    """At absurdly small frames the corner wall cell + margin has no whole
+    pixel to spare: skip the compass rather than crash or cover the maze."""
+    from gridworld.render3d.cameras import cell_pixel_box, pose_for
+    from gridworld.render3d.hud import corner_compass_box
+
+    pose = pose_for("top_down", agent_cell=(1, 1), direction=0, maze_dims=dims, wall_height=0.4)
+    box = corner_compass_box(cell_pixel_box(pose, (dims[0] - 1, 0), resolution), resolution)
+    blank = np.zeros((resolution, resolution, 3), np.uint8)
+    assert not draw_compass(blank, 3, box=box).any()

@@ -71,6 +71,8 @@ def draw_compass(
     resolution = frame.shape[1]
     default = compass_box(resolution)
     top, left, bottom, right = box or default
+    if bottom - top < 1 or right - left < 1:
+        return frame.copy()  # no room left outside the maze (absurdly small frame)
     radius = (bottom - top) / 2
     cx, cy = left + radius, top + radius
     # Stroke width scales with the disc (1 px at the default box in a 256 px frame).
