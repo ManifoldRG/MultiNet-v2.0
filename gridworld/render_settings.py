@@ -8,8 +8,9 @@ byte-identical run hashes and every camera gets its own artifact directory.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from gridworld.render3d.cameras import PRESETS  # pure pose math; no mujoco import
 from gridworld.task_spec import TaskSpecification
@@ -70,3 +71,29 @@ class RenderSettings:
         if self.resolution != "grid":
             return int(self.resolution)
         return GRID_PIXELS_PER_CELL * max(spec.maze.dimensions)
+
+    def provenance(self, spec: TaskSpecification) -> Optional[dict[str, Any]]:
+        """What draws this task's 3D frames, for the episode cache key and
+        run_inputs.json: the settings, the resolved frame size, the render-layer
+        version and the mujoco version. None for 2D, so 2D run hashes stay
+        byte-identical."""
+        if self.backend == "minigrid":
+            return None
+        from gridworld.render3d import RENDER3D_VERSION
+
+        return {
+            **dataclasses.asdict(self),
+            "frame_pixels": self.frame_pixels(spec),
+            "render3d_version": RENDER3D_VERSION,
+            "mujoco_version": _mujoco_version(),
+        }
+
+
+def _mujoco_version() -> str:
+    """Read lazily (3D runs only), after the MUJOCO_GL default is in place."""
+    from gridworld.render3d.gl import default_mujoco_gl
+
+    default_mujoco_gl()  # must precede the first `import mujoco`
+    import mujoco
+
+    return mujoco.__version__
