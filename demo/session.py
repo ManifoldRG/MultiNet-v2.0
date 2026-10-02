@@ -286,8 +286,9 @@ class MiniGridPlaySession:
             task_index = 0
         return task_list, task_index
 
-    def _load_task(self, path: str) -> None:
+    def _load_task(self, path: str) -> bool:
         """Load a task JSON file, refresh directory browsing, and reset.
+        Returns whether the task was loaded.
 
         Session fields (``task_path``/``task_spec``/``task_list``/
         ``task_index``) are assigned only after ``backend.configure()``
@@ -300,7 +301,7 @@ class MiniGridPlaySession:
 
         if not resolved.exists():
             print(f"Error: task file not found: {resolved}")
-            return
+            return False
 
         raw_spec = TaskSpecification.from_json(str(resolved))
         manifest_row = self.manifest_row_by_path.get(resolved)
@@ -325,7 +326,7 @@ class MiniGridPlaySession:
             self.backend.configure(new_spec)
         except ValueError as exc:
             print(f"Error: backend cannot load {resolved}: {exc}")
-            return
+            return False
 
         self._checkpoint_trajectory()
         self.task_path = resolved
@@ -334,6 +335,7 @@ class MiniGridPlaySession:
         self.task_list = new_task_list
         self.task_index = new_task_index
         self._finish_reset()
+        return True
 
     @property
     def display_reward(self) -> float:
@@ -392,8 +394,13 @@ class MiniGridPlaySession:
         """Load the next (+1) or previous (-1) task in the current directory."""
         if not self.task_list:
             return
-        self.task_index = (self.task_index + delta) % len(self.task_list)
-        self._load_task(str(self.task_list[self.task_index]))
+        # The index is committed by a successful _load_task only, so it always
+        # names the loaded task; a task the backend rejects is stepped past
+        # (staying put if every other task is rejected).
+        count = len(self.task_list)
+        for hop in range(1, max(count, 2)):
+            if self._load_task(str(self.task_list[(self.task_index + delta * hop) % count])):
+                return
 
     # ------------------------------------------------------------------
     # Step execution
