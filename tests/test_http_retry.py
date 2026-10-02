@@ -82,6 +82,7 @@ def test_retries_timeouts():
 def test_is_retryable_classification():
     assert is_retryable_error(_http_error(429))
     assert is_retryable_error(_http_error(503))
+    assert is_retryable_error(_http_error(529))  # Anthropic overloaded
     assert not is_retryable_error(_http_error(400))
     assert not is_retryable_error(_http_error(401))
     assert is_retryable_error(TimeoutError())
