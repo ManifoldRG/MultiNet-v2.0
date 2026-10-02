@@ -40,7 +40,7 @@ from interface import action_space as action_space_mod
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
-from interface.feedback import format_step_feedback
+from interface.feedback import format_step_feedback, is_failed_step
 from interface.progress_watchdog import ProgressStallWatchdog
 from interface.runner import _user_message_has_image, _trim_rolling_chat
 from prompting_experiments.prompt_templates import feedback as feedback_templates
@@ -284,13 +284,15 @@ class EpisodeStepper:
                 action_int
             )
             self.state = state
+            # Teleport / death / ice, named by the world model (absent otherwise).
+            mechanic = info.get("mechanic") if isinstance(info, dict) else None
             step_detail, event_type = format_step_feedback(
                 action, prev_state, state, reward, terminated, self.task_spec,
-                level=self.config.feedback,
+                level=self.config.feedback, mechanic=mechanic,
             )
             self.last_feedback = step_detail
 
-            if event_type in {"BLOCKED", "WRONG_DONE", "INVALID"}:
+            if is_failed_step(action, prev_state, state, reward, terminated, self.task_spec):
                 self.consecutive_failures += 1
                 self.action_queue.clear()
                 self.primitive_buffer.clear()
@@ -324,6 +326,7 @@ class EpisodeStepper:
                     "_decision_frame_rgb": decision_frame_rgb,
                     "_post_step_rgb": self._runner.last_rgb,
                     **self.querying.step_metadata(),
+                    **({"mechanic": mechanic} if mechanic is not None else {}),
                 }
             )
             self.action_queue_index += 1

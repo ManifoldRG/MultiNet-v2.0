@@ -17,8 +17,90 @@ from interface.coords import (
     switch_at_cell,
     switches_controlling_gate,
     door_at_cell,
+    to_row_col,
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+
+# Event types that count toward ``consecutive_failures`` and clear the action queue.
+FAILURE_EVENT_TYPES = frozenset({"BLOCKED", "WRONG_DONE", "INVALID"})
+
+
+def is_failed_step(
+    action: str,
+    prev: GridState,
+    curr: GridState,
+    reward: float,
+    terminated: bool,
+    task_spec: TaskSpecification,
+) -> bool:
+    """Whether a step counts as a failure for the episode loop's control flow.
+
+    Judged on the mechanic-blind outcome on purpose: TELEPORTED / DIED / FROZEN
+    change what the model is told, never when the queue is cleared. So a
+    MOVE_FORWARD or DONE swallowed by ice still fails (it was BLOCKED /
+    WRONG_DONE), a swallowed turn, PICKUP or TOGGLE still does not (NOTHING),
+    and a death that resets you onto the cell you just left still fails like
+    the wall bump (BLOCKED) it looked like.
+    """
+    event_type, _ = infer_step_outcome(action, prev, curr, reward, terminated, task_spec)
+    return event_type in FAILURE_EVENT_TYPES
+
+
+def _xy_row_col(xy) -> tuple[int, int]:
+    # Mechanic positions are (x, y); a JSON round trip turns them into lists.
+    return to_row_col((int(xy[0]), int(xy[1])))
+
+
+def _mechanic_outcome(
+    action: str,
+    prev: GridState,
+    curr: GridState,
+    reward: float,
+    terminated: bool,
+    task_spec: TaskSpecification,
+    level: Literal["minimal", "standard", "causal"],
+    mechanic: dict,
+) -> tuple[str, str] | None:
+    """Re-label a step the world model tagged as teleport / death / ice."""
+    base_type, base_message = infer_step_outcome(
+        action, prev, curr, reward, terminated, task_spec, level=level
+    )
+    if base_type == "DONE":
+        # Reaching the goal outranks the tile that delivered you there.
+        return None
+    kind = mechanic.get("kind")
+    if kind == "teleported":
+        return "TELEPORTED", feedback_templates.TOOK_PORTAL.format(
+            color=mechanic["color"],
+            source=_xy_row_col(mechanic["from_xy"]),
+            dest=_xy_row_col(mechanic["to_xy"]),
+        )
+    if kind == "died":
+        return "DIED", feedback_templates.DIED_AND_RESET.format(
+            cell=_xy_row_col(mechanic["cell_xy"]),
+            start=_xy_row_col(mechanic["start_xy"]),
+            facing=agent_facing(curr),
+        )
+    if kind == "froze" and base_type == "MOVED":
+        steps = int(mechanic["steps"])
+        duration = (
+            feedback_templates.FREEZE_DURATION_ONE
+            if steps == 1
+            else feedback_templates.FREEZE_DURATION.format(n=steps)
+        )
+        return "MOVED", (
+            base_message + " " + feedback_templates.ICE_FROZE_YOU.format(duration=duration)
+        )
+    if kind == "frozen":
+        remaining = int(mechanic["remaining"])
+        if remaining <= 0:
+            thaw = feedback_templates.FROZEN_THAWED
+        elif remaining == 1:
+            thaw = feedback_templates.FROZEN_THAW_IN_ONE
+        else:
+            thaw = feedback_templates.FROZEN_THAW_IN.format(n=remaining)
+        return "FROZEN", feedback_templates.FROZEN_NO_EFFECT.format(thaw=thaw)
+    return None
 
 
 def infer_step_outcome(
@@ -29,7 +111,15 @@ def infer_step_outcome(
     terminated: bool,
     task_spec: TaskSpecification,
     level: Literal["minimal", "standard", "causal"] = "minimal",
+    mechanic: dict | None = None,
 ) -> tuple[str, str]:
+    if mechanic is not None:
+        relabelled = _mechanic_outcome(
+            action, prev, curr, reward, terminated, task_spec, level, mechanic
+        )
+        if relabelled is not None:
+            return relabelled
+
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
     curr_pos = agent_row_col(curr)
@@ -171,9 +261,10 @@ def format_step_feedback(
     terminated: bool,
     task_spec: TaskSpecification,
     level: Literal["minimal", "standard", "causal"] = "minimal",
+    mechanic: dict | None = None,
 ) -> tuple[str, str]:
     event_type, event_message = infer_step_outcome(
-        action, prev, curr, reward, terminated, task_spec, level=level
+        action, prev, curr, reward, terminated, task_spec, level=level, mechanic=mechanic
     )
     if level == "minimal":
         return event_type, event_type
@@ -199,6 +290,12 @@ def format_step_feedback(
         return feedback_templates.WRONG_DONE_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "INVALID":
         return feedback_templates.INVALID_FEEDBACK.format(action=action, message=event_message), event_type
+    if event_type == "TELEPORTED":
+        return feedback_templates.TELEPORTED_FEEDBACK.format(action=action, message=event_message), event_type
+    if event_type == "DIED":
+        return feedback_templates.DIED_FEEDBACK.format(action=action, message=event_message), event_type
+    if event_type == "FROZEN":
+        return feedback_templates.FROZEN_FEEDBACK.format(action=action, message=event_message), event_type
     return feedback_templates.DEFAULT_FEEDBACK.format(
         event_type=event_type,
         action=action,

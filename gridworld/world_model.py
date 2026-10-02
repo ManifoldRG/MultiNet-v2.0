@@ -373,7 +373,7 @@ def _forward_successor(
     if _blocked(ctx, state, front):
         return
 
-    next_pos = ctx.teleporters.get(front, front)
+    next_pos = _landing(ctx, front)
     if next_pos in ctx.kill_cells:
         yield Transition(
             action=int(MiniGridActions.MOVE_FORWARD),
@@ -418,15 +418,88 @@ def _settle(state: PlannerState) -> PlannerState:
     return replace(state, rotator_dirs=_spin(state.rotator_dirs))
 
 
-def _ride(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
+def _ride_target(ctx: TaskPlanningContext, state: PlannerState) -> tuple[int, int] | None:
+    """The cell a turntable ride from ``state`` enters, or None if the arrow is blocked."""
     dx, dy = DIRECTION_VECTORS[state.rotator_dirs[ctx.rotating_index[state.agent_pos]]]
     dest = (state.agent_pos[0] + dx, state.agent_pos[1] + dy)
     if _blocked(ctx, state, dest):
+        return None
+    return dest
+
+
+def _landing(ctx: TaskPlanningContext, entered: tuple[int, int]) -> tuple[int, int]:
+    """Where the agent ends up after entering ``entered`` (a portal pad sends it on)."""
+    return ctx.teleporters.get(entered, entered)
+
+
+def _ride(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
+    dest = _ride_target(ctx, state)
+    if dest is None:
         return _settle(state)
-    next_pos = ctx.teleporters.get(dest, dest)
+    next_pos = _landing(ctx, dest)
     if next_pos in ctx.kill_cells:
         return ctx.initial_state()
     return _settle(_moved(ctx, state, next_pos))
+
+
+def classify_mechanic(
+    ctx: TaskPlanningContext,
+    before: PlannerState,
+    action: int,
+    transition_label: str,
+    after: PlannerState,
+) -> dict | None:
+    """Name the tile mechanic a transition triggered, for feedback and summaries.
+
+    Returns one of, else None:
+
+    * ``{"kind": "teleported", "from_xy", "to_xy", "color"}`` -- entered a portal
+      pad (by MOVE_FORWARD or a turntable ride) and landed on its partner;
+    * ``{"kind": "died", "cell_xy", "start_xy", "start_dir"}`` -- entered a death
+      tile (``cell_xy`` is the tile actually entered, also via a portal or a
+      ride) and the whole maze reset;
+    * ``{"kind": "froze", "cell_xy", "steps"}`` -- the move onto an ice tile;
+    * ``{"kind": "frozen", "remaining"}`` -- an action swallowed while frozen.
+
+    Positions are (x, y). ``action`` is accepted for symmetry with
+    ``successors``; the label and the two states decide everything.
+    """
+    if transition_label == "freeze":
+        return {"kind": "frozen", "remaining": after.freeze_remaining}
+    if transition_label in ("move_forward", "kill_reset"):
+        entered = _front_pos(before)
+    elif transition_label == "rotate":
+        entered = _ride_target(ctx, before)
+        if entered is None:
+            return None
+    else:
+        return None
+
+    landed = _landing(ctx, entered)
+    if landed in ctx.kill_cells:
+        return {
+            "kind": "died",
+            "cell_xy": landed,
+            "start_xy": after.agent_pos,
+            "start_dir": after.agent_dir,
+        }
+    if landed != entered:
+        return {
+            "kind": "teleported",
+            "from_xy": entered,
+            "to_xy": landed,
+            "color": _teleporter_color(ctx, entered),
+        }
+    if landed in ctx.frozen_tiles and after.freeze_remaining > 0:
+        return {"kind": "froze", "cell_xy": landed, "steps": after.freeze_remaining}
+    return None
+
+
+def _teleporter_color(ctx: TaskPlanningContext, pad: tuple[int, int]) -> str:
+    for teleporter in ctx.spec.mechanisms.teleporters:
+        if pad in (teleporter.position_a.to_tuple(), teleporter.position_b.to_tuple()):
+            return teleporter.color
+    raise KeyError(f"no teleporter at {pad}")
 
 
 def _active_switches_after_move(

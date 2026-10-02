@@ -23,7 +23,7 @@ from minigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
-from .world_model import PlannerState, TaskPlanningContext, apply, successors
+from .world_model import PlannerState, TaskPlanningContext, apply, classify_mechanic, successors
 
 
 # Color mapping for MiniGrid
@@ -672,7 +672,8 @@ class CustomMiniGridEnv(MiniGridEnv):
         ctx = self._planning_context()
         before = self._read_planner_state(ctx)
         after = apply(ctx, before, action)
-        legal = any(t.action == action for t in successors(ctx, before))
+        transition = next((t for t in successors(ctx, before) if t.action == action), None)
+        legal = transition is not None
         self._write_planner_state(ctx, after)
 
         info: dict = {}
@@ -684,6 +685,12 @@ class CustomMiniGridEnv(MiniGridEnv):
                 int(self.actions.right),
             ):
                 info["invalid_action"] = True
+        if transition is not None:
+            # Teleport / death / ice, named by the rulebook so feedback and the
+            # activity summary never re-derive the rules. Absent otherwise.
+            mechanic = classify_mechanic(ctx, before, action, transition.label, after)
+            if mechanic is not None:
+                info["mechanic"] = mechanic
 
         self.step_count += 1
         truncated = self.step_count >= self.max_steps
