@@ -57,29 +57,46 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     return (0, 0)
 
 
+def _dispatch_steps(session, prev_state) -> list[dict]:
+    """Step records the last dispatch appended (oldest first).
+
+    One dispatch can run several primitives (a cardinal move is turns plus
+    MOVE_FORWARD); a dispatch after the episode ended runs none. Records are
+    matched on the env step counter, which every step advances.
+    """
+    if prev_state is None:
+        return []
+    steps: list[dict] = []
+    for rec in reversed(session.transcript):
+        if rec.get("kind") != "step":
+            break
+        before = rec.get("state_before") or {}
+        if before.get("step_count", -1) < prev_state.step_count:
+            break
+        steps.append(rec)
+    steps.reverse()
+    return steps
+
+
+def _xy(value) -> tuple[int, int]:
+    return int(value[0]), int(value[1])
+
+
 def portal_transition(
-    session, token: str, prev_state
+    session, prev_state
 ) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
-    """Return ``(kind, src, dest)`` for a kill reset or portal warp."""
-    if prev_state is None or session.task_spec is None:
-        return None
-    dx, dy = travel_delta(token, prev_state)
-    if (dx, dy) == (0, 0):
-        return None
-    px, py = prev_state.agent_position
-    front = (px + dx, py + dy)
-    mech = session.task_spec.mechanisms
-    warps: dict[tuple[int, int], tuple[int, int]] = {}
-    for spec in mech.teleporters:
-        a, b = spec.position_a.to_tuple(), spec.position_b.to_tuple()
-        warps[a] = b
-        if spec.bidirectional:
-            warps[b] = a
-    landed = warps.get(front, front)
-    if landed in {cell.to_tuple() for cell in mech.kill_cells}:
-        return ("kill", landed, session.task_spec.maze.start.to_tuple())
-    if landed != front:
-        return ("warp", front, landed)
+    """Return ``(kind, src, dest)`` for a kill reset or portal warp, else None.
+
+    Read from the world model's ``mechanic`` tag on this dispatch's step
+    records (``info["mechanic"]`` from the backend step), so turntable rides
+    and moves swallowed by ice animate what actually happened.
+    """
+    for rec in reversed(_dispatch_steps(session, prev_state)):
+        mechanic = rec.get("mechanic") or {}
+        if mechanic.get("kind") == "died":
+            return ("kill", _xy(mechanic["cell_xy"]), _xy(mechanic["start_xy"]))
+        if mechanic.get("kind") == "teleported":
+            return ("warp", _xy(mechanic["from_xy"]), _xy(mechanic["to_xy"]))
     return None
 
 
@@ -116,7 +133,7 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
     )
     event_type = last.get("event_type") if last else None
 
-    hit = portal_transition(session, token, prev_state)
+    hit = portal_transition(session, prev_state)
     if hit is not None:
         kind, src, dst = hit
         plan.append(

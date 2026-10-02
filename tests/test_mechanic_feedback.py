@@ -501,12 +501,12 @@ def test_demo_sounds_for_mechanic_events():
 
     from demo.sounds import sfx_for_dispatch
 
+    # The event_type fallback only: no prev_state and no mechanic tag, so the
+    # warp/kill clips (tests/test_demo_fx_mechanics.py) do not fire.
     def sfx(event_type):
         session = SimpleNamespace(
             episode_done=False,
             episode_success=False,
-            last_dispatched_token="TURN_LEFT",  # no travel: skips the portal FX path
-            task_spec=None,
             event_log=[],
             transcript=[{"kind": "step", "event_type": event_type}],
         )

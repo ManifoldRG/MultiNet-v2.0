@@ -233,7 +233,7 @@ def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
     if session.episode_done and session.episode_success:
         return "success"
 
-    hit = portal_transition(session, session.last_dispatched_token, prev_state)
+    hit = portal_transition(session, prev_state)
     if hit is not None:
         return hit[0]
 

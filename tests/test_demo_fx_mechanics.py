@@ -64,6 +64,69 @@ def _ride_session(tmp_path, **extra):
     )
 
 
+# --- today's mis-animations ------------------------------------------------------
+
+
+def test_ride_onto_a_portal_pad_warps_although_the_agent_faces_elsewhere(tmp_path):
+    session = _ride_session(tmp_path, teleporters=[{**PORTAL, "position_a": [2, 2]}])
+    _dispatch(session, "MOVE_FORWARD")
+    plan, sfx = _dispatch(session, "MOVE_FORWARD")
+
+    assert session.state.agent_position == (6, 3)
+    assert _portal_effects(plan) == [
+        {"kind": "warp", "cell": [2, 2], "dest": [6, 3], "durationMs": WARP_MS}
+    ]
+    assert sfx == "warp"
+
+
+def test_ride_into_a_death_tile_kills_although_the_agent_faces_elsewhere(tmp_path):
+    session = _ride_session(tmp_path, death_portals=[[2, 2]])
+    _dispatch(session, "MOVE_FORWARD")
+    plan, sfx = _dispatch(session, "MOVE_FORWARD")
+
+    assert session.state.agent_position == (1, 1)
+    assert _portal_effects(plan) == [
+        {"kind": "kill", "cell": [2, 2], "dest": [1, 1], "durationMs": KILL_MS}
+    ]
+    assert sfx == "kill"
+
+
+def test_no_warp_when_the_agent_faces_a_portal_but_the_ride_goes_elsewhere(tmp_path):
+    session = _ride_session(tmp_path, teleporters=[{**PORTAL, "position_a": [3, 1]}])
+    _dispatch(session, "MOVE_FORWARD")
+    plan, sfx = _dispatch(session, "MOVE_FORWARD")
+
+    assert session.state.agent_position == (2, 2)
+    assert _portal_effects(plan) == []
+    assert sfx == "step"
+
+
+def test_no_warp_or_kill_when_ice_swallows_the_move(tmp_path):
+    session = _session(
+        tmp_path,
+        {"frozen_tiles": [[3, 1]], "freeze_steps": 3, "teleporters": [PORTAL]},
+    )
+    for _ in range(2):
+        _dispatch(session, "MOVE_FORWARD")
+    assert session.state.agent_position == (3, 1)  # frozen, facing the pad
+    plan, sfx = _dispatch(session, "MOVE_FORWARD")
+
+    assert session.state.agent_position == (3, 1)
+    assert _portal_effects(plan) == []
+    assert sfx == "invalid"
+
+    session = _session(
+        tmp_path, {"frozen_tiles": [[3, 1]], "freeze_steps": 3, "death_portals": [[4, 1]]}
+    )
+    for _ in range(2):
+        _dispatch(session, "MOVE_FORWARD")
+    plan, sfx = _dispatch(session, "MOVE_FORWARD")
+
+    assert session.state.agent_position == (3, 1)
+    assert _portal_effects(plan) == []
+    assert sfx == "invalid"
+
+
 # --- direct moves animate exactly as before -----------------------------------------
 
 
