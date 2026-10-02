@@ -44,8 +44,10 @@ def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:
 
 
 def maze_rows_cols(task_spec: TaskSpecification) -> tuple[int, int]:
+    # ``dimensions`` counts the border wall both backends ring the grid with, so
+    # the playable interior is two smaller on each axis.
     width, height = task_spec.maze.dimensions
-    return height, width
+    return height - 2, width - 2
 
 
 def wall_cells(task_spec: TaskSpecification) -> set[tuple[int, int]]:
@@ -108,6 +110,22 @@ def switch_at_cell(
     return None
 
 
+def door_at_cell(
+    task_spec: TaskSpecification,
+    state: GridState,
+    row: int,
+    col: int,
+) -> dict[str, str | bool] | None:
+    for door in task_spec.mechanisms.doors:
+        if to_row_col(door.position) == (row, col):
+            return {
+                "id": door.id,
+                "open": door.id in state.open_doors,
+                "requires_key": door.requires_key,
+            }
+    return None
+
+
 def gate_at_cell(
     task_spec: TaskSpecification,
     state: GridState,
@@ -121,6 +139,12 @@ def gate_at_cell(
                 "open": gate.id in state.open_gates,
             }
     return None
+
+
+def compact_ids(task_spec: TaskSpecification) -> tuple[dict[str, str], dict[str, str]]:
+    gates = {g.id: f"g{i}" for i, g in enumerate(task_spec.mechanisms.gates, start=1)}
+    switches = {s.id: f"s{i}" for i, s in enumerate(task_spec.mechanisms.switches, start=1)}
+    return gates, switches
 
 
 def switches_controlling_gate(task_spec: TaskSpecification, gate_id: str) -> list[str]:

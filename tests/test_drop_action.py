@@ -307,6 +307,7 @@ class TestDropFeedback:
 
         assert event == "DROP"
         assert "red" in message.lower()
+        assert "(" not in message
 
     def test_drop_with_empty_hands_reports_nothing(self, backend):
         from interface.feedback import infer_step_outcome
@@ -342,7 +343,9 @@ class TestDropFeedback:
         b.env.step(MiniGridActions.DROP)
         curr = b.get_state()
 
-        event, message = infer_step_outcome("DROP", prev, curr, 0.0, False, b.task_spec)
+        event, message = infer_step_outcome(
+            "DROP", prev, curr, 0.0, False, b.task_spec, level="causal",
+        )
 
         assert event == "NOTHING"
         assert "empty cell" in message.lower()

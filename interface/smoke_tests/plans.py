@@ -55,6 +55,49 @@ def v04_single_key_trajectory() -> list[str]:
     ]
 
 
+def key_switch_001_dump_trajectory() -> list[str]:
+    """Successes and failures on ``gridworld/tasks/tier3/key_switch_001.json`` (start EAST)."""
+    return [
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "TURN_RIGHT",
+        "PICKUP",
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "TURN_LEFT",
+        "MOVE_FORWARD",
+        "TOGGLE",
+        "TURN_RIGHT",
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "TURN_RIGHT",
+        "MOVE_FORWARD",
+        "PICKUP",
+        "TURN_LEFT",
+        "TURN_LEFT",
+        "MOVE_FORWARD",
+        "TURN_LEFT",
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "TURN_RIGHT",
+        "TOGGLE",
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "MOVE_FORWARD",
+        "TURN_RIGHT",
+        "MOVE_FORWARD",
+        "TURN_LEFT",
+        "MOVE_FORWARD",
+        "TOGGLE",
+        "TURN_RIGHT",
+        "MOVE_FORWARD",
+        "TURN_RIGHT",
+        "MOVE_FORWARD",
+        "TOGGLE",
+    ]
+
+
 def _turn_to_face(cur: str, target: str) -> list[str]:
     ci = FACING_ORDER.index(cur)
     ti = FACING_ORDER.index(target)
