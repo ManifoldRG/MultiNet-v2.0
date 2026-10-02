@@ -226,15 +226,14 @@ def test_full_history_returns_all_steps_under_token_budget():
     assert "FINAL_OUTPUT: MOVE_3" in text
 
 
-def test_full_history_drops_oldest_steps_and_keeps_current_when_over_budget():
+def test_full_history_omits_newest_step_when_it_exceeds_budget():
     transcript = _full_history_transcript()
 
     selected = recent_history_steps(transcript, "full", max_history_tokens=1)
 
-    assert selected == [transcript[-1]]
+    assert selected == []
     text = history_text("text_only", "full", transcript, max_history_tokens=1)
-    assert "FINAL_OUTPUT: MOVE_0" not in text
-    assert "FINAL_OUTPUT: MOVE_3" in text
+    assert text == ""
 
 
 def test_non_observation_format_conditions_omit_current_description_from_prompt():
