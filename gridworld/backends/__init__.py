@@ -30,22 +30,33 @@ Usage:
 """
 
 from .base import AbstractGridBackend, GridState
-from .minigrid_backend import MiniGridBackend
-
-# MultiGridBackend is optional - requires multigrid module
-try:
-    from .multigrid_backend import MultiGridBackend
-    _MULTIGRID_AVAILABLE = True
-except ImportError:
-    MultiGridBackend = None
-    _MULTIGRID_AVAILABLE = False
 
 __all__ = [
     "AbstractGridBackend",
     "GridState",
     "MiniGridBackend",
     "MultiGridBackend",
+    "get_backend",
 ]
+
+
+def __getattr__(name: str):
+    # Concrete backends load lazily so importing gridworld.backends (or
+    # gridworld.backends.base) never imports minigrid: minigrid-free code
+    # paths (the 3D backend, interface/*) depend on that.
+    if name == "MiniGridBackend":
+        from .minigrid_backend import MiniGridBackend
+
+        globals()[name] = MiniGridBackend
+        return MiniGridBackend
+    if name == "MultiGridBackend":
+        try:
+            from .multigrid_backend import MultiGridBackend
+        except ImportError:
+            MultiGridBackend = None
+        globals()[name] = MultiGridBackend
+        return MultiGridBackend
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_backend(name: str, **kwargs) -> AbstractGridBackend:
@@ -53,7 +64,7 @@ def get_backend(name: str, **kwargs) -> AbstractGridBackend:
     Get a backend instance by name.
 
     Args:
-        name: Backend name ("minigrid" or "multigrid")
+        name: Backend name ("minigrid", "multigrid", or "mujoco3d")
         **kwargs: Arguments passed to backend constructor
 
     Returns:
@@ -63,13 +74,24 @@ def get_backend(name: str, **kwargs) -> AbstractGridBackend:
         ValueError: If backend name is unknown or unavailable
     """
     if name == "minigrid":
+        from .minigrid_backend import MiniGridBackend
+
         return MiniGridBackend(**kwargs)
-    elif name == "multigrid":
-        if not _MULTIGRID_AVAILABLE:
+    if name == "multigrid":
+        try:
+            from .multigrid_backend import MultiGridBackend
+        except ImportError as exc:
             raise ValueError(
                 "MultiGridBackend not available. "
                 "Ensure multigrid module is accessible."
-            )
+            ) from exc
         return MultiGridBackend(**kwargs)
-    else:
-        raise ValueError(f"Unknown backend: {name}")
+    if name == "mujoco3d":
+        from .mujoco3d_backend import Mujoco3DBackend
+
+        # The only place a default state source is named: 3D code never
+        # imports it, so swapping MiniGrid out needs no 3D changes.
+        state_name = kwargs.pop("state_backend", "minigrid")
+        state_kwargs = kwargs.pop("state_backend_kwargs", None) or {}
+        return Mujoco3DBackend(get_backend(state_name, **state_kwargs), **kwargs)
+    raise ValueError(f"Unknown backend: {name}")

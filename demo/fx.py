@@ -57,6 +57,20 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     return (0, 0)
 
 
+def bounce_offset(travel: tuple[int, int], heading: int, *, turns_with_agent: bool) -> tuple[int, int]:
+    """Wall-bounce offset (screen px): recoil opposite the travel direction as
+    drawn. North-up views draw world axes; views that turn with the agent draw
+    its ``heading`` at screen-up, so the travel is first expressed in view axes
+    (forward = screen-up, the agent's right = screen-right)."""
+    dx, dy = travel
+    if turns_with_agent:
+        hx, hy = _DIR_DELTA.get(int(heading), (0, -1))
+        forward = dx * hx + dy * hy
+        right = dx * -hy + dy * hx
+        dx, dy = right, -forward
+    return int(-dx * BOUNCE_PX), int(-dy * BOUNCE_PX)
+
+
 def portal_transition(
     session, token: str, prev_state
 ) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
@@ -130,15 +144,14 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
 
     travel = travel_delta(token, prev_state)
     if hit is None and event_type == "BLOCKED" and travel != (0, 0):
-        dx, dy = travel
-        plan.append(
-            {
-                "kind": "bounce",
-                "dx": int(-dx * BOUNCE_PX),
-                "dy": int(-dy * BOUNCE_PX),
-                "durationMs": BOUNCE_MS,
-            }
+        # The frame shows the heading after the step (a cardinal move turns first).
+        shown = session.state if session.state is not None else prev_state
+        dx, dy = bounce_offset(
+            travel,
+            shown.agent_direction,
+            turns_with_agent=bool(getattr(session.backend, "view_turns_with_agent", False)),
         )
+        plan.append({"kind": "bounce", "dx": dx, "dy": dy, "durationMs": BOUNCE_MS})
 
     mech = session.task_spec.mechanisms if session.task_spec is not None else None
     new_state = session.state
@@ -208,12 +221,16 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
             }
         )
 
+    if not session.backend.frame_is_grid_aligned:
+        # Per-cell effects slice the frame into equal tiles -- meaningless on a
+        # perspective (3D) frame. Keep only the camera bounce.
+        plan = [item for item in plan if item["kind"] == "bounce"]
     return plan
 
 
 def _grid_size(session) -> tuple[int, int]:
-    env = session.backend.env
-    return int(env.width), int(env.height)
+    width, height = session.task_spec.maze.dimensions
+    return int(width), int(height)
 
 
 def _tile_image_b64(
@@ -281,7 +298,8 @@ def effects_for_dispatch(
     """Serialize ``plan_effects`` for the web player (adds tile PNGs)."""
     plan = plan_effects(session, token, prev_state, events_before)
     grid_w, grid_h = _grid_size(session)
-    prev_frame = recolor_walls(prev_rgb) if prev_rgb is not None else None
+    grid_aligned = session.backend.frame_is_grid_aligned
+    prev_frame = recolor_walls(prev_rgb) if (prev_rgb is not None and grid_aligned) else prev_rgb
     post_frame = None
     effects: list[dict] = []
 
@@ -331,6 +349,44 @@ def effects_for_dispatch(
 def _sin_pulse(t: float) -> float:
     """0→1→0 over t in [0, 1]."""
     return math.sin(max(0.0, min(1.0, t)) * math.pi)
+
+
+TURN_ANIM_MS = 250
+
+
+@dataclass
+class TurnAnimation:
+    """Timing for the 3D demo's turn animation: while it runs, the UI draws
+    ``backend.render_turn(direction, fraction)`` instead of the final frame.
+    Display-only: in-between frames are never recorded or sent to a model."""
+
+    _from_direction: Optional[int] = None
+    _start_ms: int = 0
+
+    def maybe_start(self, backend, prev_state, new_state, *, now_ms: int) -> bool:
+        """Start when a 3D view that turns with the agent sees a new heading."""
+        if not getattr(backend, "view_turns_with_agent", False):
+            return False
+        if prev_state is None or new_state is None:
+            return False
+        if int(prev_state.agent_direction) == int(new_state.agent_direction):
+            return False
+        self._from_direction = int(prev_state.agent_direction)
+        self._start_ms = now_ms
+        return True
+
+    def frame_request(self, now_ms: int) -> Optional[tuple[int, float]]:
+        """(from_direction, fraction) while running, else None."""
+        if self._from_direction is None:
+            return None
+        elapsed = now_ms - self._start_ms
+        if elapsed >= TURN_ANIM_MS:
+            self._from_direction = None
+            return None
+        return self._from_direction, max(0, elapsed) / TURN_ANIM_MS
+
+    def clear(self) -> None:
+        self._from_direction = None
 
 
 def _add_glow(out: "pygame.Surface", rect: "pygame.Rect", rgb: tuple[int, int, int], alpha: int) -> None:
@@ -387,14 +443,13 @@ class DemoFx:
     ) -> None:
         if not self.enabled or pygame is None:
             return
-        env = session.backend.env
-        if env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
 
         # Rapid key-repeat shouldn't stack camera offsets.
         self._clips = [c for c in self._clips if c.kind != "bounce"]
 
-        grid_w, grid_h = int(env.width), int(env.height)
+        grid_w, grid_h = _grid_size(session)
         for item in plan_effects(session, token, prev_state, events_before):
             kind = item["kind"]
             duration = item["durationMs"]

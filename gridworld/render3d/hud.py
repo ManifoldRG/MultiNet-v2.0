@@ -1,0 +1,102 @@
+"""Compass overlay for the 3D views that turn with the agent (no mujoco import).
+
+Drawn onto the rendered frame with plain PIL shapes. Letters are line strokes,
+not a font, so frames stay byte-identical across machines and Pillow versions.
+The compass turns with the view: the facing direction sits at the top in the
+highlight colour, and the red needle points north.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+from PIL import Image, ImageDraw
+
+COMPASS_CAMERAS: tuple[str, ...] = ("chase", "first_person")
+
+
+def turns_with_agent(camera: str, tilt: int | None = None) -> bool:
+    """Whether the view turns with the agent (and so carries a compass):
+    every demo tilt level but the top-down one, else the turning presets."""
+    if tilt is not None:
+        return tilt > 0
+    return camera in COMPASS_CAMERAS
+
+DISC = (16, 18, 26)
+RING = (150, 156, 170)
+LETTER = RING
+HIGHLIGHT = (255, 214, 10)
+NEEDLE = (228, 58, 50)
+
+_CLOCKWISE = "NESW"
+_CLOCKWISE_INDEX = {3: 0, 0: 1, 1: 2, 2: 3}  # GridState.agent_direction: 0=E 1=S 2=W 3=N
+NORTH = 3  # the "up" a north-up view shows
+
+# Letter strokes in a unit box (x right, y down).
+_GLYPHS = {
+    "N": [[(0, 1), (0, 0), (1, 1), (1, 0)]],
+    "E": [[(1, 0), (0, 0), (0, 1), (1, 1)], [(0, 0.5), (0.8, 0.5)]],
+    "S": [[(1, 0.15), (0.8, 0), (0.2, 0), (0, 0.2), (0.2, 0.45), (0.8, 0.55), (1, 0.8), (0.8, 1), (0.2, 1), (0, 0.85)]],
+    "W": [[(0, 0), (0.25, 1), (0.5, 0.45), (0.75, 1), (1, 0)]],
+}
+
+
+def compass_box(resolution: int) -> tuple[int, int, int, int]:
+    """(top, left, bottom, right) pixels of the compass in a square frame."""
+    size = round(0.16 * resolution)
+    pad = round(0.02 * resolution)
+    return pad, resolution - pad - size, pad + size, resolution - pad
+
+
+def corner_compass_box(corner_cell: tuple[float, float, float, float], resolution: int) -> tuple[int, int, int, int]:
+    """Top-down compass box: inside the top-right outer-wall cell plus the fit
+    margin beyond it, so the compass never covers an interior cell (the old
+    fixed box sat on the goal tile in 70 corpus mazes). ``corner_cell`` is
+    that cell's (top, left, bottom, right) float pixel box
+    (``cameras.cell_pixel_box``); only whole pixels right of its left edge and
+    above its bottom edge are used."""
+    _top, cell_left, cell_bottom, _right = corner_cell
+    pad = max(1, round(0.005 * resolution))  # off the frame edge
+    right, top = resolution - pad, pad
+    size = min(right - math.ceil(cell_left - 1e-6), math.floor(cell_bottom + 1e-6) - top)
+    return top, right - size, top + size, right
+
+
+def draw_compass(
+    frame: np.ndarray, direction: int, box: tuple[int, int, int, int] | None = None
+) -> np.ndarray:
+    """A copy of ``frame`` with the compass for an agent facing ``direction``,
+    in ``box`` (top, left, bottom, right; default ``compass_box``)."""
+    resolution = frame.shape[1]
+    default = compass_box(resolution)
+    top, left, bottom, right = box or default
+    if bottom - top < 1 or right - left < 1:
+        return frame.copy()  # no room left outside the maze (absurdly small frame)
+    radius = (bottom - top) / 2
+    cx, cy = left + radius, top + radius
+    # Stroke width scales with the disc (1 px at the default box in a 256 px frame).
+    width = max(1, round(resolution / 256 * (bottom - top) / (default[2] - default[0])))
+    facing = _CLOCKWISE_INDEX[int(direction)]
+
+    def at(angle: float, distance: float) -> tuple[float, float]:
+        # angle in degrees, clockwise from the top of the frame
+        a = math.radians(angle)
+        return cx + distance * math.sin(a), cy - distance * math.cos(a)
+
+    image = Image.fromarray(frame)
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((left, top, right - 1, bottom - 1), fill=DISC, outline=RING, width=width)
+    north = -90.0 * facing
+    draw.polygon(
+        [at(north, 0.46 * radius), at(north - 90, 0.13 * radius), at(north + 90, 0.13 * radius)],
+        fill=NEEDLE,
+    )
+    half = 0.15 * radius
+    for index, letter in enumerate(_CLOCKWISE):
+        lx, ly = at(90.0 * (index - facing), 0.64 * radius)
+        colour = HIGHLIGHT if index == facing else LETTER
+        for stroke in _GLYPHS[letter]:
+            points = [(lx - half + 2 * half * x, ly - half + 2 * half * y) for x, y in stroke]
+            draw.line(points, fill=colour, width=width)
+    return np.array(image)

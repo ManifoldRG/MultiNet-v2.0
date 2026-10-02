@@ -120,6 +120,43 @@ python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1
 python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1.json
 ```
 
+### 3D render backend
+
+`gridworld/render3d/` + `gridworld/backends/mujoco3d_backend.py` render the
+same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
+actions/scoring, full observability under every camera — it is a render
+layer, not a new environment. A run-config selects it with a top-level
+`"render": {"backend": "mujoco3d", "camera": "chase"}` block (resolution
+defaults to `"grid"`, MiniGrid's 32 px per cell, so a 3D frame costs the same
+image tokens as a 2D one); each camera gets its own artifact directory.
+Install the extra (`mujoco>=3.13`):
+
+```bash
+pip install -e ".[dev,visual,mujoco3d]"
+```
+
+Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
+(software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
+Elsewhere it is left unset so mujoco uses the native GL. Play with it via
+`--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
+`fixed_angled` / `first_person` live). `,` / `.` tilt the camera one level at
+a time from top-down to first person, with the walls rising as it drops; the
+footer shows the level and wall height. `chase` and `first_person` (and every
+tilt level below top-down) turn with the agent and carry a compass; turns
+animate in the demo only.
+
+```bash
+python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1 \
+  --backend mujoco3d --camera chase
+```
+
+To render static frames/contact sheets instead of playing interactively:
+
+```bash
+python -m scripts.render_3d_mazes --manifest gridworld/fixtures/manifest.json \
+  --experiment r1 --camera top_down --camera chase --contact-sheet --out <dir>
+```
+
 ## Appendix: legacy local/VLM demo harness
 
 An earlier single-machine harness predates the canonical pipeline and

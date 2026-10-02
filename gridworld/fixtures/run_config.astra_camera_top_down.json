@@ -1,0 +1,39 @@
+{
+  "description": "Astra camera ablation, arm top_down: six mazes rendered by the 3D backend, camera top_down.",
+  "manifest": "gridworld/fixtures/manifest.astra_camera_ablation.json",
+  "_note_arms": "Arms differ ONLY by the render block. Model settings match the R1-frontier Astra run (run_config.r1_frontier.json) except spend_cap_usd, a per-process hard stop sized to one arm: $6 x 5 arms = the $30 budget. 3D resolution 'grid' = 32 px per cell, so a 3D frame costs the same image tokens as the 2D anchor (~100 for an 8x8). Run arms in this order so a cap stop loses the least: 2d, top_down, first_person, chase, fixed_angled. Every 3D view carries a compass; the 2D anchor does not (it is MiniGrid's own frame, as R1 played it).",
+  "_note_no_conditions": "No conditions key => the single default cell from the experiment_config overlay.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 6,
+      "group": "openai-api",
+      "worker_count": 1,
+      "max_in_flight": 1,
+      "tasks": [
+        "all"
+      ]
+    }
+  },
+  "render": {
+    "backend": "mujoco3d",
+    "camera": "top_down"
+  }
+}

@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
+from gridworld.render_settings import RenderSettings
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -48,6 +49,27 @@ EXPECTED_RUN_FILES = ("episode.json", "run_inputs.json", "run_score.json")
 ACTIVE_STATUSES = {"assigned", "running"}
 
 AgentFactory = Callable[[str, dict[str, Any]], tuple[pipeline.Agent, str]]
+
+LOCAL_ONLY_RENDER = (
+    "3D render runs are local-only (scripts.run_pipeline) for now; distributed support is a follow-up"
+)
+
+
+def _require_2d_render(run_config: dict[str, Any], source: Any) -> None:
+    """Fail closed on a non-2D ``render`` block: these paths hard-code the 2D
+    artifact dir and run hash and never pass ``render=``, so a 3D run-config
+    would silently run 2D (and could reuse 2D episodes)."""
+    render = RenderSettings.from_run_config(run_config)
+    if render != RenderSettings():
+        raise ValueError(f"{source}: render {render.label!r}: {LOCAL_ONLY_RENDER}")
+
+
+def _require_2d_unit(unit: dict[str, Any]) -> None:
+    """Worker-side guard for a unit from a plan built elsewhere (hand-edited,
+    newer coordinator): refuse anything but the 2D backend before any work."""
+    backend = unit.get("backend", "minigrid")
+    if backend != "minigrid" or ("render" in unit and RenderSettings.from_run_config(unit) != RenderSettings()):
+        raise ValueError(f"unit {unit.get('unit_id')} (backend {backend!r}): {LOCAL_ONLY_RENDER}")
 
 
 def _now() -> float:
@@ -233,6 +255,7 @@ def prepare_job(
     artifacts_root = Path(artifacts_root)
     config = scorer_config or load_scorer_config()
     run_config = pipeline.load_run_config(run_config_path)
+    _require_2d_render(run_config, run_config_path)
     pipeline.check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = pipeline.load_manifest(manifest_path)
     prompt_variants = pipeline.condition_variant_names(conditions)
@@ -1144,6 +1167,7 @@ def run_assigned_unit(
     progress: Optional[ProgressCounter] = None,
 ) -> tuple[dict[str, Any], Optional[float]]:
     artifacts_root = Path(artifacts_root)
+    _require_2d_unit(unit)
     row = materialize_worker_inputs(unit, artifacts_root)
     factory = agent_factory or pipeline._build_agent_from_spec
     agent, _ = factory(unit["model_key"], unit["model_config"])
@@ -1532,6 +1556,13 @@ def run_lockstep_worker(
     def _build_unit(unit: dict[str, Any]):
         unit_id = unit["unit_id"]
         model_key = unit["model_key"]
+        try:
+            _require_2d_unit(unit)
+        except ValueError as exc:
+            # Fail it back rather than raise: a refill must not kill the batch.
+            _safe_fail(client, worker_id, unit_id, str(exc))
+            failed.append(unit_id)
+            return None
         if group_model_key["key"] is None:
             group_model_key["key"] = model_key
             agent_box["agent"], _ = factory(model_key, unit["model_config"])
