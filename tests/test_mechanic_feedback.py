@@ -14,6 +14,9 @@ from gridworld.actions import MiniGridActions as A
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
 from gridworld.world_model import TaskPlanningContext, classify_mechanic, successors
+from interface.feedback import format_step_feedback, is_failed_step
+from interface.config import ExperimentConfig
+from interface.runner import build_runner
 
 PORTAL = {
     "id": "portal_purple",
@@ -220,3 +223,196 @@ def test_env_step_reports_freeze_and_death():
         None,
         {"kind": "died", "cell_xy": (4, 1), "start_xy": (1, 1), "start_dir": 0},
     ]
+
+
+# --- step feedback -------------------------------------------------------------
+
+
+def _feedback(spec: TaskSpecification, actions, level="standard"):
+    """(feedback, event_type, failed) per step, as the episode loop computes them."""
+    backend = MiniGridBackend(render_mode="rgb_array")
+    backend.configure(spec)
+    _, state, _ = backend.reset(seed=spec.seed)
+    out = []
+    for action in actions:
+        name = A(int(action)).name
+        _, reward, terminated, _, curr, info = backend.step(int(action))
+        text, event_type = format_step_feedback(
+            name, state, curr, reward, terminated, spec,
+            level=level, mechanic=info.get("mechanic"),
+        )
+        failed = is_failed_step(name, state, curr, reward, terminated, spec)
+        out.append((text, event_type, failed))
+        state = curr
+    return out
+
+
+def test_teleport_feedback_names_portal_colour_and_both_ends():
+    *_, last = _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3)
+    assert last == (
+        "TELEPORTED — MOVE_FORWARD: Took the purple portal from (1, 4) to (3, 6).",
+        "TELEPORTED",
+        False,
+    )
+
+
+def test_death_feedback_says_the_whole_maze_reset():
+    *_, last = _feedback(death_spec(), [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD])
+    assert last == (
+        "DIED — MOVE_FORWARD: Stepped on a death tile at (1, 4). The maze reset: "
+        "you are back at the start tile (1, 1) facing EAST; keys, doors and "
+        "switches are back where they started.",
+        "DIED",
+        False,
+    )
+
+
+def test_ice_feedback_counts_down_to_the_thaw():
+    steps = _feedback(
+        ice_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD, A.TURN_LEFT, A.DONE, A.TURN_LEFT]
+    )
+    assert [s[:2] for s in steps] == [
+        ("MOVED — MOVE_FORWARD: Moved. The ice froze you for 3 steps.", "MOVED"),
+        ("FROZEN — MOVE_FORWARD: You are frozen; the action had no effect. "
+         "2 more steps until you thaw.", "FROZEN"),
+        ("FROZEN — TURN_LEFT: You are frozen; the action had no effect. "
+         "1 more step until you thaw.", "FROZEN"),
+        ("FROZEN — DONE: You are frozen; the action had no effect. "
+         "You have thawed; your next action will take effect.", "FROZEN"),
+        ("TURNED — TURN_LEFT: Now facing NORTH.", "TURNED"),
+    ]
+
+
+def test_one_step_freeze_uses_the_singular():
+    spec = _spec({"frozen_tiles": [[2, 1]], "freeze_steps": 1})
+    steps = _feedback(spec, [A.MOVE_FORWARD, A.TURN_RIGHT])
+    assert steps[0][0] == "MOVED — MOVE_FORWARD: Moved. The ice froze you for 1 step."
+    assert steps[1][0] == (
+        "FROZEN — TURN_RIGHT: You are frozen; the action had no effect. "
+        "You have thawed; your next action will take effect."
+    )
+
+
+def test_minimal_feedback_is_the_new_event_type_alone():
+    assert _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3, level="minimal")[-1][:2] == (
+        "TELEPORTED",
+        "TELEPORTED",
+    )
+    assert [s[:2] for s in _feedback(ice_spec(), [A.MOVE_FORWARD] * 2, level="minimal")] == [
+        ("MOVED", "MOVED"),
+        ("FROZEN", "FROZEN"),
+    ]
+    death = _feedback(death_spec(), [A.MOVE_FORWARD] * 3, level="minimal")
+    assert death[-1][:2] == ("DIED", "DIED")
+
+
+def test_causal_feedback_matches_standard_for_mechanics():
+    for spec, actions in (
+        (teleport_spec(), [A.MOVE_FORWARD] * 3),
+        (ice_spec(), [A.MOVE_FORWARD] * 3),
+        (death_spec(), [A.MOVE_FORWARD] * 3),
+    ):
+        assert _feedback(spec, actions, level="causal") == _feedback(spec, actions)
+
+
+def test_teleporting_onto_the_goal_is_still_success():
+    *_, last = _feedback(_spec({"teleporters": [PORTAL]}, goal=(6, 3)), [A.MOVE_FORWARD] * 3)
+    assert last == ("SUCCESS — MOVE_FORWARD: Reached the goal.", "DONE", False)
+
+
+def test_failure_counting_is_unchanged_by_mechanic_labels():
+    # Frozen: a swallowed MOVE_FORWARD used to be BLOCKED and a swallowed DONE
+    # WRONG_DONE (failures); a swallowed turn / PICKUP / TOGGLE used to be
+    # NOTHING (not a failure). The FROZEN label keeps exactly that.
+    spec = _spec({"frozen_tiles": [[2, 1]], "freeze_steps": 6})
+    steps = _feedback(
+        spec,
+        [A.MOVE_FORWARD, A.MOVE_FORWARD, A.TURN_LEFT, A.PICKUP, A.TOGGLE, A.DONE, A.TURN_RIGHT],
+    )
+    assert [(s[1], s[2]) for s in steps] == [
+        ("MOVED", False),
+        ("FROZEN", True),
+        ("FROZEN", False),
+        ("FROZEN", False),
+        ("FROZEN", False),
+        ("FROZEN", True),
+        ("FROZEN", False),
+    ]
+    # Teleport and death were plain moves: not failures.
+    assert _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3)[-1][2] is False
+    assert _feedback(death_spec(), [A.MOVE_FORWARD] * 3)[-1][2] is False
+    # ...except a death that resets you onto the cell you just left, which the
+    # mechanic-blind outcome saw as a wall bump (BLOCKED): still a failure.
+    from_start = _feedback(_spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD])
+    assert from_start[0][1:] == ("DIED", True)
+
+
+# --- episode loop ----------------------------------------------------------------
+
+
+class _ScriptedAgent:
+    def __init__(self, actions):
+        self._actions = [A(int(a)).name for a in actions]
+        self._i = 0
+        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+
+    def __call__(self, messages):
+        self.last_messages = messages
+        action = self._actions[self._i] if self._i < len(self._actions) else "DONE"
+        self._i += 1
+        return f"FINAL_OUTPUT: {action}"
+
+
+R1_CELL = dict(
+    prompting="minimal",
+    observation="image_only",
+    context_window="text_summary_and_last_n",
+    chat_history="stateless",
+    in_context_learning="zero_shot",
+    action_space="egocentric",
+    querying="step_by_step",
+    progress_stall_k=30,
+)
+
+
+def _run(spec: TaskSpecification, actions, **overrides):
+    backend = MiniGridBackend(render_mode="rgb_array")
+    backend.configure(spec)
+    runner = build_runner(ExperimentConfig(**{**R1_CELL, **overrides}), backend, spec)
+    agent = _ScriptedAgent(actions)
+    result = runner.run(agent, verbose=False)
+    steps = [rec for rec in result["transcript"] if rec.get("kind") == "step"]
+    return result, steps, agent
+
+
+def test_runner_records_mechanic_events_and_keeps_failure_counting():
+    _, steps, _ = _run(
+        ice_spec(),
+        [A.MOVE_FORWARD, A.MOVE_FORWARD, A.TURN_LEFT, A.DONE, A.TURN_LEFT],
+        feedback="standard",
+    )
+    assert [s["event_type"] for s in steps[:5]] == ["MOVED", "FROZEN", "FROZEN", "FROZEN", "TURNED"]
+    assert steps[1]["feedback"] == (
+        "FROZEN — MOVE_FORWARD: You are frozen; the action had no effect. "
+        "2 more steps until you thaw."
+    )
+    assert [s["consecutive_failures_after"] for s in steps[:5]] == [0, 1, 0, 1, 0]
+    assert steps[0]["mechanic"] == {"kind": "froze", "cell_xy": (2, 1), "steps": 3}
+    assert steps[3]["mechanic"] == {"kind": "frozen", "remaining": 0}
+    assert "mechanic" not in steps[4]
+
+
+def test_runner_reports_teleport_and_death_as_non_failures():
+    _, steps, _ = _run(teleport_spec(), [A.MOVE_FORWARD] * 3, feedback="standard")
+    assert steps[2]["event_type"] == "TELEPORTED"
+    assert steps[2]["consecutive_failures_after"] == 0
+    assert steps[2]["position_after_row_col"] == [3, 6]
+    assert "mechanic" not in steps[0]
+
+    _, steps, _ = _run(
+        death_spec(), [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD]
+    )
+    assert [s["event_type"] for s in steps[:4]] == ["MOVED", "PICKUP", "MOVED", "DIED"]
+    assert steps[3]["feedback"] == "DIED"  # R1 cell: minimal feedback
+    assert steps[3]["consecutive_failures_after"] == 0
+    assert steps[3]["mechanic"]["kind"] == "died"
