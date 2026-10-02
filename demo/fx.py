@@ -57,6 +57,20 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     return (0, 0)
 
 
+def bounce_offset(travel: tuple[int, int], heading: int, *, turns_with_agent: bool) -> tuple[int, int]:
+    """Wall-bounce offset (screen px): recoil opposite the travel direction as
+    drawn. North-up views draw world axes; views that turn with the agent draw
+    its ``heading`` at screen-up, so the travel is first expressed in view axes
+    (forward = screen-up, the agent's right = screen-right)."""
+    dx, dy = travel
+    if turns_with_agent:
+        hx, hy = _DIR_DELTA.get(int(heading), (0, -1))
+        forward = dx * hx + dy * hy
+        right = dx * -hy + dy * hx
+        dx, dy = right, -forward
+    return int(-dx * BOUNCE_PX), int(-dy * BOUNCE_PX)
+
+
 def portal_transition(
     session, token: str, prev_state
 ) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
@@ -130,15 +144,14 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
 
     travel = travel_delta(token, prev_state)
     if hit is None and event_type == "BLOCKED" and travel != (0, 0):
-        dx, dy = travel
-        plan.append(
-            {
-                "kind": "bounce",
-                "dx": int(-dx * BOUNCE_PX),
-                "dy": int(-dy * BOUNCE_PX),
-                "durationMs": BOUNCE_MS,
-            }
+        # The frame shows the heading after the step (a cardinal move turns first).
+        shown = session.state if session.state is not None else prev_state
+        dx, dy = bounce_offset(
+            travel,
+            shown.agent_direction,
+            turns_with_agent=bool(getattr(session.backend, "view_turns_with_agent", False)),
         )
+        plan.append({"kind": "bounce", "dx": dx, "dy": dy, "durationMs": BOUNCE_MS})
 
     mech = session.task_spec.mechanisms if session.task_spec is not None else None
     new_state = session.state
