@@ -1,0 +1,34 @@
+{
+  "description": "R1-frontier cost calibration: GPT-5.6 Terra over the 5-maze R1 smoke manifest (30/42/47/61/80 optimal steps, out-of-panel) with the R1 fixed cell and the SAME model params as run_config.r1_frontier.json (xhigh, 64k, image_detail=high) except the model, the tier and the spend cap. Measures OpenAI-family queries/episode and per-query reasoning/output tokens to project the Astra panel cost via scripts/estimate_frontier_cost.py. NOT a scored panel.",
+  "manifest": "gridworld/fixtures/manifest.r1_smoke_batch.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay.",
+  "_note_model_params": "Standard tier (no service_tier) for predictable latency; the estimator re-prices at flex. spend_cap_usd=40 hard-stops the process (worst case if every query hit the 64k cap would be ~$0.77/query).",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "text_summary_and_last3",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "gpt56_terra": {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "image_detail": "high",
+      "timeout": 1800,
+      "max_attempts": 20,
+      "spend_cap_usd": 40,
+      "group": "openai-api",
+      "worker_count": 1,
+      "max_in_flight": 5,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

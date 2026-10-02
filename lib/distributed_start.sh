@@ -192,6 +192,7 @@ REMOTE
   case "$provider" in
     claude) key_var=ANTHROPIC_API_KEY ;;
     kimi)   key_var=MOONSHOT_API_KEY ;;
+    openai) key_var=OPENAI_API_KEY ;;
     *) echo "no credential mapping for provider '$provider' (worker $vm)" >&2; return 1 ;;
   esac
   printf -v key_q '%q' "${!key_var:-}"
