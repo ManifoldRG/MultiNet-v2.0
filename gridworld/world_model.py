@@ -160,12 +160,12 @@ class TaskPlanningContext:
 
 
 def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> PlannerState:
-    """Return the next world state for ``action``. Illegal actions are no-ops."""
+    """Return the next world state for ``action``. Illegal actions still spin rotators."""
     action = int(action)
     for transition in successors(ctx, state):
         if transition.action == action:
             return transition.next_state
-    return state
+    return _settle(state)
 
 
 def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
@@ -272,6 +272,7 @@ def shortest_plan(
     ctx: TaskPlanningContext,
     start: PlannerState,
     is_goal: Callable[[PlannerState], bool],
+    max_states: int = 500_000,
 ) -> tuple[list[int], PlannerState | None, int]:
     """Run BFS over ``successors`` and return the first shortest plan."""
     if is_goal(start):
@@ -282,6 +283,8 @@ def shortest_plan(
     visited = {start}
 
     while queue:
+        if len(visited) >= max_states:
+            return [], None, len(visited)
         state = queue.popleft()
         for transition in successors(ctx, state):
             if transition.next_state in visited:

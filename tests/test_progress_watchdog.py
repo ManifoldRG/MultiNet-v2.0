@@ -75,7 +75,7 @@ def _hazard_spec():
     })
 
 
-def _run_agent(spec, agent, *, drop_available=False, **cfg):
+def _run_agent(spec, agent, *, drop_available=True, **cfg):
     backend = MiniGridBackend(render_mode="rgb_array")
     backend.drop_available = drop_available
     backend.configure(spec)

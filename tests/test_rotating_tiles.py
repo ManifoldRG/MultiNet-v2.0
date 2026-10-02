@@ -66,6 +66,22 @@ def test_turns_wait_for_the_arrow_then_forward_rides_it():
     assert tuple(backend.env.agent_pos) == (3, 1)
 
 
+def test_illegal_action_still_spins():
+    ctx = TaskPlanningContext(_spec())
+    state = ctx.initial_state()
+    assert state.rotator_dirs == (0,)
+    state = apply(ctx, state, MiniGridActions.PICKUP)
+    assert state.agent_pos == (1, 1)
+    assert state.rotator_dirs == (1,)
+
+
+def test_rotating_dirs_must_match_tiles():
+    spec = _spec(mechanisms={"rotating_tiles": [[2, 1]], "rotating_initial_directions": []})
+    ok, errors = spec.validate()
+    assert not ok
+    assert any("rotating_tiles and rotating_initial_directions" in e for e in errors)
+
+
 def test_blocked_arrow_keeps_you_on_the_tile():
     ctx = TaskPlanningContext(_spec())
     state = ctx.initial_state()

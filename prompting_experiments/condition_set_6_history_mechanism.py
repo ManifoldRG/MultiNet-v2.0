@@ -25,7 +25,7 @@ CONDITION_SET = ConditionSet(
         "single_message": Variant(
             name="single_message",
             description="History in one stateless message (last3) - same as the fair default.",
-            config_overrides={"chat_history": "stateless", "context_window": "last3"},
+            config_overrides={"chat_history": "stateless", "context_window": "last_n"},
         ),
         "multiturn": Variant(
             name="multiturn",

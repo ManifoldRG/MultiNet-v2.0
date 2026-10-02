@@ -114,6 +114,48 @@ def test_validate_rejects_dependency_and_distractor_reference_errors():
     )
 
 
+def test_validate_rejects_doors_and_gates_on_walls():
+    assert_invalid(
+        make_spec(
+            maze={
+                "dimensions": [5, 5],
+                "walls": [[2, 2]],
+                "start": [1, 1],
+                "goal": [3, 3],
+            },
+            mechanisms={
+                "keys": [{"id": "k1", "position": [1, 2], "color": "red"}],
+                "doors": [{"id": "d1", "position": [2, 2], "requires_key": "red"}],
+            },
+        ),
+        "Door d1 position (2, 2) is a wall",
+    )
+    assert_invalid(
+        make_spec(
+            maze={
+                "dimensions": [5, 5],
+                "walls": [[2, 2]],
+                "start": [1, 1],
+                "goal": [3, 3],
+            },
+            mechanisms={
+                "switches": [{"id": "s1", "position": [1, 2], "controls": ["g1"]}],
+                "gates": [{"id": "g1", "position": [2, 2]}],
+            },
+        ),
+        "Gate g1 position (2, 2) is a wall",
+    )
+    assert_invalid(
+        make_spec(
+            mechanisms={
+                "keys": [{"id": "k1", "position": [1, 2], "color": "red"}],
+                "doors": [{"id": "d1", "position": [0, 2], "requires_key": "red"}],
+            },
+        ),
+        "Door d1 position (0, 2) is a wall",
+    )
+
+
 def test_validate_rejects_border_cells_and_invalid_view_size():
     assert_invalid(
         make_spec(

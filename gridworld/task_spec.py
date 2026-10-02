@@ -325,7 +325,7 @@ class TaskSpecification:
     dependency_chain: Optional[DependencyChain] = None
     distractors: Optional[list[Distractor]] = None
     metadata: Optional[dict[str, Any]] = None
-    version: str = "1.0"
+    version: str = "1.1"
     description: str = ""  # Human-readable task description
 
     @classmethod
@@ -382,7 +382,7 @@ class TaskSpecification:
             dependency_chain=dependency_chain,
             distractors=distractors,
             metadata=metadata,
-            version=d.get("version", "1.0"),
+            version=d.get("version", "1.1"),
             description=d.get("description", "")
         )
 
@@ -524,10 +524,10 @@ class TaskSpecification:
         }
         wall_positions = explicit_wall_positions | border_positions
 
-        def check_position(pos: Position, name: str, *, allow_wall: bool = False) -> None:
+        def check_position(pos: Position, name: str) -> None:
             if not in_bounds(pos):
                 errors.append(f"{name} position {pos.to_tuple()} out of bounds")
-            elif not allow_wall and pos.to_tuple() in wall_positions:
+            elif pos.to_tuple() in wall_positions:
                 errors.append(f"{name} position {pos.to_tuple()} is a wall")
 
         # Check start and canonical maze goal positions.
@@ -572,7 +572,7 @@ class TaskSpecification:
 
         for door in self.mechanisms.doors:
             register_id(door.id, f"Door {door.id}")
-            check_position(door.position, f"Door {door.id}", allow_wall=True)
+            check_position(door.position, f"Door {door.id}")
             register_position(door.position, f"Door {door.id}")
 
         for switch in self.mechanisms.switches:
@@ -582,7 +582,7 @@ class TaskSpecification:
 
         for gate in self.mechanisms.gates:
             register_id(gate.id, f"Gate {gate.id}")
-            check_position(gate.position, f"Gate {gate.id}", allow_wall=True)
+            check_position(gate.position, f"Gate {gate.id}")
             register_position(gate.position, f"Gate {gate.id}")
 
         for block in self.mechanisms.blocks:
@@ -610,6 +610,10 @@ class TaskSpecification:
             check_position(frozen, "Frozen tile")
             register_position(frozen, "Frozen tile")
 
+        if len(self.mechanisms.rotating_tiles) != len(self.mechanisms.rotating_initial_directions):
+            errors.append(
+                "rotating_tiles and rotating_initial_directions have different lengths"
+            )
         for rotating in self.mechanisms.rotating_tiles:
             check_position(rotating, "Rotating tile")
             register_position(rotating, "Rotating tile")
