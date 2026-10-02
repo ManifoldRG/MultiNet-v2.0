@@ -49,13 +49,32 @@ def compass_box(resolution: int) -> tuple[int, int, int, int]:
     return pad, resolution - pad - size, pad + size, resolution - pad
 
 
-def draw_compass(frame: np.ndarray, direction: int) -> np.ndarray:
-    """A copy of ``frame`` with the compass for an agent facing ``direction``."""
+def corner_compass_box(corner_cell: tuple[float, float, float, float], resolution: int) -> tuple[int, int, int, int]:
+    """Top-down compass box: inside the top-right outer-wall cell plus the fit
+    margin beyond it, so the compass never covers an interior cell (the old
+    fixed box sat on the goal tile in 70 corpus mazes). ``corner_cell`` is
+    that cell's (top, left, bottom, right) float pixel box
+    (``cameras.cell_pixel_box``); only whole pixels right of its left edge and
+    above its bottom edge are used."""
+    _top, cell_left, cell_bottom, _right = corner_cell
+    pad = max(1, round(0.005 * resolution))  # off the frame edge
+    right, top = resolution - pad, pad
+    size = min(right - math.ceil(cell_left - 1e-6), math.floor(cell_bottom + 1e-6) - top)
+    return top, right - size, top + size, right
+
+
+def draw_compass(
+    frame: np.ndarray, direction: int, box: tuple[int, int, int, int] | None = None
+) -> np.ndarray:
+    """A copy of ``frame`` with the compass for an agent facing ``direction``,
+    in ``box`` (top, left, bottom, right; default ``compass_box``)."""
     resolution = frame.shape[1]
-    top, left, bottom, right = compass_box(resolution)
+    default = compass_box(resolution)
+    top, left, bottom, right = box or default
     radius = (bottom - top) / 2
     cx, cy = left + radius, top + radius
-    width = max(1, round(resolution / 256))
+    # Stroke width scales with the disc (1 px at the default box in a 256 px frame).
+    width = max(1, round(resolution / 256 * (bottom - top) / (default[2] - default[0])))
     facing = _CLOCKWISE_INDEX[int(direction)]
 
     def at(angle: float, distance: float) -> tuple[float, float]:

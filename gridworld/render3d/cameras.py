@@ -89,6 +89,20 @@ def to_pixel(uv: tuple[float, float], resolution: int) -> tuple[float, float]:
     return (1.0 - v) / 2.0 * resolution, (u + 1.0) / 2.0 * resolution
 
 
+def cell_pixel_box(pose: CameraPose, cell, resolution: int) -> tuple[float, float, float, float]:
+    """(top, left, bottom, right) float pixel bounds of floor cell (x, y)'s
+    projection in a resolution x resolution frame (exact for top_down)."""
+    x, y = cell
+    pixels = [
+        to_pixel(project(pose, (float(cx), -float(cy), 0.0)), resolution)
+        for cx in (x, x + 1)
+        for cy in (y, y + 1)
+    ]
+    rows = [r for r, _ in pixels]
+    cols = [c for _, c in pixels]
+    return min(rows), min(cols), max(rows), max(cols)
+
+
 def maze_corners(width, height, wall_height) -> list[tuple[float, float, float]]:
     return [
         (x, y, z)
