@@ -528,3 +528,46 @@ def test_prompt_preview_labels_mechanics():
     assert transcript[-1]["event_type"] == "TELEPORTED"
     assert transcript[-1]["mechanic"]["kind"] == "teleported"
     assert "mechanic" not in transcript[0]
+
+
+# --- end to end: what the model is told -------------------------------------------
+
+
+def _prompt_texts(result) -> list[str]:
+    """Joined text blocks of each query's user message, in query order."""
+    texts = []
+    for rec in result["transcript"]:
+        if rec.get("kind") != "query":
+            continue
+        content = rec["agent_messages"][-1]["content"]
+        blocks = [content] if isinstance(content, str) else [
+            b["text"] for b in content if b.get("type") == "text"
+        ]
+        texts.append("\n".join(blocks))
+    return texts
+
+
+def test_r1_cell_prompt_tells_the_model_about_the_death_reset():
+    actions = [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD, A.MOVE_FORWARD]
+    result, _, _ = _run(death_spec(), actions)
+    after_death_and_one_move = _prompt_texts(result)[5]
+    assert (
+        "Activity summary:\nfirst you picked up the red key, then you stepped on a "
+        "death tile at (1, 4) and the maze reset to the start tile (1, 1), finally "
+        "you passed (1, 2)"
+    ) in after_death_and_one_move
+
+
+def test_image_text_history_shows_mechanic_feedback():
+    result, _, _ = _run(
+        ice_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD], observation="image_text", feedback="standard"
+    )
+    prompt = _prompt_texts(result)[2]
+    assert (
+        "Position before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\n"
+        "Feedback: MOVED — MOVE_FORWARD: Moved. The ice froze you for 3 steps.\n"
+        "Position before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\n"
+        "Feedback: FROZEN — MOVE_FORWARD: You are frozen; the action had no effect. "
+        "2 more steps until you thaw."
+    ) in prompt
+    assert "first you were frozen at (1, 2) for 3 steps" in prompt
