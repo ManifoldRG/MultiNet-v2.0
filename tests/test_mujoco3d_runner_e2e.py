@@ -55,3 +55,41 @@ def test_scripted_agent_plays_identically_on_3d_and_2d():
     assert result3d["steps_used"] == result2d["steps_used"] == len(plan.actions)
     assert _executed(result3d) == _executed(result2d) == tokens
     assert runner3d.last_rgb.shape == (128, 128, 3)  # the frame the model saw was the 3D render
+
+
+@pytest.mark.parametrize("backend_name", ["minigrid", "mujoco3d"])
+def test_build_episode_runner_parses_the_spec_and_builds_the_scene_once(tmp_path, monkeypatch, backend_name):
+    """One JSON parse per episode, and on 3D one MjModel compile + GL context
+    (configure used to run twice: in load_task and again after the seed/cap)."""
+    import json
+
+    from gridworld.render3d import renderer as renderer_mod
+    from gridworld.render_settings import RenderSettings
+    from pipeline.run_stage3 import build_episode_runner
+
+    path = tmp_path / "mechanisms.json"
+    path.write_text(json.dumps(MECHANISMS))
+
+    parses = []
+    real_from_json = TaskSpecification.from_json.__func__
+    monkeypatch.setattr(
+        TaskSpecification, "from_json", classmethod(lambda cls, p: parses.append(p) or real_from_json(cls, p))
+    )
+    builds = []
+
+    class CountingRenderer(renderer_mod.SceneRenderer):
+        def __init__(self, *args, **kwargs):
+            builds.append(1)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(renderer_mod, "SceneRenderer", CountingRenderer)
+    render = RenderSettings() if backend_name == "minigrid" else RenderSettings("mujoco3d", "top_down", 64)
+
+    runner = build_episode_runner(path, ExperimentConfig(), 7, max_steps=12, render=render)
+    try:
+        assert len(parses) == 1
+        assert builds == ([] if backend_name == "minigrid" else [1])
+        configured = runner.backend.task_spec
+        assert (configured.seed, configured.max_steps) == (7, 12)
+    finally:
+        runner.backend.close()
