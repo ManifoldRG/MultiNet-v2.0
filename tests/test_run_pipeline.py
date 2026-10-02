@@ -2391,6 +2391,7 @@ def test_3d_sidecar_records_the_resolved_frame_pixels_and_render_versions(tmp_pa
         "backend": "mujoco3d",
         "camera": "top_down",
         "resolution": "grid",
+        "start_map": False,
         "frame_pixels": 32 * dims,
         "render3d_version": RENDER3D_VERSION,
         "mujoco_version": mujoco.__version__,

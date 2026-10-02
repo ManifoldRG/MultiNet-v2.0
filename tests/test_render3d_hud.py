@@ -67,7 +67,7 @@ def test_each_heading_draws_a_different_repeatable_compass():
 
 
 def test_compass_is_for_the_views_that_turn_with_the_agent():
-    assert set(COMPASS_CAMERAS) == {"chase", "first_person"}
+    assert set(COMPASS_CAMERAS) == {"chase", "first_person", "first_person_narrow"}
     assert turns_with_agent("chase") and not turns_with_agent("top_down")
     # a demo tilt level overrides the preset: only level 0 (top-down) stays north-up
     assert not turns_with_agent("chase", tilt=0) and turns_with_agent("top_down", tilt=1)

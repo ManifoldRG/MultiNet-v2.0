@@ -42,7 +42,7 @@ from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
 from interface.feedback import format_step_feedback
 from interface.progress_watchdog import ProgressStallWatchdog
-from interface.runner import _user_message_has_image, _trim_rolling_chat
+from interface.runner import _trim_rolling_chat, _user_message_has_image, _with_start_map
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,7 @@ class EpisodeStepper:
         # replay the episode deterministically from the same starting maze.
         self.seed = self.task_spec.seed
         self._runner.last_rgb, state, reset_info = self.backend.reset(seed=self.seed)
+        self._capture_start_map()
         self.querying.reset()
 
         # Build the initial system prompt (may include the initial maze for
@@ -148,7 +149,26 @@ class EpisodeStepper:
                 "_reset_frame_rgb": self._runner.last_rgb,
             }
         )
+        if self._runner.start_map_rgb is not None:
+            self.transcript[-1]["_start_map_rgb"] = self._runner.start_map_rgb
         self._finished = False
+
+    def _capture_start_map(self) -> None:
+        """Snapshot the start map (3D render.start_map) right after reset.
+
+        Fail-closed: the map and its prompt text come together or not at all,
+        and a text_only run (no images) never gets one."""
+        frame_for = getattr(self.backend, "start_map_frame", None)
+        self._runner.start_map_rgb = frame_for() if frame_for is not None else None
+        has_map = self._runner.start_map_rgb is not None
+        if has_map != (self.prompt.start_map_text() is not None):
+            raise ValueError(
+                "start map and prompt disagree: build the runner with build_runner so the "
+                "prompt's render context comes from the backend"
+            )
+        if has_map and self.config.observation == "text_only":
+            raise ValueError("render start_map shows the model an image; observation 'text_only' carries none")
+        self._start_map_blocks = self._runner.start_map_blocks()
 
     def next_query(self) -> Optional[List[dict]]:
         # ``apply_reply`` can end the episode (e.g. ``parse_failed`` at the retry
@@ -197,6 +217,9 @@ class EpisodeStepper:
                         agent_messages = self.messages[:-1] + [current_turn]
                     else:
                         agent_messages = self.messages
+                # The start map opens the request's first user message; the
+                # stored chat (self.messages) never carries it.
+                agent_messages = _with_start_map(agent_messages, self._start_map_blocks)
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
                         "LLM query #%d: task_id=%s observation=%s messages_in_context=%d current_turn_has_image=%s",

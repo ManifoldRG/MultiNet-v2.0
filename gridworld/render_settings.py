@@ -17,7 +17,7 @@ from gridworld.task_spec import TaskSpecification
 
 BACKENDS = ("minigrid", "mujoco3d")
 GRID_PIXELS_PER_CELL = 32  # MiniGrid's tile size: a 3D frame then costs the same image tokens
-_KEYS = {"backend", "camera", "resolution"}
+_KEYS = {"backend", "camera", "resolution", "start_map"}
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,9 @@ class RenderSettings:
     backend: str = "minigrid"
     camera: str | None = None
     resolution: int | str = "grid"  # "grid" = GRID_PIXELS_PER_CELL per cell
+    # A top-down map of the reset state, shown to the model once per request
+    # beside its 3D view (interface/episode_step.py). Off = today's prompts.
+    start_map: bool = False
 
     @classmethod
     def from_run_config(cls, run_config: dict[str, Any]) -> RenderSettings:
@@ -52,20 +55,31 @@ class RenderSettings:
         resolution = block.get("resolution", "grid")
         if resolution != "grid" and (not isinstance(resolution, int) or isinstance(resolution, bool) or resolution <= 0):
             raise ValueError(f"render resolution must be a positive int or 'grid', got {resolution!r}")
-        return cls(backend=backend, camera=camera, resolution=resolution)
+        start_map = block.get("start_map", False)
+        if not isinstance(start_map, bool):
+            raise ValueError(f"render start_map must be a bool, got {start_map!r}")
+        if start_map and backend != "mujoco3d":
+            raise ValueError("start_map is a 3D setting; the minigrid frame already shows the whole maze")
+        if start_map and camera == "top_down":
+            raise ValueError("start_map adds a top-down map; the top_down camera already is one")
+        return cls(backend=backend, camera=camera, resolution=resolution, start_map=start_map)
 
     @property
     def label(self) -> str:
         """Artifact directory and run-hash label: one per rendered view."""
         if self.backend == "minigrid":
             return "minigrid"
-        return f"{self.backend}_{self.camera}_{self.resolution}"
+        suffix = "_map" if self.start_map else ""
+        return f"{self.backend}_{self.camera}_{self.resolution}{suffix}"
 
     def backend_kwargs(self, spec: TaskSpecification) -> dict[str, Any]:
         """Backend constructor arguments for this task."""
         if self.backend == "minigrid":
             return {}
-        return {"camera": self.camera, "resolution": self.frame_pixels(spec)}
+        kwargs: dict[str, Any] = {"camera": self.camera, "resolution": self.frame_pixels(spec)}
+        if self.start_map:
+            kwargs["start_map"] = True
+        return kwargs
 
     def frame_pixels(self, spec: TaskSpecification) -> int:
         if self.resolution != "grid":
@@ -87,6 +101,13 @@ class RenderSettings:
             "render3d_version": RENDER3D_VERSION,
             "mujoco_version": _mujoco_version(),
         }
+
+    def check_observation(self, observation: str) -> None:
+        """Fail fast when a start map meets an observation with no images."""
+        if self.start_map and observation == "text_only":
+            raise ValueError(
+                "render start_map shows the model an image, but observation 'text_only' carries none"
+            )
 
 
 def _mujoco_version() -> str:

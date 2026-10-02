@@ -12,6 +12,9 @@ from scripts.run_pipeline import load_manifest, load_run_config, resolve_task_ro
 
 FIXTURES = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures"
 ARMS = ["2d", "top_down", "chase", "fixed_angled", "first_person"]
+# The 2026-09-18 run used the narrow eye; the preset was widened afterwards,
+# so the arm keeps its original camera under its new name.
+ARM_CAMERA = {"first_person": "first_person_narrow"}
 MANIFEST = FIXTURES / "manifest.astra_camera_ablation.json"
 
 
@@ -47,7 +50,7 @@ def test_arms_differ_only_by_their_render_block():
     assert "render" not in configs["2d"]  # the anchor is MiniGrid's own frame
     for arm in ARMS[1:]:
         settings = RenderSettings.from_run_config(configs[arm])
-        assert settings.backend == "mujoco3d" and settings.camera == arm
+        assert settings.backend == "mujoco3d" and settings.camera == ARM_CAMERA.get(arm, arm)
         assert settings.resolution == "grid"  # same image-token budget as the 2D anchor
 
 

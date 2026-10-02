@@ -129,6 +129,11 @@ layer, not a new environment. A run-config selects it with a top-level
 `"render": {"backend": "mujoco3d", "camera": "chase"}` block (resolution
 defaults to `"grid"`, MiniGrid's 32 px per cell, so a 3D frame costs the same
 image tokens as a 2D one); each camera gets its own artifact directory.
+Add `"start_map": true` (any camera but `top_down`, image observations only)
+to also show the model a top-down snapshot of the maze at reset: it opens the
+first user message of every request, exactly once, in every chat mode (stored
+chat turns never carry it), is logged as `frames/start_map.png`, and the run
+gets its own `..._map` artifact label. Off by default; prompts are unchanged.
 Install the extra (`mujoco>=3.13`):
 
 ```bash
@@ -139,7 +144,10 @@ Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
 (software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
 Elsewhere it is left unset so mujoco uses the native GL. Play with it via
 `--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
-`fixed_angled` / `first_person` live). `,` / `.` tilt the camera one level at
+`fixed_angled` / `first_person` / `first_person_narrow` live; `first_person` is
+the wide eye, fovy 110 with 1.0 walls so portal beacons show, and
+`first_person_narrow` the 2026-09-18 ablation eye, fovy 90 with 1.4 walls).
+`,` / `.` tilt the camera one level at
 a time from top-down to first person, with the walls rising as it drops; the
 footer shows the level and wall height. `chase` and `first_person` (and every
 tilt level below top-down) turn with the agent and carry a compass; turns
