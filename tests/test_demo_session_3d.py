@@ -155,3 +155,48 @@ def test_2d_session_cannot_tilt(tmp_path):
         assert session.tilt_status() is None
     finally:
         session.close()
+
+
+def _blocked_corridor() -> dict:
+    bad = copy.deepcopy(CORRIDOR)
+    bad["task_id"] = "render3d_corridor_blocked"
+    bad["mechanisms"]["blocks"] = [{"id": "b1", "position": [4, 1]}]  # the 3D backend rejects blocks
+    return bad
+
+
+def test_next_task_skips_a_rejected_spec_and_keeps_the_index_in_sync(tmp_path, capsys):
+    """`]` onto a spec the backend rejects must not leave task_index naming
+    the rejected task while the previous one stays loaded (wrong footer)."""
+    from render3d_test_utils import MECHANISMS
+
+    (tmp_path / "render3d_corridor_blocked.json").write_text(json.dumps(_blocked_corridor()))
+    (tmp_path / "render3d_mechanisms.json").write_text(json.dumps(MECHANISMS))
+    session = make_play_session(tmp_path, "mujoco3d", "top_down")
+    try:
+        assert [p.name for p in session.task_list] == [
+            "render3d_corridor.json", "render3d_corridor_blocked.json", "render3d_mechanisms.json"
+        ]
+        assert session.task_index == 0
+
+        session._load_adjacent_task(+1)
+        assert session.task_list[session.task_index] == session.task_path
+        assert session.task_spec.task_id == "render3d_mechanisms"  # stepped past the rejected one
+        assert "backend cannot load" in capsys.readouterr().out
+
+        session._load_adjacent_task(-1)
+        assert session.task_list[session.task_index] == session.task_path
+        assert session.task_spec.task_id == "render3d_corridor"
+    finally:
+        session.close()
+
+
+def test_next_task_stays_put_when_every_other_spec_is_rejected(tmp_path):
+    (tmp_path / "render3d_corridor_blocked.json").write_text(json.dumps(_blocked_corridor()))
+    session = make_play_session(tmp_path, "mujoco3d", "top_down")
+    try:
+        session._dispatch_token("MOVE_FORWARD")
+        session._load_adjacent_task(+1)
+        assert session.task_index == 0 and session.task_spec.task_id == "render3d_corridor"
+        assert session.state.step_count == 1  # the episode in progress was not reset
+    finally:
+        session.close()

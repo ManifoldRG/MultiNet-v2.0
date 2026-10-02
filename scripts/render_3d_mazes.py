@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -56,7 +58,21 @@ def resolve_mazes(manifest: str | None, experiment: str | None, patterns: list[s
     return unique
 
 
-def render_maze(path: Path, cameras: list[str], resolution: int, replay: str, out_dir: Path) -> list[dict]:
+def output_names(paths: list[Path]) -> dict[Path, str]:
+    """Output directory per maze: its stem, plus a short hash of its resolved
+    path when selected mazes share a stem (they would overwrite each other)."""
+    stems = Counter(path.stem for path in paths)
+    return {
+        path: path.stem
+        if stems[path.stem] == 1
+        else f"{path.stem}_{hashlib.sha1(str(path.resolve()).encode()).hexdigest()[:8]}"
+        for path in paths
+    }
+
+
+def render_maze(
+    path: Path, cameras: list[str], resolution: int, replay: str, out_dir: Path, name: str | None = None
+) -> list[dict]:
     spec = TaskSpecification.from_json(str(path))
     actions: list[int] = []
     if replay == "bfs":
@@ -76,7 +92,7 @@ def render_maze(path: Path, cameras: list[str], resolution: int, replay: str, ou
                 frames.append((step, ACTION_ORDER[action], frame))
                 if terminated or truncated:
                     break
-            cam_dir = out_dir / path.stem / camera
+            cam_dir = out_dir / (name or path.stem) / camera
             cam_dir.mkdir(parents=True, exist_ok=True)
             for step, action, image in frames:
                 png = cam_dir / f"step_{step:03d}.png"
@@ -131,8 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     records: list[dict] = []
+    names = output_names(mazes)
     for path in mazes:
-        records.extend(render_maze(path, cameras, args.resolution, args.replay, out_dir))
+        records.extend(render_maze(path, cameras, args.resolution, args.replay, out_dir, names[path]))
     (out_dir / "index.json").write_text(json.dumps(records, indent=1))
     if args.contact_sheet:
         print(f"contact sheet: {contact_sheet(records, out_dir, cameras)}")

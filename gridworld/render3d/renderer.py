@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
+from .gl import default_mujoco_gl
 
-os.environ.setdefault("MUJOCO_GL", "osmesa")  # must precede `import mujoco`
+default_mujoco_gl()  # must precede `import mujoco`
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
@@ -17,12 +17,13 @@ from .cameras import (  # noqa: E402
     PRESETS,
     TILT_LEVELS,
     CameraPose,
+    cell_pixel_box,
     check_tilt,
     pose_for,
     tilt_pose,
     view_wall_height,
 )
-from .hud import NORTH, draw_compass, draw_frost, draw_ride_arrow, turns_with_agent  # noqa: E402
+from .hud import NORTH, corner_compass_box, draw_compass, draw_frost, draw_ride_arrow, turns_with_agent  # noqa: E402
 from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
@@ -140,7 +141,13 @@ class SceneRenderer:
         # views that turn with the agent also carry the ride glyph while it
         # stands on a rotating tile (north-up views see the arrow itself).
         up = int(state.agent_direction) if self.view_turns_with_agent else NORTH
-        frame = draw_compass(frame, up)
+        box = None
+        if pose.orthographic:
+            # Top-down: keep it in the top-right outer-wall cell (+ margin), off
+            # every interior cell -- the goal tile included.
+            corner = cell_pixel_box(pose, (self.index.width - 1, 0), self.resolution)
+            box = corner_compass_box(corner, self.resolution)
+        frame = draw_compass(frame, up, box=box)
         if self.view_turns_with_agent:
             ride = self._ride_direction(state, rotators)
             if ride is not None:

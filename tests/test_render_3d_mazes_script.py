@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
 import pytest
 
 pytest.importorskip("mujoco")
@@ -86,3 +87,36 @@ def test_manifest_row_with_missing_source_is_skipped_with_warning(tmp_path, caps
     # Should have warning in stderr about skipping missing row
     captured = capsys.readouterr()
     assert "skipping manifest row" in captured.err
+
+
+def test_same_filename_in_two_dirs_does_not_overwrite(tmp_path):
+    """Frames used to go to out/<stem>/<camera>: two `maze.json`s in
+    different dirs overwrote each other and the index pointed both at one."""
+    import copy
+
+    from render3d_test_utils import MECHANISMS
+
+    for sub, spec in (("a", CORRIDOR), ("b", MECHANISMS)):
+        (tmp_path / sub).mkdir()
+        (tmp_path / sub / "maze.json").write_text(json.dumps(copy.deepcopy(spec)))
+    out = tmp_path / "out"
+    code = main([
+        "--mazes", str(tmp_path / "*" / "maze.json"), "--resolution", "48",
+        "--contact-sheet", "--out", str(out),
+    ])
+    assert code == 0
+    index = json.loads((out / "index.json").read_text())
+    assert {r["task_id"] for r in index} == {"render3d_corridor", "render3d_mechanisms"}
+    pngs = [r["png"] for r in index]
+    assert len(set(pngs)) == 2, pngs
+    frames = [np.asarray(Image.open(out / png)) for png in pngs]
+    assert not np.array_equal(frames[0], frames[1])
+
+
+def test_unique_stems_keep_their_plain_directory(tmp_path):
+    maze = tmp_path / "corridor.json"
+    maze.write_text(json.dumps(CORRIDOR))
+    out = tmp_path / "out"
+    assert main(["--mazes", str(maze), "--resolution", "32", "--out", str(out)]) == 0
+    [record] = json.loads((out / "index.json").read_text())
+    assert record["png"] == "corridor/top_down/step_000.png"

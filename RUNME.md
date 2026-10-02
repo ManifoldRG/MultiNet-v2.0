@@ -140,8 +140,9 @@ Install the extra (`mujoco>=3.13`):
 pip install -e ".[dev,visual,mujoco3d]"
 ```
 
-Headless rendering uses `MUJOCO_GL`, which defaults to `osmesa` (software,
-CPU-safe); set `MUJOCO_GL=egl` on GPU machines for speed. Play with it via
+Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
+(software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
+Elsewhere it is left unset so mujoco uses the native GL. Play with it via
 `--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
 `fixed_angled` / `first_person` / `first_person_narrow` live; `first_person` is
 the wide eye, fovy 110 with 1.0 walls so portal beacons show, and

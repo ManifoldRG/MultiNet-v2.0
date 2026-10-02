@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional
 
 from interface.config import ExperimentConfig
 from interface.episode_log import flush_episode_log
-from interface.loader import load_task
+from gridworld.backends import get_backend
 from gridworld.render_settings import RenderSettings
 from interface.runner import build_runner
 from gridworld.task_spec import TaskSpecification
@@ -51,8 +51,10 @@ def build_episode_runner(
     that draws the frames (2D MiniGrid by default).
     """
     render = render or RenderSettings()
-    kwargs = render.backend_kwargs(TaskSpecification.from_json(str(task_source)))
-    backend, spec = load_task(task_source, render.backend, **kwargs)
+    # Parse once and configure once: a 3D configure compiles the MjModel and
+    # opens a GL context, so it must not also run on the pre-seed spec.
+    spec = TaskSpecification.from_json(str(task_source))
+    backend = get_backend(render.backend, **render.backend_kwargs(spec))
     spec = _spec_with_seed(spec, seed)
     if max_steps is not None and spec.max_steps != max_steps:
         spec = dataclasses.replace(spec, max_steps=int(max_steps))

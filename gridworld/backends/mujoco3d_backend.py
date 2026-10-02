@@ -54,17 +54,23 @@ class Mujoco3DBackend(AbstractGridBackend):
         check_supported(task_spec)  # before touching the state backend
         from ..render3d.renderer import SceneRenderer  # lazy: mujoco loads only when used
 
-        self.state_backend.configure(task_spec)
-        if self._renderer is not None:
-            self._renderer.close()
-            self._renderer = None
-        self._renderer = SceneRenderer(
+        # Atomic: build the new renderer before touching anything, so a failed
+        # build (GL context, scene compile) leaves the old task fully playable.
+        renderer = SceneRenderer(
             task_spec,
             camera=self._camera,
             resolution=self.resolution,
             wall_height=self.wall_height,
             tilt=self._tilt,
         )
+        try:
+            self.state_backend.configure(task_spec)
+        except BaseException:
+            renderer.close()
+            raise
+        old, self._renderer = self._renderer, renderer
+        if old is not None:
+            old.close()
         self.task_spec = task_spec
         self._configured = True
         self._frame = None

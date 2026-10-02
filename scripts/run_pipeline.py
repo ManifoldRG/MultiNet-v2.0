@@ -316,26 +316,31 @@ def _expected_run_hash(
     prompt_variant: str = "default",
     experiment_config: Any | None = None,
     model_config: Optional[dict[str, Any]] = None,
+    render: Optional[dict[str, Any]] = None,
 ) -> str:
     """Hash the inputs that determine a Stage-3 episode.
 
     Excludes scorer config: that invalidates run_score, not the model call.
+    ``render`` is ``RenderSettings.provenance`` (3D only: render-layer and
+    mujoco versions + resolved frame size); it is omitted for 2D so 2D hashes
+    stay byte-identical.
     TODO(post-release): fold in backend_version + adapter/model code version so code
     changes invalidate cached episodes at v1.
     """
-    return stable_hash(
-        {
-            "task": spec.to_dict(),
-            "model_id": model_name,
-            "model_config": _runtime_model_config(model_config),
-            "seed": seed,
-            "backend": backend,
-            "condition_set": condition_set,
-            "prompt_variant": prompt_variant,
-            "experiment_config": _experiment_config_payload(experiment_config),
-            "pipeline_version": PIPELINE_VERSION,
-        }
-    )
+    payload = {
+        "task": spec.to_dict(),
+        "model_id": model_name,
+        "model_config": _runtime_model_config(model_config),
+        "seed": seed,
+        "backend": backend,
+        "condition_set": condition_set,
+        "prompt_variant": prompt_variant,
+        "experiment_config": _experiment_config_payload(experiment_config),
+        "pipeline_version": PIPELINE_VERSION,
+    }
+    if render is not None:
+        payload["render"] = render
+    return stable_hash(payload)
 
 
 def _phase_episode_provenance(
@@ -605,6 +610,7 @@ def _prepare_unit_run(
     # --conditions.
     manifest_row = dict(row)
 
+    render_provenance = render.provenance(runtime_spec)  # None for 2D
     expected_hash = _expected_run_hash(
         runtime_spec,
         model_name,
@@ -614,6 +620,7 @@ def _prepare_unit_run(
         prompt_variant=prompt_variant,
         experiment_config=experiment_config,
         model_config=model_config,
+        render=render_provenance,
     )
 
     def write_run_inputs(extras: Optional[dict[str, Any]] = None) -> None:
@@ -630,7 +637,7 @@ def _prepare_unit_run(
             "condition_set": conditions,
             "prompt_variant": prompt_variant,
             "experiment_config": _experiment_config_payload(experiment_config),
-            **({} if render.backend == "minigrid" else {"render": render.provenance()}),
+            **({} if render_provenance is None else {"render": render_provenance}),
             "runtime_max_steps_cap": {
                 "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
                 "optimal_steps": _canonical_optimal_steps(canonical),
@@ -668,6 +675,7 @@ def _prepare_unit_run(
             manifest_row,
             agent_or_model=model_name,
             seed=seed,
+            backend=render.label,
             raw_output_ref=str(episode_path.relative_to(artifacts_root)),
             metrics=metrics,
             prompt_variant=prompt_variant,
@@ -756,7 +764,7 @@ def _run_one_unit(
             max_steps=prep.runtime_spec.max_steps,
             provenance={
                 **_phase_episode_provenance(phase, model_config),
-                **({} if render.backend == "minigrid" else {"render": render.provenance()}),
+                **({} if render.backend == "minigrid" else {"render": render.provenance(prep.runtime_spec)}),
             },
             render=render,
         )

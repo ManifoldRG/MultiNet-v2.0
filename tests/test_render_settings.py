@@ -61,9 +61,8 @@ def test_start_map_gets_its_own_label_kwarg_and_provenance():
     # its own artifact directory and run hash: never collides with a no-map run
     assert settings.label == "mujoco3d_first_person_grid_map"
     assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 7 * 32, "start_map": True}
-    assert settings.provenance() == {
-        "backend": "mujoco3d", "camera": "first_person", "resolution": "grid", "start_map": True,
-    }
+    # the flag is part of the 3D cache key and the recorded render provenance
+    assert settings.provenance(SPEC)["start_map"] is True
 
 
 @pytest.mark.parametrize("block", [
@@ -75,8 +74,7 @@ def test_no_start_map_changes_nothing(block):
     assert settings.start_map is False
     assert settings.label == "mujoco3d_chase_grid"
     assert settings.backend_kwargs(SPEC) == {"camera": "chase", "resolution": 7 * 32}
-    # the render provenance stamped on sidecars / episode.json is as before
-    assert settings.provenance() == {"backend": "mujoco3d", "camera": "chase", "resolution": "grid"}
+    assert settings.provenance(SPEC)["start_map"] is False
 
 
 @pytest.mark.parametrize(
@@ -103,3 +101,30 @@ def test_start_map_needs_an_observation_that_carries_images():
         settings.check_observation("text_only")
     # without a start map every observation stays allowed
     RenderSettings().check_observation("text_only")
+
+
+@pytest.mark.parametrize("block", [[], "", 0, False, None, "mujoco3d", ["mujoco3d"]])
+def test_a_present_render_block_must_be_an_object(block):
+    # A falsy non-object must not silently mean "2D": only an absent block does.
+    with pytest.raises(ValueError, match="'render' must be an object"):
+        RenderSettings.from_run_config({"render": block})
+
+
+def test_an_empty_render_object_is_the_2d_default():
+    assert RenderSettings.from_run_config({"render": {}}) == RenderSettings()
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"backend": "minigrid", "resolution": 512},
+        {"resolution": 512},
+        {"backend": "minigrid", "resolution": "grid"},
+        {"camera": "chase"},
+    ],
+)
+def test_3d_only_keys_are_rejected_for_the_minigrid_backend(block):
+    # MiniGrid ignores resolution/camera: accepting them would record a setting
+    # the run never used.
+    with pytest.raises(ValueError, match="3D setting"):
+        RenderSettings.from_run_config({"render": block})

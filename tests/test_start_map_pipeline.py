@@ -55,7 +55,9 @@ def test_start_map_run_writes_its_own_artifacts(tmp_path):
     )
     sidecar = load_json(run_dir / "run_inputs.json")
     assert sidecar["backend"] == "mujoco3d_first_person_grid_map"
-    assert sidecar["render"] == {**render, "resolution": "grid"}
+    # the settings, plus the render-layer provenance every 3D sidecar carries
+    assert {**render, "resolution": "grid"}.items() <= sidecar["render"].items()
+    assert {"frame_pixels", "render3d_version", "mujoco_version"} <= sidecar["render"].keys()
     episode = load_json(run_dir / "episode.json")
     assert episode["render"]["start_map"] is True
     assert episode["transcript"][0]["start_map_frame"] == "frames/start_map.png"

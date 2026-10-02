@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from gridworld.render3d.cameras import PRESETS  # pure pose math; no mujoco import
 from gridworld.task_spec import TaskSpecification
@@ -33,11 +33,11 @@ class RenderSettings:
     def from_run_config(cls, run_config: dict[str, Any]) -> RenderSettings:
         """Parse the optional top-level ``render`` block, failing fast on
         anything unknown (like the experiment_config overlay does)."""
-        block = run_config.get("render")
-        if not block:
+        if "render" not in run_config:
             return cls()
-        if not isinstance(block, dict):
-            raise ValueError("run-config 'render' must be an object")
+        block = run_config["render"]
+        if not isinstance(block, dict):  # a falsy [] / "" / 0 / null must not mean 2D
+            raise ValueError(f"run-config 'render' must be an object, got {block!r}")
         unknown = sorted(set(block) - _KEYS)
         if unknown:
             raise ValueError(f"unknown render keys: {', '.join(unknown)}; known: {sorted(_KEYS)}")
@@ -45,8 +45,11 @@ class RenderSettings:
         if backend not in BACKENDS:
             raise ValueError(f"unknown render backend {backend!r}; choose from {list(BACKENDS)}")
         camera = block.get("camera")
-        if backend == "minigrid" and camera is not None:
-            raise ValueError("camera is a 3D setting; the minigrid backend has no camera")
+        if backend == "minigrid":
+            # MiniGrid would silently ignore these, recording a setting the run never used.
+            for key in ("camera", "resolution"):
+                if key in block:
+                    raise ValueError(f"{key} is a 3D setting; the minigrid backend has no {key}")
         if backend == "mujoco3d" and camera not in PRESETS:
             raise ValueError(f"3D runs need a camera from {list(PRESETS)}, got {camera!r}")
         resolution = block.get("resolution", "grid")
@@ -83,13 +86,21 @@ class RenderSettings:
             return int(self.resolution)
         return GRID_PIXELS_PER_CELL * max(spec.maze.dimensions)
 
-    def provenance(self) -> dict[str, Any]:
-        """The ``render`` block stamped on sidecars and episode.json. Without a
-        start map it is exactly what it was before the flag existed."""
-        payload = dataclasses.asdict(self)
-        if not self.start_map:
-            del payload["start_map"]
-        return payload
+    def provenance(self, spec: TaskSpecification) -> Optional[dict[str, Any]]:
+        """What draws this task's 3D frames, for the episode cache key and
+        run_inputs.json: the settings, the resolved frame size, the render-layer
+        version and the mujoco version. None for 2D, so 2D run hashes stay
+        byte-identical."""
+        if self.backend == "minigrid":
+            return None
+        from gridworld.render3d import RENDER3D_VERSION
+
+        return {
+            **dataclasses.asdict(self),
+            "frame_pixels": self.frame_pixels(spec),
+            "render3d_version": RENDER3D_VERSION,
+            "mujoco_version": _mujoco_version(),
+        }
 
     def check_observation(self, observation: str) -> None:
         """Fail fast when a start map meets an observation with no images."""
@@ -97,3 +108,13 @@ class RenderSettings:
             raise ValueError(
                 "render start_map shows the model an image, but observation 'text_only' carries none"
             )
+
+
+def _mujoco_version() -> str:
+    """Read lazily (3D runs only), after the MUJOCO_GL default is in place."""
+    from gridworld.render3d.gl import default_mujoco_gl
+
+    default_mujoco_gl()  # must precede the first `import mujoco`
+    import mujoco
+
+    return mujoco.__version__
