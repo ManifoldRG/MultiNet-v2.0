@@ -129,6 +129,11 @@ layer, not a new environment. A run-config selects it with a top-level
 `"render": {"backend": "mujoco3d", "camera": "chase"}` block (resolution
 defaults to `"grid"`, MiniGrid's 32 px per cell, so a 3D frame costs the same
 image tokens as a 2D one); each camera gets its own artifact directory.
+Add `"start_map": true` (any camera but `top_down`, image observations only)
+to also show the model a top-down snapshot of the maze at reset: it opens the
+first user message of every request, exactly once, in every chat mode (stored
+chat turns never carry it), is logged as `frames/start_map.png`, and the run
+gets its own `..._map` artifact label. Off by default; prompts are unchanged.
 Install the extra (`mujoco>=3.13`):
 
 ```bash
