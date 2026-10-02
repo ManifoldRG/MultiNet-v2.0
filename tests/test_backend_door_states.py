@@ -76,10 +76,9 @@ def test_minigrid_door_states_track_physical_open_close():
         backend.step(int(action))
     assert backend.door_states() == {"d1": True}
 
-    # Re-close the unlocked door: physically closed, still "unlocked" for scoring.
-    *_, state, _info = backend.step(int(A.TOGGLE))
-    assert backend.door_states() == {"d1": False}
-    assert "d1" in state.open_doors
-
-    backend.step(int(A.TOGGLE))
+    # PR #57 rulebook: TOGGLE on an open door is a no-op (doors never re-close),
+    # so the physical state stays in step with GridState.open_doors.
+    *_, state, info = backend.step(int(A.TOGGLE))
     assert backend.door_states() == {"d1": True}
+    assert "d1" in state.open_doors
+    assert info.get("invalid_action") is True

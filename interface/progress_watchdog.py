@@ -51,6 +51,10 @@ class ProgressStallWatchdog:
         self.seen_signatures = {_progress_signature(initial_state)}
         self.stall_count = 0
 
+    @property
+    def remaining(self) -> int:
+        return self.k - self.stall_count
+
     def observe(self, state) -> bool:
         """Record ``state`` and return True once ``stall_count`` reaches ``k``."""
         sig = _progress_signature(state)

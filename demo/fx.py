@@ -34,6 +34,8 @@ DOOR_FADE_MS = 150
 GATE_FADE_MS = 110
 SWITCH_PRESS_MS = 80
 GOAL_PULSE_MS = 320
+KILL_MS = 480
+WARP_MS = 300
 
 BOUNCE_PX = 2
 
@@ -53,6 +55,32 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     if token == "MOVE_FORWARD" and prev_state is not None:
         return _DIR_DELTA.get(prev_state.agent_direction, (0, 0))
     return (0, 0)
+
+
+def portal_transition(
+    session, token: str, prev_state
+) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
+    """Return ``(kind, src, dest)`` for a kill reset or portal warp."""
+    if prev_state is None or session.task_spec is None:
+        return None
+    dx, dy = travel_delta(token, prev_state)
+    if (dx, dy) == (0, 0):
+        return None
+    px, py = prev_state.agent_position
+    front = (px + dx, py + dy)
+    mech = session.task_spec.mechanisms
+    warps: dict[tuple[int, int], tuple[int, int]] = {}
+    for spec in mech.teleporters:
+        a, b = spec.position_a.to_tuple(), spec.position_b.to_tuple()
+        warps[a] = b
+        if spec.bidirectional:
+            warps[b] = a
+    landed = warps.get(front, front)
+    if landed in {cell.to_tuple() for cell in mech.kill_cells}:
+        return ("kill", landed, session.task_spec.maze.start.to_tuple())
+    if landed != front:
+        return ("warp", front, landed)
+    return None
 
 
 def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
@@ -88,8 +116,20 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
     )
     event_type = last.get("event_type") if last else None
 
+    hit = portal_transition(session, token, prev_state)
+    if hit is not None:
+        kind, src, dst = hit
+        plan.append(
+            {
+                "kind": kind,
+                "cell": [int(src[0]), int(src[1])],
+                "dest": [int(dst[0]), int(dst[1])],
+                "durationMs": KILL_MS if kind == "kill" else WARP_MS,
+            }
+        )
+
     travel = travel_delta(token, prev_state)
-    if event_type == "BLOCKED" and travel != (0, 0):
+    if hit is None and event_type == "BLOCKED" and travel != (0, 0):
         dx, dy = travel
         plan.append(
             {
@@ -259,16 +299,17 @@ def effects_for_dispatch(
         cell = item["cell"]
         duration = item["durationMs"]
 
-        if kind == "pulse":
-            effects.append(
-                {
-                    "kind": "pulse",
-                    "cell": cell,
-                    "gridW": grid_w,
-                    "gridH": grid_h,
-                    "durationMs": duration,
-                }
-            )
+        if kind in ("pulse", "kill", "warp"):
+            item_out = {
+                "kind": kind,
+                "cell": cell,
+                "gridW": grid_w,
+                "gridH": grid_h,
+                "durationMs": duration,
+            }
+            if "dest" in item:
+                item_out["dest"] = item["dest"]
+            effects.append(item_out)
             continue
 
         if kind == "press":
@@ -335,6 +376,14 @@ class TurnAnimation:
         self._from_direction = None
 
 
+def _add_glow(out: "pygame.Surface", rect: "pygame.Rect", rgb: tuple[int, int, int], alpha: int) -> None:
+    if alpha <= 0 or pygame is None:
+        return
+    glow = pygame.Surface(rect.size, pygame.SRCALPHA)
+    glow.fill((*rgb, min(255, alpha)))
+    out.blit(glow, rect.topleft, special_flags=pygame.BLEND_RGBA_ADD)
+
+
 @dataclass
 class _Clip:
     kind: str
@@ -342,6 +391,7 @@ class _Clip:
     duration_ms: int
     offset: tuple[int, int] = (0, 0)
     cell: Optional[tuple[int, int]] = None
+    dest: Optional[tuple[int, int]] = None
     tile_surf: Optional["pygame.Surface"] = None
 
 
@@ -404,9 +454,12 @@ class DemoFx:
 
             cell = (int(item["cell"][0]), int(item["cell"][1]))
 
-            if kind == "pulse":
-                self._clips.append(_Clip("pulse", now_ms, duration, cell=cell))
-                if prev_rgb is not None:
+            if kind in ("pulse", "kill", "warp"):
+                dest = tuple(item["dest"]) if "dest" in item else None
+                self._clips.append(
+                    _Clip(kind, now_ms, duration, cell=cell, dest=dest)
+                )
+                if kind == "pulse" and prev_rgb is not None:
                     self._success_pulse_pending = True
                 continue
 
@@ -496,6 +549,54 @@ class DemoFx:
                 glow = pygame.Surface(dest.size, pygame.SRCALPHA)
                 glow.fill((90, 220, 140, int(110 * _sin_pulse(t))))
                 out.blit(glow, dest.topleft, special_flags=pygame.BLEND_RGBA_ADD)
+
+            elif clip.kind == "kill":
+                veil_a = int(90 * max(0.0, 1.0 - t / 0.45)) if t < 0.45 else 0
+                if veil_a:
+                    veil = pygame.Surface(out.get_size(), pygame.SRCALPHA)
+                    veil.fill((160, 16, 16, veil_a))
+                    out.blit(veil, (0, 0))
+                _add_glow(out, dest, (220, 40, 40), int(200 * _sin_pulse(min(1.0, t / 0.5))))
+                if t < 0.55:
+                    mark = pygame.Surface(dest.size, pygame.SRCALPHA)
+                    pad = max(3, dest.width // 5)
+                    alpha = int(230 * (1.0 - t / 0.55))
+                    pygame.draw.line(
+                        mark, (255, 90, 90, alpha),
+                        (pad, pad), (dest.width - pad, dest.height - pad), 3,
+                    )
+                    pygame.draw.line(
+                        mark, (255, 90, 90, alpha),
+                        (dest.width - pad, pad), (pad, dest.height - pad), 3,
+                    )
+                    out.blit(mark, dest.topleft)
+                if clip.dest is not None and t > 0.35:
+                    rx, ry = clip.dest
+                    spawn = pygame.Rect(
+                        int(rx * cell_w), int(ry * cell_h),
+                        max(1, int(cell_w)), max(1, int(cell_h)),
+                    )
+                    _add_glow(out, spawn, (255, 210, 180), int(160 * _sin_pulse((t - 0.35) / 0.65)))
+
+            elif clip.kind == "warp":
+                _add_glow(out, dest, (170, 120, 255), int(170 * _sin_pulse(min(1.0, t / 0.65))))
+                if clip.dest is not None:
+                    rx, ry = clip.dest
+                    land = pygame.Rect(
+                        int(rx * cell_w), int(ry * cell_h),
+                        max(1, int(cell_w)), max(1, int(cell_h)),
+                    )
+                    _add_glow(
+                        out, land, (80, 210, 255),
+                        int(170 * _sin_pulse(max(0.0, (t - 0.2) / 0.8))),
+                    )
+                    if t < 0.85:
+                        beam = pygame.Surface(out.get_size(), pygame.SRCALPHA)
+                        pygame.draw.line(
+                            beam, (160, 200, 255, int(180 * (1.0 - t))),
+                            dest.center, land.center, 2,
+                        )
+                        out.blit(beam, (0, 0))
 
         return out, offset
 
