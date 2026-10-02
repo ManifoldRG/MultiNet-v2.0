@@ -2308,6 +2308,12 @@ def test_run_from_config_renders_through_the_3d_backend(tmp_path):
     episode = load_json(run_dir / "episode.json")
     assert episode["render"]["camera"] == "top_down"
     assert episode["steps_used"] > 0
+    # The aggregate rows and per-model report name the backend that drew the
+    # frames, not the 2D default.
+    rows = [json.loads(line) for line in (artifacts / "episode_runs.jsonl").read_text().splitlines()]
+    assert [r["backend"] for r in rows] == ["mujoco3d_top_down_grid"]
+    report = load_json(artifacts / "reports" / "cfg3d" / "models" / "stub-model.json")
+    assert report["backend"] == "mujoco3d_top_down_grid"
 
     from PIL import Image
 

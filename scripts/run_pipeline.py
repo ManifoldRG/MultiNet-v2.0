@@ -668,6 +668,7 @@ def _prepare_unit_run(
             manifest_row,
             agent_or_model=model_name,
             seed=seed,
+            backend=render.label,
             raw_output_ref=str(episode_path.relative_to(artifacts_root)),
             metrics=metrics,
             prompt_variant=prompt_variant,
