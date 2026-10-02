@@ -469,3 +469,62 @@ def test_summary_survives_a_json_round_trip():
     assert text_summary_history(reloaded, teleport_spec()) == text_summary_history(
         result["transcript"], teleport_spec()
     )
+
+
+# --- other feedback callers: demo + prompt preview ------------------------------
+
+
+def test_demo_session_labels_mechanics_like_the_runner(tmp_path):
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / "teleport.json"
+    path.write_text(json.dumps(teleport_spec().to_dict()))
+    session = MiniGridPlaySession(
+        task_path=str(path), config=replace(R1_CONFIG, feedback="standard")
+    )
+    for _ in range(3):
+        session._step_token("MOVE_FORWARD")
+    last = session.transcript[-1]
+    assert last["event_type"] == "TELEPORTED"
+    assert last["feedback"] == (
+        "TELEPORTED — MOVE_FORWARD: Took the purple portal from (1, 4) to (3, 6)."
+    )
+    assert last["mechanic"]["kind"] == "teleported"
+    assert "took the purple portal from (1, 4) to (3, 6)" in text_summary_history(
+        session._model_transcript(), session.task_spec
+    )
+
+
+def test_demo_sounds_for_mechanic_events():
+    from types import SimpleNamespace
+
+    from demo.sounds import sfx_for_dispatch
+
+    def sfx(event_type):
+        session = SimpleNamespace(
+            episode_done=False,
+            episode_success=False,
+            last_dispatched_token="TURN_LEFT",  # no travel: skips the portal FX path
+            task_spec=None,
+            event_log=[],
+            transcript=[{"kind": "step", "event_type": event_type}],
+        )
+        return sfx_for_dispatch(session, 0)
+
+    assert sfx("TELEPORTED") == sfx("MOVED") == "step"
+    assert sfx("DIED") == sfx("FROZEN") == sfx("NOTHING") == "invalid"
+
+
+def test_prompt_preview_labels_mechanics():
+    from prompting_experiments.preview_prompts import _solution_preview_steps
+
+    spec = teleport_spec()
+    backend = MiniGridBackend(render_mode="rgb_array")
+    backend.configure(spec)
+    runner = build_runner(ExperimentConfig(**R1_CELL), backend, spec)
+    runner.last_rgb, state, _ = backend.reset(seed=spec.seed)
+    _, _, transcript, _ = _solution_preview_steps(runner, state, ["MOVE_FORWARD"] * 3)
+    assert transcript[-1]["event_type"] == "TELEPORTED"
+    assert transcript[-1]["mechanic"]["kind"] == "teleported"
+    assert "mechanic" not in transcript[0]

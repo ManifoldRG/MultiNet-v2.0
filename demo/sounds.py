@@ -255,7 +255,7 @@ def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
         None,
     )
     event_type = last.get("event_type") if last else None
-    if event_type == "MOVED":
+    if event_type in ("MOVED", "TELEPORTED"):
         return "step"
     if event_type == "TURNED":
         return "turn"
@@ -273,7 +273,7 @@ def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
         # Successful drops already returned "pickup" via the Progress event
         # above; reaching here means X with an empty inventory.
         return "invalid"
-    if event_type in ("NOTHING", "INVALID", "WRONG_DONE"):
+    if event_type in ("NOTHING", "INVALID", "WRONG_DONE", "DIED", "FROZEN"):
         return "invalid"
     return "invalid"
 

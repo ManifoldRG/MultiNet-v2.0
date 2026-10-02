@@ -391,7 +391,7 @@ class MiniGridPlaySession:
 
         feedback_text, event_type = format_step_feedback(
             token, prev_state, self.state, reward, terminated, self.task_spec,
-            level=self.config.feedback,
+            level=self.config.feedback, mechanic=(info or {}).get("mechanic"),
         )
         self.last_feedback = feedback_text
         self._record_step(
@@ -467,6 +467,7 @@ class MiniGridPlaySession:
                 "terminated": terminated,
                 "truncated": truncated,
                 "backend_info": info,
+                **({"mechanic": info["mechanic"]} if info and info.get("mechanic") else {}),
             }
         )
 

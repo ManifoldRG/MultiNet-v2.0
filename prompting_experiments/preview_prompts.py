@@ -117,9 +117,10 @@ def _rollout_preview_steps(
             runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
                 nlu_action_to_int(action)
             )
+        mechanic = info.get("mechanic") if isinstance(info, dict) else None
         step_detail, event_type = format_step_feedback(
             action, prev_state, state, reward, terminated, runner.task_spec,
-            level=runner.config.feedback,
+            level=runner.config.feedback, mechanic=mechanic,
         )
         last_feedback = step_detail
         transcript.append(
@@ -147,6 +148,7 @@ def _rollout_preview_steps(
                 "consecutive_failures_after": 0,
                 "_decision_frame_rgb": decision_frame_rgb,
                 "_post_step_rgb": runner.last_rgb,
+                **({"mechanic": mechanic} if mechanic is not None else {}),
             }
         )
         if watchdog is not None:
@@ -201,9 +203,10 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
             runner.last_rgb, reward, terminated, truncated, state, info = runner.backend.step(
                 nlu_action_to_int(action)
             )
+        mechanic = info.get("mechanic") if isinstance(info, dict) else None
         step_detail, event_type = format_step_feedback(
             action, prev_state, state, reward, terminated, runner.task_spec,
-            level=runner.config.feedback,
+            level=runner.config.feedback, mechanic=mechanic,
         )
         last_feedback = step_detail
         transcript.append(
@@ -231,6 +234,7 @@ def _solution_preview_steps(runner, state, actions: list[str]) -> tuple[Any, str
                 "consecutive_failures_after": 0,
                 "_decision_frame_rgb": decision_frame_rgb,
                 "_post_step_rgb": runner.last_rgb,
+                **({"mechanic": mechanic} if mechanic is not None else {}),
             }
         )
         if watchdog is not None:
