@@ -48,3 +48,30 @@ def test_fixed_resolution_is_recorded_in_the_label():
 def test_bad_render_blocks_fail_before_any_paid_call(block, message):
     with pytest.raises(ValueError, match=message):
         RenderSettings.from_run_config({"render": block})
+
+
+@pytest.mark.parametrize("block", [[], "", 0, False, None, "mujoco3d", ["mujoco3d"]])
+def test_a_present_render_block_must_be_an_object(block):
+    # A falsy non-object must not silently mean "2D": only an absent block does.
+    with pytest.raises(ValueError, match="'render' must be an object"):
+        RenderSettings.from_run_config({"render": block})
+
+
+def test_an_empty_render_object_is_the_2d_default():
+    assert RenderSettings.from_run_config({"render": {}}) == RenderSettings()
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"backend": "minigrid", "resolution": 512},
+        {"resolution": 512},
+        {"backend": "minigrid", "resolution": "grid"},
+        {"camera": "chase"},
+    ],
+)
+def test_3d_only_keys_are_rejected_for_the_minigrid_backend(block):
+    # MiniGrid ignores resolution/camera: accepting them would record a setting
+    # the run never used.
+    with pytest.raises(ValueError, match="3D setting"):
+        RenderSettings.from_run_config({"render": block})

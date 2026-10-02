@@ -29,11 +29,11 @@ class RenderSettings:
     def from_run_config(cls, run_config: dict[str, Any]) -> RenderSettings:
         """Parse the optional top-level ``render`` block, failing fast on
         anything unknown (like the experiment_config overlay does)."""
-        block = run_config.get("render")
-        if not block:
+        if "render" not in run_config:
             return cls()
-        if not isinstance(block, dict):
-            raise ValueError("run-config 'render' must be an object")
+        block = run_config["render"]
+        if not isinstance(block, dict):  # a falsy [] / "" / 0 / null must not mean 2D
+            raise ValueError(f"run-config 'render' must be an object, got {block!r}")
         unknown = sorted(set(block) - _KEYS)
         if unknown:
             raise ValueError(f"unknown render keys: {', '.join(unknown)}; known: {sorted(_KEYS)}")
@@ -41,8 +41,11 @@ class RenderSettings:
         if backend not in BACKENDS:
             raise ValueError(f"unknown render backend {backend!r}; choose from {list(BACKENDS)}")
         camera = block.get("camera")
-        if backend == "minigrid" and camera is not None:
-            raise ValueError("camera is a 3D setting; the minigrid backend has no camera")
+        if backend == "minigrid":
+            # MiniGrid would silently ignore these, recording a setting the run never used.
+            for key in ("camera", "resolution"):
+                if key in block:
+                    raise ValueError(f"{key} is a 3D setting; the minigrid backend has no {key}")
         if backend == "mujoco3d" and camera not in PRESETS:
             raise ValueError(f"3D runs need a camera from {list(PRESETS)}, got {camera!r}")
         resolution = block.get("resolution", "grid")
