@@ -32,3 +32,17 @@ VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
 
 # `INITIAL_MAZE_SECTION` is used when the observation includes text.
+
+# 3D task prefixes: TASK_PREFIX's "triangular agent ... pointy end" only fits
+# the 2D top-down frame. Standard/verbose (and text_initial_maze) use these
+# for 3D runs, by camera family; MIN_TASK_PREFIX is already camera-neutral.
+# NOTE: the 3D visuals are about to be redesigned; like the start-map texts in
+# user.py, these name how the agent and goal look.
+TASK_PREFIX_3D_THIRD_PERSON = (  # top_down, chase, fixed_angled
+    "Task: You are the red wedge-shaped agent trying to navigate this maze. "
+    "The wedge points the way you face. Move to the green goal tile."
+)
+TASK_PREFIX_3D_FIRST_PERSON = (  # first_person, first_person_narrow
+    "Task: You are navigating this maze and see it through your own eyes; "
+    "the view looks the way you face. Move to the green goal tile."
+)

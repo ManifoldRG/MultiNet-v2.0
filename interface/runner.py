@@ -25,6 +25,7 @@ from interface.observation import (
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
     PromptStrategy,
+    RenderContext,
     StandardPromptStrategy,
     VerbosePromptStrategy,
 )
@@ -117,7 +118,11 @@ def build_runner(
         backend=backend,
         task_spec=task_spec,
         config=config,
-        prompt=_PROMPT_STRATEGIES[config.prompting](action_space_mod.actions_hint(space)),
+        # The render context (3D camera, start map) is read off the backend, not
+        # the config, so 2D prompts and every config hash stay as they were.
+        prompt=_PROMPT_STRATEGIES[config.prompting](
+            action_space_mod.actions_hint(space), render=RenderContext.from_backend(backend)
+        ),
         querying=QueryingMode(
             config.querying,
             valid_actions=action_space_mod.valid_actions(space),
