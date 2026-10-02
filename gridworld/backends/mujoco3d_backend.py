@@ -28,10 +28,19 @@ class Mujoco3DBackend(AbstractGridBackend):
         camera: str = "top_down",
         resolution: int = 512,
         wall_height: Optional[float] = None,
+        start_map: bool = False,
     ):
         super().__init__()
         if camera not in PRESETS:
             raise ValueError(f"unknown camera preset {camera!r}; choose from {PRESETS}")
+        if start_map and camera == "top_down":
+            raise ValueError("start_map adds a top-down map; the top_down camera already is one")
+        # Run-config render.start_map: reset() also snapshots the reset state
+        # from above (start_map_frame) with a second, lazily built renderer.
+        self.start_map = bool(start_map)
+        self._map_renderer = None
+        self._start_map: Optional[np.ndarray] = None
+        self._start_map_spec: Optional[TaskSpecification] = None
         self.state_backend = state_backend
         self.resolution = int(resolution)
         self.wall_height = wall_height
@@ -65,6 +74,7 @@ class Mujoco3DBackend(AbstractGridBackend):
         if self._renderer is None:
             raise RuntimeError("Backend must be configured before reset()/step()")
         _flat, state, info = self.state_backend.reset(seed=seed)
+        self._capture_start_map(state)
         return self._frame_for(state), state, info
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, GridState, dict]:
@@ -194,7 +204,38 @@ class Mujoco3DBackend(AbstractGridBackend):
         self._frame = None
         self._frame_key = None
 
+    def start_map_frame(self) -> Optional[np.ndarray]:
+        """The top-down snapshot of this episode's reset state (north up, the
+        agent at its start pose, at the frame resolution); None without
+        start_map or before the configured maze has been reset."""
+        if self._start_map_spec is not self.task_spec:
+            return None
+        return self._start_map
+
+    def _capture_start_map(self, state: GridState) -> None:
+        if not self.start_map:
+            return
+        if self._map_renderer is not None and self._map_renderer.spec is not self.task_spec:
+            self._map_renderer.close()
+            self._map_renderer = None
+        if self._map_renderer is None:
+            from ..render3d.renderer import SceneRenderer  # lazy: mujoco loads only when used
+
+            self._map_renderer = SceneRenderer(
+                self.task_spec, camera="top_down", resolution=self.resolution, wall_height=self.wall_height
+            )
+        self._start_map = self._map_renderer.render(
+            state,
+            self.state_backend.door_states(),
+            rotators=self.state_backend.rotator_directions(),
+            freeze=self.state_backend.freeze_remaining(),
+        )
+        self._start_map_spec = self.task_spec
+
     def close(self) -> None:
+        if self._map_renderer is not None:
+            self._map_renderer.close()
+            self._map_renderer = None
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None

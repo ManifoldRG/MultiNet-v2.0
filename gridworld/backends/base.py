@@ -321,6 +321,12 @@ class AbstractGridBackend(ABC):
         no-op while > 0). Not part of GridState; renderers read it here."""
         return 0
 
+    def start_map_frame(self) -> Optional[np.ndarray]:
+        """A top-down snapshot of the reset state, shown to the model beside
+        its view (run-config ``render.start_map``; the 3D backend only).
+        None for every backend without one."""
+        return None
+
     @property
     def frame_is_grid_aligned(self) -> bool:
         """True when frames are a top-down image of equal-size cell tiles, so
