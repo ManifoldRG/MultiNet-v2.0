@@ -630,7 +630,7 @@ def _prepare_unit_run(
             "condition_set": conditions,
             "prompt_variant": prompt_variant,
             "experiment_config": _experiment_config_payload(experiment_config),
-            **({} if render.backend == "minigrid" else {"render": dataclasses.asdict(render)}),
+            **({} if render.backend == "minigrid" else {"render": render.provenance()}),
             "runtime_max_steps_cap": {
                 "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
                 "optimal_steps": _canonical_optimal_steps(canonical),
@@ -756,7 +756,7 @@ def _run_one_unit(
             max_steps=prep.runtime_spec.max_steps,
             provenance={
                 **_phase_episode_provenance(phase, model_config),
-                **({} if render.backend == "minigrid" else {"render": dataclasses.asdict(render)}),
+                **({} if render.backend == "minigrid" else {"render": render.provenance()}),
             },
             render=render,
         )
@@ -898,6 +898,12 @@ def run_from_config(
     # frames. Parsed here so a bad block fails before any paid model call; the
     # 2D default leaves artifact paths and run hashes exactly as they were.
     render = RenderSettings.from_run_config(run_config)
+    if render.start_map:
+        # The map is an image: every experiment cell must carry images.
+        for _variant, cell in _condition_configs(
+            conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay
+        ):
+            render.check_observation(cell.observation)
 
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
