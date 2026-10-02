@@ -8,6 +8,7 @@ render it.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 from gridworld.actions import MiniGridActions as A
@@ -17,6 +18,8 @@ from gridworld.world_model import TaskPlanningContext, classify_mechanic, succes
 from interface.feedback import format_step_feedback, is_failed_step
 from interface.config import ExperimentConfig
 from interface.runner import build_runner
+from interface.episode_log import _json_safe
+from interface.observation import text_summary_history
 
 PORTAL = {
     "id": "portal_purple",
@@ -27,7 +30,7 @@ PORTAL = {
 }
 
 
-def _spec(mechanisms: dict, goal=(7, 3)) -> TaskSpecification:
+def _spec(mechanisms: dict, goal=(7, 1)) -> TaskSpecification:
     return TaskSpecification.from_dict(
         {
             "task_id": "mechanic_feedback",
@@ -416,3 +419,53 @@ def test_runner_reports_teleport_and_death_as_non_failures():
     assert steps[3]["feedback"] == "DIED"  # R1 cell: minimal feedback
     assert steps[3]["consecutive_failures_after"] == 0
     assert steps[3]["mechanic"]["kind"] == "died"
+
+
+# --- activity summary ------------------------------------------------------------
+
+
+def _summary(spec: TaskSpecification, actions) -> str:
+    result, _, _ = _run(spec, list(actions) + [A.TURN_LEFT])
+    # The scripted TURN_LEFT pads the episode so the summary reflects ``actions``
+    # only through the trail: turns never enter it.
+    return text_summary_history(result["transcript"], spec)
+
+
+def test_summary_reports_the_portal_and_restarts_the_trail():
+    assert _summary(teleport_spec(), [A.MOVE_FORWARD] * 4) == (
+        "You started at (1, 1) facing EAST.\n"
+        "Activity summary:\n"
+        "first you took the purple portal from (1, 4) to (3, 6), finally you passed (3, 7)"
+    )
+
+
+def test_summary_reports_one_freeze_event_not_each_swallowed_action():
+    assert _summary(ice_spec(), [A.MOVE_FORWARD] * 5) == (
+        "You started at (1, 1) facing EAST.\n"
+        "Activity summary:\n"
+        "first you were frozen at (1, 2) for 3 steps, finally you passed (1, 3)"
+    )
+    one_step = _spec({"frozen_tiles": [[2, 1]], "freeze_steps": 1})
+    assert _summary(one_step, [A.MOVE_FORWARD]).endswith(
+        "first you were frozen at (1, 2) for 1 step"
+    )
+
+
+def test_summary_keeps_events_before_a_death():
+    assert _summary(
+        death_spec(),
+        [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD, A.MOVE_FORWARD],
+    ) == (
+        "You started at (1, 1) facing EAST.\n"
+        "Activity summary:\n"
+        "first you picked up the red key, then you stepped on a death tile at (1, 4) "
+        "and the maze reset to the start tile (1, 1), finally you passed (1, 2)"
+    )
+
+
+def test_summary_survives_a_json_round_trip():
+    result, _, _ = _run(teleport_spec(), [A.MOVE_FORWARD] * 4)
+    reloaded = json.loads(json.dumps(_json_safe(result["transcript"]), default=str))
+    assert text_summary_history(reloaded, teleport_spec()) == text_summary_history(
+        result["transcript"], teleport_spec()
+    )

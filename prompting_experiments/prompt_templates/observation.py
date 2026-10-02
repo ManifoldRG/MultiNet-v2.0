@@ -23,6 +23,16 @@ TEXT_SUMMARY_DROP_KEY_UNKNOWN = "dropped the key"
 TEXT_SUMMARY_OPEN_DOOR = "opened the {door_color} door"
 TEXT_SUMMARY_OPEN_GATE = "opened the {gate_color} gate"
 TEXT_SUMMARY_CLOSE_GATE = "closed the {gate_color} gate"
+TEXT_SUMMARY_TELEPORT = (
+    "took the {color} portal from ({from_row}, {from_col}) to ({to_row}, {to_col})"
+)
+TEXT_SUMMARY_FROZE = "were frozen at ({row}, {col}) for {duration}"
+TEXT_SUMMARY_FREEZE_DURATION = "{n} steps"
+TEXT_SUMMARY_FREEZE_DURATION_ONE = "1 step"
+TEXT_SUMMARY_DIED = (
+    "stepped on a death tile at ({row}, {col}) and the maze reset to the start "
+    "tile ({start_row}, {start_col})"
+)
 TEXT_SUMMARY_NAV_TO = "navigated to ({row}, {col})"
 TEXT_SUMMARY_PASSED = "passed ({row}, {col})"
 TEXT_SUMMARY_EMPTY = "you haven't done anything yet"
