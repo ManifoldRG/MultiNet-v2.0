@@ -19,7 +19,7 @@ from gridworld.baselines import plan_bfs_path  # noqa: E402
 from gridworld.render3d.scene import UnsupportedSpecError  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 from maze_test_utils import MAZE_JSON_DIR  # noqa: E402
-from render3d_test_utils import CORRIDOR, corpus_sample  # noqa: E402
+from render3d_test_utils import CORRIDOR, MECHANISMS, corpus_sample  # noqa: E402
 
 RES = 96
 _SET_FIELDS = ("open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells")
@@ -146,6 +146,38 @@ def test_configure_with_bad_colour_leaves_backend_still_playable():
             backend.configure(TaskSpecification.from_dict(bad))
         assert backend.render().shape == (RES, RES, 3)
         assert backend.state_backend.task_spec.task_id == "render3d_corridor"
+    finally:
+        backend.close()
+
+
+def test_configure_is_atomic_when_the_new_renderer_fails_to_build(monkeypatch):
+    """If building the new SceneRenderer raises (GL context, scene compile),
+    the backend must stay on the OLD task: state backend, task_spec and the
+    old renderer untouched, still rendering and stepping."""
+    from gridworld.render3d import renderer as renderer_mod
+
+    backend = get_backend("mujoco3d", resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    backend.reset(seed=0)
+    try:
+        before = backend.render().copy()
+        other = copy.deepcopy(MECHANISMS)
+
+        class _Boom:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("GL context lost")
+
+        monkeypatch.setattr(renderer_mod, "SceneRenderer", _Boom)
+        with pytest.raises(RuntimeError, match="GL context lost"):
+            backend.configure(TaskSpecification.from_dict(other))
+        monkeypatch.undo()
+
+        assert backend.is_configured
+        assert backend.task_spec.task_id == "render3d_corridor"
+        assert backend.state_backend.task_spec.task_id == "render3d_corridor"
+        np.testing.assert_array_equal(backend.render(), before)
+        *_, state, _info = backend.step(int(A.MOVE_FORWARD))
+        assert tuple(state.agent_position) == (2, 1)  # the corridor, not the 9x5 room
     finally:
         backend.close()
 
