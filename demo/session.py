@@ -82,7 +82,7 @@ class ProgressEvent(NamedTuple):
     object_phrase: str
     suffix: str
     color: Optional[str]
-    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | "death" | "freeze" | None
+    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | "death" | "freeze" | "rotate" | None
 
 
 # Settings that can be toggled live via the UI's settings overlay (Tab).
@@ -669,6 +669,18 @@ class MiniGridPlaySession:
         if prev.freeze_remaining == 0 and new.freeze_remaining > 0:
             self.event_log.append(
                 ProgressEvent("Stepped on a ", "frozen tile", "", "light_blue", "freeze")
+            )
+
+        rotating = {(cell.x, cell.y) for cell in mech.rotating_tiles}
+        prev_pos = tuple(prev.agent_position)
+        new_pos = tuple(new.agent_position)
+        if prev_pos in rotating and new_pos != prev_pos:
+            self.event_log.append(
+                ProgressEvent("Rode a ", "rotating tile", "", "orange", "rotate")
+            )
+        elif prev_pos not in rotating and new_pos in rotating:
+            self.event_log.append(
+                ProgressEvent("Stepped on a ", "rotating tile", "", "orange", "rotate")
             )
 
     # ------------------------------------------------------------------

@@ -100,6 +100,8 @@ MECH_COLOR_RGB["white"] = (255, 255, 255)
 # Death and freeze must not reuse key red (255, 0, 0) or key blue (0, 0, 255).
 MECH_COLOR_RGB["dark_red"] = (153, 36, 44)
 MECH_COLOR_RGB["light_blue"] = (170, 210, 255)
+# Rotating tiles are orange in the maze, distinct from yellow keys.
+MECH_COLOR_RGB["orange"] = (255, 168, 64)
 
 DIRECTION_NAMES = {
     0: "East (right)",

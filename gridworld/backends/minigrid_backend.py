@@ -320,6 +320,9 @@ class MiniGridBackend(AbstractGridBackend):
             teleporter_cooldowns=teleporter_cooldowns,
             key_positions=key_positions,
             freeze_remaining=int(getattr(self.env, "freeze_remaining", 0)),
+            rotator_dirs=tuple(
+                int(tile.direction) for tile in getattr(self.env, "rotators", ())
+            ),
             goal_reached=goal_reached,
             observability_mode=obs_mode,
             visible_cells=visible_cells,

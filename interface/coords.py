@@ -36,7 +36,31 @@ def agent_row_col(state: GridState) -> tuple[int, int]:
 
 
 def agent_facing(state: GridState) -> str:
-    return _DIR_TO_FACING.get(state.agent_direction, "NORTH")
+    return direction_name(state.agent_direction)
+
+
+def direction_name(direction: int) -> str:
+    return _DIR_TO_FACING.get(int(direction) % 4, "NORTH")
+
+
+def rotating_dirs(task_spec: TaskSpecification, state: GridState | None) -> tuple[int, ...]:
+    if state is not None and state.rotator_dirs:
+        return tuple(int(d) for d in state.rotator_dirs)
+    return tuple(int(d) for d in task_spec.mechanisms.rotating_initial_directions)
+
+
+def rotating_pointing(
+    task_spec: TaskSpecification,
+    state: GridState | None,
+    row: int,
+    col: int,
+) -> str | None:
+    dirs = rotating_dirs(task_spec, state)
+    for i, cell in enumerate(task_spec.mechanisms.rotating_tiles):
+        if to_row_col(cell) != (row, col) or i >= len(dirs):
+            continue
+        return direction_name(dirs[i])
+    return None
 
 
 def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:
@@ -212,5 +236,11 @@ def describe_cell(
     for cell in task_spec.mechanisms.frozen_tiles:
         if to_row_col(cell) == (row, col):
             return observation_templates.CELL_FROZEN_TILE.format(row=row, col=col)
+
+    pointing = rotating_pointing(task_spec, state, row, col)
+    if pointing:
+        return observation_templates.CELL_ROTATING_TILE.format(
+            direction=pointing, row=row, col=col
+        )
 
     return observation_templates.CELL_OPEN.format(row=row, col=col)

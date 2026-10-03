@@ -137,6 +137,9 @@ class GridState:
     # not authoritative once an episode is under way.
     key_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
     freeze_remaining: int = 0
+    # Live arrow direction of each rotating tile, same order as the task spec.
+    # 0=east, 1=south, 2=west, 3=north. Every action advances these.
+    rotator_dirs: tuple[int, ...] = ()
 
     # Goal state
     goal_reached: bool = False
@@ -165,6 +168,7 @@ class GridState:
             "teleporter_cooldowns": self.teleporter_cooldowns,
             "key_positions": {k: list(v) for k, v in self.key_positions.items()},
             "freeze_remaining": self.freeze_remaining,
+            "rotator_dirs": list(self.rotator_dirs),
             "goal_reached": self.goal_reached,
             "observability_mode": self.observability_mode,
             "visible_cells": [list(c) for c in self.visible_cells],
@@ -192,6 +196,7 @@ class GridState:
             # Absent in pre-DROP snapshots; keys then sat at their spec cells.
             key_positions={k: tuple(v) for k, v in d.get("key_positions", {}).items()},
             freeze_remaining=d.get("freeze_remaining", 0),
+            rotator_dirs=tuple(int(d) for d in d.get("rotator_dirs", ())),
             goal_reached=d.get("goal_reached", False),
             observability_mode=d.get("observability_mode", "full"),
             visible_cells={tuple(c) for c in d.get("visible_cells", [])},

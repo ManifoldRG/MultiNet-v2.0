@@ -18,6 +18,7 @@ from interface.coords import (
     inventory_list,
     live_key_position,
     maze_rows_cols,
+    rotating_pointing,
     to_row_col,
     wall_cells,
 )
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 
 ObservationTextFormat = Literal["coords", "json", "ascii"]
 _FACING = {"NORTH": "^", "EAST": ">", "SOUTH": "v", "WEST": "<"}
+_ROTATING = {"NORTH": "^^", "EAST": ">>", "SOUTH": "vv", "WEST": "<<"}
 _ASCII_MAP_HEADER = (
     "Map. Every cell is a two-character token and tokens are separated by a"
     " space, so row N is the Nth line and column N is the Nth token on it."
@@ -126,6 +128,17 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
     for cell in task_spec.mechanisms.frozen_tiles:
         row, col = to_row_col(cell)
         parts.append(observation_templates.FROZEN_TILE_LINE.format(row=row, col=col))
+
+    for cell in task_spec.mechanisms.rotating_tiles:
+        row, col = to_row_col(cell)
+        pointing = rotating_pointing(task_spec, state, row, col)
+        if pointing is None:
+            continue
+        parts.append(
+            observation_templates.ROTATING_TILE_LINE.format(
+                row=row, col=col, direction=pointing
+            )
+        )
     return parts
 
 
@@ -208,8 +221,20 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
             for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.kill_cells)
         ],
         "frozen_tiles": [
-            {"row": row, "col": col}
+            {
+                "row": row,
+                "col": col,
+            }
             for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.frozen_tiles)
+        ],
+        "rotating_tiles": [
+            {
+                "row": row,
+                "col": col,
+                "pointing": rotating_pointing(task_spec, state, row, col),
+            }
+            for cell in task_spec.mechanisms.rotating_tiles
+            for row, col in [to_row_col(cell)]
         ],
     }
     return payload
@@ -285,6 +310,13 @@ def _ascii_grid(
     for cell in task_spec.mechanisms.frozen_tiles:
         row, col = to_row_col(cell)
         place(row, col, "!!", "frozen tile")
+
+    for cell in task_spec.mechanisms.rotating_tiles:
+        row, col = to_row_col(cell)
+        pointing = rotating_pointing(task_spec, state, row, col)
+        if pointing is None:
+            continue
+        place(row, col, _ROTATING[pointing], f"rotating tile pointing {pointing}")
 
     agent_token = _FACING[facing] if include_facing else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"

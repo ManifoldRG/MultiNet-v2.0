@@ -365,6 +365,18 @@ def _extract_mechanism_events(
             if before == 0 and after > 0:
                 events.append((index, observation_templates.TEXT_SUMMARY_FROZEN))
 
+        elif event_type == "ROTATING":
+            before = tuple(sb.get("agent_position") or ())
+            after = tuple(sa.get("agent_position") or ())
+            tiles = {
+                cell.to_tuple() for cell in task_spec.mechanisms.rotating_tiles
+            } if task_spec else set()
+            if after in tiles and before not in tiles:
+                events.append((index, observation_templates.TEXT_SUMMARY_ROTATING))
+
+        elif event_type == "CARRIED":
+            events.append((index, observation_templates.TEXT_SUMMARY_CARRIED))
+
     return events
 
 

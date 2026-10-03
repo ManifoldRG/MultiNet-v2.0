@@ -14,6 +14,7 @@ from interface.coords import (
     forward_cell,
     gate_at_cell,
     goal_row_col,
+    rotating_pointing,
     switch_at_cell,
     switches_controlling_gate,
     door_at_cell,
@@ -78,6 +79,11 @@ def infer_step_outcome(
                     n=curr.freeze_remaining
                 )
             return "FROZEN", feedback_templates.FROZEN_LANDED
+        rotating = [to_row_col(cell) for cell in task_spec.mechanisms.rotating_tiles]
+        if prev_pos in rotating and prev_pos == curr_pos:
+            return "ROTATING", feedback_templates.ROTATING_STAYED.format(
+                direction=rotating_pointing(task_spec, curr, *curr_pos)
+            )
         if prev_pos == curr_pos:
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
             if gate and not gate["open"]:
@@ -116,6 +122,14 @@ def infer_step_outcome(
             return "BLOCKED", feedback_templates.MOVE_BLOCKED_GENERIC
         if terminated and reward > 0 and curr_pos == goal:
             return "DONE", feedback_templates.REACHED_GOAL
+        if prev_pos in rotating:
+            return "CARRIED", feedback_templates.ROTATING_CARRIED.format(
+                direction=rotating_pointing(task_spec, prev, *prev_pos)
+            )
+        if curr_pos in rotating:
+            return "ROTATING", feedback_templates.ROTATING_LANDED.format(
+                direction=rotating_pointing(task_spec, curr, *curr_pos)
+            )
         return "MOVED", feedback_templates.MOVED_TO
 
     if action == "PICKUP":
@@ -201,6 +215,9 @@ def format_step_feedback(
         action, prev, curr, reward, terminated, task_spec, level=level
     )
     if level == "minimal":
+        if event_type in ("ROTATING", "CARRIED"):
+            direction = event_message.split()[-1].rstrip(".")
+            return f"{event_type} {direction}", event_type
         return event_type, event_type
     if event_type == "BLOCKED":
         return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message), event_type
