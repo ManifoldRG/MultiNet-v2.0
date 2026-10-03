@@ -49,6 +49,25 @@ def rotating_dirs(task_spec: TaskSpecification, state: GridState | None) -> tupl
     return tuple(int(d) for d in task_spec.mechanisms.rotating_initial_directions)
 
 
+def teleporter_link(
+    task_spec: TaskSpecification,
+    row: int,
+    col: int,
+) -> tuple[tuple[int, int], str] | None:
+    """Where stepping on ``(row, col)`` lands, and that teleporter's color.
+
+    One-way teleporters only send from the first end to the second.
+    """
+    for teleporter in task_spec.mechanisms.teleporters:
+        end_a = to_row_col(teleporter.position_a)
+        end_b = to_row_col(teleporter.position_b)
+        if (row, col) == end_a:
+            return end_b, teleporter.color
+        if teleporter.bidirectional and (row, col) == end_b:
+            return end_a, teleporter.color
+    return None
+
+
 def rotating_pointing(
     task_spec: TaskSpecification,
     state: GridState | None,
@@ -242,5 +261,15 @@ def describe_cell(
         return observation_templates.CELL_ROTATING_TILE.format(
             direction=pointing, row=row, col=col
         )
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        ends = (
+            to_row_col(teleporter.position_a),
+            to_row_col(teleporter.position_b),
+        )
+        if (row, col) in ends:
+            return observation_templates.CELL_TELEPORTER.format(
+                color=teleporter.color, row=row, col=col
+            )
 
     return observation_templates.CELL_OPEN.format(row=row, col=col)

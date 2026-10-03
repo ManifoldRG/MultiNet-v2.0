@@ -139,6 +139,19 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
                 row=row, col=col, direction=pointing
             )
         )
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        row_a, col_a = to_row_col(teleporter.position_a)
+        row_b, col_b = to_row_col(teleporter.position_b)
+        line = (
+            observation_templates.TELEPORTER_LINE
+            if teleporter.bidirectional
+            else observation_templates.TELEPORTER_ONE_WAY_LINE
+        )
+        parts.append(line.format(
+            color=teleporter.color,
+            row_a=row_a, col_a=col_a, row_b=row_b, col_b=col_b,
+        ))
     return parts
 
 
@@ -236,6 +249,17 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
             for cell in task_spec.mechanisms.rotating_tiles
             for row, col in [to_row_col(cell)]
         ],
+        "teleporters": [
+            {
+                "color": teleporter.color,
+                "row_a": to_row_col(teleporter.position_a)[0],
+                "col_a": to_row_col(teleporter.position_a)[1],
+                "row_b": to_row_col(teleporter.position_b)[0],
+                "col_b": to_row_col(teleporter.position_b)[1],
+                "bidirectional": teleporter.bidirectional,
+            }
+            for teleporter in task_spec.mechanisms.teleporters
+        ],
     }
     return payload
 
@@ -317,6 +341,13 @@ def _ascii_grid(
         if pointing is None:
             continue
         place(row, col, _ROTATING[pointing], f"rotating tile pointing {pointing}")
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        color = teleporter.color
+        token = "t" if color.lower() in ("grey", "gray") else f"t{color[0].upper()}"
+        for end in (teleporter.position_a, teleporter.position_b):
+            row, col = to_row_col(end)
+            place(row, col, token, f"{color} teleporter")
 
     agent_token = _FACING[facing] if include_facing else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"

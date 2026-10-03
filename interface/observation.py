@@ -20,6 +20,7 @@ import numpy as np
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
+from interface.coords import to_row_col
 from interface.renderer import (
     render_user_observation_text,
     rgb_to_image_block,
@@ -376,6 +377,15 @@ def _extract_mechanism_events(
 
         elif event_type == "CARRIED":
             events.append((index, observation_templates.TEXT_SUMMARY_CARRIED))
+
+        elif event_type == "TELEPORTED":
+            pos = tuple(sa.get("agent_position") or ())
+            if len(pos) == 2:
+                row, col = to_row_col(pos)
+                events.append((
+                    index,
+                    observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col),
+                ))
 
     return events
 

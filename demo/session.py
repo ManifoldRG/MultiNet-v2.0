@@ -31,7 +31,14 @@ from gridworld.actions import MiniGridActions
 from demo.compare import R1ResultCatalog, r1_task_id
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
-from interface.coords import agent_facing, agent_row_col
+from interface.coords import (
+    FACING_TO_DELTA,
+    agent_facing,
+    agent_row_col,
+    rotating_pointing,
+    teleporter_link,
+    to_row_col,
+)
 from interface.episode_log import state_snapshot
 from interface.feedback import format_step_feedback
 from interface.observation import (
@@ -82,7 +89,7 @@ class ProgressEvent(NamedTuple):
     object_phrase: str
     suffix: str
     color: Optional[str]
-    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | "death" | "freeze" | "rotate" | None
+    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | "death" | "freeze" | "rotate" | "teleport" | None
 
 
 # Settings that can be toggled live via the UI's settings overlay (Tab).
@@ -674,13 +681,35 @@ class MiniGridPlaySession:
         rotating = {(cell.x, cell.y) for cell in mech.rotating_tiles}
         prev_pos = tuple(prev.agent_position)
         new_pos = tuple(new.agent_position)
-        if prev_pos in rotating and new_pos != prev_pos:
+        row, col = to_row_col(prev.agent_position)
+        if (row, col) in {to_row_col(cell) for cell in mech.rotating_tiles}:
+            pointing = rotating_pointing(spec, prev, row, col)
+            dr, dc = FACING_TO_DELTA[pointing or agent_facing(prev)]
+        else:
+            dr, dc = FACING_TO_DELTA[agent_facing(prev)]
+        entered = (row + dr, col + dc)
+        link = teleporter_link(spec, *entered)
+        if link is not None and to_row_col(new.agent_position) == link[0] and prev_pos != new_pos:
             self.event_log.append(
-                ProgressEvent("Rode a ", "rotating tile", "", "orange", "rotate")
+                ProgressEvent(
+                    "Teleported through the ",
+                    link[1],
+                    " teleporter",
+                    link[1],
+                    "teleport",
+                )
+            )
+        elif prev_pos in rotating and new_pos != prev_pos:
+            direction = rotating_pointing(spec, prev, *to_row_col(prev_pos))
+            suffix = f" pointing {direction}" if direction else ""
+            self.event_log.append(
+                ProgressEvent("Rode a ", "rotating tile", suffix, "orange", "rotate")
             )
         elif prev_pos not in rotating and new_pos in rotating:
+            direction = rotating_pointing(spec, new, *to_row_col(new_pos))
+            suffix = f" pointing {direction}" if direction else ""
             self.event_log.append(
-                ProgressEvent("Stepped on a ", "rotating tile", "", "orange", "rotate")
+                ProgressEvent("Stepped on a ", "rotating tile", suffix, "orange", "rotate")
             )
 
     # ------------------------------------------------------------------

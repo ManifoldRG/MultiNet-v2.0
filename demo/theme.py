@@ -102,6 +102,7 @@ MECH_COLOR_RGB["dark_red"] = (153, 36, 44)
 MECH_COLOR_RGB["light_blue"] = (170, 210, 255)
 # Rotating tiles are orange in the maze, distinct from yellow keys.
 MECH_COLOR_RGB["orange"] = (255, 168, 64)
+MECH_COLOR_RGB["cyan"] = (0, 220, 220)
 
 DIRECTION_NAMES = {
     0: "East (right)",

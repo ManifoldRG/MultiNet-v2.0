@@ -303,19 +303,26 @@ class MiniGridPlayerUI:
         flat-colored wrapped block rather than trying to color-wrap segments
         (this only happens for unusually long entries)."""
         font = self.font_small_bold
-        segments = [(event.prefix, COLOR_TEXT), (event.object_phrase, object_color), (event.suffix, COLOR_TEXT)]
-        total_w = sum(font.size(text)[0] for text, _ in segments if text)
-        if total_w <= max_width:
-            cx = x
-            for text, color in segments:
-                if not text:
-                    continue
-                surf = font.render(text, True, color)
-                self.screen.blit(surf, (cx, y))
-                cx += surf.get_width()
-            return y + self._line_height(font)
-        combined = f"{event.prefix}{event.object_phrase}{event.suffix}"
-        return self._draw_wrapped_text(combined, x, y, font, COLOR_TEXT, max_width)
+        words: list[tuple[str, tuple]] = []
+        for text, color in (
+            (event.prefix, COLOR_TEXT),
+            (event.object_phrase, object_color),
+            (event.suffix, COLOR_TEXT),
+        ):
+            words.extend((word, color) for word in text.split(" ") if word)
+        cx = x
+        line_h = self._line_height(font)
+        for word, color in words:
+            gap = 0 if cx == x else font.size(" ")[0]
+            word_w = font.size(word)[0]
+            if cx != x and cx + gap + word_w > x + max_width:
+                cx = x
+                y += line_h
+                gap = 0
+            surf = font.render(word, True, color)
+            self.screen.blit(surf, (cx + gap, y))
+            cx += gap + word_w
+        return y + line_h
 
     def _draw_section_label(
         self, text: str, x: int, y: int, color: tuple,

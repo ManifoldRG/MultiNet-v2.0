@@ -131,6 +131,14 @@ def draw_death_icon(
     pygame.draw.line(surface, color, (cx + r, cy - r), (cx - r, cy + r), 2)
 
 
+def draw_teleport_icon(
+    surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
+) -> None:
+    cx, cy = center
+    pygame.draw.circle(surface, color, (cx, cy), size * 0.38, width=2)
+    pygame.draw.circle(surface, color, (cx, cy), size * 0.16, width=2)
+
+
 def draw_rotate_icon(
     surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
 ) -> None:
@@ -176,6 +184,7 @@ def progress_icon_fn(icon_kind: Optional[str]) -> Optional[Callable]:
         "death": draw_death_icon,
         "freeze": draw_freeze_icon,
         "rotate": draw_rotate_icon,
+        "teleport": draw_teleport_icon,
     }.get(icon_kind)
 
 
