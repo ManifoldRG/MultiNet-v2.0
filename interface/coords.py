@@ -209,4 +209,8 @@ def describe_cell(
         if to_row_col(cell) == (row, col):
             return observation_templates.CELL_DEATH_PORTAL.format(row=row, col=col)
 
+    for cell in task_spec.mechanisms.frozen_tiles:
+        if to_row_col(cell) == (row, col):
+            return observation_templates.CELL_FROZEN_TILE.format(row=row, col=col)
+
     return observation_templates.CELL_OPEN.format(row=row, col=col)

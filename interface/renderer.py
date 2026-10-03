@@ -122,6 +122,10 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
     for cell in task_spec.mechanisms.kill_cells:
         row, col = to_row_col(cell)
         parts.append(observation_templates.DEATH_PORTAL_LINE.format(row=row, col=col))
+
+    for cell in task_spec.mechanisms.frozen_tiles:
+        row, col = to_row_col(cell)
+        parts.append(observation_templates.FROZEN_TILE_LINE.format(row=row, col=col))
     return parts
 
 
@@ -197,8 +201,15 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
             for gate in task_spec.mechanisms.gates
         ],
         "death_portals": [
-            {"row": row, "col": col}
+            {
+                "row": row,
+                "col": col,
+            }
             for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.kill_cells)
+        ],
+        "frozen_tiles": [
+            {"row": row, "col": col}
+            for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.frozen_tiles)
         ],
     }
     return payload
@@ -271,6 +282,10 @@ def _ascii_grid(
         row, col = to_row_col(cell)
         place(row, col, "xx", "death portal")
 
+    for cell in task_spec.mechanisms.frozen_tiles:
+        row, col = to_row_col(cell)
+        place(row, col, "!!", "frozen tile")
+
     agent_token = _FACING[facing] if include_facing else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"
     under = cells.get(pos)
@@ -333,6 +348,8 @@ def _ascii_status(
     spent = _spent_key_colors(task_spec, state)
     if spent:
         lines.append(f"  Keys used up: {', '.join(spent)}")
+    if state is not None and state.freeze_remaining > 0:
+        lines.append("  " + observation_templates.FROZEN_STATUS_LINE)
     if task_spec.mechanisms.switches:
         on = [
             switches[s.id] for s in task_spec.mechanisms.switches
@@ -404,6 +421,8 @@ def render_user_observation_text(
             "moves_remaining": remaining,
             "map_contents": _mechanism_payload(task_spec, state),
         }
+        if state.freeze_remaining > 0:
+            payload["frozen"] = observation_templates.FROZEN_STATUS_LINE
         if stall_remaining is not None:
             payload["stall"] = observation_templates.STALL_REMAINING_LINE.format(
                 n=stall_remaining
@@ -424,6 +443,8 @@ def render_user_observation_text(
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=", ".join(inv) or "empty"),
         observation_templates.MOVES_REMAINING_LINE.format(n=remaining),
     ]
+    if state.freeze_remaining > 0:
+        head.append(observation_templates.FROZEN_STATUS_LINE)
     if stall_remaining is not None:
         head.append(observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
     spent = _spent_key_colors(task_spec, state)

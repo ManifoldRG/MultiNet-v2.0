@@ -136,6 +136,7 @@ class GridState:
     # on the grid in the agent's own cell, so the task spec's static position is
     # not authoritative once an episode is under way.
     key_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
+    freeze_remaining: int = 0
 
     # Goal state
     goal_reached: bool = False
@@ -163,6 +164,7 @@ class GridState:
             "block_positions": {k: list(v) for k, v in self.block_positions.items()},
             "teleporter_cooldowns": self.teleporter_cooldowns,
             "key_positions": {k: list(v) for k, v in self.key_positions.items()},
+            "freeze_remaining": self.freeze_remaining,
             "goal_reached": self.goal_reached,
             "observability_mode": self.observability_mode,
             "visible_cells": [list(c) for c in self.visible_cells],
@@ -189,6 +191,7 @@ class GridState:
             teleporter_cooldowns=d.get("teleporter_cooldowns", {}),
             # Absent in pre-DROP snapshots; keys then sat at their spec cells.
             key_positions={k: tuple(v) for k, v in d.get("key_positions", {}).items()},
+            freeze_remaining=d.get("freeze_remaining", 0),
             goal_reached=d.get("goal_reached", False),
             observability_mode=d.get("observability_mode", "full"),
             visible_cells={tuple(c) for c in d.get("visible_cells", [])},

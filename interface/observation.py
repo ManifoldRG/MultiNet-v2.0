@@ -359,6 +359,12 @@ def _extract_mechanism_events(
         elif event_type == "DEATH RESET":
             events.append((index, observation_templates.TEXT_SUMMARY_DEATH_PORTAL))
 
+        elif event_type == "FROZEN":
+            before = int(sb.get("freeze_remaining") or 0)
+            after = int(sa.get("freeze_remaining") or 0)
+            if before == 0 and after > 0:
+                events.append((index, observation_templates.TEXT_SUMMARY_FROZEN))
+
     return events
 
 

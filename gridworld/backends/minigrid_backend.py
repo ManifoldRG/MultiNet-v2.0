@@ -319,6 +319,7 @@ class MiniGridBackend(AbstractGridBackend):
             block_positions=block_positions,
             teleporter_cooldowns=teleporter_cooldowns,
             key_positions=key_positions,
+            freeze_remaining=int(getattr(self.env, "freeze_remaining", 0)),
             goal_reached=goal_reached,
             observability_mode=obs_mode,
             visible_cells=visible_cells,

@@ -34,6 +34,14 @@ def infer_step_outcome(
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
     curr_pos = agent_row_col(curr)
+    if prev.freeze_remaining > 0:
+        if curr.freeze_remaining > 0:
+            if level == "causal":
+                return "FROZEN", feedback_templates.FROZEN_STILL_CAUSAL.format(
+                    n=curr.freeze_remaining
+                )
+            return "FROZEN", feedback_templates.FROZEN_STILL
+        return "FROZEN", feedback_templates.FROZEN_ENDED
     newly_open = curr.open_doors - prev.open_doors
 
     if newly_open:
@@ -60,6 +68,16 @@ def infer_step_outcome(
             and prev_pos != curr_pos
         ):
             return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET
+        if (
+            prev.freeze_remaining == 0
+            and curr.freeze_remaining > 0
+            and any(to_row_col(cell) == curr_pos for cell in task_spec.mechanisms.frozen_tiles)
+        ):
+            if level == "causal":
+                return "FROZEN", feedback_templates.FROZEN_LANDED_CAUSAL.format(
+                    n=curr.freeze_remaining
+                )
+            return "FROZEN", feedback_templates.FROZEN_LANDED
         if prev_pos == curr_pos:
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
             if gate and not gate["open"]:

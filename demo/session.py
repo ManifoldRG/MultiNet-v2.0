@@ -82,7 +82,7 @@ class ProgressEvent(NamedTuple):
     object_phrase: str
     suffix: str
     color: Optional[str]
-    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | None
+    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | "death" | "freeze" | None
 
 
 # Settings that can be toggled live via the UI's settings overlay (Tab).
@@ -563,6 +563,19 @@ class MiniGridPlaySession:
             result[door.id] = bool(getattr(cell, "is_open", False))
         return result
 
+    def _entered_death_portal(self, prev: GridState, new: GridState) -> bool:
+        """True when this step walked onto a death portal and returned to the start."""
+        spec = self.task_spec
+        if spec is None:
+            return False
+        start = spec.maze.start.to_tuple()
+        if tuple(new.agent_position) != start or tuple(prev.agent_position) == start:
+            return False
+        dx, dy = ((1, 0), (0, 1), (-1, 0), (0, -1))[prev.agent_direction % 4]
+        x, y = prev.agent_position
+        front = (x + dx, y + dy)
+        return any((cell.x, cell.y) == front for cell in spec.mechanisms.kill_cells)
+
     def _record_events(
         self, prev: GridState, new: GridState, prev_doors: dict[str, bool]
     ) -> None:
@@ -648,6 +661,15 @@ class MiniGridPlaySession:
 
         if new.goal_reached and not prev.goal_reached:
             self.event_log.append(ProgressEvent("Reached the ", "goal", "!", "green", "goal"))
+
+        if self._entered_death_portal(prev, new):
+            self.event_log.append(
+                ProgressEvent("Stepped on a ", "death portal", "", "dark_red", "death")
+            )
+        if prev.freeze_remaining == 0 and new.freeze_remaining > 0:
+            self.event_log.append(
+                ProgressEvent("Stepped on a ", "frozen tile", "", "light_blue", "freeze")
+            )
 
     # ------------------------------------------------------------------
     # Settings (mutates the shared ExperimentConfig; UI triggers this)
