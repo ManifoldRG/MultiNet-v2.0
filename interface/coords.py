@@ -44,9 +44,9 @@ def direction_name(direction: int) -> str:
 
 
 def rotating_dirs(task_spec: TaskSpecification, state: GridState | None) -> tuple[int, ...]:
-    if state is not None and state.rotator_dirs:
-        return tuple(int(d) for d in state.rotator_dirs)
-    return tuple(int(d) for d in task_spec.mechanisms.rotating_initial_directions)
+    if state is None:
+        return tuple(int(d) for d in task_spec.mechanisms.rotating_initial_directions)
+    return tuple(int(d) for d in state.rotator_dirs)
 
 
 def teleporter_link(
@@ -76,9 +76,8 @@ def rotating_pointing(
 ) -> str | None:
     dirs = rotating_dirs(task_spec, state)
     for i, cell in enumerate(task_spec.mechanisms.rotating_tiles):
-        if to_row_col(cell) != (row, col) or i >= len(dirs):
-            continue
-        return direction_name(dirs[i])
+        if to_row_col(cell) == (row, col):
+            return direction_name(dirs[i])
     return None
 
 
@@ -108,6 +107,32 @@ def forward_cell(state: GridState) -> tuple[int, int]:
     row, col = agent_row_col(state)
     dr, dc = FACING_TO_DELTA[agent_facing(state)]
     return (row + dr, col + dc)
+
+
+def entered_cell(task_spec: TaskSpecification, state: GridState) -> tuple[int, int]:
+    """Cell a MOVE_FORWARD from ``state`` enters, in ``(row, col)``.
+
+    Standing on a rotating tile enters the arrow's cell. Otherwise, the cell ahead.
+    """
+    row, col = agent_row_col(state)
+    pointing = rotating_pointing(task_spec, state, row, col)
+    if pointing is None:
+        return forward_cell(state)
+    dr, dc = FACING_TO_DELTA[pointing]
+    return (row + dr, col + dc)
+
+
+def move_landing(
+    task_spec: TaskSpecification,
+    state: GridState,
+) -> tuple[tuple[int, int], tuple[tuple[int, int], str] | None]:
+    """Where a MOVE_FORWARD from ``state`` lands, and the teleporter it used.
+
+    An active teleporter end lands on the other end.
+    """
+    entered = entered_cell(task_spec, state)
+    link = teleporter_link(task_spec, *entered)
+    return (link[0] if link is not None else entered), link
 
 
 def live_key_position(key, state: GridState):

@@ -32,11 +32,10 @@ from demo.compare import R1ResultCatalog, r1_task_id
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
 from interface.coords import (
-    FACING_TO_DELTA,
     agent_facing,
     agent_row_col,
+    move_landing,
     rotating_pointing,
-    teleporter_link,
     to_row_col,
 )
 from interface.episode_log import state_snapshot
@@ -570,19 +569,6 @@ class MiniGridPlaySession:
             result[door.id] = bool(getattr(cell, "is_open", False))
         return result
 
-    def _entered_death_portal(self, prev: GridState, new: GridState) -> bool:
-        """True when this step walked onto a death portal and returned to the start."""
-        spec = self.task_spec
-        if spec is None:
-            return False
-        start = spec.maze.start.to_tuple()
-        if tuple(new.agent_position) != start or tuple(prev.agent_position) == start:
-            return False
-        dx, dy = ((1, 0), (0, 1), (-1, 0), (0, -1))[prev.agent_direction % 4]
-        x, y = prev.agent_position
-        front = (x + dx, y + dy)
-        return any((cell.x, cell.y) == front for cell in spec.mechanisms.kill_cells)
-
     def _record_events(
         self, prev: GridState, new: GridState, prev_doors: dict[str, bool]
     ) -> None:
@@ -669,7 +655,16 @@ class MiniGridPlaySession:
         if new.goal_reached and not prev.goal_reached:
             self.event_log.append(ProgressEvent("Reached the ", "goal", "!", "green", "goal"))
 
-        if self._entered_death_portal(prev, new):
+        prev_rc = agent_row_col(prev)
+        new_rc = agent_row_col(new)
+        landing, link = move_landing(spec, prev)
+        kills = {to_row_col(cell) for cell in mech.kill_cells}
+        died = (
+            landing in kills
+            and new_rc == to_row_col(spec.maze.start)
+            and prev_rc != new_rc
+        )
+        if died:
             self.event_log.append(
                 ProgressEvent("Stepped on a ", "death portal", "", "dark_red", "death")
             )
@@ -678,18 +673,10 @@ class MiniGridPlaySession:
                 ProgressEvent("Stepped on a ", "frozen tile", "", "light_blue", "freeze")
             )
 
-        rotating = {(cell.x, cell.y) for cell in mech.rotating_tiles}
-        prev_pos = tuple(prev.agent_position)
-        new_pos = tuple(new.agent_position)
-        row, col = to_row_col(prev.agent_position)
-        if (row, col) in {to_row_col(cell) for cell in mech.rotating_tiles}:
-            pointing = rotating_pointing(spec, prev, row, col)
-            dr, dc = FACING_TO_DELTA[pointing or agent_facing(prev)]
-        else:
-            dr, dc = FACING_TO_DELTA[agent_facing(prev)]
-        entered = (row + dr, col + dc)
-        link = teleporter_link(spec, *entered)
-        if link is not None and to_row_col(new.agent_position) == link[0] and prev_pos != new_pos:
+        rotating = {to_row_col(cell) for cell in mech.rotating_tiles}
+        if died:
+            return
+        if link is not None and new_rc == link[0] and prev_rc != new_rc:
             self.event_log.append(
                 ProgressEvent(
                     "Teleported through the ",
@@ -699,17 +686,19 @@ class MiniGridPlaySession:
                     "teleport",
                 )
             )
-        elif prev_pos in rotating and new_pos != prev_pos:
-            direction = rotating_pointing(spec, prev, *to_row_col(prev_pos))
-            suffix = f" pointing {direction}" if direction else ""
+        elif prev_rc in rotating and new_rc != prev_rc:
+            direction = rotating_pointing(spec, prev, *prev_rc)
             self.event_log.append(
-                ProgressEvent("Rode a ", "rotating tile", suffix, "orange", "rotate")
+                ProgressEvent(
+                    "Rode a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
+                )
             )
-        elif prev_pos not in rotating and new_pos in rotating:
-            direction = rotating_pointing(spec, new, *to_row_col(new_pos))
-            suffix = f" pointing {direction}" if direction else ""
+        elif prev_rc not in rotating and new_rc in rotating:
+            direction = rotating_pointing(spec, new, *new_rc)
             self.event_log.append(
-                ProgressEvent("Stepped on a ", "rotating tile", suffix, "orange", "rotate")
+                ProgressEvent(
+                    "Stepped on a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
+                )
             )
 
     # ------------------------------------------------------------------

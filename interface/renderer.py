@@ -131,12 +131,11 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
 
     for cell in task_spec.mechanisms.rotating_tiles:
         row, col = to_row_col(cell)
-        pointing = rotating_pointing(task_spec, state, row, col)
-        if pointing is None:
-            continue
         parts.append(
             observation_templates.ROTATING_TILE_LINE.format(
-                row=row, col=col, direction=pointing
+                row=row,
+                col=col,
+                direction=rotating_pointing(task_spec, state, row, col),
             )
         )
 
@@ -338,8 +337,6 @@ def _ascii_grid(
     for cell in task_spec.mechanisms.rotating_tiles:
         row, col = to_row_col(cell)
         pointing = rotating_pointing(task_spec, state, row, col)
-        if pointing is None:
-            continue
         place(row, col, _ROTATING[pointing], f"rotating tile pointing {pointing}")
 
     for teleporter in task_spec.mechanisms.teleporters:

@@ -20,7 +20,7 @@ import numpy as np
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
-from interface.coords import to_row_col
+from interface.coords import move_landing, rotating_pointing, to_row_col
 from interface.renderer import (
     render_user_observation_text,
     rgb_to_image_block,
@@ -358,34 +358,43 @@ def _extract_mechanism_events(
                 )
 
         elif event_type == "DEATH RESET":
-            events.append((index, observation_templates.TEXT_SUMMARY_DEATH_PORTAL))
+            landing, _ = move_landing(task_spec, GridState.from_dict(sb))
+            events.append((
+                index,
+                observation_templates.TEXT_SUMMARY_DEATH_PORTAL.format(
+                    row=landing[0], col=landing[1]
+                ),
+            ))
 
         elif event_type == "FROZEN":
             before = int(sb.get("freeze_remaining") or 0)
             after = int(sa.get("freeze_remaining") or 0)
             if before == 0 and after > 0:
-                events.append((index, observation_templates.TEXT_SUMMARY_FROZEN))
-
-        elif event_type == "ROTATING":
-            before = tuple(sb.get("agent_position") or ())
-            after = tuple(sa.get("agent_position") or ())
-            tiles = {
-                cell.to_tuple() for cell in task_spec.mechanisms.rotating_tiles
-            } if task_spec else set()
-            if after in tiles and before not in tiles:
-                events.append((index, observation_templates.TEXT_SUMMARY_ROTATING))
-
-        elif event_type == "CARRIED":
-            events.append((index, observation_templates.TEXT_SUMMARY_CARRIED))
-
-        elif event_type == "TELEPORTED":
-            pos = tuple(sa.get("agent_position") or ())
-            if len(pos) == 2:
-                row, col = to_row_col(pos)
+                row, col = rec["position_after_row_col"]
                 events.append((
                     index,
-                    observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col),
+                    observation_templates.TEXT_SUMMARY_FROZEN.format(row=int(row), col=int(col)),
                 ))
+
+        elif event_type == "CARRIED":
+            row, col = (int(v) for v in rec["position_before_row_col"])
+            events.append((
+                index,
+                observation_templates.TEXT_SUMMARY_CARRIED.format(
+                    row=row,
+                    col=col,
+                    direction=rotating_pointing(
+                        task_spec, GridState.from_dict(sb), row, col
+                    ),
+                ),
+            ))
+
+        elif event_type == "TELEPORTED":
+            row, col = to_row_col(sa["agent_position"])
+            events.append((
+                index,
+                observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col),
+            ))
 
     return events
 

@@ -21,6 +21,8 @@ from typing import Optional
 import numpy as np
 
 from demo.theme import recolor_walls
+from gridworld.backends.base import GridState
+from interface.coords import agent_row_col, entered_cell, move_landing, to_row_col
 
 try:
     import pygame
@@ -57,29 +59,38 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     return (0, 0)
 
 
+def _xy(row_col: tuple[int, int]) -> tuple[int, int]:
+    row, col = row_col
+    return (col, row)
+
+
 def portal_transition(
-    session, token: str, prev_state
+    session, _token: str, prev_state
 ) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
-    """Return ``(kind, src, dest)`` for a kill reset or portal warp."""
-    if prev_state is None or session.task_spec is None:
+    """Return ``(kind, src, dest)`` when this step actually warped or died.
+
+    The cell in front of the agent is not enough: on a rotating tile,
+    MOVE_FORWARD follows the arrow, so facing a teleporter does not use it.
+    """
+    if prev_state is None or session.task_spec is None or session.state is None:
         return None
-    dx, dy = travel_delta(token, prev_state)
-    if (dx, dy) == (0, 0):
+    if tuple(session.state.agent_position) == tuple(prev_state.agent_position):
         return None
-    px, py = prev_state.agent_position
-    front = (px + dx, py + dy)
-    mech = session.task_spec.mechanisms
-    warps: dict[tuple[int, int], tuple[int, int]] = {}
-    for spec in mech.teleporters:
-        a, b = spec.position_a.to_tuple(), spec.position_b.to_tuple()
-        warps[a] = b
-        if spec.bidirectional:
-            warps[b] = a
-    landed = warps.get(front, front)
-    if landed in {cell.to_tuple() for cell in mech.kill_cells}:
-        return ("kill", landed, session.task_spec.maze.start.to_tuple())
-    if landed != front:
-        return ("warp", front, landed)
+    last = next(
+        (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
+        None,
+    )
+    if last is None or last.get("action") != "MOVE_FORWARD":
+        return None
+    spec = session.task_spec
+    before = GridState.from_dict(last["state_before"])
+    landing, link = move_landing(spec, before)
+    arrived = agent_row_col(session.state)
+    kills = {to_row_col(cell) for cell in spec.mechanisms.kill_cells}
+    if landing in kills and arrived == to_row_col(spec.maze.start):
+        return ("kill", _xy(landing), spec.maze.start.to_tuple())
+    if link is not None and arrived == link[0]:
+        return ("warp", _xy(entered_cell(spec, before)), _xy(link[0]))
     return None
 
 
