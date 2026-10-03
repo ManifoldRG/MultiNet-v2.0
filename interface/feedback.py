@@ -14,9 +14,12 @@ from interface.coords import (
     forward_cell,
     gate_at_cell,
     goal_row_col,
+    move_landing,
+    rotating_pointing,
     switch_at_cell,
     switches_controlling_gate,
     door_at_cell,
+    to_row_col,
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
@@ -33,6 +36,14 @@ def infer_step_outcome(
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
     curr_pos = agent_row_col(curr)
+    if prev.freeze_remaining > 0:
+        if curr.freeze_remaining > 0:
+            if level == "causal":
+                return "FROZEN", feedback_templates.FROZEN_STILL_CAUSAL.format(
+                    n=curr.freeze_remaining
+                )
+            return "FROZEN", feedback_templates.FROZEN_STILL
+        return "FROZEN", feedback_templates.FROZEN_ENDED
     newly_open = curr.open_doors - prev.open_doors
 
     if newly_open:
@@ -52,6 +63,25 @@ def infer_step_outcome(
         return "NOTHING", feedback_templates.ACTION_NO_EFFECT.format(action=action)
 
     if action == "MOVE_FORWARD":
+        landing, link = move_landing(task_spec, prev)
+        kills = {to_row_col(cell) for cell in task_spec.mechanisms.kill_cells}
+        rotating = [to_row_col(cell) for cell in task_spec.mechanisms.rotating_tiles]
+        if (
+            landing in kills
+            and curr_pos == to_row_col(task_spec.maze.start)
+            and prev_pos != curr_pos
+        ):
+            return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET
+        if prev.freeze_remaining == 0 and curr.freeze_remaining > 0:
+            if level == "causal":
+                return "FROZEN", feedback_templates.FROZEN_LANDED_CAUSAL.format(
+                    n=curr.freeze_remaining
+                )
+            return "FROZEN", feedback_templates.FROZEN_LANDED
+        if prev_pos in rotating and prev_pos == curr_pos:
+            return "ROTATING", feedback_templates.ROTATING_STAYED.format(
+                direction=rotating_pointing(task_spec, curr, *curr_pos)
+            )
         if prev_pos == curr_pos:
             fwd = forward_cell(prev)
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
@@ -91,6 +121,18 @@ def infer_step_outcome(
             return "BLOCKED", feedback_templates.MOVE_BLOCKED_GENERIC
         if terminated and reward > 0 and curr_pos == goal:
             return "DONE", feedback_templates.REACHED_GOAL
+        if link is not None and curr_pos == link[0] and prev_pos != curr_pos:
+            return "TELEPORTED", feedback_templates.TELEPORTED.format(
+                row=curr_pos[0], col=curr_pos[1]
+            )
+        if prev_pos in rotating:
+            return "CARRIED", feedback_templates.ROTATING_CARRIED.format(
+                direction=rotating_pointing(task_spec, prev, *prev_pos)
+            )
+        if curr_pos in rotating:
+            return "ROTATING", feedback_templates.ROTATING_LANDED.format(
+                direction=rotating_pointing(task_spec, curr, *curr_pos)
+            )
         return "MOVED", feedback_templates.MOVED_TO
 
     if action == "PICKUP":
@@ -176,6 +218,12 @@ def format_step_feedback(
         action, prev, curr, reward, terminated, task_spec, level=level
     )
     if level == "minimal":
+        if event_type in ("ROTATING", "CARRIED"):
+            direction = event_message.split()[-1].rstrip(".")
+            return f"{event_type} {direction}", event_type
+        if event_type == "TELEPORTED":
+            where = event_message[event_message.index("("):].rstrip(".")
+            return f"TELEPORTED {where}", event_type
         return event_type, event_type
     if event_type == "BLOCKED":
         return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message), event_type

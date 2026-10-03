@@ -97,6 +97,12 @@ MECH_COLOR_RGB["gray"] = MECH_COLOR_RGB["grey"]
 # Extended maze palette (switches/keys) beyond MiniGrid's built-in COLORS.
 MECH_COLOR_RGB["black"] = (40, 42, 50)
 MECH_COLOR_RGB["white"] = (255, 255, 255)
+# Death and freeze must not reuse key red (255, 0, 0) or key blue (0, 0, 255).
+MECH_COLOR_RGB["dark_red"] = (153, 36, 44)
+MECH_COLOR_RGB["light_blue"] = (170, 210, 255)
+# Rotating tiles are orange in the maze, distinct from yellow keys.
+MECH_COLOR_RGB["orange"] = (255, 168, 64)
+MECH_COLOR_RGB["cyan"] = (0, 220, 220)
 
 DIRECTION_NAMES = {
     0: "East (right)",

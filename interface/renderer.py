@@ -18,6 +18,7 @@ from interface.coords import (
     inventory_list,
     live_key_position,
     maze_rows_cols,
+    rotating_pointing,
     to_row_col,
     wall_cells,
 )
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 
 ObservationTextFormat = Literal["coords", "json", "ascii"]
 _FACING = {"NORTH": "^", "EAST": ">", "SOUTH": "v", "WEST": "<"}
+_ROTATING = {"NORTH": "^^", "EAST": ">>", "SOUTH": "vv", "WEST": "<<"}
 _ASCII_MAP_HEADER = (
     "Map. Every cell is a two-character token and tokens are separated by a"
     " space, so row N is the Nth line and column N is the Nth token on it."
@@ -118,6 +120,37 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
                 initial_state=gate.initial_state,
             )
         )
+
+    for cell in task_spec.mechanisms.kill_cells:
+        row, col = to_row_col(cell)
+        parts.append(observation_templates.DEATH_PORTAL_LINE.format(row=row, col=col))
+
+    for cell in task_spec.mechanisms.frozen_tiles:
+        row, col = to_row_col(cell)
+        parts.append(observation_templates.FROZEN_TILE_LINE.format(row=row, col=col))
+
+    for cell in task_spec.mechanisms.rotating_tiles:
+        row, col = to_row_col(cell)
+        parts.append(
+            observation_templates.ROTATING_TILE_LINE.format(
+                row=row,
+                col=col,
+                direction=rotating_pointing(task_spec, state, row, col),
+            )
+        )
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        row_a, col_a = to_row_col(teleporter.position_a)
+        row_b, col_b = to_row_col(teleporter.position_b)
+        line = (
+            observation_templates.TELEPORTER_LINE
+            if teleporter.bidirectional
+            else observation_templates.TELEPORTER_ONE_WAY_LINE
+        )
+        parts.append(line.format(
+            color=teleporter.color,
+            row_a=row_a, col_a=col_a, row_b=row_b, col_b=col_b,
+        ))
     return parts
 
 
@@ -161,7 +194,7 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
     active = state.active_switches if state else set()
     open_gates = state.open_gates if state else set()
     gates, switches = compact_ids(task_spec)
-    return {
+    payload = {
         "keys": [_key_status(key, state) for key in task_spec.mechanisms.keys],
         "doors": [
             {
@@ -192,7 +225,42 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
             }
             for gate in task_spec.mechanisms.gates
         ],
+        "death_portals": [
+            {
+                "row": row,
+                "col": col,
+            }
+            for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.kill_cells)
+        ],
+        "frozen_tiles": [
+            {
+                "row": row,
+                "col": col,
+            }
+            for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.frozen_tiles)
+        ],
+        "rotating_tiles": [
+            {
+                "row": row,
+                "col": col,
+                "pointing": rotating_pointing(task_spec, state, row, col),
+            }
+            for cell in task_spec.mechanisms.rotating_tiles
+            for row, col in [to_row_col(cell)]
+        ],
+        "teleporters": [
+            {
+                "color": teleporter.color,
+                "row_a": to_row_col(teleporter.position_a)[0],
+                "col_a": to_row_col(teleporter.position_a)[1],
+                "row_b": to_row_col(teleporter.position_b)[0],
+                "col_b": to_row_col(teleporter.position_b)[1],
+                "bidirectional": teleporter.bidirectional,
+            }
+            for teleporter in task_spec.mechanisms.teleporters
+        ],
     }
+    return payload
 
 
 def _ascii_grid(
@@ -258,6 +326,26 @@ def _ascii_grid(
             "on switch" if on else "off switch",
         )
 
+    for cell in task_spec.mechanisms.kill_cells:
+        row, col = to_row_col(cell)
+        place(row, col, "xx", "death portal")
+
+    for cell in task_spec.mechanisms.frozen_tiles:
+        row, col = to_row_col(cell)
+        place(row, col, "!!", "frozen tile")
+
+    for cell in task_spec.mechanisms.rotating_tiles:
+        row, col = to_row_col(cell)
+        pointing = rotating_pointing(task_spec, state, row, col)
+        place(row, col, _ROTATING[pointing], f"rotating tile pointing {pointing}")
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        color = teleporter.color
+        token = "t" if color.lower() in ("grey", "gray") else f"t{color[0].upper()}"
+        for end in (teleporter.position_a, teleporter.position_b):
+            row, col = to_row_col(end)
+            place(row, col, token, f"{color} teleporter")
+
     agent_token = _FACING[facing] if include_facing else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"
     under = cells.get(pos)
@@ -320,6 +408,8 @@ def _ascii_status(
     spent = _spent_key_colors(task_spec, state)
     if spent:
         lines.append(f"  Keys used up: {', '.join(spent)}")
+    if state is not None and state.freeze_remaining > 0:
+        lines.append("  " + observation_templates.FROZEN_STATUS_LINE)
     if task_spec.mechanisms.switches:
         on = [
             switches[s.id] for s in task_spec.mechanisms.switches
@@ -391,6 +481,8 @@ def render_user_observation_text(
             "moves_remaining": remaining,
             "map_contents": _mechanism_payload(task_spec, state),
         }
+        if state.freeze_remaining > 0:
+            payload["frozen"] = observation_templates.FROZEN_STATUS_LINE
         if stall_remaining is not None:
             payload["stall"] = observation_templates.STALL_REMAINING_LINE.format(
                 n=stall_remaining
@@ -411,6 +503,8 @@ def render_user_observation_text(
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=", ".join(inv) or "empty"),
         observation_templates.MOVES_REMAINING_LINE.format(n=remaining),
     ]
+    if state.freeze_remaining > 0:
+        head.append(observation_templates.FROZEN_STATUS_LINE)
     if stall_remaining is not None:
         head.append(observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
     spent = _spent_key_colors(task_spec, state)

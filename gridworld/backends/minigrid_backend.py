@@ -319,6 +319,8 @@ class MiniGridBackend(AbstractGridBackend):
             block_positions=block_positions,
             teleporter_cooldowns=teleporter_cooldowns,
             key_positions=key_positions,
+            freeze_remaining=int(self.env.freeze_remaining),
+            rotator_dirs=tuple(int(tile.direction) for tile in self.env.rotators),
             goal_reached=goal_reached,
             observability_mode=obs_mode,
             visible_cells=visible_cells,

@@ -31,7 +31,13 @@ from gridworld.actions import MiniGridActions
 from demo.compare import R1ResultCatalog, r1_task_id
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
-from interface.coords import agent_facing, agent_row_col
+from interface.coords import (
+    agent_facing,
+    agent_row_col,
+    move_landing,
+    rotating_pointing,
+    to_row_col,
+)
 from interface.episode_log import state_snapshot
 from interface.feedback import format_step_feedback
 from interface.observation import (
@@ -82,7 +88,7 @@ class ProgressEvent(NamedTuple):
     object_phrase: str
     suffix: str
     color: Optional[str]
-    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | None
+    icon: Optional[str]  # "key" | "door" | "switch" | "gate" | "block" | "goal" | "death" | "freeze" | "rotate" | "teleport" | None
 
 
 # Settings that can be toggled live via the UI's settings overlay (Tab).
@@ -648,6 +654,52 @@ class MiniGridPlaySession:
 
         if new.goal_reached and not prev.goal_reached:
             self.event_log.append(ProgressEvent("Reached the ", "goal", "!", "green", "goal"))
+
+        prev_rc = agent_row_col(prev)
+        new_rc = agent_row_col(new)
+        landing, link = move_landing(spec, prev)
+        kills = {to_row_col(cell) for cell in mech.kill_cells}
+        died = (
+            landing in kills
+            and new_rc == to_row_col(spec.maze.start)
+            and prev_rc != new_rc
+        )
+        if died:
+            self.event_log.append(
+                ProgressEvent("Stepped on a ", "death portal", "", "dark_red", "death")
+            )
+        if prev.freeze_remaining == 0 and new.freeze_remaining > 0:
+            self.event_log.append(
+                ProgressEvent("Stepped on a ", "frozen tile", "", "light_blue", "freeze")
+            )
+
+        rotating = {to_row_col(cell) for cell in mech.rotating_tiles}
+        if died:
+            return
+        if link is not None and new_rc == link[0] and prev_rc != new_rc:
+            self.event_log.append(
+                ProgressEvent(
+                    "Teleported through the ",
+                    link[1],
+                    " teleporter",
+                    link[1],
+                    "teleport",
+                )
+            )
+        elif prev_rc in rotating and new_rc != prev_rc:
+            direction = rotating_pointing(spec, prev, *prev_rc)
+            self.event_log.append(
+                ProgressEvent(
+                    "Rode a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
+                )
+            )
+        elif prev_rc not in rotating and new_rc in rotating:
+            direction = rotating_pointing(spec, new, *new_rc)
+            self.event_log.append(
+                ProgressEvent(
+                    "Stepped on a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
+                )
+            )
 
     # ------------------------------------------------------------------
     # Settings (mutates the shared ExperimentConfig; UI triggers this)
