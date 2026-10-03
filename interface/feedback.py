@@ -17,6 +17,7 @@ from interface.coords import (
     switch_at_cell,
     switches_controlling_gate,
     door_at_cell,
+    to_row_col,
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
@@ -52,8 +53,14 @@ def infer_step_outcome(
         return "NOTHING", feedback_templates.ACTION_NO_EFFECT.format(action=action)
 
     if action == "MOVE_FORWARD":
+        fwd = forward_cell(prev)
+        if (
+            any(to_row_col(cell) == fwd for cell in task_spec.mechanisms.kill_cells)
+            and curr_pos == to_row_col(task_spec.maze.start)
+            and prev_pos != curr_pos
+        ):
+            return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET
         if prev_pos == curr_pos:
-            fwd = forward_cell(prev)
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
             if gate and not gate["open"]:
                 gates, switches = compact_ids(task_spec)

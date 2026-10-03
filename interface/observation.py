@@ -356,6 +356,9 @@ def _extract_mechanism_events(
                     )
                 )
 
+        elif event_type == "DEATH RESET":
+            events.append((index, observation_templates.TEXT_SUMMARY_DEATH_PORTAL))
+
     return events
 
 

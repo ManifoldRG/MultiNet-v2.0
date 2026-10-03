@@ -205,4 +205,8 @@ def describe_cell(
                 col=col,
             )
 
+    for cell in task_spec.mechanisms.kill_cells:
+        if to_row_col(cell) == (row, col):
+            return observation_templates.CELL_DEATH_PORTAL.format(row=row, col=col)
+
     return observation_templates.CELL_OPEN.format(row=row, col=col)

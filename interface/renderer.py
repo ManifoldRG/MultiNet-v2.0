@@ -118,6 +118,10 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
                 initial_state=gate.initial_state,
             )
         )
+
+    for cell in task_spec.mechanisms.kill_cells:
+        row, col = to_row_col(cell)
+        parts.append(observation_templates.DEATH_PORTAL_LINE.format(row=row, col=col))
     return parts
 
 
@@ -161,7 +165,7 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
     active = state.active_switches if state else set()
     open_gates = state.open_gates if state else set()
     gates, switches = compact_ids(task_spec)
-    return {
+    payload = {
         "keys": [_key_status(key, state) for key in task_spec.mechanisms.keys],
         "doors": [
             {
@@ -192,7 +196,12 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
             }
             for gate in task_spec.mechanisms.gates
         ],
+        "death_portals": [
+            {"row": row, "col": col}
+            for row, col in (to_row_col(cell) for cell in task_spec.mechanisms.kill_cells)
+        ],
     }
+    return payload
 
 
 def _ascii_grid(
@@ -257,6 +266,10 @@ def _ascii_grid(
             switches[switch.id],
             "on switch" if on else "off switch",
         )
+
+    for cell in task_spec.mechanisms.kill_cells:
+        row, col = to_row_col(cell)
+        place(row, col, "xx", "death portal")
 
     agent_token = _FACING[facing] if include_facing else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"

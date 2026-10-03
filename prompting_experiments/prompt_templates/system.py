@@ -4,7 +4,7 @@ TASK_PREFIX = "Task: You are the triangular agent trying to navigate this maze. 
 
 MECHANISM_LIST = (
     "The environment may contain:\n"
-    "Keys, doors, switches, and gates."
+    "Keys, doors, switches, gates, and death portals."
 )
 
 MECHANISM_RULES = (
@@ -17,6 +17,7 @@ MECHANISM_RULES = (
     "  - Switches: TOGGLE while standing on them. "
     "    Linked gates are open if its linked switch is on, and closed if it is off.\n"
     "  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n"
+    "  - Death portals: stepping on one returns you to the start and resets your progress.\n"
     "  - Closed doors you lack a key for block movement like walls until resolved.\n"
     "  - Use DONE only when you are standing on the goal cell."
 )
