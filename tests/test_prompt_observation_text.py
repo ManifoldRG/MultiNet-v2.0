@@ -6,6 +6,7 @@ from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
 from interface.coords import inventory_list
 from interface.loader import default_maze_path, load_task
+from interface import observation as observation_module
 from interface.observation import (
     current_observation_text,
     history_content_blocks,
@@ -234,6 +235,38 @@ def test_full_history_omits_newest_step_when_it_exceeds_budget():
     assert selected == []
     text = history_text("text_only", "full", transcript, max_history_tokens=1)
     assert text == ""
+
+
+def test_full_history_reuses_and_invalidates_step_token_estimates(monkeypatch):
+    transcript = _full_history_transcript()
+    frame = np.zeros((1, 1, 3), dtype=np.uint8)
+    for step in transcript:
+        step["_decision_frame_rgb"] = frame
+
+    calls = 0
+    compute_estimate = observation_module._compute_history_step_token_estimate
+
+    def counted_estimate(*args):
+        nonlocal calls
+        calls += 1
+        return compute_estimate(*args)
+
+    monkeypatch.setattr(
+        observation_module,
+        "_compute_history_step_token_estimate",
+        counted_estimate,
+    )
+
+    recent_history_steps(transcript, "full", observation="image_text")
+    recent_history_steps(transcript, "full", observation="image_text")
+    assert calls == len(transcript)
+
+    recent_history_steps(transcript, "full", observation="text_only")
+    assert calls == 2 * len(transcript)
+
+    transcript[0]["prompt_feedback"] += " with additional detail"
+    recent_history_steps(transcript, "full", observation="text_only")
+    assert calls == 2 * len(transcript) + 1
 
 
 def test_non_observation_format_conditions_omit_current_description_from_prompt():

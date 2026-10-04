@@ -36,6 +36,7 @@ ContextWindow = Literal[
 # available.
 _DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
 _IMAGE_HISTORY_TOKEN_ESTIMATE = 256
+_HISTORY_TOKEN_ESTIMATES_KEY = "_history_token_estimates"
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -444,15 +445,52 @@ def _history_step_token_estimate(
     step: dict[str, Any], observation: ObservationMode
 ) -> int:
     position = step.get("position_after_row_col", (0, 0))
+    row, col = int(position[0]), int(position[1])
+    facing = str(step.get("facing_after", ""))
+    action = str(_history_record_action(step))
+    feedback = str(step.get("prompt_feedback", ""))
+    has_image = step.get("_decision_frame_rgb") is not None
+    signature = (row, col, facing, action, feedback, has_image)
+
+    cache = step.get(_HISTORY_TOKEN_ESTIMATES_KEY)
+    if not isinstance(cache, dict):
+        cache = {}
+        step[_HISTORY_TOKEN_ESTIMATES_KEY] = cache
+    cached = cache.get(observation)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+
+    estimate = _compute_history_step_token_estimate(
+        row,
+        col,
+        facing,
+        action,
+        feedback,
+        has_image,
+        observation,
+    )
+    cache[observation] = (signature, estimate)
+    return estimate
+
+
+def _compute_history_step_token_estimate(
+    row: int,
+    col: int,
+    facing: str,
+    action: str,
+    feedback: str,
+    has_image: bool,
+    observation: ObservationMode,
+) -> int:
     text = observation_templates.RECENT_HISTORY_STEP.format(
-        row=int(position[0]),
-        col=int(position[1]),
-        facing=step.get("facing_after", ""),
-        action=_history_record_action(step),
-        feedback=step.get("prompt_feedback", ""),
+        row=row,
+        col=col,
+        facing=facing,
+        action=action,
+        feedback=feedback,
     )
     estimate = max(1, (len(text) + 3) // 4)
-    if observation in ("image_only", "image_text") and step.get("_decision_frame_rgb") is not None:
+    if observation in ("image_only", "image_text") and has_image:
         estimate += _IMAGE_HISTORY_TOKEN_ESTIMATE
     return estimate
 
