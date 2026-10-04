@@ -11,6 +11,7 @@ History is derived from enriched ``transcript`` step records.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Literal
 
 import numpy as np
@@ -36,7 +37,6 @@ ContextWindow = Literal[
 # available.
 _DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
 _IMAGE_HISTORY_TOKEN_ESTIMATE = 256
-_HISTORY_TOKEN_ESTIMATES_KEY = "_history_token_estimates"
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -450,17 +450,7 @@ def _history_step_token_estimate(
     action = str(_history_record_action(step))
     feedback = str(step.get("prompt_feedback", ""))
     has_image = step.get("_decision_frame_rgb") is not None
-    signature = (row, col, facing, action, feedback, has_image)
-
-    cache = step.get(_HISTORY_TOKEN_ESTIMATES_KEY)
-    if not isinstance(cache, dict):
-        cache = {}
-        step[_HISTORY_TOKEN_ESTIMATES_KEY] = cache
-    cached = cache.get(observation)
-    if cached is not None and cached[0] == signature:
-        return cached[1]
-
-    estimate = _compute_history_step_token_estimate(
+    return _compute_history_step_token_estimate(
         row,
         col,
         facing,
@@ -469,10 +459,9 @@ def _history_step_token_estimate(
         has_image,
         observation,
     )
-    cache[observation] = (signature, estimate)
-    return estimate
 
 
+@lru_cache(maxsize=8192)
 def _compute_history_step_token_estimate(
     row: int,
     col: int,

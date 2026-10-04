@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 
 from gridworld.backends.base import GridState
@@ -237,36 +239,94 @@ def test_full_history_omits_newest_step_when_it_exceeds_budget():
     assert text == ""
 
 
-def test_full_history_reuses_and_invalidates_step_token_estimates(monkeypatch):
+def test_full_history_reuses_and_invalidates_step_token_estimates():
     transcript = _full_history_transcript()
     frame = np.zeros((1, 1, 3), dtype=np.uint8)
     for step in transcript:
         step["_decision_frame_rgb"] = frame
 
-    calls = 0
-    compute_estimate = observation_module._compute_history_step_token_estimate
+    estimate_cache = observation_module._compute_history_step_token_estimate
+    original_keys = [set(step) for step in transcript]
+    estimate_cache.cache_clear()
+    try:
+        recent_history_steps(transcript, "full", observation="image_text")
+        first_pass = estimate_cache.cache_info()
+        assert first_pass.misses == len(transcript)
+        assert first_pass.hits == 0
 
-    def counted_estimate(*args):
-        nonlocal calls
-        calls += 1
-        return compute_estimate(*args)
+        recent_history_steps(transcript, "full", observation="image_text")
+        second_pass = estimate_cache.cache_info()
+        assert second_pass.hits == len(transcript)
+        assert second_pass.misses == len(transcript)
 
-    monkeypatch.setattr(
-        observation_module,
-        "_compute_history_step_token_estimate",
-        counted_estimate,
+        recent_history_steps(transcript, "full", observation="text_only")
+        mode_switch = estimate_cache.cache_info()
+        assert mode_switch.misses == 2 * len(transcript)
+
+        recent_history_steps(transcript, "full", observation="image_text")
+        mode_return = estimate_cache.cache_info()
+        assert mode_return.hits == 2 * len(transcript)
+
+        transcript[0]["prompt_feedback"] += " with additional detail"
+        recent_history_steps(transcript, "full", observation="text_only")
+        invalidated = estimate_cache.cache_info()
+        assert invalidated.misses == 2 * len(transcript) + 1
+
+        assert [set(step) for step in transcript] == original_keys
+
+        cached_selection = recent_history_steps(
+            transcript, "full", observation="image_text"
+        )
+        estimate_cache.cache_clear()
+        uncached_selection = recent_history_steps(
+            transcript, "full", observation="image_text"
+        )
+        assert [step["action"] for step in cached_selection] == [
+            step["action"] for step in uncached_selection
+        ]
+    finally:
+        estimate_cache.cache_clear()
+
+
+def test_full_history_selects_maximal_contiguous_suffix_under_budget():
+    transcript = _full_history_transcript()
+    estimates = [
+        observation_module._history_step_token_estimate(step, "text_only")
+        for step in transcript
+    ]
+    budget = sum(estimates[-3:])
+
+    selected = recent_history_steps(
+        transcript,
+        "full",
+        observation="text_only",
+        max_history_tokens=budget,
     )
 
-    recent_history_steps(transcript, "full", observation="image_text")
-    recent_history_steps(transcript, "full", observation="image_text")
-    assert calls == len(transcript)
+    assert selected == transcript[-3:]
 
-    recent_history_steps(transcript, "full", observation="text_only")
-    assert calls == 2 * len(transcript)
 
-    transcript[0]["prompt_feedback"] += " with additional detail"
-    recent_history_steps(transcript, "full", observation="text_only")
-    assert calls == 2 * len(transcript) + 1
+def test_full_history_cache_survives_transcript_json_round_trip():
+    transcript = _full_history_transcript()
+    estimate_cache = observation_module._compute_history_step_token_estimate
+    estimate_cache.cache_clear()
+    try:
+        selected = recent_history_steps(transcript, "full", observation="text_only")
+        before_round_trip = estimate_cache.cache_info()
+        restored = json.loads(json.dumps(transcript))
+
+        restored_selected = recent_history_steps(
+            restored, "full", observation="text_only"
+        )
+        after_round_trip = estimate_cache.cache_info()
+
+        assert [step["action"] for step in restored_selected] == [
+            step["action"] for step in selected
+        ]
+        assert after_round_trip.hits == before_round_trip.hits + len(transcript)
+        assert all("_history_token_estimates" not in step for step in restored)
+    finally:
+        estimate_cache.cache_clear()
 
 
 def test_non_observation_format_conditions_omit_current_description_from_prompt():
