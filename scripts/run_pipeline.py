@@ -994,24 +994,6 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
     temperature = float(model_cfg.get("temperature", 0.0))
     max_tokens = model_cfg.get("max_tokens")
 
-
-    if provider == "openai":
-        from interface.agents import OpenAIAgent, OpenAIConfig
-
-        cfg = OpenAIConfig(temperature=temperature)
-        if model:
-            cfg.model = model
-        if max_tokens:
-            cfg.max_tokens = int(max_tokens)
-        if "timeout" in model_cfg:
-            cfg.timeout = float(model_cfg["timeout"])
-        if "base_url" in model_cfg:
-            cfg.base_url = model_cfg["base_url"]
-        if "api_key" in model_cfg:
-            cfg.api_key = model_cfg["api_key"]
-            
-        return OpenAIAgent(config=cfg), model or cfg.model
-
     if provider == "claude":
         from interface.agents import ClaudeAnthropicAgent, ClaudeAnthropicConfig
 

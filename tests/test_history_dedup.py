@@ -26,7 +26,6 @@ class RecordingAgent:
         self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
 
     def __call__(self, messages):
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         self.calls.append(messages)
         action = self._actions[self._i] if self._i < len(self._actions) else "DONE"
         self._i += 1
@@ -42,7 +41,6 @@ class LegacyDelimiterAgent:
 
     def __call__(self, messages):
         self.calls += 1
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         if self.calls == 1:
             return "ACTION: turn left"
         return "FINAL_OUTPUT: TURN_LEFT"
@@ -51,7 +49,6 @@ class LegacyDelimiterAgent:
 class RejectedDelimiterAgent(LegacyDelimiterAgent):
     def __call__(self, messages):
         self.calls += 1
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         if self.calls == 1:
             return "ACTION: teleport"
         return "FINAL_OUTPUT: TURN_LEFT"

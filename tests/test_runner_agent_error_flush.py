@@ -45,7 +45,6 @@ class RaisingAgent:
         self.calls += 1
         if self.calls > self.ok_replies:
             raise self.exc
-        self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
         return "FINAL_OUTPUT: TURN_LEFT"
 
 

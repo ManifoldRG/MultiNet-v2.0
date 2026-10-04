@@ -16,7 +16,6 @@ class ScriptedAgent:
         self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
 
     def __call__(self, messages):
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         self.calls += 1
         a = self._a[self._i] if self._i < len(self._a) else "DONE"
         self._i += 1
@@ -31,7 +30,6 @@ class OneReplyAgent:
 
     def __call__(self, messages):
         self.calls += 1
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         return self.reply
 
 

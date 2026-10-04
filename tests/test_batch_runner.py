@@ -80,7 +80,6 @@ class ScriptedAgent:
         self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
 
     def __call__(self, messages):
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         action = self._actions[self._i] if self._i < len(self._actions) else "DONE"
         self._i += 1
         return f"FINAL_OUTPUT: {action}"
@@ -449,8 +448,7 @@ def test_serial_equivalence_e2e():
 
     # markers: "5 by 5", "3 by 7", "3 by 6"
     scripts = {"5 by 5": s1, "3 by 7": s2, "3 by 6": s3}
-    usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
-    agent = ScriptedBatchAgent(scripts, usage=usage)
+    agent = ScriptedBatchAgent(scripts, usage=None)
     runner = LockstepBatchRunner(agent, max_batches=3)
     runner.add(_make_unit("M1", m1, action_space="cardinal"))
     runner.add(_make_unit("M2", m2, action_space="cardinal"))

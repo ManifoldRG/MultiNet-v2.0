@@ -25,7 +25,6 @@ class ScriptedAgent:
         self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
 
     def __call__(self, messages):
-        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
         action = self._actions[self._i] if self._i < len(self._actions) else "DONE"
         self._i += 1
         return f"FINAL_OUTPUT: {action}"

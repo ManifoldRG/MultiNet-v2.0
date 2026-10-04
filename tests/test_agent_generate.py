@@ -10,11 +10,8 @@ from __future__ import annotations
 import json
 import urllib.request
 
-import pytest
-
 from interface.agents.claude import ClaudeAnthropicAgent, ClaudeAnthropicConfig
 from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
-from interface.agents.openai import OpenAIAgent, OpenAIConfig
 from interface.agents.qwen_vllm_api import QwenVLLMAPIAgent, QwenVLLMAPIConfig
 from interface.agents.reply import Reply
 
@@ -102,18 +99,6 @@ def test_claude_generate_not_truncated_on_end_turn(monkeypatch):
     assert reply.stop_reason == "end_turn"
     assert reply.token_truncated is False
     assert reply.thinking is None
-
-
-def test_openai_generate_requires_positive_usage(monkeypatch):
-    payload = {
-        "choices": [{"finish_reason": "stop", "message": {"content": "FINAL_OUTPUT: DONE"}}],
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-    }
-    _patch(monkeypatch, payload)
-    agent = OpenAIAgent(OpenAIConfig(model="gpt-4o-mini", max_tokens=512, api_key="secret"))
-
-    with pytest.raises(ValueError, match="positive token telemetry"):
-        agent.generate([{"role": "user", "content": "go"}])
 
 
 # --- Kimi -------------------------------------------------------------------
