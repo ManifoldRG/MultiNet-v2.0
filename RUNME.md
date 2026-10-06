@@ -124,11 +124,15 @@ python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1
 
 `gridworld/render3d/` + `gridworld/backends/mujoco3d_backend.py` render the
 same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
-actions/scoring, full observability under every camera — it is a render
-layer, not a new environment. A run-config selects it with a top-level
-`"render": {"backend": "mujoco3d", "camera": "chase"}` block (resolution
-defaults to `"grid"`, MiniGrid's 32 px per cell, so a 3D frame costs the same
-image tokens as a 2D one); each camera gets its own artifact directory.
+actions/scoring — it is a render layer, not a new environment. What a frame
+shows depends on the camera: `top_down`, `chase` and `fixed_angled` frame the
+whole maze, `first_person` only what lies ahead of the agent. A run-config
+selects it with a top-level `"render": {"backend": "mujoco3d", "camera":
+"chase"}` block; each camera gets its own artifact directory. Resolution
+defaults to `"grid"`: 32 px (MiniGrid's tile) per cell of the maze's longer
+side. The 3D frame is square, so it costs the same image tokens as the 2D
+frame only for a square maze; a 20x8 maze renders 640x640 against MiniGrid's
+640x256.
 Install the extra (`mujoco>=3.13`):
 
 ```bash

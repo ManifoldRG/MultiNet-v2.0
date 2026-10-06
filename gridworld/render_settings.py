@@ -16,7 +16,10 @@ from gridworld.render3d.cameras import PRESETS  # pure pose math; no mujoco impo
 from gridworld.task_spec import TaskSpecification
 
 BACKENDS = ("minigrid", "mujoco3d")
-GRID_PIXELS_PER_CELL = 32  # MiniGrid's tile size: a 3D frame then costs the same image tokens
+# MiniGrid's tile size. The 3D frame is square (this many px per cell of the
+# longer side), so it matches MiniGrid's 32W x 32H frame, and its image-token
+# cost, only for a square maze.
+GRID_PIXELS_PER_CELL = 32
 _KEYS = {"backend", "camera", "resolution"}
 
 

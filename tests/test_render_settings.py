@@ -19,10 +19,11 @@ def test_default_is_the_2d_backend_and_changes_nothing():
     assert settings.backend_kwargs(SPEC) == {}
 
 
-def test_3d_block_sets_camera_and_matches_the_2d_pixel_budget():
+def test_3d_block_sets_camera_and_sizes_the_frame_by_the_longer_side():
     settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "chase"}})
     assert settings.label == "mujoco3d_chase_grid"
-    # "grid" = MiniGrid's 32 px per cell, so a frame costs the same image tokens as 2D
+    # "grid" = MiniGrid's 32 px per cell of the longer side, in a square frame:
+    # the 2D pixel budget only for a square maze (this 7x3 one is 224x96 in 2D)
     assert settings.backend_kwargs(SPEC) == {"camera": "chase", "resolution": 7 * 32}
 
 
