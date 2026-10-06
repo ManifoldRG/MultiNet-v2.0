@@ -192,7 +192,10 @@ def _condition_configs(
 ) -> list[tuple[str, ExperimentConfig]]:
     from interface.config import ExperimentConfig
 
-    base = ExperimentConfig(**(base_overrides or {}))
+    # from_dict, not the raw constructor: it resolves renamed values (last3 ->
+    # last_n), as the run-config validation does, so a legacy overlay that
+    # validates also runs.
+    base = ExperimentConfig.from_dict(base_overrides or {})
     if not conditions:
         if prompt_variant not in (None, "default"):
             raise ValueError("The default condition set only supports prompt_variant='default'.")

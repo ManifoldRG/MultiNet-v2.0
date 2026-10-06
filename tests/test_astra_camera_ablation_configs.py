@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from gridworld.render_settings import RenderSettings
-from scripts.run_pipeline import load_manifest, load_run_config, resolve_task_rows
+from interface.config import ExperimentConfig
+from scripts.run_pipeline import _condition_configs, load_manifest, load_run_config, resolve_task_rows
 
 FIXTURES = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures"
 ARMS = ["2d", "top_down", "chase", "fixed_angled", "first_person"]
@@ -54,3 +55,14 @@ def test_arms_differ_only_by_their_render_block():
 def test_the_five_arms_fit_the_run_budget():
     caps = {arm: _config(arm)["models"]["gpt6_astra"]["spend_cap_usd"] for arm in ARMS}
     assert sum(caps.values()) == 30  # Sean's budget; each arm stops itself at its share
+
+
+@pytest.mark.parametrize("arm", ARMS)
+def test_each_arm_builds_the_experiment_config_the_run_uses(arm):
+    """Validation alone passed while every arm crashed: the run builds its
+    config through _condition_configs (run_pipeline), so drive that path. The
+    overlay also uses current names, so the raw constructor accepts it."""
+    overlay = _config(arm)["experiment_config"]
+    ExperimentConfig(**overlay)
+    [(_name, cfg)] = _condition_configs(None, None, overlay)
+    assert cfg.context_window == "text_summary_and_last_n" and cfg.context_n == 3
