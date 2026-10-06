@@ -126,15 +126,20 @@ python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1
 same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
 actions/scoring — it is a render layer, not a new environment. What a frame
 shows depends on the camera: `top_down`, `chase` and `fixed_angled` frame the
-whole maze, `first_person` only what lies ahead of the agent, plus status
-slots along the bottom for the key it carries and the switch it stands on (its
-own cell, where PICKUP and a switch TOGGLE act, is out of view). A run-config
-selects it with a top-level `"render": {"backend": "mujoco3d", "camera":
-"chase"}` block; each camera gets its own artifact directory. Resolution
-defaults to `"grid"`: 32 px (MiniGrid's tile) per cell of the maze's longer
-side. The 3D frame is square, so it costs the same image tokens as the 2D
-frame only for a square maze; a 20x8 maze renders 640x640 against MiniGrid's
-640x256.
+whole maze; `first_person` (and `first_person_narrow`) only what lies ahead
+of the agent, plus status slots along the bottom for the key it carries and
+the switch it stands on (its own cell, where PICKUP and a switch TOGGLE act,
+is out of view). A run-config selects it with a top-level `"render":
+{"backend": "mujoco3d", "camera": "chase"}` block; each camera gets its own
+artifact directory. Resolution defaults to `"grid"`: 32 px (MiniGrid's tile)
+per cell of the maze's longer side. The 3D frame is square, so it costs the
+same image tokens as the 2D frame only for a square maze; a 20x8 maze renders
+640x640 against MiniGrid's 640x256.
+Add `"start_map": true` (any camera but `top_down`, image observations only)
+to also show the model a top-down snapshot of the maze at reset: it opens the
+first user message of every request, exactly once, in every chat mode (stored
+chat turns never carry it), is logged as `frames/start_map.png`, and the run
+gets its own `..._map` artifact label. Off by default; prompts are unchanged.
 Install the extra (`mujoco>=3.13`):
 
 ```bash
@@ -145,7 +150,10 @@ Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
 (software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
 Elsewhere it is left unset so mujoco uses the native GL. Play with it via
 `--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
-`fixed_angled` / `first_person` live). `,` / `.` tilt the camera one level at
+`fixed_angled` / `first_person` / `first_person_narrow` live; `first_person` is
+the wide eye, fovy 110 with 1.0 walls so portal beacons show, and
+`first_person_narrow` the 2026-09-18 ablation eye, fovy 90 with 1.4 walls).
+`,` / `.` tilt the camera one level at
 a time from top-down to first person, with the walls rising as it drops; the
 footer shows the level and wall height. `chase` and `first_person` (and every
 tilt level below top-down) turn with the agent and carry a compass; turns

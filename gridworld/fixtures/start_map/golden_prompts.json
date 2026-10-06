@@ -1,0 +1,3218 @@
+{
+ "2d_standard_image_only_stateless_last_n": {
+  "end_reason": "truncated",
+  "logged": [
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step8"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "sent": [
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step8"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "steps_used": 9
+ },
+ "2d_verbose_image_text_rolling_one_shot": {
+  "end_reason": "truncated",
+  "logged": [
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "You are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "You are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "You are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "You are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 5.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "You are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 5.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "You are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 4.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "You are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 5.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "You are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 4.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "You are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 3.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "You are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 4.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "You are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 3.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "You are at (1, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 2.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "You are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 3.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step7"
+      },
+      {
+       "text": "You are at (1, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 2.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step8"
+      },
+      {
+       "text": "You are at (2, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 1.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "sent": [
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "You are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "You are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "You are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "You are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 5.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "You are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "You are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 5.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "You are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 4.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "You are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 5.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "You are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 4.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "You are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 3.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "You are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 4.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "You are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 3.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "You are at (1, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 2.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: You are the triangular agent trying to navigate this maze. You are facing the pointy end. Move to the green goal cell in the grid.\nThe environment may contain:\nKeys, doors, switches, and gates.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\n\nRULES (domain logic):\n  - PICKUP: pick up a key while standing in the same cell.\n  - DROP: put down the key you are carrying, leaving it in your current cell.\n    You carry one key at a time, so DROP before picking up a different key.\n  - Doors: face a locked door with the matching key in inventory and TOGGLE to open it, then\n    MOVE_FORWARD through the open door. MOVE_FORWARD alone does not open a locked door.\n  - Switches: TOGGLE while standing on them.     Linked gates are open if its linked switch is on, and closed if it is off.\n  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n  - Closed doors you lack a key for block movement like walls until resolved.\n  - Use DONE only when you are standing on the goal cell.\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "You are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 3.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step7"
+      },
+      {
+       "text": "You are at (1, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 2.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "text": "Example maze and solution (14x14 maze with a red key-door, switch-gate, and blue key-door chain):\n"
+      },
+      {
+       "image": "sha256:d91741236ebb9cb538e3a1682af22965871fe3ee254dc74244f1408c2466aeec"
+      },
+      {
+       "text": "\nActions to solve: TURN_RIGHT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, TOGGLE, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, MOVE_FORWARD, MOVE_FORWARD, TURN_RIGHT, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT, PICKUP, TURN_LEFT, TURN_LEFT, MOVE_FORWARD, TOGGLE, MOVE_FORWARD, MOVE_FORWARD, DONE\n\n"
+      },
+      {
+       "image": "step8"
+      },
+      {
+       "text": "You are at (2, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 1.\n\nMap contents as of this step (keys on the ground, doors, switches, gates):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>\n\nReminder: decide your single next action without narrating your reasoning. Your response must end with the line `FINAL_OUTPUT: <action>` and nothing after it."
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "steps_used": 9
+ },
+ "3d_first_person_r1_cell_stateless": {
+  "end_reason": "truncated",
+  "logged": [
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nyou haven't done anything yet"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you passed (1, 2)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you navigated to (1, 2), finally you passed (1, 3)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, finally you passed (1, 4)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), finally you passed (1, 5)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), then you navigated to (1, 5), finally you passed (1, 6)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), then you navigated to (1, 5), finally you passed (1, 6)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), then you navigated to (1, 6), finally you passed (2, 6)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step8"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "sent": [
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nyou haven't done anything yet"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you passed (1, 2)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you navigated to (1, 2), finally you passed (1, 3)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, finally you passed (1, 4)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), finally you passed (1, 5)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), then you navigated to (1, 5), finally you passed (1, 6)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), then you navigated to (1, 5), finally you passed (1, 6)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "text": "You started at (1, 1) facing EAST.\nActivity summary:\nfirst you opened the black gate, then you navigated to (1, 4), then you navigated to (1, 6), finally you passed (2, 6)"
+      },
+      {
+       "text": "Recent steps (oldest first):\n"
+      },
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n"
+      },
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
+      },
+      {
+       "image": "step8"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "steps_used": 9
+ },
+ "3d_first_person_rolling": {
+  "end_reason": "truncated",
+  "logged": [
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step8"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "sent": [
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "reset"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step1"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step2"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TOGGLE",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "The previous response did not contain a valid action.",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step3"
+      },
+      {
+       "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step4"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step5"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   [
+    {
+     "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+     "role": "system"
+    },
+    {
+     "content": [
+      {
+       "image": "step6"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: TURN_RIGHT",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step7"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "FINAL_OUTPUT: MOVE_FORWARD",
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "image": "step8"
+      },
+      {
+       "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
+      }
+     ],
+     "role": "user"
+    }
+   ]
+  ],
+  "steps_used": 9
+ }
+}

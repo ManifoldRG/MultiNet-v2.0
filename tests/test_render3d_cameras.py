@@ -87,12 +87,12 @@ def test_chase_zoom_and_aim_never_change_within_a_maze(dims):
 
 
 def test_first_person_sits_at_agent_eye_facing_heading():
-    pose = pose_for("first_person", agent_cell=(3, 4), direction=3, maze_dims=(8, 8), wall_height=1.4)
+    pose = pose_for("first_person", agent_cell=(3, 4), direction=3, maze_dims=(8, 8), wall_height=1.0)
     cam = camera_position(pose)
     ax, ay, _ = cell_center(3, 4)
     assert math.dist(cam[:2], (ax, ay)) < 0.2
     assert cam[2] == pytest.approx(EYE_HEIGHT, abs=1e-6)
-    assert pose.azimuth == 90.0 and pose.fovy == 90.0 and not pose.orthographic
+    assert pose.azimuth == 90.0 and pose.fovy == 110.0 and not pose.orthographic
 
 
 def test_unknown_preset_or_direction_raises():
@@ -113,7 +113,7 @@ def test_tilt_ladder_is_anchored_on_the_presets():
     for level, preset in anchors.items():
         wall = tilt_wall_height(level)
         assert tilt_pose(level, **kwargs) == pose_for(preset, wall_height=wall, **kwargs)
-    assert tilt_wall_height(0) == 0.4 and tilt_wall_height(len(TILT_LEVELS) - 1) == 1.4
+    assert tilt_wall_height(0) == 0.4 and tilt_wall_height(len(TILT_LEVELS) - 1) == 1.0
 
 
 def test_tilt_levels_descend_and_walls_rise_step_by_step():
