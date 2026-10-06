@@ -126,7 +126,9 @@ python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1
 same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
 actions/scoring — it is a render layer, not a new environment. What a frame
 shows depends on the camera: `top_down`, `chase` and `fixed_angled` frame the
-whole maze, `first_person` only what lies ahead of the agent. A run-config
+whole maze, `first_person` only what lies ahead of the agent, plus status
+slots along the bottom for the key it carries and the switch it stands on (its
+own cell, where PICKUP and a switch TOGGLE act, is out of view). A run-config
 selects it with a top-level `"render": {"backend": "mujoco3d", "camera":
 "chase"}` block; each camera gets its own artifact directory. Resolution
 defaults to `"grid"`: 32 px (MiniGrid's tile) per cell of the maze's longer

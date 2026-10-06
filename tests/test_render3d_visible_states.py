@@ -279,3 +279,51 @@ def test_set_camera_rebuilds_for_new_wall_height(spec):
 def test_unknown_camera_raises(spec):
     with pytest.raises(ValueError, match="unknown camera preset"):
         SceneRenderer(spec, camera="isometric", resolution=64)
+
+
+# --- first-person status slots ------------------------------------------------
+# PICKUP and a switch TOGGLE act on the agent's own cell, which is below the
+# eye's view; the bottom status slots are the frame's only cue that they
+# worked (Pranav, PR #55 review).
+
+
+def _status_top() -> int:
+    from gridworld.render3d.hud import status_boxes
+
+    return status_boxes(RES, 1)[0][0]
+
+
+def _changed_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return np.nonzero((a != b).any(axis=-1))[0]
+
+
+def test_first_person_shows_the_key_it_carries(spec):
+    facing_away = dict(agent_direction=2)  # west from (1,2): the key cell is behind
+    empty = _render(spec, "first_person", _state(**facing_away))[0]
+    holding = _render(spec, "first_person", _state(**facing_away, key_positions={}, agent_carrying="red"))[0]
+    rows = _changed_rows(empty, holding)
+    assert rows.size > MIN_CHANGED_PX and rows.min() >= _status_top()
+
+
+def test_first_person_shows_the_switch_underfoot_and_whether_it_is_on(spec):
+    on_switch = dict(agent_position=(2, 3), agent_direction=1)  # facing the outer wall
+    off = _render(spec, "first_person", _state(**on_switch))[0]
+    on = _render(spec, "first_person", _state(**on_switch, active_switches={"s1"}, open_gates={"g1"}))[0]
+    rows = _changed_rows(off, on)
+    assert rows.size > MIN_CHANGED_PX and rows.min() >= _status_top()
+
+
+def test_status_slots_are_only_for_the_eye_view(spec):
+    plain = _render(spec, "top_down", _state(agent_position=(2, 3)))[0]
+    busy = _render(
+        spec, "top_down",
+        _state(agent_position=(2, 3), active_switches={"s1"}, open_gates={"g1"}, key_positions={}, agent_carrying="red"),
+    )[0]
+    band = slice(_status_top(), RES)  # below the 9x5 maze in the square top-down frame
+    assert plain[band].tobytes() == busy[band].tobytes()
+
+
+def test_status_slots_leave_the_cell_ahead_in_view(spec):
+    _frame, pose, _wall = _render(spec, "first_person", _state())  # (1,2) facing east
+    row, _col = to_pixel(project(pose, cell_center(2, 2)), RES)
+    assert row < _status_top()

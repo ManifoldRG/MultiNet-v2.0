@@ -22,7 +22,7 @@ from .cameras import (  # noqa: E402
     tilt_pose,
     view_wall_height,
 )
-from .hud import NORTH, corner_compass_box, draw_compass, turns_with_agent  # noqa: E402
+from .hud import NORTH, corner_compass_box, draw_compass, draw_status, turns_with_agent  # noqa: E402
 from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
@@ -144,7 +144,19 @@ class SceneRenderer:
             corner = cell_pixel_box(pose, (self.index.width - 1, 0), self.resolution)
             box = corner_compass_box(corner, self.resolution)
         frame = draw_compass(frame, up, box=box)
+        if eye_view:
+            # The eye cannot see the agent's own cell, where PICKUP and a switch
+            # TOGGLE act: status slots along the bottom show their effect.
+            frame = draw_status(frame, carrying=state.agent_carrying, switch=self._switch_underfoot(state))
         return frame
+
+    def _switch_underfoot(self, state: GridState) -> tuple[str, bool] | None:
+        """(colour, on) of the switch on the agent's cell, if any."""
+        cell = tuple(int(v) for v in state.agent_position)
+        for switch in self.spec.mechanisms.switches:
+            if (switch.position.x, switch.position.y) == cell:
+                return switch.color, switch.id in state.active_switches
+        return None
 
     def close(self) -> None:
         # Explicit close avoids EGL "Exception ignored" noise at interpreter exit.

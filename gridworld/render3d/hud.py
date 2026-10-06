@@ -1,9 +1,14 @@
-"""Compass overlay for the 3D views that turn with the agent (no mujoco import).
+"""HUD overlays for the 3D views (no mujoco import).
+
+- A compass on the views that turn with the agent: the facing direction sits
+  at the top in the highlight colour, and the red needle points north.
+- Status slots on the first-person view, centred along the bottom edge: the
+  key the agent carries and the switch it stands on. The eye cannot see the
+  agent's own cell, where PICKUP and a switch TOGGLE act, so without them
+  neither action changes the frame.
 
 Drawn onto the rendered frame with plain PIL shapes. Letters are line strokes,
 not a font, so frames stay byte-identical across machines and Pillow versions.
-The compass turns with the view: the facing direction sits at the top in the
-highlight colour, and the red needle points north.
 """
 
 from __future__ import annotations
@@ -12,6 +17,8 @@ import math
 
 import numpy as np
 from PIL import Image, ImageDraw
+
+from . import palette
 
 COMPASS_CAMERAS: tuple[str, ...] = ("chase", "first_person")
 
@@ -99,4 +106,68 @@ def draw_compass(
         for stroke in _GLYPHS[letter]:
             points = [(lx - half + 2 * half * x, ly - half + 2 * half * y) for x, y in stroke]
             draw.line(points, fill=colour, width=width)
+    return np.array(image)
+
+
+def status_boxes(resolution: int, count: int) -> list[tuple[int, int, int, int]]:
+    """(top, left, bottom, right) of ``count`` status slots, side by side and
+    centred along the bottom edge of a square frame."""
+    size = round(0.12 * resolution)
+    gap = round(0.02 * resolution)
+    pad = round(0.02 * resolution)
+    top = resolution - pad - size
+    first = (resolution - (count * size + (count - 1) * gap)) // 2
+    lefts = [first + i * (size + gap) for i in range(count)]
+    return [(top, left, top + size, left + size) for left in lefts]
+
+
+def _rgb(colour: palette.RGBA) -> tuple[int, int, int]:
+    r, g, b, _alpha = colour
+    return round(255 * r), round(255 * g), round(255 * b)
+
+
+def _draw_key(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, colour: str) -> None:
+    """A key lying on its side: bow on the left, two teeth down at the tip."""
+    fill = _rgb(palette.rgba(colour))
+    bx = cx - 0.3 * r
+    draw.ellipse((bx - 0.27 * r, cy - 0.27 * r, bx + 0.27 * r, cy + 0.27 * r), fill=fill)
+    draw.ellipse((bx - 0.11 * r, cy - 0.11 * r, bx + 0.11 * r, cy + 0.11 * r), fill=DISC)
+    draw.rectangle((bx + 0.2 * r, cy - 0.09 * r, cx + 0.6 * r, cy + 0.09 * r), fill=fill)
+    draw.rectangle((cx + 0.33 * r, cy, cx + 0.45 * r, cy + 0.32 * r), fill=fill)
+    draw.rectangle((cx + 0.5 * r, cy, cx + 0.6 * r, cy + 0.24 * r), fill=fill)
+
+
+def _draw_switch(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, colour: str, on: bool) -> None:
+    """The switch as the scene draws it: a dark plate and a button, dim when
+    off, lit with a halo when on."""
+    lit = palette.rgba(colour)
+    draw.rectangle((cx - 0.5 * r, cy - 0.5 * r, cx + 0.5 * r, cy + 0.5 * r), fill=_rgb(palette.SWITCH_PLATE))
+    if on:
+        draw.ellipse((cx - 0.44 * r, cy - 0.44 * r, cx + 0.44 * r, cy + 0.44 * r), outline=_rgb(lit),
+                     width=max(1, round(0.08 * r)))
+    button = _rgb(lit if on else palette.dim(lit, 0.35))
+    draw.ellipse((cx - 0.28 * r, cy - 0.28 * r, cx + 0.28 * r, cy + 0.28 * r), fill=button)
+
+
+def draw_status(
+    frame: np.ndarray, *, carrying: str | None, switch: tuple[str, bool] | None
+) -> np.ndarray:
+    """A copy of ``frame`` with the first-person status slots: the colour of
+    the key the agent carries, then the switch under it as ``(colour, on)``.
+    Nothing to show: an unchanged copy."""
+    slots = []
+    if carrying:
+        slots.append(lambda draw, cx, cy, r: _draw_key(draw, cx, cy, r, carrying))
+    if switch is not None:
+        slots.append(lambda draw, cx, cy, r: _draw_switch(draw, cx, cy, r, *switch))
+    if not slots:
+        return frame.copy()
+    resolution = frame.shape[1]
+    image = Image.fromarray(frame)
+    draw = ImageDraw.Draw(image)
+    for paint, (top, left, bottom, right) in zip(slots, status_boxes(resolution, len(slots))):
+        draw.ellipse((left, top, right - 1, bottom - 1), fill=DISC, outline=RING,
+                     width=max(1, round(resolution / 256)))
+        radius = (bottom - top) / 2
+        paint(draw, left + radius, top + radius, radius)
     return np.array(image)

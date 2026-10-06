@@ -4,7 +4,9 @@ termination and info as the bare state backend, every step."""
 from __future__ import annotations
 
 import copy
+import json
 import random
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -247,6 +249,29 @@ def test_a_reconfigured_backend_draws_what_a_fresh_one_draws(camera):
     finally:
         fresh.close()
         reused.close()
+
+
+def test_first_person_pickup_and_switch_toggle_change_the_frame():
+    """Pranav's PR #55 measurement: along tier3/key_switch_001's BFS plan, a
+    successful PICKUP and a switch TOGGLE each changed 0 first-person pixels,
+    since both act on the agent's own cell, below the eye's view."""
+    path = Path(__file__).resolve().parents[1] / "gridworld" / "tasks" / "tier3" / "key_switch_001.json"
+    spec = TaskSpecification.from_dict(json.loads(path.read_text()))
+    plan = plan_bfs_path(spec)
+    backend = get_backend("mujoco3d", camera="first_person", resolution=RES)
+    backend.configure(spec)
+    backend.reset(seed=spec.seed)
+    changed = {}
+    try:
+        for action, label in zip(plan.actions, plan.action_labels):
+            before = backend.render()
+            backend.step(action)
+            kind = label.split(":")[0]
+            if kind in ("pickup", "toggle"):
+                changed[kind] = int((backend.render() != before).any(axis=-1).sum())
+    finally:
+        backend.close()
+    assert changed["pickup"] > 0 and changed["toggle"] > 0
 
 
 def test_close_clears_configured_flag_and_guards_reset_and_step():
