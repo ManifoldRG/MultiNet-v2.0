@@ -251,14 +251,37 @@ def test_a_reconfigured_backend_draws_what_a_fresh_one_draws(camera):
         reused.close()
 
 
-def test_first_person_pickup_and_switch_toggle_change_the_frame():
+def test_a_reconfigured_start_map_backend_draws_what_a_fresh_one_draws():
+    """With start_map the backend holds a second (top-down) renderer, closed
+    at the first reset after a task switch, while the view renderer's
+    context is current. Both frames must match a fresh backend's."""
+    first, second = (TaskSpecification.from_dict(d) for d in (CORRIDOR, MECHANISMS))
+    fresh = get_backend("mujoco3d", camera="first_person", resolution=RES, start_map=True)
+    reused = get_backend("mujoco3d", camera="first_person", resolution=RES, start_map=True)
+    try:
+        fresh.configure(second)
+        view = fresh.reset(seed=0)[0]
+        start_map = fresh.start_map_frame()
+        reused.configure(first)
+        reused.reset(seed=0)
+        reused.configure(second)
+        np.testing.assert_array_equal(reused.reset(seed=0)[0], view)
+        np.testing.assert_array_equal(reused.start_map_frame(), start_map)
+        np.testing.assert_array_equal(reused.render(), view)  # the view renderer survived the map close
+    finally:
+        fresh.close()
+        reused.close()
+
+
+@pytest.mark.parametrize("camera", ["first_person", "first_person_narrow"])
+def test_first_person_pickup_and_switch_toggle_change_the_frame(camera):
     """Pranav's PR #55 measurement: along tier3/key_switch_001's BFS plan, a
-    successful PICKUP and a switch TOGGLE each changed 0 first-person pixels,
-    since both act on the agent's own cell, below the eye's view."""
+    successful PICKUP and a switch TOGGLE each changed 0 first-person pixels
+    (both eyes), since both act on the agent's own cell, below the view."""
     path = Path(__file__).resolve().parents[1] / "gridworld" / "tasks" / "tier3" / "key_switch_001.json"
     spec = TaskSpecification.from_dict(json.loads(path.read_text()))
     plan = plan_bfs_path(spec)
-    backend = get_backend("mujoco3d", camera="first_person", resolution=RES)
+    backend = get_backend("mujoco3d", camera=camera, resolution=RES)
     backend.configure(spec)
     backend.reset(seed=spec.seed)
     changed = {}
