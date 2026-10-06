@@ -236,6 +236,34 @@ def test_render_is_deterministic_and_well_formed(spec):
     assert a is not b
 
 
+@pytest.mark.parametrize("switch", ["camera", "tilt"])
+def test_a_failed_rebuild_leaves_the_renderer_on_its_old_view(spec, monkeypatch, switch):
+    """set_camera/set_tilt rebuild the scene when the wall height changes. If
+    that build raises, the renderer keeps its old scene and view, like the
+    backend's atomic configure (423611a)."""
+    from gridworld.render3d import renderer as renderer_mod
+    from gridworld.render3d.cameras import TILT_LEVELS
+
+    renderer = SceneRenderer(spec, camera="top_down", resolution=64)
+    try:
+        before = renderer.render(_state(), CLOSED)
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("scene compile failed")
+
+        monkeypatch.setattr(renderer_mod, "build_scene", _boom)
+        with pytest.raises(RuntimeError, match="scene compile failed"):
+            if switch == "camera":
+                renderer.set_camera("first_person")
+            else:
+                renderer.set_tilt(len(TILT_LEVELS) - 1)  # the eye level: taller walls
+        monkeypatch.undo()
+        assert renderer.camera == "top_down" and renderer.tilt is None
+        np.testing.assert_array_equal(renderer.render(_state(), CLOSED), before)
+    finally:
+        renderer.close()
+
+
 def test_set_camera_rebuilds_for_new_wall_height(spec):
     renderer = SceneRenderer(spec, camera="top_down", resolution=64)
     try:
