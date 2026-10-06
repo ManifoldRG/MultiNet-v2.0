@@ -68,7 +68,12 @@ def _require_2d_unit(unit: dict[str, Any]) -> None:
     """Worker-side guard for a unit from a plan built elsewhere (hand-edited,
     newer coordinator): refuse anything but the 2D backend before any work."""
     backend = unit.get("backend", "minigrid")
-    if backend != "minigrid" or ("render" in unit and RenderSettings.from_run_config(unit) != RenderSettings()):
+    # Read the render block's backend directly, not via from_run_config: a unit
+    # may carry the resolved provenance (frame_pixels, versions), whose extra
+    # keys would raise "unknown render keys" instead of this refusal.
+    render = unit.get("render")
+    render_backend = render.get("backend", "minigrid") if isinstance(render, dict) else render
+    if backend != "minigrid" or render_backend not in (None, "minigrid"):
         raise ValueError(f"unit {unit.get('unit_id')} (backend {backend!r}): {LOCAL_ONLY_RENDER}")
 
 

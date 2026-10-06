@@ -1846,7 +1846,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -1887,7 +1887,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -1922,7 +1922,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
@@ -1957,7 +1957,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
@@ -1992,7 +1992,7 @@
        "text": "Recent steps (oldest first):\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
@@ -2219,7 +2219,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2260,7 +2260,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2295,7 +2295,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
@@ -2330,7 +2330,7 @@
        "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
@@ -2365,7 +2365,7 @@
        "text": "Recent steps (oldest first):\n"
       },
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n"
@@ -2584,7 +2584,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2601,7 +2601,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2616,7 +2616,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2633,7 +2633,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2921,7 +2921,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2953,7 +2953,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2968,7 +2968,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -2985,7 +2985,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -3000,7 +3000,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"
@@ -3032,7 +3032,7 @@
     {
      "content": [
       {
-       "image": "step2"
+       "image": "step3"
       },
       {
        "text": "Your inventory: empty.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>"

@@ -116,7 +116,9 @@ class Mujoco3DBackend(AbstractGridBackend):
         if self._frame is None or key != self._frame_key:
             self._frame = self._renderer.render(state, doors, rotators=rotators, freeze=freeze)
             self._frame_key = key
-        return self._frame
+        # The caller's own array, as MiniGrid returns: drawing on it must not
+        # change the cached frame.
+        return self._frame.copy()
 
     def render_turn(self, from_direction: int, fraction: float) -> np.ndarray:
         """Display-only frame ``fraction`` of the way through a turn from
@@ -159,9 +161,9 @@ class Mujoco3DBackend(AbstractGridBackend):
         """Show a demo tilt level (None: back to the camera preset).
         Display-only: state is untouched."""
         check_tilt(level)
-        self._tilt = level
         if self._renderer is not None:
-            self._renderer.set_tilt(level)
+            self._renderer.set_tilt(level)  # may raise: then the view is unchanged
+        self._tilt = level
         self._frame = None
         self._frame_key = None
 
@@ -203,10 +205,10 @@ class Mujoco3DBackend(AbstractGridBackend):
     def set_camera(self, camera: str) -> None:
         if camera not in PRESETS:
             raise ValueError(f"unknown camera preset {camera!r}; choose from {PRESETS}")
+        if self._renderer is not None:
+            self._renderer.set_camera(camera)  # may raise: then the view is unchanged
         self._camera = camera
         self._tilt = None
-        if self._renderer is not None:
-            self._renderer.set_camera(camera)
         self._frame = None
         self._frame_key = None
 

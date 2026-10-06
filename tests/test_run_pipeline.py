@@ -1302,6 +1302,13 @@ def test_baseline_variant_of_every_launch_set_is_the_default_config():
         assert _config_key(configs[0][1]) == base_key
 
 
+def test_condition_configs_resolve_legacy_context_window_names():
+    """A run-config overlay written before the last3 -> last_n rename must run,
+    not just validate: _condition_configs builds the config the run uses."""
+    [(_name, cfg)] = _condition_configs(None, None, {"context_window": "text_summary_and_last3"})
+    assert cfg.context_window == "text_summary_and_last_n"
+
+
 def test_dedup_rollout_covers_every_unique_variant_config_once():
     """The deduplicated rollout must cover every distinct prompt config across
     the four launch sets, and run the shared baseline exactly once."""

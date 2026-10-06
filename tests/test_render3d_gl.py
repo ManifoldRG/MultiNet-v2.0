@@ -22,10 +22,18 @@ def _helper():
     return default_mujoco_gl
 
 
+@pytest.fixture
+def no_mujoco_gl(monkeypatch):
+    """MUJOCO_GL unset for the test, restored afterwards. setenv first: a bare
+    delenv of an unset variable records nothing to restore, so the osmesa the
+    helper sets would leak into later tests (and is invalid off Linux)."""
+    monkeypatch.setenv("MUJOCO_GL", "")
+    monkeypatch.delenv("MUJOCO_GL")
+
+
 @pytest.mark.parametrize("platform", ["linux", "linux2"])
-def test_linux_without_mujoco_gl_defaults_to_osmesa(monkeypatch, platform):
+def test_linux_without_mujoco_gl_defaults_to_osmesa(monkeypatch, no_mujoco_gl, platform):
     monkeypatch.setattr(sys, "platform", platform)
-    monkeypatch.delenv("MUJOCO_GL", raising=False)
     _helper()()
     assert os.environ["MUJOCO_GL"] == "osmesa"
 
@@ -38,9 +46,8 @@ def test_an_explicit_mujoco_gl_is_never_overridden(monkeypatch):
 
 
 @pytest.mark.parametrize("platform", ["darwin", "win32", "cygwin"])
-def test_off_linux_mujoco_gl_stays_unset(monkeypatch, platform):
+def test_off_linux_mujoco_gl_stays_unset(monkeypatch, no_mujoco_gl, platform):
     monkeypatch.setattr(sys, "platform", platform)
-    monkeypatch.delenv("MUJOCO_GL", raising=False)
     _helper()()
     assert "MUJOCO_GL" not in os.environ
 

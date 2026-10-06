@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from gridworld.render3d import palette
 from gridworld.render3d.hud import (
     COMPASS_CAMERAS,
     DISC,
@@ -12,6 +13,8 @@ from gridworld.render3d.hud import (
     NEEDLE,
     compass_box,
     draw_compass,
+    draw_status,
+    status_boxes,
     turns_with_agent,
 )
 
@@ -84,3 +87,57 @@ def test_top_down_corner_box_too_small_for_a_compass_draws_none(resolution, dims
     box = corner_compass_box(cell_pixel_box(pose, (dims[0] - 1, 0), resolution), resolution)
     blank = np.zeros((resolution, resolution, 3), np.uint8)
     assert not draw_compass(blank, 3, box=box).any()
+
+
+# --- first-person status slots (carried key, switch underfoot) --------------
+
+
+def _rgb(name: str, factor: float = 1.0) -> tuple[int, int, int]:
+    r, g, b, _alpha = palette.dim(palette.rgba(name), factor)
+    return round(255 * r), round(255 * g), round(255 * b)
+
+
+def _inside(rows, cols, box) -> bool:
+    top, left, bottom, right = box
+    return bool(((rows >= top) & (rows < bottom) & (cols >= left) & (cols < right)).all())
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_status_slots_sit_side_by_side_centred_along_the_bottom(count):
+    boxes = status_boxes(RES, count)
+    assert len(boxes) == count
+    assert len({(top, bottom) for top, _l, bottom, _r in boxes}) == 1  # one row
+    top, bottom = boxes[0][0], boxes[0][2]
+    assert top > 0.8 * RES and RES - bottom < 0.05 * RES  # along the bottom edge
+    assert abs(boxes[0][1] + boxes[-1][3] - RES) <= 1  # centred, not on a side
+    assert all(a[3] <= b[1] for a, b in zip(boxes, boxes[1:]))  # side by side
+
+
+def test_nothing_to_show_leaves_the_frame_as_it_was():
+    frame = np.zeros((RES, RES, 3), np.uint8)
+    out = draw_status(frame, carrying=None, switch=None)
+    assert out is not frame and out.tobytes() == frame.tobytes()
+
+
+def test_a_carried_key_is_drawn_in_its_colour_in_the_bottom_slot():
+    out = draw_status(np.zeros((RES, RES, 3), np.uint8), carrying="red", switch=None)
+    rows, cols = _pixels(out, _rgb("red"))
+    assert rows.size > 20 and _inside(rows, cols, status_boxes(RES, 1)[0])
+
+
+def test_the_switch_slot_lights_up_when_the_switch_is_on():
+    blank = np.zeros((RES, RES, 3), np.uint8)
+    off = draw_status(blank, carrying=None, switch=("yellow", False))
+    on = draw_status(blank, carrying=None, switch=("yellow", True))
+    box = status_boxes(RES, 1)[0]
+    assert _pixels(off, _rgb("yellow"))[0].size == 0  # off: only the dimmed button
+    assert _pixels(off, _rgb("yellow", 0.35))[0].size > 20
+    rows, cols = _pixels(on, _rgb("yellow"))
+    assert rows.size > 20 and _inside(rows, cols, box)
+
+
+def test_key_and_switch_share_the_bottom_row():
+    out = draw_status(np.zeros((RES, RES, 3), np.uint8), carrying="red", switch=("yellow", True))
+    key_box, switch_box = status_boxes(RES, 2)
+    assert _inside(*_pixels(out, _rgb("red")), key_box)
+    assert _inside(*_pixels(out, _rgb("yellow")), switch_box)

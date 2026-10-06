@@ -111,6 +111,9 @@ def _assigned_2d_unit(tmp_path: Path) -> tuple[Path, dict]:
 _3D_UNIT_MARKS = [
     {"backend": "mujoco3d_top_down_grid"},
     {"render": THREE_D},
+    # The resolved provenance a newer coordinator might stamp (run_inputs.json shape).
+    {"render": {**THREE_D, "resolution": "grid", "frame_pixels": 256,
+                "render3d_version": "2", "mujoco_version": "3.13.0"}},
 ]
 
 

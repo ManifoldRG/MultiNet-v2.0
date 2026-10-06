@@ -239,6 +239,34 @@ def test_render_is_deterministic_and_well_formed(spec):
     assert a is not b
 
 
+@pytest.mark.parametrize("switch", ["camera", "tilt"])
+def test_a_failed_rebuild_leaves_the_renderer_on_its_old_view(spec, monkeypatch, switch):
+    """set_camera/set_tilt rebuild the scene when the wall height changes. If
+    that build raises, the renderer keeps its old scene and view, like the
+    backend's atomic configure (423611a)."""
+    from gridworld.render3d import renderer as renderer_mod
+    from gridworld.render3d.cameras import TILT_LEVELS
+
+    renderer = SceneRenderer(spec, camera="top_down", resolution=64)
+    try:
+        before = renderer.render(_state(), CLOSED)
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("scene compile failed")
+
+        monkeypatch.setattr(renderer_mod, "build_scene", _boom)
+        with pytest.raises(RuntimeError, match="scene compile failed"):
+            if switch == "camera":
+                renderer.set_camera("first_person")
+            else:
+                renderer.set_tilt(len(TILT_LEVELS) - 1)  # the eye level: taller walls
+        monkeypatch.undo()
+        assert renderer.camera == "top_down" and renderer.tilt is None
+        np.testing.assert_array_equal(renderer.render(_state(), CLOSED), before)
+    finally:
+        renderer.close()
+
+
 def test_set_camera_rebuilds_for_new_wall_height(spec):
     renderer = SceneRenderer(spec, camera="top_down", resolution=64)
     try:
@@ -254,3 +282,51 @@ def test_set_camera_rebuilds_for_new_wall_height(spec):
 def test_unknown_camera_raises(spec):
     with pytest.raises(ValueError, match="unknown camera preset"):
         SceneRenderer(spec, camera="isometric", resolution=64)
+
+
+# --- first-person status slots ------------------------------------------------
+# PICKUP and a switch TOGGLE act on the agent's own cell, which is below the
+# eye's view; the bottom status slots are the frame's only cue that they
+# worked (Pranav, PR #55 review).
+
+
+def _status_top() -> int:
+    from gridworld.render3d.hud import status_boxes
+
+    return status_boxes(RES, 1)[0][0]
+
+
+def _changed_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return np.nonzero((a != b).any(axis=-1))[0]
+
+
+def test_first_person_shows_the_key_it_carries(spec):
+    facing_away = dict(agent_direction=2)  # west from (1,2): the key cell is behind
+    empty = _render(spec, "first_person", _state(**facing_away))[0]
+    holding = _render(spec, "first_person", _state(**facing_away, key_positions={}, agent_carrying="red"))[0]
+    rows = _changed_rows(empty, holding)
+    assert rows.size > MIN_CHANGED_PX and rows.min() >= _status_top()
+
+
+def test_first_person_shows_the_switch_underfoot_and_whether_it_is_on(spec):
+    on_switch = dict(agent_position=(2, 3), agent_direction=1)  # facing the outer wall
+    off = _render(spec, "first_person", _state(**on_switch))[0]
+    on = _render(spec, "first_person", _state(**on_switch, active_switches={"s1"}, open_gates={"g1"}))[0]
+    rows = _changed_rows(off, on)
+    assert rows.size > MIN_CHANGED_PX and rows.min() >= _status_top()
+
+
+def test_status_slots_are_only_for_the_eye_view(spec):
+    plain = _render(spec, "top_down", _state(agent_position=(2, 3)))[0]
+    busy = _render(
+        spec, "top_down",
+        _state(agent_position=(2, 3), active_switches={"s1"}, open_gates={"g1"}, key_positions={}, agent_carrying="red"),
+    )[0]
+    band = slice(_status_top(), RES)  # below the 9x5 maze in the square top-down frame
+    assert plain[band].tobytes() == busy[band].tobytes()
+
+
+def test_status_slots_leave_the_cell_ahead_in_view(spec):
+    _frame, pose, _wall = _render(spec, "first_person", _state())  # (1,2) facing east
+    row, _col = to_pixel(project(pose, cell_center(2, 2)), RES)
+    assert row < _status_top()

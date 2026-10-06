@@ -23,7 +23,15 @@ from .cameras import (  # noqa: E402
     tilt_pose,
     view_wall_height,
 )
-from .hud import NORTH, corner_compass_box, draw_compass, draw_frost, draw_ride_arrow, turns_with_agent  # noqa: E402
+from .hud import (  # noqa: E402
+    NORTH,
+    corner_compass_box,
+    draw_compass,
+    draw_frost,
+    draw_ride_arrow,
+    draw_status,
+    turns_with_agent,
+)
 from .scene import AGENT_GROUP, HIDDEN_GROUP, build_scene  # noqa: E402
 from .sync import SceneState  # noqa: E402
 
@@ -65,19 +73,30 @@ class SceneRenderer:
     def _effective_wall_height(self) -> float:
         return view_wall_height(self._camera, self._tilt, self._wall_height)
 
-    def _rebuild_if_wall_height_changed(self) -> None:
-        if self._effective_wall_height() != self.index.wall_height:
-            self.close()
-            self._build()
+    def _switch_view(self, camera: str, tilt: int | None) -> None:
+        """Show ``camera``/``tilt``, rebuilding the scene if the wall height
+        changes. A failed rebuild leaves the old scene and view in place."""
+        previous = (self._camera, self._tilt)
+        self._camera, self._tilt = camera, tilt
+        try:
+            if self._effective_wall_height() != self.index.wall_height:
+                self._build()
+        except BaseException:
+            self._camera, self._tilt = previous
+            raise
 
     def _build(self) -> None:
-        xml, self.index = build_scene(
+        """Compile the scene for the current view. Everything is built before
+        the old scene is touched, so a failure leaves it rendering."""
+        xml, index = build_scene(
             self.spec, wall_height=self._effective_wall_height(), resolution=self.resolution
         )
-        self.model = mujoco.MjModel.from_xml_string(xml)
-        self.data = mujoco.MjData(self.model)
-        self._sync = SceneState(self.model, self.index)
-        self._renderer = mujoco.Renderer(self.model, self.resolution, self.resolution)
+        model = mujoco.MjModel.from_xml_string(xml)
+        data = mujoco.MjData(model)
+        sync = SceneState(model, index)
+        renderer = mujoco.Renderer(model, self.resolution, self.resolution)
+        self.close()
+        self.index, self.model, self.data, self._sync, self._renderer = index, model, data, sync, renderer
         self._option = mujoco.MjvOption()
         self._cam = mujoco.MjvCamera()
         self._cam.type = mujoco.mjtCamera.mjCAMERA_FREE
@@ -85,15 +104,12 @@ class SceneRenderer:
     def set_camera(self, camera: str) -> None:
         if camera not in PRESETS:
             raise ValueError(f"unknown camera preset {camera!r}; choose from {PRESETS}")
-        self._camera = camera
-        self._tilt = None
-        self._rebuild_if_wall_height_changed()
+        self._switch_view(camera, None)
 
     def set_tilt(self, level: int | None) -> None:
         """Show a demo tilt level (None: back to the preset). Display-only."""
         check_tilt(level)
-        self._tilt = level
-        self._rebuild_if_wall_height_changed()
+        self._switch_view(self._camera, level)
 
     def render(
         self,
@@ -148,6 +164,10 @@ class SceneRenderer:
             corner = cell_pixel_box(pose, (self.index.width - 1, 0), self.resolution)
             box = corner_compass_box(corner, self.resolution)
         frame = draw_compass(frame, up, box=box)
+        if eye_view:
+            # The eye cannot see the agent's own cell, where PICKUP and a switch
+            # TOGGLE act: status slots along the bottom show their effect.
+            frame = draw_status(frame, carrying=state.agent_carrying, switch=self._switch_underfoot(state))
         if self.view_turns_with_agent:
             ride = self._ride_direction(state, rotators)
             if ride is not None:
@@ -155,6 +175,14 @@ class SceneRenderer:
         if freeze > 0:
             frame = draw_frost(frame, int(freeze), int(self.spec.mechanisms.freeze_steps))
         return frame
+
+    def _switch_underfoot(self, state: GridState) -> tuple[str, bool] | None:
+        """(colour, on) of the switch on the agent's cell, if any."""
+        cell = tuple(int(v) for v in state.agent_position)
+        for switch in self.spec.mechanisms.switches:
+            if (switch.position.x, switch.position.y) == cell:
+                return switch.color, switch.id in state.active_switches
+        return None
 
     def _ride_direction(self, state: GridState, rotators: tuple[int, ...] | None) -> int | None:
         """The arrow direction of the rotating tile under the agent, if any."""
@@ -168,6 +196,13 @@ class SceneRenderer:
     def close(self) -> None:
         # Explicit close avoids EGL "Exception ignored" noise at interpreter exit.
         if self._renderer is not None:
+            # mujoco's Renderer.close() frees its GL objects in whatever context
+            # is current. When a newer renderer exists (configure, a view
+            # rebuild), that is the new one, whose textures it would delete:
+            # make this renderer's own context current first.
+            gl_context = getattr(self._renderer, "_gl_context", None)
+            if gl_context is not None:
+                gl_context.make_current()
             self._renderer.close()
             self._renderer = None
 

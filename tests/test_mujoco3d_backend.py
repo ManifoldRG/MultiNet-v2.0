@@ -4,7 +4,9 @@ termination and info as the bare state backend, every step."""
 from __future__ import annotations
 
 import copy
+import json
 import random
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -114,11 +116,29 @@ def test_render_is_cached_until_state_or_camera_changes(monkeypatch):
             backend._renderer, "render", lambda s, d, **kw: calls.append(1) or real_render(s, d, **kw)
         )
         first, second = backend.render(), backend.render()
-        assert first is second and calls == []  # reset already rendered this state
+        assert calls == []  # reset already rendered this state
+        np.testing.assert_array_equal(first, second)
         backend.set_camera("chase")
         assert backend.render().shape == (RES, RES, 3) and calls == [1]
         backend.step(int(A.TURN_LEFT))
         assert calls == [1, 1]
+    finally:
+        backend.close()
+
+
+def test_render_hands_out_a_copy_of_the_cached_frame():
+    """Like MiniGrid, each render() is the caller's own array: drawing on one
+    must not change the next frame of the same state (the cache)."""
+    backend = get_backend("mujoco3d", resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    backend.reset(seed=0)
+    try:
+        first = backend.render()
+        pristine = first.copy()
+        first[:4, :4] = (255, 0, 255)  # a consumer draws an overlay
+        second = backend.render()
+        assert not np.shares_memory(first, second)
+        np.testing.assert_array_equal(second, pristine)
     finally:
         backend.close()
 
@@ -180,6 +200,78 @@ def test_configure_is_atomic_when_the_new_renderer_fails_to_build(monkeypatch):
         assert tuple(state.agent_position) == (2, 1)  # the corridor, not the 9x5 room
     finally:
         backend.close()
+
+
+@pytest.mark.parametrize("switch", ["camera", "tilt"])
+def test_a_failed_view_switch_leaves_the_backend_on_its_old_view(monkeypatch, switch):
+    """A camera/tilt switch that fails to rebuild the scene must leave the
+    backend reporting, and drawing, the view it had."""
+    from gridworld.render3d import renderer as renderer_mod
+    from gridworld.render3d.cameras import TILT_LEVELS
+
+    backend = get_backend("mujoco3d", resolution=RES)
+    backend.configure(TaskSpecification.from_dict(CORRIDOR))
+    backend.reset(seed=0)
+    try:
+        before = backend.render()
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("scene compile failed")
+
+        monkeypatch.setattr(renderer_mod, "build_scene", _boom)
+        with pytest.raises(RuntimeError, match="scene compile failed"):
+            if switch == "camera":
+                backend.set_camera("first_person")
+            else:
+                backend.set_tilt(len(TILT_LEVELS) - 1)
+        monkeypatch.undo()
+        assert backend.camera == "top_down" and backend.tilt is None
+        np.testing.assert_array_equal(backend.render(), before)
+    finally:
+        backend.close()
+
+
+@pytest.mark.parametrize("camera", ["top_down", "first_person"])
+def test_a_reconfigured_backend_draws_what_a_fresh_one_draws(camera):
+    """configure() builds the new renderer before closing the old one. Closing
+    a mujoco Renderer frees GL objects in whatever context is current, which
+    is then the NEW renderer's: the demo's task switch drew damaged frames."""
+    first, second = (TaskSpecification.from_dict(d) for d in (CORRIDOR, MECHANISMS))
+    fresh = get_backend("mujoco3d", camera=camera, resolution=RES)
+    reused = get_backend("mujoco3d", camera=camera, resolution=RES)
+    try:
+        fresh.configure(second)
+        expected = fresh.reset(seed=0)[0]
+        reused.configure(first)
+        reused.reset(seed=0)
+        reused.configure(second)
+        np.testing.assert_array_equal(reused.reset(seed=0)[0], expected)
+    finally:
+        fresh.close()
+        reused.close()
+
+
+def test_first_person_pickup_and_switch_toggle_change_the_frame():
+    """Pranav's PR #55 measurement: along tier3/key_switch_001's BFS plan, a
+    successful PICKUP and a switch TOGGLE each changed 0 first-person pixels,
+    since both act on the agent's own cell, below the eye's view."""
+    path = Path(__file__).resolve().parents[1] / "gridworld" / "tasks" / "tier3" / "key_switch_001.json"
+    spec = TaskSpecification.from_dict(json.loads(path.read_text()))
+    plan = plan_bfs_path(spec)
+    backend = get_backend("mujoco3d", camera="first_person", resolution=RES)
+    backend.configure(spec)
+    backend.reset(seed=spec.seed)
+    changed = {}
+    try:
+        for action, label in zip(plan.actions, plan.action_labels):
+            before = backend.render()
+            backend.step(action)
+            kind = label.split(":")[0]
+            if kind in ("pickup", "toggle"):
+                changed[kind] = int((backend.render() != before).any(axis=-1).sum())
+    finally:
+        backend.close()
+    assert changed["pickup"] > 0 and changed["toggle"] > 0
 
 
 def test_close_clears_configured_flag_and_guards_reset_and_step():
