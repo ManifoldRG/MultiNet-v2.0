@@ -62,7 +62,7 @@ def test_wall_bounce_survives_on_3d(tmp_path):
 
 
 # --- Wall bounce on views that turn with the agent --------------------------
-# chase / first_person / tilt>0 put the agent's heading at screen-up, so a
+# first_person / tilt>0 put the agent's heading at screen-up, so a
 # bounce in world axes jerks sideways (facing E/W) or lurches into the wall
 # (facing S). The bounce must recoil away from the travel direction AS DRAWN.
 

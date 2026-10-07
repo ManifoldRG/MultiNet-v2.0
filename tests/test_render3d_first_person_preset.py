@@ -14,7 +14,7 @@ WHERE = dict(agent_cell=(3, 3), direction=0, maze_dims=(9, 9))
 
 
 def test_both_eyes_are_presets():
-    assert PRESETS == ("top_down", "chase", "fixed_angled", "first_person", "first_person_narrow")
+    assert PRESETS == ("top_down", "first_person", "first_person_narrow")
 
 
 @pytest.mark.parametrize(

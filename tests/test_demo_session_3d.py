@@ -36,7 +36,7 @@ def test_session_plays_corridor_to_success(tmp_path, backend, camera):
 
 def test_3d_session_matches_2d_progress_and_steps(tmp_path):
     s2 = _play(make_play_session(tmp_path, "minigrid"))
-    s3 = _play(make_play_session(tmp_path, "mujoco3d", "chase"))
+    s3 = _play(make_play_session(tmp_path, "mujoco3d", "first_person"))
     try:
         assert s3.state.step_count == s2.state.step_count == len(TOKENS)
         assert s3.event_log == s2.event_log
@@ -52,11 +52,11 @@ def test_3d_frame_and_camera_cycle_are_display_only(tmp_path):
         assert session.backend.frame_is_grid_aligned is False
         # rendered at the demo panel size, not stretched from 512
         assert session.backend.render().shape == (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE, 3)
-        assert session.camera_names == ("top_down", "chase", "fixed_angled", "first_person", "first_person_narrow")
-        assert session.cycle_camera() == "chase"
-        assert session.backend.camera == "chase"
+        assert session.camera_names == ("top_down", "first_person", "first_person_narrow")
+        assert session.cycle_camera() == "first_person"
+        assert session.backend.camera == "first_person"
         assert session.state.step_count == 0 and len(session.transcript) == 1
-        for _ in range(4):
+        for _ in range(len(session.camera_names) - 1):
             session.cycle_camera()
         assert session.backend.camera == "top_down"
     finally:
@@ -120,7 +120,7 @@ def test_load_task_survives_a_maze_the_backend_cannot_render(tmp_path, capsys):
 def test_play_task_rejects_camera_without_3d_backend():
     pytest.importorskip("pygame")
     result = subprocess.run(
-        [sys.executable, "play_task.py", "--camera", "chase"],
+        [sys.executable, "play_task.py", "--camera", "first_person"],
         cwd=REPO_ROOT, capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 2
@@ -128,13 +128,13 @@ def test_play_task_rejects_camera_without_3d_backend():
 
 
 def test_tilt_steps_from_the_current_preset_clamps_and_is_display_only(tmp_path):
-    session = make_play_session(tmp_path, "mujoco3d", "chase")
+    session = make_play_session(tmp_path, "mujoco3d", "top_down")
     try:
         last = session.backend.tilt_levels - 1
         assert session.tilt_status() is None
-        assert session.step_tilt(+1) == 3  # chase sits at level 2
-        assert session.tilt_status() == f"Tilt 3/{last} · walls 0.7"
-        assert session.step_tilt(-1) == 2
+        assert session.step_tilt(+1) == 1  # top_down sits at level 0
+        assert session.tilt_status() == f"Tilt 1/{last} · walls 0.5"
+        assert session.step_tilt(-1) == 0
         for _ in range(last + 2):
             session.step_tilt(-1)
         assert session.backend.tilt == 0
@@ -144,6 +144,15 @@ def test_tilt_steps_from_the_current_preset_clamps_and_is_display_only(tmp_path)
         assert session.state.step_count == 0 and len(session.transcript) == 1
         session.cycle_camera()  # V leaves tilt mode
         assert session.backend.tilt is None and session.tilt_status() is None
+    finally:
+        session.close()
+
+
+def test_tilt_from_first_person_starts_at_the_last_level(tmp_path):
+    session = make_play_session(tmp_path, "mujoco3d", "first_person")
+    try:
+        last = session.backend.tilt_levels - 1
+        assert session.step_tilt(-1) == last - 1  # first person sits at the last level
     finally:
         session.close()
 

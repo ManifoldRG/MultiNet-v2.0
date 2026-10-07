@@ -138,7 +138,7 @@ def test_3d_backend_renders_with_minigrid_blocked_on_a_stub_state_backend():
             def get_state(self):
                 return self._state()
 
-        backend = Mujoco3DBackend(StubStateBackend(), camera="chase", resolution=64)
+        backend = Mujoco3DBackend(StubStateBackend(), camera="first_person", resolution=64)
         backend.configure(TaskSpecification.from_dict(CORRIDOR))
         frame, _state, _info = backend.reset(seed=0)
         assert frame.shape == (64, 64, 3), frame.shape

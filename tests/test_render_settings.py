@@ -20,11 +20,11 @@ def test_default_is_the_2d_backend_and_changes_nothing():
 
 
 def test_3d_block_sets_camera_and_sizes_the_frame_by_the_longer_side():
-    settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "chase"}})
-    assert settings.label == "mujoco3d_chase_grid"
+    settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "first_person"}})
+    assert settings.label == "mujoco3d_first_person_grid"
     # "grid" = MiniGrid's 32 px per cell of the longer side, in a square frame:
     # the 2D pixel budget only for a square maze (this 7x3 one is 224x96 in 2D)
-    assert settings.backend_kwargs(SPEC) == {"camera": "chase", "resolution": 7 * 32}
+    assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 7 * 32}
 
 
 def test_fixed_resolution_is_recorded_in_the_label():
@@ -38,12 +38,15 @@ def test_fixed_resolution_is_recorded_in_the_label():
 @pytest.mark.parametrize(
     "block, message",
     [
-        ({"backend": "minigrid", "camera": "chase"}, "camera"),
+        ({"backend": "minigrid", "camera": "first_person"}, "camera"),
         ({"backend": "mujoco3d"}, "camera"),
         ({"backend": "mujoco3d", "camera": "isometric"}, "camera"),
-        ({"backend": "holodeck", "camera": "chase"}, "backend"),
-        ({"backend": "mujoco3d", "camera": "chase", "resolution": 0}, "resolution"),
-        ({"backend": "mujoco3d", "camera": "chase", "zoom": 2}, "zoom"),
+        # retired presets: a run-config naming one fails fast, before any call
+        ({"backend": "mujoco3d", "camera": "chase"}, "camera"),
+        ({"backend": "mujoco3d", "camera": "fixed_angled"}, "camera"),
+        ({"backend": "holodeck", "camera": "first_person"}, "backend"),
+        ({"backend": "mujoco3d", "camera": "first_person", "resolution": 0}, "resolution"),
+        ({"backend": "mujoco3d", "camera": "first_person", "zoom": 2}, "zoom"),
     ],
 )
 def test_bad_render_blocks_fail_before_any_paid_call(block, message):
@@ -67,14 +70,14 @@ def test_start_map_gets_its_own_label_kwarg_and_provenance():
 
 
 @pytest.mark.parametrize("block", [
-    {"backend": "mujoco3d", "camera": "chase"},
-    {"backend": "mujoco3d", "camera": "chase", "start_map": False},
+    {"backend": "mujoco3d", "camera": "first_person"},
+    {"backend": "mujoco3d", "camera": "first_person", "start_map": False},
 ])
 def test_no_start_map_changes_nothing(block):
     settings = RenderSettings.from_run_config({"render": block})
     assert settings.start_map is False
-    assert settings.label == "mujoco3d_chase_grid"
-    assert settings.backend_kwargs(SPEC) == {"camera": "chase", "resolution": 7 * 32}
+    assert settings.label == "mujoco3d_first_person_grid"
+    assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 7 * 32}
     assert settings.provenance(SPEC)["start_map"] is False
 
 
@@ -84,9 +87,9 @@ def test_no_start_map_changes_nothing(block):
         ({"backend": "minigrid", "start_map": True}, "start_map"),
         ({"start_map": True}, "start_map"),
         ({"backend": "mujoco3d", "camera": "top_down", "start_map": True}, "top_down"),
-        ({"backend": "mujoco3d", "camera": "chase", "start_map": "yes"}, "bool"),
-        ({"backend": "mujoco3d", "camera": "chase", "start_map": 1}, "bool"),
-        ({"backend": "mujoco3d", "camera": "chase", "start_map": None}, "bool"),
+        ({"backend": "mujoco3d", "camera": "first_person", "start_map": "yes"}, "bool"),
+        ({"backend": "mujoco3d", "camera": "first_person", "start_map": 1}, "bool"),
+        ({"backend": "mujoco3d", "camera": "first_person", "start_map": None}, "bool"),
     ],
 )
 def test_bad_start_map_fails_before_any_paid_call(block, message):
@@ -121,7 +124,7 @@ def test_an_empty_render_object_is_the_2d_default():
         {"backend": "minigrid", "resolution": 512},
         {"resolution": 512},
         {"backend": "minigrid", "resolution": "grid"},
-        {"camera": "chase"},
+        {"camera": "first_person"},
     ],
 )
 def test_3d_only_keys_are_rejected_for_the_minigrid_backend(block):

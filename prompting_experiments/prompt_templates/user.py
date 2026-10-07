@@ -86,8 +86,6 @@ CURRENT_VIEW_LABEL = "Your view now ({view}):"
 CURRENT_VIEW_NAMES = {
     "first_person": "first person",
     "first_person_narrow": "first person",
-    "chase": "from behind and above you",
-    "fixed_angled": "from a fixed angle",
 }
 # verbose, on the views that turn with the agent (render3d/hud.py).
 COMPASS_NOTE = (

@@ -742,8 +742,7 @@ class MiniGridPlaySession:
         current = self.backend.tilt
         if current is None:  # start from where the current preset sits
             current = {
-                "top_down": 0, "fixed_angled": 1, "chase": 2,
-                "first_person": levels - 1, "first_person_narrow": levels - 1,
+                "top_down": 0, "first_person": levels - 1, "first_person_narrow": levels - 1,
             }.get(
                 self.backend.camera, 0
             )

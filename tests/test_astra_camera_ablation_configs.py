@@ -12,7 +12,9 @@ from interface.config import ExperimentConfig
 from scripts.run_pipeline import _condition_configs, load_manifest, load_run_config, resolve_task_rows
 
 FIXTURES = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures"
-ARMS = ["2d", "top_down", "chase", "fixed_angled", "first_person"]
+# The 2026-09-18 run also had chase and fixed_angled arms; they were removed
+# with those camera presets (results stay in Multinet-v2-results).
+ARMS = ["2d", "top_down", "first_person"]
 # The 2026-09-18 run used the narrow eye; the preset was widened afterwards,
 # so the arm keeps its original camera under its new name.
 ARM_CAMERA = {"first_person": "first_person_narrow"}
@@ -55,9 +57,9 @@ def test_arms_differ_only_by_their_render_block():
         assert settings.resolution == "grid"  # same image-token budget as the 2D anchor
 
 
-def test_the_five_arms_fit_the_run_budget():
+def test_each_arm_stops_itself_at_its_share_of_the_budget():
     caps = {arm: _config(arm)["models"]["gpt6_astra"]["spend_cap_usd"] for arm in ARMS}
-    assert sum(caps.values()) == 30  # Sean's budget; each arm stops itself at its share
+    assert set(caps.values()) == {6}  # Sean's $30 for the original five arms, $6 each
 
 
 @pytest.mark.parametrize("arm", ARMS)

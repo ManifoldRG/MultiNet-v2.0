@@ -48,7 +48,7 @@ def test_scripted_agent_plays_identically_on_3d_and_2d():
     assert plan.success
     tokens = [ACTION_ORDER[a] for a in plan.actions]
 
-    runner3d, result3d = _run(get_backend("mujoco3d", camera="chase", resolution=128), spec, tokens)
+    runner3d, result3d = _run(get_backend("mujoco3d", camera="first_person", resolution=128), spec, tokens)
     _, result2d = _run(MiniGridBackend(render_mode="rgb_array"), spec, tokens)
 
     assert result3d["success"] is True
