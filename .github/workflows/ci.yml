@@ -15,8 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: pip install -e ".[dev,visual]"
+      - run: sudo apt-get update && sudo apt-get install -y libosmesa6   # headless MuJoCo (render3d tests)
+      - run: pip install -e ".[dev,visual,mujoco3d]"
       - run: pytest -q   # addopts already excludes ogbench collection and slow benchmarks
+        env:
+          MUJOCO_GL: osmesa
       - name: wheel must not ship mazes/ or deploy/
         run: |
           pip wheel --no-deps --no-build-isolation -w /tmp/wheelcheck .
