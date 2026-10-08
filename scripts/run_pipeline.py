@@ -1008,6 +1008,12 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
+        if "cache_ttl" in model_cfg:
+            cfg.cache_ttl = str(model_cfg["cache_ttl"])
+        if "batch_cache_ttl" in model_cfg:
+            cfg.batch_cache_ttl = str(model_cfg["batch_cache_ttl"])
         if "effort" in model_cfg:
             cfg.effort = str(model_cfg["effort"])
         if "batch_deadline_s" in model_cfg:
@@ -1029,6 +1035,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "prompt_cache_ttl" in model_cfg:
+            cfg.prompt_cache_ttl = str(model_cfg["prompt_cache_ttl"])
         if "batch_deadline_s" in model_cfg:
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:

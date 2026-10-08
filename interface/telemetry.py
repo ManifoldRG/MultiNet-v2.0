@@ -25,6 +25,13 @@ def normalize_token_usage(usage: Any) -> dict[str, int] | None:
     if input_tokens is not None and (cache_read is not None or cache_creation is not None):
         input_tokens = int(input_tokens) + int(cache_read or 0) + int(cache_creation or 0)
 
+    details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details")
+    if isinstance(details, dict):
+        if cache_read is None and details.get("cached_tokens") is not None:
+            cache_read = details["cached_tokens"]
+        if cache_creation is None and details.get("cache_write_tokens") is not None:
+            cache_creation = details["cache_write_tokens"]
+
     if total_tokens is None and (input_tokens is not None or output_tokens is not None):
         total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
 
@@ -39,6 +46,12 @@ def normalize_token_usage(usage: Any) -> dict[str, int] | None:
         normalized["cache_read_input_tokens"] = int(cache_read)
     if cache_creation is not None:
         normalized["cache_creation_input_tokens"] = int(cache_creation)
+    creation = usage.get("cache_creation")
+    if isinstance(creation, dict):
+        for ttl in ("5m", "1h"):
+            value = creation.get(f"ephemeral_{ttl}_input_tokens")
+            if value is not None:
+                normalized[f"cache_creation_{ttl}_input_tokens"] = int(value)
     return normalized or None
 
 

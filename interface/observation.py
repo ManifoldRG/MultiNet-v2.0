@@ -397,6 +397,8 @@ def history_content_blocks(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
     max_history_tokens: int = _DEFAULT_MAX_HISTORY_TOKENS,
+    *,
+    cache_breakpoints: bool = False,
 ) -> list[dict]:
     if observation not in ("image_only", "image_text"):
         return []
@@ -437,7 +439,15 @@ def history_content_blocks(
         if context_window == "full"
         else user_templates.LAST3_USER_PROMPT["header"]
     )
-    return [{"type": "text", "text": header}] + blocks
+    out = [{"type": "text", "text": header}] + blocks
+    if cache_breakpoints:
+        pair_texts = [
+            i for i, block in enumerate(out)
+            if i > 0 and block.get("type") == "text"
+        ]
+        for i in pair_texts[-2:]:
+            out[i] = {**out[i], "cache_breakpoint": True}
+    return out
 
 
 def _history_step_token_estimate(

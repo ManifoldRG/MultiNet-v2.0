@@ -19,6 +19,7 @@ class ContentPart:
     kind: PartKind
     text: str = ""
     image: Optional[ImagePayload] = None
+    cache_breakpoint: bool = False
 
 
 def parse_data_image_url(url: str) -> ImagePayload:
@@ -54,14 +55,39 @@ def parse_runner_content(content: object) -> Union[str, List[ContentPart]]:
         if not isinstance(block, dict):
             continue
         block_type = block.get("type")
+        cache_breakpoint = bool(block.get("cache_breakpoint"))
         if block_type == "text":
-            parts.append(ContentPart(kind="text", text=str(block.get("text", ""))))
+            parts.append(
+                ContentPart(
+                    kind="text",
+                    text=str(block.get("text", "")),
+                    cache_breakpoint=cache_breakpoint,
+                )
+            )
         elif block_type == "image_url":
             url = _image_url_from_block(block)
             if url and url.startswith("data:"):
                 payload = parse_data_image_url(url)
-                parts.append(ContentPart(kind="image", image=payload))
+                parts.append(
+                    ContentPart(
+                        kind="image",
+                        image=payload,
+                        cache_breakpoint=cache_breakpoint,
+                    )
+                )
     return parts
+
+
+def strip_cache_markers(content: object) -> object:
+    """Remove runner-only cache metadata before forwarding raw content blocks."""
+    if not isinstance(content, list):
+        return content
+    return [
+        {key: value for key, value in block.items() if key != "cache_breakpoint"}
+        if isinstance(block, dict)
+        else block
+        for block in content
+    ]
 
 
 def split_system_prompt(messages: List[dict]) -> Tuple[Optional[str], List[dict]]:

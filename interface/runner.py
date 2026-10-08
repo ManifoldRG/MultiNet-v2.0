@@ -289,7 +289,11 @@ class ExperimentRunner:
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
         hist_blocks = history_content_blocks(
-            obs, ctx, transcript, self.config.max_history_tokens
+            obs,
+            ctx,
+            transcript,
+            self.config.max_history_tokens,
+            cache_breakpoints=self.config.prompt_cache,
         )
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)

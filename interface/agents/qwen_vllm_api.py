@@ -15,6 +15,7 @@ from typing import Any, List, Optional
 from interface.agents.http_retry import call_with_retry
 from interface.agents.qwen_vllm import DEFAULT_QWEN_VLLM_MODEL, _to_openai_messages
 from interface.agents.reply import Reply, detect_token_truncated
+from interface.agents.runner_messages import strip_cache_markers
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -126,13 +127,20 @@ class QwenVLLMAPIAgent:
         self.last_usage = None
 
     def generate(self, messages: List[dict]) -> Reply:
+        clean_messages = [
+            {
+                **message,
+                "content": strip_cache_markers(message.get("content", "")),
+            }
+            for message in messages
+        ]
         return _post_chat_completions(
             base_url=self.config.base_url,
             api_key=self.config.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
-            messages=_to_openai_messages(messages),
+            messages=_to_openai_messages(clean_messages),
             timeout=self.config.timeout,
             enable_thinking=self.config.enable_thinking,
             extra_body=self.config.extra_body,
