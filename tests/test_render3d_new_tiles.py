@@ -501,6 +501,41 @@ def test_sign_label_is_fully_readable_from_every_approach():
     assert max(counts) <= 1.25 * min(counts), counts
 
 
+def test_sign_arrow_reads_on_the_viewers_left_from_every_approach():
+    """A mirrored face shows as much text as a correct one, so also check the
+    order: from each cardinal approach the '>' lies left of the digits."""
+    pytest.importorskip("mujoco")
+
+    from gridworld.render3d.renderer import SceneRenderer
+    from gridworld.render3d.scene import _GLYPH_STROKES, HIDDEN_GROUP
+
+    spec = _sign_spec((14, 12))
+    renderer = SceneRenderer(spec, camera="first_person", resolution=RES)
+    try:
+        model = renderer.model
+        arrow, digits = [], []
+        for i in range(model.ngeom):
+            name = model.geom(i).name
+            if ":sign:" in name and not name.endswith(":plate"):
+                (arrow if int(name.rsplit(":", 1)[1]) < len(_GLYPH_STROKES[">"]) else digits).append(i)
+
+        def mean_column(st, geoms, shown):
+            home = model.geom_group[geoms].copy()
+            model.geom_group[geoms] = HIDDEN_GROUP
+            hidden = renderer.render(st, NO_DOORS, rotators=())
+            model.geom_group[geoms] = home
+            cols = np.nonzero(np.any(shown != hidden, axis=-1))[1]
+            assert cols.size > 20, cols.size
+            return cols.mean()
+
+        for viewer, direction in (((9, 10), 0), ((10, 9), 1), ((11, 10), 2), ((10, 11), 3)):
+            st = _state(agent_position=viewer, agent_direction=direction)
+            shown = renderer.render(st, NO_DOORS, rotators=())
+            assert mean_column(st, arrow, shown) < mean_column(st, digits, shown), (viewer, direction)
+    finally:
+        renderer.close()
+
+
 def test_sign_has_a_destination_arrow_before_the_digits():
     from gridworld.render3d.scene import portal_sign_label
 
@@ -522,6 +557,38 @@ def test_2d_portal_encode_is_deterministic_and_colour_specific():
     import inspect
 
     assert "hash(" not in inspect.getsource(TeleporterObj.encode)
+
+
+def test_2d_tiles_share_a_cache_key_only_when_they_draw_the_same_picture():
+    """MiniGrid caches a tile's picture by encode() for the whole process, so two
+    tiles with one key both show whichever was drawn first (PR #58 review: a blue
+    portal drew as an off blue switch, an east turntable as plain floor)."""
+    pytest.importorskip("minigrid")
+    from minigrid.core.world_object import Floor
+
+    from gridworld.custom_env import FrozenTile, KillCell, RotatingTile, Switch, TeleporterObj
+
+    tiles = {"floor": Floor(), "frozen": FrozenTile(), "kill": KillCell()}
+    tiles.update({f"turntable {d}": RotatingTile(d) for d in range(4)})
+    for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "white", "cyan", "brown"):
+        for state in ("off", "on"):
+            tiles[f"{state} {c} switch"] = Switch(color=c, initial_state=state)
+    for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "cyan"):
+        tiles[f"{c} portal"] = TeleporterObj(color=c)
+
+    def picture(obj):
+        img = np.zeros((96, 96, 3), dtype=np.uint8)
+        obj.render(img)
+        return img
+
+    by_key: dict[tuple, list[str]] = {}
+    for name, obj in tiles.items():
+        by_key.setdefault(obj.encode(), []).append(name)
+    clashes = [
+        names for names in by_key.values()
+        if any(not np.array_equal(picture(tiles[names[0]]), picture(tiles[n])) for n in names[1:])
+    ]
+    assert not clashes, clashes
 
 
 def test_compare_script_starts_from_the_reset_state():
