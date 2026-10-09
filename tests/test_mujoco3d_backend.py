@@ -273,7 +273,7 @@ def test_a_reconfigured_start_map_backend_draws_what_a_fresh_one_draws():
         reused.close()
 
 
-@pytest.mark.parametrize("camera", ["first_person", "first_person_narrow"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_first_person_pickup_and_switch_toggle_change_the_frame(camera):
     """Pranav's PR #55 measurement: along tier3/key_switch_001's BFS plan, a
     successful PICKUP and a switch TOGGLE each changed 0 first-person pixels
@@ -315,7 +315,7 @@ def test_registry_wraps_minigrid_by_default():
     backend = get_backend("mujoco3d", camera="first_person", resolution=RES)
     assert isinstance(backend.state_backend, MiniGridBackend)
     assert backend.camera == "first_person"
-    assert backend.camera_names == ("top_down", "first_person", "first_person_narrow")
+    assert backend.camera_names == ("top_down", "first_person")
     assert backend.frame_is_grid_aligned is False
     assert backend.observation_shape == (RES, RES, 3)
 
@@ -325,7 +325,7 @@ def test_unknown_camera_rejected():
         get_backend("mujoco3d", camera="isometric")
 
 
-@pytest.mark.parametrize("camera", ["first_person", "first_person_narrow"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_render_turn_animates_between_headings_and_touches_nothing(camera):
     backend = get_backend("mujoco3d", camera=camera, resolution=RES)
     backend.configure(TaskSpecification.from_dict(CORRIDOR))
@@ -352,7 +352,7 @@ def test_view_turns_with_agent_only_on_heading_following_cameras():
         backend.set_camera(camera)
         if backend.view_turns_with_agent:
             turning.add(camera)
-    assert turning == {"first_person", "first_person_narrow"}
+    assert turning == {"first_person"}
 
 
 def test_tilt_is_display_only_and_steps_through_every_level():
@@ -388,7 +388,9 @@ def test_tilt_anchor_levels_render_exactly_like_their_presets():
     spec = TaskSpecification.from_dict(CORRIDOR)
     anchors = {0: "top_down", len(TILT_LEVELS) - 1: "first_person"}
     for level, preset in anchors.items():
-        tilted = get_backend("mujoco3d", camera="first_person_narrow", resolution=RES)
+        # start from the other preset, so the tilt level alone sets the view
+        other = "first_person" if preset == "top_down" else "top_down"
+        tilted = get_backend("mujoco3d", camera=other, resolution=RES)
         plain = get_backend("mujoco3d", camera=preset, resolution=RES)
         try:
             for b in (tilted, plain):

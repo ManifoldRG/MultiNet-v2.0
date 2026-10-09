@@ -44,6 +44,7 @@ def test_fixed_resolution_is_recorded_in_the_label():
         # retired presets: a run-config naming one fails fast, before any call
         ({"backend": "mujoco3d", "camera": "chase"}, "camera"),
         ({"backend": "mujoco3d", "camera": "fixed_angled"}, "camera"),
+        ({"backend": "mujoco3d", "camera": "first_person_narrow"}, "camera"),
         ({"backend": "holodeck", "camera": "first_person"}, "backend"),
         ({"backend": "mujoco3d", "camera": "first_person", "resolution": 0}, "resolution"),
         ({"backend": "mujoco3d", "camera": "first_person", "zoom": 2}, "zoom"),

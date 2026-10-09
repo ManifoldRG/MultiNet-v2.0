@@ -126,7 +126,7 @@ python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1
 same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
 actions/scoring — it is a render layer, not a new environment. What a frame
 shows depends on the camera: `top_down` frames the whole maze; `first_person`
-(and `first_person_narrow`) only what lies ahead of the agent, plus status
+only what lies ahead of the agent, plus status
 slots along the bottom for the key it carries and the switch it stands on (its
 own cell, where PICKUP and a switch TOGGLE act, is out of view). A run-config
 selects it with a top-level `"render": {"backend": "mujoco3d", "camera":
@@ -149,14 +149,13 @@ pip install -e ".[dev,visual,mujoco3d]"
 Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
 (software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
 Elsewhere it is left unset so mujoco uses the native GL. Play with it via
-`--backend mujoco3d --camera <preset>` (`V` cycles `top_down` /
-`first_person` / `first_person_narrow` live; `first_person` is the wide eye,
-fovy 110 with 1.0 walls so portal beacons show, and `first_person_narrow` the
-2026-09-18 ablation eye, fovy 90 with 1.4 walls). `,` / `.` tilt the camera
-one level at a time from top-down to first person, with the walls rising as
-it drops; the footer shows the level and wall height. The first-person views
-(and every tilt level below top-down) turn with the agent and carry a
-compass; turns animate in the demo only.
+`--backend mujoco3d --camera <preset>` (`V` switches between `top_down` and
+`first_person` live; `first_person` is the wide eye, fovy 110 with 1.0 walls
+so portal beacons show). `,` / `.` tilt the camera one level at a time from
+top-down to first person, with the walls rising as it drops; the footer shows
+the level and wall height. The first-person view (and every tilt level below
+top-down) turns with the agent and carries a compass; turns animate in the
+demo only.
 
 ```bash
 python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1 \

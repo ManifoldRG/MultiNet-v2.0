@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw
 
 from . import palette
 
-COMPASS_CAMERAS: tuple[str, ...] = ("first_person", "first_person_narrow")
+COMPASS_CAMERAS: tuple[str, ...] = ("first_person",)
 
 
 def turns_with_agent(camera: str, tilt: int | None = None) -> bool:

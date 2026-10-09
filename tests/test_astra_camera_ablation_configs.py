@@ -12,12 +12,10 @@ from interface.config import ExperimentConfig
 from scripts.run_pipeline import _condition_configs, load_manifest, load_run_config, resolve_task_rows
 
 FIXTURES = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures"
-# The 2026-09-18 run also had chase and fixed_angled arms; they were removed
-# with those camera presets (results stay in Multinet-v2-results).
-ARMS = ["2d", "top_down", "first_person"]
-# The 2026-09-18 run used the narrow eye; the preset was widened afterwards,
-# so the arm keeps its original camera under its new name.
-ARM_CAMERA = {"first_person": "first_person_narrow"}
+# The 2026-09-18 run also had chase, fixed_angled and first_person (the narrow
+# eye) arms; they were removed with those camera presets (results stay in
+# Multinet-v2-results).
+ARMS = ["2d", "top_down"]
 MANIFEST = FIXTURES / "manifest.astra_camera_ablation.json"
 
 
@@ -53,7 +51,7 @@ def test_arms_differ_only_by_their_render_block():
     assert "render" not in configs["2d"]  # the anchor is MiniGrid's own frame
     for arm in ARMS[1:]:
         settings = RenderSettings.from_run_config(configs[arm])
-        assert settings.backend == "mujoco3d" and settings.camera == ARM_CAMERA.get(arm, arm)
+        assert settings.backend == "mujoco3d" and settings.camera == arm
         assert settings.resolution == "grid"  # same image-token budget as the 2D anchor
 
 

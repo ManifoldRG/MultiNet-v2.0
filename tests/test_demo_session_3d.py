@@ -52,7 +52,7 @@ def test_3d_frame_and_camera_cycle_are_display_only(tmp_path):
         assert session.backend.frame_is_grid_aligned is False
         # rendered at the demo panel size, not stretched from 512
         assert session.backend.render().shape == (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE, 3)
-        assert session.camera_names == ("top_down", "first_person", "first_person_narrow")
+        assert session.camera_names == ("top_down", "first_person")
         assert session.cycle_camera() == "first_person"
         assert session.backend.camera == "first_person"
         assert session.state.step_count == 0 and len(session.transcript) == 1

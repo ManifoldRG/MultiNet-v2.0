@@ -16,11 +16,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-PRESETS: tuple[str, ...] = ("top_down", "first_person", "first_person_narrow")
+PRESETS: tuple[str, ...] = ("top_down", "first_person")
 DEFAULT_WALL_HEIGHT: dict[str, float] = {
     "top_down": 0.4,
     "first_person": 1.0,
-    "first_person_narrow": 1.4,
 }
 
 # GridState.agent_direction (0=E, 1=S, 2=W, 3=N) -> world yaw in degrees.
@@ -31,11 +30,9 @@ PERSPECTIVE_FOVY = 45.0  # MuJoCo's default free-camera fovy (degrees)
 # 2026-09-23 beacon-visibility sweep (fovy 110 / pitch -5 / walls 1.0: a portal
 # beacon in view from 58% of poses in the dense mazes, diagonals to ten cells,
 # own tile edge still in frame; fovy > 110 drops a beacon under 4 px at ten
-# cells). first_person_narrow is the 2026-09-18 camera-ablation eye, kept as
-# an ablation arm.
+# cells).
 EYE_PRESETS: dict[str, tuple[float, float]] = {
     "first_person": (110.0, -5.0),
-    "first_person_narrow": (90.0, -12.0),
 }
 FIRST_PERSON_FOVY, FIRST_PERSON_ELEVATION = EYE_PRESETS["first_person"]
 FIT_MARGIN = 0.06  # fraction of the half-frame kept clear around the maze

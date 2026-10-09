@@ -42,7 +42,7 @@ TASK_PREFIX_3D_THIRD_PERSON = (  # top_down
     "Task: You are the red wedge-shaped agent trying to navigate this maze. "
     "The wedge points the way you face. Move to the green goal tile."
 )
-TASK_PREFIX_3D_FIRST_PERSON = (  # first_person, first_person_narrow
+TASK_PREFIX_3D_FIRST_PERSON = (  # first_person
     "Task: You are navigating this maze and see it through your own eyes; "
     "the view looks the way you face. Move to the green goal tile."
 )

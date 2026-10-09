@@ -1,7 +1,7 @@
 {
   "description": "Astra camera ablation, arm top_down: six mazes rendered by the 3D backend, camera top_down.",
   "manifest": "gridworld/fixtures/manifest.astra_camera_ablation.json",
-  "_note_arms": "Arms differ ONLY by the render block. Model settings match the R1-frontier Astra run (run_config.r1_frontier.json) except spend_cap_usd, a per-process hard stop sized to one arm: $6 per arm (the 2026-09-18 run had five arms, $30; its chase and fixed_angled arms were removed with those camera presets). 3D resolution 'grid' = 32 px per cell, so a 3D frame costs the same image tokens as the 2D anchor (~100 for an 8x8). Run arms in this order so a cap stop loses the least: 2d, top_down, first_person. Every 3D view carries a compass; the 2D anchor does not (it is MiniGrid's own frame, as R1 played it).",
+  "_note_arms": "Arms differ ONLY by the render block. Model settings match the R1-frontier Astra run (run_config.r1_frontier.json) except spend_cap_usd, a per-process hard stop sized to one arm: $6 per arm (the 2026-09-18 run had five arms, $30; its chase, fixed_angled and first_person (narrow eye) arms were removed with those camera presets). 3D resolution 'grid' = 32 px per cell, so a 3D frame costs the same image tokens as the 2D anchor (~100 for an 8x8). Run arms in this order so a cap stop loses the least: 2d, top_down. Every 3D view carries a compass; the 2D anchor does not (it is MiniGrid's own frame, as R1 played it).",
   "_note_no_conditions": "No conditions key => the single default cell from the experiment_config overlay.",
   "experiment_config": {
     "prompting": "minimal",

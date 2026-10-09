@@ -100,7 +100,7 @@ def test_top_down_compass_clears_the_interior_at_other_frame_sizes(black_frames,
     assert mask.any() and _interior_hits(spec, mask) == 0
 
 
-@pytest.mark.parametrize("camera", ["first_person", "first_person_narrow"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_other_views_keep_the_fixed_top_right_compass(black_frames, camera):
     """Only top_down moves: the perspective views draw exactly as before."""
     spec = TaskSpecification.from_dict(CORRIDOR)

@@ -32,7 +32,7 @@ def _fresh_top_down(backend, spec, state):
         renderer.close()
 
 
-@pytest.mark.parametrize("camera", ["first_person", "first_person_narrow"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_start_map_is_a_fresh_top_down_render_of_the_reset_state(camera):
     spec = r1_spec()
     backend = get_backend("mujoco3d", camera=camera, resolution=RES, start_map=True)

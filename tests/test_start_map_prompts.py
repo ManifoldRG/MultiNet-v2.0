@@ -27,8 +27,8 @@ LEVELS = {
     "verbose": VerbosePromptStrategy,
     "text_initial_maze": TextInitialMazePromptStrategy,
 }
-MAP_CAMERAS = ("first_person", "first_person_narrow")
-FIRST_PERSON = ("first_person", "first_person_narrow")
+MAP_CAMERAS = ("first_person",)
+FIRST_PERSON = ("first_person",)
 THIRD_PERSON = ("top_down",)
 
 MINIMAL_MAP = (
@@ -42,7 +42,6 @@ STANDARD_MAP = (
 )
 VIEW_LABELS = {
     "first_person": "Your view now (first person):",
-    "first_person_narrow": "Your view now (first person):",
 }
 THIRD_PERSON_PREFIX = (
     "Task: You are the red wedge-shaped agent trying to navigate this maze. "
@@ -200,7 +199,7 @@ def test_render_context_comes_from_the_backend():
     assert RenderContext.from_backend(mapped) == RenderContext(camera="first_person", start_map=True)
 
 
-@pytest.mark.parametrize("camera, start_map", [("first_person", True), ("first_person_narrow", False), ("top_down", False)])
+@pytest.mark.parametrize("camera, start_map", [("first_person", True), ("first_person", False), ("top_down", False)])
 def test_build_runner_hands_the_backends_render_context_to_the_prompt(camera, start_map):
     pytest.importorskip("mujoco")
     pytest.importorskip("minigrid")

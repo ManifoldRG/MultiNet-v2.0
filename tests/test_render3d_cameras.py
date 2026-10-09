@@ -116,7 +116,7 @@ def test_first_person_sits_at_agent_eye_facing_heading():
 
 
 def test_unknown_preset_or_direction_raises():
-    for unknown in ("isometric", "chase", "fixed_angled"):  # the last two were retired
+    for unknown in ("isometric", "chase", "fixed_angled", "first_person_narrow"):  # all but the first were retired
         with pytest.raises(ValueError, match="unknown camera preset"):
             pose_for(unknown, agent_cell=(1, 1), direction=0, maze_dims=(8, 8), wall_height=0.6)
     with pytest.raises(ValueError, match="agent_direction"):
