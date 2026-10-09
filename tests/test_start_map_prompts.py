@@ -27,9 +27,9 @@ LEVELS = {
     "verbose": VerbosePromptStrategy,
     "text_initial_maze": TextInitialMazePromptStrategy,
 }
-MAP_CAMERAS = ("first_person", "first_person_narrow", "chase", "fixed_angled")
-FIRST_PERSON = ("first_person", "first_person_narrow")
-THIRD_PERSON = ("top_down", "chase", "fixed_angled")
+MAP_CAMERAS = ("first_person",)
+FIRST_PERSON = ("first_person",)
+THIRD_PERSON = ("top_down",)
 
 MINIMAL_MAP = (
     "Map: a top-down view of the whole maze at the start, north up. "
@@ -42,9 +42,6 @@ STANDARD_MAP = (
 )
 VIEW_LABELS = {
     "first_person": "Your view now (first person):",
-    "first_person_narrow": "Your view now (first person):",
-    "chase": "Your view now (from behind and above you):",
-    "fixed_angled": "Your view now (from a fixed angle):",
 }
 THIRD_PERSON_PREFIX = (
     "Task: You are the red wedge-shaped agent trying to navigate this maze. "
@@ -111,13 +108,10 @@ def test_verbose_map_text_is_standard_plus_a_full_legend(camera):
 @pytest.mark.parametrize("camera", MAP_CAMERAS)
 def test_verbose_view_label_explains_the_compass_on_views_that_turn(camera):
     label = _strategy("verbose", camera, start_map=True).current_view_label()
-    assert label.endswith("\n" + VIEW_LABELS[camera]) or label == VIEW_LABELS[camera]
-    if camera == "fixed_angled":  # north-up view: no turning compass to explain
-        assert label == VIEW_LABELS[camera]
-    else:
-        compass = label.splitlines()[0]
-        assert compass == user_templates.COMPASS_NOTE
-        assert "compass" in compass and "north" in compass and "face" in compass
+    assert label.endswith("\n" + VIEW_LABELS[camera])
+    compass = label.splitlines()[0]  # every map camera turns with the agent
+    assert compass == user_templates.COMPASS_NOTE
+    assert "compass" in compass and "north" in compass and "face" in compass
 
 
 @pytest.mark.parametrize("level", list(LEVELS))
@@ -142,14 +136,14 @@ def test_view_label_precedes_the_current_image_placeholder():
 
     state = GridState(agent_position=(1, 1), agent_direction=0)
     placeholder = user_templates.CURRENT_IMAGE_PLACEHOLDER
-    labelled = _strategy("standard", "chase", start_map=True).build_user_prompt(
+    labelled = _strategy("standard", "first_person", start_map=True).build_user_prompt(
         "", "", state, observation="image_only"
     )
-    assert labelled == f"{VIEW_LABELS['chase']}\n{placeholder}\nYour inventory: empty.\nWhat is your next action?"
+    assert labelled == f"{VIEW_LABELS['first_person']}\n{placeholder}\nYour inventory: empty.\nWhat is your next action?"
     for level in ("minimal",):
-        plain = _strategy(level, "chase", start_map=True).build_user_prompt("", "", state, observation="image_only")
+        plain = _strategy(level, "first_person", start_map=True).build_user_prompt("", "", state, observation="image_only")
         assert plain.startswith(placeholder)
-    no_map = _strategy("standard", "chase").build_user_prompt("", "", state, observation="image_only")
+    no_map = _strategy("standard", "first_person").build_user_prompt("", "", state, observation="image_only")
     assert no_map.startswith(placeholder)
 
 
@@ -199,13 +193,13 @@ def test_render_context_comes_from_the_backend():
     from gridworld.backends import get_backend
 
     assert RenderContext.from_backend(get_backend("minigrid", render_mode="rgb_array")) == RenderContext()
-    plain = get_backend("mujoco3d", camera="chase", resolution=64)
+    plain = get_backend("mujoco3d", camera="top_down", resolution=64)
     mapped = get_backend("mujoco3d", camera="first_person", resolution=64, start_map=True)
-    assert RenderContext.from_backend(plain) == RenderContext(camera="chase")
+    assert RenderContext.from_backend(plain) == RenderContext(camera="top_down")
     assert RenderContext.from_backend(mapped) == RenderContext(camera="first_person", start_map=True)
 
 
-@pytest.mark.parametrize("camera, start_map", [("first_person", True), ("chase", False), ("top_down", False)])
+@pytest.mark.parametrize("camera, start_map", [("first_person", True), ("first_person", False), ("top_down", False)])
 def test_build_runner_hands_the_backends_render_context_to_the_prompt(camera, start_map):
     pytest.importorskip("mujoco")
     pytest.importorskip("minigrid")

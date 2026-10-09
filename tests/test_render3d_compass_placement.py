@@ -100,15 +100,14 @@ def test_top_down_compass_clears_the_interior_at_other_frame_sizes(black_frames,
     assert mask.any() and _interior_hits(spec, mask) == 0
 
 
-@pytest.mark.parametrize("camera", ["chase", "first_person", "fixed_angled"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_other_views_keep_the_fixed_top_right_compass(black_frames, camera):
     """Only top_down moves: the perspective views draw exactly as before."""
     spec = TaskSpecification.from_dict(CORRIDOR)
     resolution = 224
     mask = _compass_mask(spec, camera, resolution)
     blank = np.zeros((resolution, resolution, 3), np.uint8)
-    direction = 0 if camera in ("chase", "first_person") else 3  # E heading vs north-up
-    expected = draw_compass(blank, direction).any(axis=-1)
+    expected = draw_compass(blank, 0).any(axis=-1)  # the eye views turn with the agent (E heading)
     np.testing.assert_array_equal(mask, expected)
     top, left, bottom, right = compass_box(resolution)
     assert mask[top:bottom, left:right].any() and not mask.sum() > (bottom - top) * (right - left)

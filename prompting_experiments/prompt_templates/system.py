@@ -38,11 +38,11 @@ INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
 # for 3D runs, by camera family; MIN_TASK_PREFIX is already camera-neutral.
 # NOTE: the 3D visuals are about to be redesigned; like the start-map texts in
 # user.py, these name how the agent and goal look.
-TASK_PREFIX_3D_THIRD_PERSON = (  # top_down, chase, fixed_angled
+TASK_PREFIX_3D_THIRD_PERSON = (  # top_down
     "Task: You are the red wedge-shaped agent trying to navigate this maze. "
     "The wedge points the way you face. Move to the green goal tile."
 )
-TASK_PREFIX_3D_FIRST_PERSON = (  # first_person, first_person_narrow
+TASK_PREFIX_3D_FIRST_PERSON = (  # first_person
     "Task: You are navigating this maze and see it through your own eyes; "
     "the view looks the way you face. Move to the green goal tile."
 )

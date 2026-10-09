@@ -47,43 +47,63 @@ def test_top_down_is_orthographic_north_up_and_fits():
     assert fits(pose, maze_corners(10, 6, 0.4))
 
 
+def _whole_maze_tilt_levels() -> list[int]:
+    """Demo tilt levels that frame the whole maze from above its centre and
+    turn with the agent (the view the retired chase preset showed)."""
+    from gridworld.render3d.cameras import TILT_LEVELS
+
+    return [n for n, t in enumerate(TILT_LEVELS) if t.preset is None and t.distance is None]
+
+
+def test_the_ladder_keeps_whole_maze_levels():
+    assert _whole_maze_tilt_levels() == [1, 2]
+
+
 @pytest.mark.parametrize("direction", [0, 1, 2, 3])
-def test_chase_faces_heading_so_forward_is_up_in_frame(direction):
-    pose = pose_for("chase", agent_cell=(5, 5), direction=direction, maze_dims=(10, 10), wall_height=0.6)
-    assert pose.azimuth == DIRECTION_YAW[direction] and not pose.orthographic
-    dx, dy = DELTA[direction]
-    here = project(pose, cell_center(5, 5))
-    ahead = project(pose, cell_center(5 + 2 * dx, 5 + 2 * dy))
-    assert ahead[1] > here[1]
-    assert abs(ahead[0] - here[0]) < 0.05
+def test_whole_maze_tilt_levels_face_the_heading_so_forward_is_up_in_frame(direction):
+    from gridworld.render3d.cameras import tilt_pose
+
+    for level in _whole_maze_tilt_levels():
+        pose = tilt_pose(level, agent_cell=(5, 5), direction=direction, maze_dims=(10, 10))
+        assert pose.azimuth == DIRECTION_YAW[direction] and not pose.orthographic
+        dx, dy = DELTA[direction]
+        here = project(pose, cell_center(5, 5))
+        ahead = project(pose, cell_center(5 + 2 * dx, 5 + 2 * dy))
+        assert ahead[1] > here[1]
+        assert abs(ahead[0] - here[0]) < 0.05
 
 
 @pytest.mark.parametrize("dims", DIMS)
-@pytest.mark.parametrize("preset", ["chase", "fixed_angled"])
-def test_auto_fit_keeps_whole_maze_in_frame_and_is_tight(preset, dims):
+def test_whole_maze_tilt_levels_keep_the_maze_in_frame_and_are_tight(dims):
+    from gridworld.render3d.cameras import tilt_pose, tilt_wall_height
+
     width, height = dims
-    corners = maze_corners(width, height, 0.6)
-    for cell in [(1, 1), (width - 2, 1), (1, height - 2), (width - 2, height - 2)]:
-        tight_somewhere = False
-        for direction in range(4):
-            pose = pose_for(preset, agent_cell=cell, direction=direction, maze_dims=dims, wall_height=0.6)
-            assert fits(pose, corners)
-            tight_somewhere |= not fits(dataclasses.replace(pose, distance=pose.distance * 0.9), corners)
-        # chase keeps one distance for all headings, so it is tight at its worst one
-        assert tight_somewhere
+    for level in _whole_maze_tilt_levels():
+        corners = maze_corners(width, height, tilt_wall_height(level))
+        for cell in [(1, 1), (width - 2, 1), (1, height - 2), (width - 2, height - 2)]:
+            tight_somewhere = False
+            for direction in range(4):
+                pose = tilt_pose(level, agent_cell=cell, direction=direction, maze_dims=dims)
+                assert fits(pose, corners)
+                tight_somewhere |= not fits(dataclasses.replace(pose, distance=pose.distance * 0.9), corners)
+            # one distance for all headings, so it is tight at its worst one
+            assert tight_somewhere
 
 
 @pytest.mark.parametrize("dims", DIMS)
-def test_chase_zoom_and_aim_never_change_within_a_maze(dims):
+def test_whole_maze_tilt_zoom_and_aim_never_change_within_a_maze(dims):
     # Playtest: the view breathed on every step. Only a turn may move it.
+    from gridworld.render3d.cameras import tilt_pose
+
     width, height = dims
-    poses = [
-        pose_for("chase", agent_cell=cell, direction=direction, maze_dims=dims, wall_height=0.6)
-        for cell in [(1, 1), (width - 2, 1), (1, height - 2), (width // 2, height // 2)]
-        for direction in range(4)
-    ]
-    assert len({(p.lookat, p.distance, p.elevation, p.fovy) for p in poses}) == 1
-    assert {p.azimuth for p in poses} == set(DIRECTION_YAW.values())
+    for level in _whole_maze_tilt_levels():
+        poses = [
+            tilt_pose(level, agent_cell=cell, direction=direction, maze_dims=dims)
+            for cell in [(1, 1), (width - 2, 1), (1, height - 2), (width // 2, height // 2)]
+            for direction in range(4)
+        ]
+        assert len({(p.lookat, p.distance, p.elevation, p.fovy) for p in poses}) == 1
+        assert {p.azimuth for p in poses} == set(DIRECTION_YAW.values())
 
 
 def test_first_person_sits_at_agent_eye_facing_heading():
@@ -96,10 +116,11 @@ def test_first_person_sits_at_agent_eye_facing_heading():
 
 
 def test_unknown_preset_or_direction_raises():
-    with pytest.raises(ValueError, match="unknown camera preset"):
-        pose_for("isometric", agent_cell=(1, 1), direction=0, maze_dims=(8, 8), wall_height=0.6)
+    for unknown in ("isometric", "chase", "fixed_angled", "first_person_narrow"):  # all but the first were retired
+        with pytest.raises(ValueError, match="unknown camera preset"):
+            pose_for(unknown, agent_cell=(1, 1), direction=0, maze_dims=(8, 8), wall_height=0.6)
     with pytest.raises(ValueError, match="agent_direction"):
-        pose_for("chase", agent_cell=(1, 1), direction=7, maze_dims=(8, 8), wall_height=0.6)
+        pose_for("first_person", agent_cell=(1, 1), direction=7, maze_dims=(8, 8), wall_height=1.0)
 
 
 # --- demo tilt: top_down (level 0) down to first person (last level) --------
@@ -109,7 +130,7 @@ def test_tilt_ladder_is_anchored_on_the_presets():
     from gridworld.render3d.cameras import TILT_LEVELS, tilt_pose, tilt_wall_height
 
     kwargs = dict(agent_cell=(3, 4), direction=1, maze_dims=(10, 8))
-    anchors = {0: "top_down", 2: "chase", len(TILT_LEVELS) - 1: "first_person"}
+    anchors = {0: "top_down", len(TILT_LEVELS) - 1: "first_person"}
     for level, preset in anchors.items():
         wall = tilt_wall_height(level)
         assert tilt_pose(level, **kwargs) == pose_for(preset, wall_height=wall, **kwargs)

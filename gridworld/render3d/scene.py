@@ -26,7 +26,7 @@ KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
 # 2D glyph's colours and top-down motif (custom_env.py) but means something
 # at eye level -- a floating skull, a snow bank you wade through, a pool of
 # light with a beacon, a turntable. Heights are in wall units (first-person
-# walls are 1.0, 1.4 in the narrow preset; the eye sits at 0.55).
+# walls are 1.0; the eye sits at 0.55).
 PORTAL_RING_TOP = 0.14
 PORTAL_BEACON_TOP = 10.0  # sweep 2026-09-23: with 1.0 walls, 10 reaches diagonals to ten cells
 PORTAL_BEACON_ALPHA = 0.45

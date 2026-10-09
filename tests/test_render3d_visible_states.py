@@ -11,7 +11,7 @@ import pytest
 mujoco = pytest.importorskip("mujoco")
 
 from gridworld.backends.base import GridState  # noqa: E402
-from gridworld.render3d.cameras import cell_center, project, to_pixel  # noqa: E402
+from gridworld.render3d.cameras import PRESETS, cell_center, project, to_pixel  # noqa: E402
 from gridworld.render3d.renderer import SceneRenderer  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 from render3d_test_utils import MECHANISMS  # noqa: E402
@@ -65,7 +65,7 @@ def _agent_px(frame) -> int:
     return int(_agent_mask(frame).sum())
 
 
-@pytest.mark.parametrize("camera", ["top_down", "chase"])
+@pytest.mark.parametrize("camera", ["top_down"])
 @pytest.mark.parametrize("mechanism", ["door", "switch", "gate", "key"])
 def test_each_mechanism_state_is_visibly_distinct(spec, camera, mechanism):
     if mechanism == "door":
@@ -82,7 +82,7 @@ def test_each_mechanism_state_is_visibly_distinct(spec, camera, mechanism):
     assert _changed_px(frame_a, frame_b, _cell_region(pose, cell, wall_height)) >= MIN_CHANGED_PX
 
 
-ALL_CAMERAS = ["top_down", "chase", "fixed_angled", "first_person", "first_person_narrow"]
+ALL_CAMERAS = list(PRESETS)
 # One mechanism flips per case; the key case uses a used-up key (not carried),
 # so nothing but the key's own cell may change.
 LOCAL_CHANGES = {
@@ -165,7 +165,7 @@ def test_agent_heading_is_visible_top_down(spec):
     assert _changed_px(east, south, _cell_region(pose, (1, 2), wall_height)) >= MIN_CHANGED_PX
 
 
-@pytest.mark.parametrize("camera", ["top_down", "chase", "fixed_angled"])
+@pytest.mark.parametrize("camera", ["top_down"])
 def test_goal_pad_lands_where_project_predicts(spec, camera):
     # Door and gate open, so nothing tall stands between the camera and the goal.
     frame, pose, _ = _render(spec, camera, _state(open_gates={"g1"}), {"d1": True})
@@ -177,7 +177,7 @@ def test_goal_pad_lands_where_project_predicts(spec, camera):
     assert math.dist((rows.mean(), cols.mean()), want) < 3.0
 
 
-@pytest.mark.parametrize("camera", ["top_down", "chase", "fixed_angled"])
+@pytest.mark.parametrize("camera", ["top_down"])
 @pytest.mark.parametrize("direction", [0, 1, 2, 3])
 def test_agent_silhouette_points_where_it_faces(spec, camera, direction):
     # The agent reads like MiniGrid's triangle: along its facing, the front
@@ -228,7 +228,7 @@ def test_agent_hidden_only_in_first_person(spec):
 
 
 def test_render_is_deterministic_and_well_formed(spec):
-    renderer = SceneRenderer(spec, camera="chase", resolution=RES)
+    renderer = SceneRenderer(spec, camera="first_person", resolution=RES)
     try:
         a = renderer.render(_state(), CLOSED)
         b = renderer.render(_state(), CLOSED)

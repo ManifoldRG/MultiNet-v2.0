@@ -2,7 +2,7 @@
 """Interactive R1 human-play demo. See ``demo.session`` / ``demo.ui`` for implementation.
 
     python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1
-    python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1 --backend mujoco3d --camera chase
+    python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1 --backend mujoco3d --camera first_person
 """
 
 from __future__ import annotations

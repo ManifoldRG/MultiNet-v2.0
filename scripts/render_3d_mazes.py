@@ -5,7 +5,7 @@ frames or full BFS-plan replays per camera preset, plus an optional contact
 sheet.
 
     python -m scripts.render_3d_mazes --manifest gridworld/fixtures/manifest.json \
-        --experiment r1 --camera top_down --camera chase --contact-sheet --out /tmp/render3d
+        --experiment r1 --camera top_down --camera first_person --contact-sheet --out /tmp/render3d
 """
 
 from __future__ import annotations
