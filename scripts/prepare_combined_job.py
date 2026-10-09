@@ -68,6 +68,8 @@ def merge_plans(part_plans: list[dict[str, Any]], job_id: str) -> tuple[dict, di
 def build(specs: list[dict[str, Any]], *, artifacts_root: Path, run_set_id: str,
           seeds: list[int], difficulty_max: float | None) -> dict:
     artifacts_root = Path(artifacts_root)
+    for spec in specs:  # fail closed on a 3D batch before preparing any part
+        dist._require_2d_render(dist.pipeline.load_run_config(spec["run_config"]), spec["run_config"])
     part_plans = []
     tasks_root = artifacts_root / "tasks"
     tasks_root.mkdir(parents=True, exist_ok=True)

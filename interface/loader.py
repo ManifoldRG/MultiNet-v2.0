@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.backends import get_backend
+from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
 
-def load_task(path: str | Path) -> tuple[MiniGridBackend, TaskSpecification]:
+def load_task(
+    path: str | Path, backend: str = "minigrid", **backend_kwargs
+) -> tuple[AbstractGridBackend, TaskSpecification]:
     spec = TaskSpecification.from_json(str(path))
-    backend = MiniGridBackend(render_mode="rgb_array")
-    backend.configure(spec)
-    return backend, spec
+    grid_backend = get_backend(backend, **backend_kwargs)
+    grid_backend.configure(spec)
+    return grid_backend, spec
 
 
 def default_maze_path(name: str = "V01_empty_room.json") -> Path:

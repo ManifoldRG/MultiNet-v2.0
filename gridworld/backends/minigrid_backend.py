@@ -36,6 +36,7 @@ class MiniGridBackend(AbstractGridBackend):
         self.parser = TaskParser(render_mode=render_mode)
         self.env: Optional[CustomMiniGridEnv] = None
         self._last_obs = None
+        self.drop_available = True
 
     def configure(self, task_spec: TaskSpecification) -> None:
         """
@@ -84,6 +85,7 @@ class MiniGridBackend(AbstractGridBackend):
         # CRITICAL: parser.parse() internally calls env.reset() and populates the grid.
         # We must NOT call reset() again here or it will wipe out all objects!
         self.env = self.parser.parse(self.task_spec, seed=seed)
+        self.env.drop_available = self.drop_available
 
         # Generate observation (env is already reset and populated by parser)
         obs = self.env.gen_obs()
@@ -191,6 +193,17 @@ class MiniGridBackend(AbstractGridBackend):
             Current GridState
         """
         return self._get_grid_state()
+
+    def door_states(self) -> dict[str, bool]:
+        """Physical open/closed per door, read off the live grid cell (a
+        re-closed door is closed here but stays in GridState.open_doors)."""
+        if self.env is None or self.task_spec is None:
+            return {}
+        states: dict[str, bool] = {}
+        for door in self.task_spec.mechanisms.doors:
+            cell = self.env.grid.get(door.position.x, door.position.y)
+            states[door.id] = bool(getattr(cell, "is_open", False))
+        return states
 
     def _get_grid_state(self) -> GridState:
         """

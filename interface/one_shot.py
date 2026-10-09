@@ -30,16 +30,22 @@ def _png_b64() -> str:
     return base64.b64encode(_PNG_PATH.read_bytes()).decode("utf-8")
 
 
-@lru_cache(maxsize=1)
-def _maze_text() -> str:
+@lru_cache(maxsize=6)
+def _maze_text(observation_text_format: str = "coords", include_facing: bool = False) -> str:
     from gridworld.task_spec import TaskSpecification
     from interface.renderer import render_initial_maze_text
 
     spec = TaskSpecification.from_json(str(_JSON_PATH))
-    return render_initial_maze_text(spec)
+    return render_initial_maze_text(
+        spec, observation_text_format=observation_text_format, include_facing=include_facing
+    )
 
 
-def one_shot_content_blocks(observation: "ObservationMode") -> list[dict]:
+def one_shot_content_blocks(
+    observation: "ObservationMode",
+    observation_text_format: str = "coords",
+    include_facing: bool = False,
+) -> list[dict]:
     """Return content blocks for the one-shot example to prepend to the user message."""
     solution_line = user_templates.ONE_SHOT_SOLUTION_LINE.format(
         actions=_solution_str()
@@ -48,7 +54,7 @@ def one_shot_content_blocks(observation: "ObservationMode") -> list[dict]:
     if observation == "text_only":
         text = (
             f"{user_templates.ONE_SHOT_EXAMPLE_INTRO}"
-            f"{_maze_text()}\n{solution_line}\n\n"
+            f"{_maze_text(observation_text_format, include_facing)}\n{solution_line}\n\n"
         )
         return [{"type": "text", "text": text}]
 

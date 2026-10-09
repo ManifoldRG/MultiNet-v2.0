@@ -155,7 +155,7 @@ def main() -> None:
     )
     parser.add_argument("--prompting", default="standard", choices=["minimal", "standard", "verbose"])
     parser.add_argument("--observation", default="image_text", choices=["text_only", "image_text", "image_only"])
-    parser.add_argument("--context-window", default="last3", choices=["current", "last3"])
+    parser.add_argument("--context-window", default="last_n", choices=["current", "last_n"])
     parser.add_argument(
         "--querying",
         default="step_by_step",
@@ -166,6 +166,13 @@ def main() -> None:
         choices=("stateless", "rolling", "full"),
         default="stateless",
         help="ExperimentConfig.chat_history (default: stateless).",
+    )
+    parser.add_argument(
+        "--context-n",
+        type=int,
+        default=3,
+        metavar="N",
+        help="ExperimentConfig.context_n for last_n windows (default: 3).",
     )
     parser.add_argument(
         "--chat-turns-max",
@@ -203,6 +210,7 @@ def main() -> None:
         prompting=args.prompting,
         observation=args.observation,
         context_window=args.context_window,
+        context_n=args.context_n,
         querying=args.querying,
         chat_history=args.chat_history,
         chat_turns_max=args.chat_turns_max,
