@@ -4,6 +4,9 @@ from dataclasses import asdict, dataclass, fields
 from typing import Literal, Optional, get_args, get_origin, get_type_hints
 
 
+DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
+
+
 @dataclass
 class ExperimentConfig:
     """Selects one implementation along each experimental axis."""
@@ -14,9 +17,16 @@ class ExperimentConfig:
     include_current_observation_description: bool = True
     observation_text_includes_facing: bool = True
     context_window: Literal[
-        "current", "last_n", "text_summary", "text_summary_and_last_n"
+        "current",
+        "last3",
+        "last_n",
+        "text_summary",
+        "text_summary_and_last3",
+        "text_summary_and_last_n",
+        "full",
     ] = "last_n"
     context_n: int = 3
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
     chat_history: Literal["stateless", "rolling", "full"] = "stateless"
     chat_turns_max: int = 3
@@ -37,11 +47,26 @@ class ExperimentConfig:
             if value not in allowed:
                 raise ValueError(f"{f.name} must be one of {allowed}, got {value!r}")
         k = self.progress_stall_k
-        if k is None:
-            return
-        if isinstance(k, bool) or not isinstance(k, int) or k <= 0:
+        if k is not None and (isinstance(k, bool) or not isinstance(k, int) or k <= 0):
             raise ValueError(
                 f"progress_stall_k must be None or a positive int, got {k!r}"
+            )
+        if (
+            isinstance(self.max_history_tokens, bool)
+            or not isinstance(self.max_history_tokens, int)
+            or self.max_history_tokens <= 0
+        ):
+            raise ValueError(
+                "max_history_tokens must be a positive int, "
+                f"got {self.max_history_tokens!r}"
+            )
+        if (
+            isinstance(self.context_n, bool)
+            or not isinstance(self.context_n, int)
+            or self.context_n <= 0
+        ):
+            raise ValueError(
+                f"context_n must be a positive int, got {self.context_n!r}"
             )
 
     def to_dict(self) -> dict:
