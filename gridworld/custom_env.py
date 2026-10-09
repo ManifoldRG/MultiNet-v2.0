@@ -52,7 +52,13 @@ SWITCH_RENDER_COLORS = {
 }
 
 
-PORTAL_COLOUR_STATE = {name: i for i, name in enumerate(sorted(SWITCH_RENDER_COLORS))}
+# MiniGrid's tile cache keys a tile's picture on encode() for the whole process.
+# Switches and portals are both Balls and several visual colours share one
+# MiniGrid colour index (cyan draws on blue's, white on grey's), so their state
+# slot carries the visual colour: a switch 2 * colour + on, a portal
+# PORTAL_STATE_BASE + colour, above every switch state.
+TILE_COLOUR_STATE = {name: i for i, name in enumerate(sorted(SWITCH_RENDER_COLORS))}
+PORTAL_STATE_BASE = 2 * len(TILE_COLOUR_STATE)
 
 
 class Switch(Ball):
@@ -117,12 +123,12 @@ class Switch(Ball):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.13), core)
 
     def encode(self):
-        obj_type, color_idx, state = super().encode()
-        # Low bit preserves the custom (non-MiniGrid) color flag; the +2 makes
-        # the encoded tuple differ on activation so the MiniGrid tile cache
-        # (keyed on encode()) refreshes when is_active flips.
-        state = (1 if self.visual_color not in MINIGRID_COLORS else 0) + (2 if self.is_active else 0)
-        return (obj_type, color_idx, state)
+        obj_type, color_idx, _state = super().encode()
+        # The low bit flips with is_active so the MiniGrid tile cache (keyed on
+        # encode()) refreshes; the colour is the one render() draws, which falls
+        # back to grey (see TILE_COLOUR_STATE).
+        colour = TILE_COLOUR_STATE.get(self.visual_color, TILE_COLOUR_STATE["grey"])
+        return (obj_type, color_idx, 2 * colour + (1 if self.is_active else 0))
 
 
 class GroundKey(Key):
@@ -182,11 +188,10 @@ class TeleporterObj(Ball):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.12), color)
 
     def encode(self):
-        # The state slot keys MiniGrid's process-wide tile cache, so it must be
-        # deterministic and distinct per visual colour (cyan and blue share the
-        # MiniGrid colour index; a string-hash state varied with PYTHONHASHSEED).
+        # Deterministic and distinct from every switch and other portal colour
+        # (see TILE_COLOUR_STATE; a string-hash state varied with PYTHONHASHSEED).
         obj_type, color_idx, _state = super().encode()
-        return (obj_type, color_idx, PORTAL_COLOUR_STATE[self.visual_color])
+        return (obj_type, color_idx, PORTAL_STATE_BASE + TILE_COLOUR_STATE[self.visual_color])
 
 
 class KillCell(Lava):
@@ -209,7 +214,7 @@ class RotatingTile(Floor):
 
     def encode(self):
         obj_type, color_idx, _state = super().encode()
-        return (obj_type, color_idx, self.direction)
+        return (obj_type, color_idx, 1 + self.direction)  # 0 is plain floor's state
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([255, 168, 64]))
