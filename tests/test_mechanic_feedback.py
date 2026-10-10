@@ -264,72 +264,77 @@ def _feedback(spec: TaskSpecification, actions, level="standard"):
     return out
 
 
-def test_teleport_feedback_names_portal_colour_and_both_ends():
+def test_teleport_feedback():
     *_, last = _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3)
-    assert last == (
-        "TELEPORTED — MOVE_FORWARD: Took the purple portal from (1, 4) to (3, 6).",
-        "TELEPORTED",
-        False,
-    )
+    assert last[:2] == ("TELEPORTED — MOVE_FORWARD: You teleported to (3,6).", "TELEPORTED")
 
 
-def test_death_feedback_says_the_whole_maze_reset():
+def test_death_feedback():
     *_, last = _feedback(death_spec(), [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD])
-    assert last == (
-        "DIED — MOVE_FORWARD: Stepped on a death tile at (1, 4). The maze reset: "
-        "you are back at the start tile (1, 1) facing EAST; keys, doors and "
-        "switches are back where they started.",
-        "DIED",
-        False,
+    assert last[:2] == (
+        "DEATH RESET — MOVE_FORWARD: Stepped on a death portal and lost your progress.",
+        "DEATH RESET",
     )
 
 
-def test_ice_feedback_counts_down_to_the_thaw():
-    steps = _feedback(
-        ice_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD, A.TURN_LEFT, A.DONE, A.TURN_LEFT]
+def test_death_taken_from_the_start_cell_is_reported_as_a_death():
+    # The reset lands on the cell the agent left, so positions alone look like a bump.
+    (only,) = _feedback(_spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD])
+    assert only[:2] == (
+        "DEATH RESET — MOVE_FORWARD: Stepped on a death portal and lost your progress.",
+        "DEATH RESET",
     )
+
+
+def test_freeze_feedback_standard_and_causal():
+    actions = [A.MOVE_FORWARD] * 4  # land on ice (3 steps), then 3 swallowed moves
+    assert [s[0] for s in _feedback(ice_spec(), actions)] == [
+        "FROZEN — MOVE_FORWARD: You stepped on a frozen tile.",
+        "FROZEN — MOVE_FORWARD: This action did nothing, wait until the freeze ends.",
+        "FROZEN — MOVE_FORWARD: This action did nothing, wait until the freeze ends.",
+        "FROZEN — MOVE_FORWARD: This action did nothing. The freeze has ended.",
+    ]
+    assert [s[0] for s in _feedback(ice_spec(), actions, level="causal")] == [
+        "FROZEN — MOVE_FORWARD: You stepped on a frozen tile. You are frozen for 3 steps.",
+        "FROZEN — MOVE_FORWARD: This action did nothing. Frozen for 2 more steps.",
+        "FROZEN — MOVE_FORWARD: This action did nothing. Frozen for 1 more steps.",
+        "FROZEN — MOVE_FORWARD: This action did nothing. The freeze has ended.",
+    ]
+
+
+def test_rotating_tile_feedback():
+    steps = _feedback(_ride_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD])
     assert [s[:2] for s in steps] == [
-        ("MOVED — MOVE_FORWARD: Moved. The ice froze you for 3 steps.", "MOVED"),
-        ("FROZEN — MOVE_FORWARD: You are frozen; the action had no effect. "
-         "2 more steps until you thaw.", "FROZEN"),
-        ("FROZEN — TURN_LEFT: You are frozen; the action had no effect. "
-         "1 more step until you thaw.", "FROZEN"),
-        ("FROZEN — DONE: You are frozen; the action had no effect. "
-         "You have thawed; your next action will take effect.", "FROZEN"),
-        ("TURNED — TURN_LEFT: Now facing NORTH.", "TURNED"),
+        ("ROTATING — MOVE_FORWARD: You stepped on a rotating tile. It points SOUTH.", "ROTATING"),
+        ("CARRIED — MOVE_FORWARD: The rotating tile carried you SOUTH.", "CARRIED"),
     ]
-
-
-def test_one_step_freeze_uses_the_singular():
-    spec = _spec({"frozen_tiles": [[2, 1]], "freeze_steps": 1})
-    steps = _feedback(spec, [A.MOVE_FORWARD, A.TURN_RIGHT])
-    assert steps[0][0] == "MOVED — MOVE_FORWARD: Moved. The ice froze you for 1 step."
-    assert steps[1][0] == (
-        "FROZEN — TURN_RIGHT: You are frozen; the action had no effect. "
-        "You have thawed; your next action will take effect."
+    blocked = _feedback(_ride_spec(), [A.MOVE_FORWARD, A.TURN_LEFT, A.TURN_LEFT, A.MOVE_FORWARD])
+    assert blocked[-1][:2] == (
+        "ROTATING — MOVE_FORWARD: This action did not carry you off the rotating tile. "
+        "It now points EAST.",
+        "ROTATING",
     )
 
 
-def test_minimal_feedback_is_the_new_event_type_alone():
-    assert _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3, level="minimal")[-1][:2] == (
-        "TELEPORTED",
-        "TELEPORTED",
-    )
-    assert [s[:2] for s in _feedback(ice_spec(), [A.MOVE_FORWARD] * 2, level="minimal")] == [
-        ("MOVED", "MOVED"),
-        ("FROZEN", "FROZEN"),
+def test_minimal_feedback_carries_the_direction_or_destination():
+    assert [s[0] for s in _feedback(_ride_spec(), [A.MOVE_FORWARD] * 2, level="minimal")] == [
+        "ROTATING SOUTH",
+        "CARRIED SOUTH",
     ]
-    death = _feedback(death_spec(), [A.MOVE_FORWARD] * 3, level="minimal")
-    assert death[-1][:2] == ("DIED", "DIED")
+    assert _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3, level="minimal")[-1][0] == (
+        "TELEPORTED (3,6)"
+    )
+    assert _feedback(ice_spec(), [A.MOVE_FORWARD] * 2, level="minimal")[-1][0] == "FROZEN"
+    assert _feedback(
+        _spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD], level="minimal"
+    )[0][0] == "DEATH RESET"
 
 
-def test_causal_feedback_matches_standard_for_mechanics():
-    for spec, actions in (
-        (teleport_spec(), [A.MOVE_FORWARD] * 3),
-        (ice_spec(), [A.MOVE_FORWARD] * 3),
-        (death_spec(), [A.MOVE_FORWARD] * 3),
-    ):
-        assert _feedback(spec, actions, level="causal") == _feedback(spec, actions)
+def test_a_ride_onto_a_teleporter_reports_the_teleport():
+    # Turntable at (2, 1) points SOUTH after the first step; a portal pad sits at (2, 2).
+    spec = _ride_spec(teleporters=[{**PORTAL, "position_a": [2, 2]}])
+    *_, last = _feedback(spec, [A.MOVE_FORWARD, A.MOVE_FORWARD])
+    assert last[1] == "TELEPORTED"
 
 
 def test_teleporting_onto_the_goal_is_still_success():
@@ -502,7 +507,7 @@ def test_demo_session_labels_mechanics_like_the_runner(tmp_path):
     last = session.transcript[-1]
     assert last["event_type"] == "TELEPORTED"
     assert last["feedback"] == (
-        "TELEPORTED — MOVE_FORWARD: Took the purple portal from (1, 4) to (3, 6)."
+        "TELEPORTED — MOVE_FORWARD: You teleported to (3,6)."
     )
     assert last["mechanic"]["kind"] == "teleported"
     assert "took the purple portal from (1, 4) to (3, 6)" in text_summary_history(

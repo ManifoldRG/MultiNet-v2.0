@@ -13,9 +13,8 @@ from interface.coords import (
     compact_ids,
     forward_cell,
     gate_at_cell,
+    direction_name,
     goal_row_col,
-    move_landing,
-    rotating_pointing,
     switch_at_cell,
     switches_controlling_gate,
     door_at_cell,
@@ -62,46 +61,53 @@ def _mechanic_outcome(
     task_spec: TaskSpecification,
     level: Literal["minimal", "standard", "causal"],
     mechanic: dict,
-) -> tuple[str, str] | None:
-    """Re-label a step the world model tagged as teleport / death / ice."""
-    base_type, base_message = infer_step_outcome(
-        action, prev, curr, reward, terminated, task_spec, level=level
-    )
+) -> tuple[str, str, str] | None:
+    """(event_type, message, minimal text) for a step the world model labelled, else None."""
+    base_type, _ = infer_step_outcome(action, prev, curr, reward, terminated, task_spec)
     if base_type == "DONE":
         # Reaching the goal outranks the tile that delivered you there.
         return None
     kind = mechanic.get("kind")
-    if kind == "teleported":
-        return "TELEPORTED", feedback_templates.TOOK_PORTAL.format(
-            color=mechanic["color"],
-            source=_xy_row_col(mechanic["from_xy"]),
-            dest=_xy_row_col(mechanic["to_xy"]),
-        )
-    if kind == "died":
-        return "DIED", feedback_templates.DIED_AND_RESET.format(
-            cell=_xy_row_col(mechanic["cell_xy"]),
-            start=_xy_row_col(mechanic["start_xy"]),
-            facing=agent_facing(curr),
-        )
-    if kind == "froze" and base_type == "MOVED":
-        steps = int(mechanic["steps"])
-        duration = (
-            feedback_templates.FREEZE_DURATION_ONE
-            if steps == 1
-            else feedback_templates.FREEZE_DURATION.format(n=steps)
-        )
-        return "MOVED", (
-            base_message + " " + feedback_templates.ICE_FROZE_YOU.format(duration=duration)
-        )
     if kind == "frozen":
+        if action == "DONE":
+            # Calling DONE while frozen is still a wrong DONE.
+            return None
         remaining = int(mechanic["remaining"])
         if remaining <= 0:
-            thaw = feedback_templates.FROZEN_THAWED
-        elif remaining == 1:
-            thaw = feedback_templates.FROZEN_THAW_IN_ONE
+            return "FROZEN", feedback_templates.FROZEN_ENDED, "FROZEN"
+        if level == "causal":
+            return "FROZEN", feedback_templates.FROZEN_STILL_CAUSAL.format(n=remaining), "FROZEN"
+        return "FROZEN", feedback_templates.FROZEN_STILL, "FROZEN"
+    if kind == "froze":
+        if level == "causal":
+            message = feedback_templates.FROZEN_LANDED_CAUSAL.format(n=int(mechanic["steps"]))
         else:
-            thaw = feedback_templates.FROZEN_THAW_IN.format(n=remaining)
-        return "FROZEN", feedback_templates.FROZEN_NO_EFFECT.format(thaw=thaw)
+            message = feedback_templates.FROZEN_LANDED
+        return "FROZEN", message, "FROZEN"
+    if kind == "died":
+        return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET, "DEATH RESET"
+    if kind == "teleported":
+        row, col = _xy_row_col(mechanic["to_xy"])
+        return (
+            "TELEPORTED",
+            feedback_templates.TELEPORTED.format(row=row, col=col),
+            f"TELEPORTED ({row},{col})",
+        )
+    if kind == "carried":
+        direction = direction_name(int(mechanic["direction"]))
+        return (
+            "CARRIED",
+            feedback_templates.ROTATING_CARRIED.format(direction=direction),
+            f"CARRIED {direction}",
+        )
+    if kind == "rotating":
+        direction = direction_name(int(mechanic["pointing"]))
+        template = (
+            feedback_templates.ROTATING_STAYED
+            if mechanic["stayed"]
+            else feedback_templates.ROTATING_LANDED
+        )
+        return "ROTATING", template.format(direction=direction), f"ROTATING {direction}"
     return None
 
 
@@ -113,26 +119,10 @@ def infer_step_outcome(
     terminated: bool,
     task_spec: TaskSpecification,
     level: Literal["minimal", "standard", "causal"] = "minimal",
-    mechanic: dict | None = None,
 ) -> tuple[str, str]:
-    if mechanic is not None:
-        relabelled = _mechanic_outcome(
-            action, prev, curr, reward, terminated, task_spec, level, mechanic
-        )
-        if relabelled is not None:
-            return relabelled
-
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
     curr_pos = agent_row_col(curr)
-    if prev.freeze_remaining > 0:
-        if curr.freeze_remaining > 0:
-            if level == "causal":
-                return "FROZEN", feedback_templates.FROZEN_STILL_CAUSAL.format(
-                    n=curr.freeze_remaining
-                )
-            return "FROZEN", feedback_templates.FROZEN_STILL
-        return "FROZEN", feedback_templates.FROZEN_ENDED
     newly_open = curr.open_doors - prev.open_doors
 
     if newly_open:
@@ -152,25 +142,6 @@ def infer_step_outcome(
         return "NOTHING", feedback_templates.ACTION_NO_EFFECT.format(action=action)
 
     if action == "MOVE_FORWARD":
-        landing, link = move_landing(task_spec, prev)
-        kills = {to_row_col(cell) for cell in task_spec.mechanisms.kill_cells}
-        rotating = [to_row_col(cell) for cell in task_spec.mechanisms.rotating_tiles]
-        if (
-            landing in kills
-            and curr_pos == to_row_col(task_spec.maze.start)
-            and prev_pos != curr_pos
-        ):
-            return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET
-        if prev.freeze_remaining == 0 and curr.freeze_remaining > 0:
-            if level == "causal":
-                return "FROZEN", feedback_templates.FROZEN_LANDED_CAUSAL.format(
-                    n=curr.freeze_remaining
-                )
-            return "FROZEN", feedback_templates.FROZEN_LANDED
-        if prev_pos in rotating and prev_pos == curr_pos:
-            return "ROTATING", feedback_templates.ROTATING_STAYED.format(
-                direction=rotating_pointing(task_spec, curr, *curr_pos)
-            )
         if prev_pos == curr_pos:
             fwd = forward_cell(prev)
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
@@ -210,18 +181,6 @@ def infer_step_outcome(
             return "BLOCKED", feedback_templates.MOVE_BLOCKED_GENERIC
         if terminated and reward > 0 and curr_pos == goal:
             return "DONE", feedback_templates.REACHED_GOAL
-        if link is not None and curr_pos == link[0] and prev_pos != curr_pos:
-            return "TELEPORTED", feedback_templates.TELEPORTED.format(
-                row=curr_pos[0], col=curr_pos[1]
-            )
-        if prev_pos in rotating:
-            return "CARRIED", feedback_templates.ROTATING_CARRIED.format(
-                direction=rotating_pointing(task_spec, prev, *prev_pos)
-            )
-        if curr_pos in rotating:
-            return "ROTATING", feedback_templates.ROTATING_LANDED.format(
-                direction=rotating_pointing(task_spec, curr, *curr_pos)
-            )
         return "MOVED", feedback_templates.MOVED_TO
 
     if action == "PICKUP":
@@ -304,17 +263,20 @@ def format_step_feedback(
     level: Literal["minimal", "standard", "causal"] = "minimal",
     mechanic: dict | None = None,
 ) -> tuple[str, str]:
-    event_type, event_message = infer_step_outcome(
-        action, prev, curr, reward, terminated, task_spec, level=level, mechanic=mechanic
+    relabelled = (
+        _mechanic_outcome(action, prev, curr, reward, terminated, task_spec, level, mechanic)
+        if mechanic is not None
+        else None
     )
+    if relabelled is not None:
+        event_type, event_message, minimal_text = relabelled
+    else:
+        event_type, event_message = infer_step_outcome(
+            action, prev, curr, reward, terminated, task_spec, level=level
+        )
+        minimal_text = event_type
     if level == "minimal":
-        if event_type in ("ROTATING", "CARRIED"):
-            direction = event_message.split()[-1].rstrip(".")
-            return f"{event_type} {direction}", event_type
-        if event_type == "TELEPORTED":
-            where = event_message[event_message.index("("):].rstrip(".")
-            return f"TELEPORTED {where}", event_type
-        return event_type, event_type
+        return minimal_text, event_type
     if event_type == "BLOCKED":
         return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "TURNED":
@@ -337,12 +299,6 @@ def format_step_feedback(
         return feedback_templates.WRONG_DONE_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "INVALID":
         return feedback_templates.INVALID_FEEDBACK.format(action=action, message=event_message), event_type
-    if event_type == "TELEPORTED":
-        return feedback_templates.TELEPORTED_FEEDBACK.format(action=action, message=event_message), event_type
-    if event_type == "DIED":
-        return feedback_templates.DIED_FEEDBACK.format(action=action, message=event_message), event_type
-    if event_type == "FROZEN":
-        return feedback_templates.FROZEN_FEEDBACK.format(action=action, message=event_message), event_type
     return feedback_templates.DEFAULT_FEEDBACK.format(
         event_type=event_type,
         action=action,
