@@ -360,6 +360,11 @@ class MiniGridPlaySession:
                 if self.episode_done:
                     break
                 self._step_token(primitive, cardinal_source=token)
+                last = self.transcript[-1] if self.transcript else {}
+                if (last.get("mechanic") or {}).get("kind") == "frozen":
+                    # The freeze swallowed it: drop the rest of the move, as the
+                    # runner does, so a thaw never runs it on the old heading.
+                    break
         else:
             self._step_token(token)
 

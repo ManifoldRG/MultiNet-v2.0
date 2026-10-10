@@ -689,3 +689,46 @@ def test_image_text_history_shows_mechanic_feedback():
         "Feedback: FROZEN — MOVE_FORWARD: This action did nothing, wait until the freeze ends."
     ) in prompt
     assert "first you stepped on a frozen tile at (1,2)" in prompt
+
+
+def test_a_cardinal_move_the_freeze_swallows_is_dropped_whole():
+    # Facing EAST, MOVE_NORTH expands to TURN_LEFT, MOVE_FORWARD. When the freeze
+    # swallows the turn (here the thawing one), the MOVE_FORWARD must not then
+    # run on the old heading and carry the agent EAST.
+    replies = iter(["MOVE_EAST", "MOVE_NORTH", "MOVE_NORTH", "MOVE_NORTH"])
+
+    class _CardinalAgent:
+        last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+
+        def __call__(self, messages):
+            return "FINAL_OUTPUT: " + next(replies, "DONE")
+
+    backend = MiniGridBackend(render_mode="rgb_array")
+    spec = ice_spec()
+    backend.configure(spec)
+    config = ExperimentConfig(**{**R1_CELL, "action_space": "cardinal"})
+    result = build_runner(config, backend, spec).run(_CardinalAgent(), verbose=False)
+    steps = [rec for rec in result["transcript"] if rec.get("kind") == "step"]
+    delta = {"MOVE_NORTH": (-1, 0), "MOVE_SOUTH": (1, 0), "MOVE_EAST": (0, 1), "MOVE_WEST": (0, -1)}
+    for s in steps:
+        (r0, c0), (r1, c1) = s["position_before_row_col"], s["position_after_row_col"]
+        if (r0, c0) != (r1, c1):
+            assert (r1 - r0, c1 - c0) == delta[s["cardinal_action"]], s
+
+
+def test_demo_drops_a_cardinal_move_the_freeze_swallows(tmp_path):
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / "ice.json"
+    path.write_text(json.dumps(ice_spec().to_dict()))
+    session = MiniGridPlaySession(
+        task_path=str(path), config=replace(R1_CONFIG, action_space="cardinal")
+    )
+    for token in ("MOVE_EAST", "MOVE_NORTH", "MOVE_NORTH", "MOVE_NORTH"):
+        session._dispatch_token(token)
+    delta = {"MOVE_NORTH": (-1, 0), "MOVE_SOUTH": (1, 0), "MOVE_EAST": (0, 1), "MOVE_WEST": (0, -1)}
+    for s in (rec for rec in session.transcript if rec.get("kind") == "step"):
+        (r0, c0), (r1, c1) = s["position_before_row_col"], s["position_after_row_col"]
+        if (r0, c0) != (r1, c1):
+            assert (r1 - r0, c1 - c0) == delta[s["cardinal_source"]], s

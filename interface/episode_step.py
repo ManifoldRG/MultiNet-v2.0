@@ -301,6 +301,10 @@ class EpisodeStepper:
                 self.primitive_buffer.clear()
             else:
                 self.consecutive_failures = 0
+                if mechanic is not None and mechanic.get("kind") == "frozen":
+                    # The freeze swallowed this primitive: drop the rest of its
+                    # cardinal move too, so a thaw never runs it on the old heading.
+                    self.primitive_buffer.clear()
 
             self.transcript.append(
                 {
