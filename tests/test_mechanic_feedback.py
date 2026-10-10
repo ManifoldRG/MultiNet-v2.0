@@ -507,7 +507,7 @@ def test_summary_reports_the_portal_and_restarts_the_trail():
     assert _summary(teleport_spec(), [A.MOVE_FORWARD] * 4) == (
         "You started at (1, 1) facing EAST.\n"
         "Activity summary:\n"
-        "first you took the purple portal from (1, 4) to (3, 6), finally you passed (3, 7)"
+        "first you teleported to (3,6), finally you passed (3, 7)"
     )
 
 
@@ -515,11 +515,11 @@ def test_summary_reports_one_freeze_event_not_each_swallowed_action():
     assert _summary(ice_spec(), [A.MOVE_FORWARD] * 5) == (
         "You started at (1, 1) facing EAST.\n"
         "Activity summary:\n"
-        "first you were frozen at (1, 2) for 3 steps, finally you passed (1, 3)"
+        "first you stepped on a frozen tile at (1,2), finally you passed (1, 3)"
     )
     one_step = _spec({"frozen_tiles": [[2, 1]], "freeze_steps": 1})
     assert _summary(one_step, [A.MOVE_FORWARD]).endswith(
-        "first you were frozen at (1, 2) for 1 step"
+        "first you stepped on a frozen tile at (1,2)"
     )
 
 
@@ -530,17 +530,28 @@ def test_summary_keeps_events_before_a_death():
     ) == (
         "You started at (1, 1) facing EAST.\n"
         "Activity summary:\n"
-        "first you picked up the red key, then you stepped on a death tile at (1, 4) "
-        "and the maze reset to the start tile (1, 1), finally you passed (1, 2)"
+        "first you picked up the red key, then you stepped on a death portal at (1,4) "
+        "and lost your progress, finally you passed (1, 2)"
     )
+
+
+def test_summary_reports_a_death_taken_from_the_start_cell():
+    summary = _summary(_spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD])
+    assert "stepped on a death portal at (1,2) and lost your progress" in summary
+
+
+def test_summary_reports_a_turntable_ride():
+    summary = _summary(_ride_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD])
+    assert "stepped on a rotating tile at (1,2) and rode it in SOUTH" in summary
 
 
 def test_summary_survives_a_json_round_trip():
-    result, _, _ = _run(teleport_spec(), [A.MOVE_FORWARD] * 4)
-    reloaded = json.loads(json.dumps(_json_safe(result["transcript"]), default=str))
-    assert text_summary_history(reloaded, teleport_spec()) == text_summary_history(
-        result["transcript"], teleport_spec()
-    )
+    for spec, actions in ((teleport_spec(), [A.MOVE_FORWARD] * 4), (_ride_spec(), [A.MOVE_FORWARD] * 2)):
+        result, _, _ = _run(spec, actions)
+        reloaded = json.loads(json.dumps(_json_safe(result["transcript"]), default=str))
+        assert text_summary_history(reloaded, spec) == text_summary_history(
+            result["transcript"], spec
+        )
 
 
 # --- other feedback callers: demo + prompt preview ------------------------------
@@ -625,8 +636,7 @@ def test_r1_cell_prompt_tells_the_model_about_the_death_reset():
     after_death_and_one_move = _prompt_texts(result)[5]
     assert (
         "Activity summary:\nfirst you picked up the red key, then you stepped on a "
-        "death tile at (1, 4) and the maze reset to the start tile (1, 1), finally "
-        "you passed (1, 2)"
+        "death portal at (1,4) and lost your progress, finally you passed (1, 2)"
     ) in after_death_and_one_move
 
 
@@ -637,9 +647,8 @@ def test_image_text_history_shows_mechanic_feedback():
     prompt = _prompt_texts(result)[2]
     assert (
         "Position before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\n"
-        "Feedback: MOVED — MOVE_FORWARD: Moved. The ice froze you for 3 steps.\n"
+        "Feedback: FROZEN — MOVE_FORWARD: You stepped on a frozen tile.\n"
         "Position before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\n"
-        "Feedback: FROZEN — MOVE_FORWARD: You are frozen; the action had no effect. "
-        "2 more steps until you thaw."
+        "Feedback: FROZEN — MOVE_FORWARD: This action did nothing, wait until the freeze ends."
     ) in prompt
-    assert "first you were frozen at (1, 2) for 3 steps" in prompt
+    assert "first you stepped on a frozen tile at (1,2)" in prompt
