@@ -292,7 +292,10 @@ class EpisodeStepper:
             )
             self.last_feedback = step_detail
 
-            if is_failed_step(action, prev_state, state, reward, terminated, self.task_spec):
+            if is_failed_step(
+                action, prev_state, state, reward, terminated, self.task_spec,
+                mechanic=mechanic,
+            ):
                 self.consecutive_failures += 1
                 self.action_queue.clear()
                 self.primitive_buffer.clear()

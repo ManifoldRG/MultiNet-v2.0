@@ -33,16 +33,21 @@ def is_failed_step(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    mechanic: dict | None = None,
 ) -> bool:
-    """Whether a step counts as a failure for the episode loop's control flow.
+    """Whether a step counts as a failure: it bumps ``consecutive_failures`` and
+    clears the queued actions, so the model is asked again.
 
-    Judged on the mechanic-blind outcome on purpose: TELEPORTED / DIED / FROZEN
-    change what the model is told, never when the queue is cleared. So a
-    MOVE_FORWARD or DONE swallowed by ice still fails (it was BLOCKED /
-    WRONG_DONE), a swallowed turn, PICKUP or TOGGLE still does not (NOTHING),
-    and a death that resets you onto the cell you just left still fails like
-    the wall bump (BLOCKED) it looked like.
+    Mechanic-blind (as on main), with two exceptions from the world-model label:
+    a death always fails, because the queued plan started from a cell the maze
+    just reset away from; while frozen, only a DONE fails (a wrong DONE), since
+    a swallowed move is the ice's doing, not the model's.
     """
+    kind = (mechanic or {}).get("kind")
+    if kind == "died":
+        return True
+    if kind == "frozen":
+        return action == "DONE"
     event_type, _ = infer_step_outcome(action, prev, curr, reward, terminated, task_spec)
     return event_type in FAILURE_EVENT_TYPES
 

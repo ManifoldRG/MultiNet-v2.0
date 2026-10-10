@@ -258,7 +258,9 @@ def _feedback(spec: TaskSpecification, actions, level="standard"):
             name, state, curr, reward, terminated, spec,
             level=level, mechanic=info.get("mechanic"),
         )
-        failed = is_failed_step(name, state, curr, reward, terminated, spec)
+        failed = is_failed_step(
+            name, state, curr, reward, terminated, spec, mechanic=info.get("mechanic")
+        )
         out.append((text, event_type, failed))
         state = curr
     return out
@@ -342,31 +344,39 @@ def test_teleporting_onto_the_goal_is_still_success():
     assert last == ("SUCCESS — MOVE_FORWARD: Reached the goal.", "DONE", False)
 
 
-def test_failure_counting_is_unchanged_by_mechanic_labels():
-    # Frozen: a swallowed MOVE_FORWARD used to be BLOCKED and a swallowed DONE
-    # WRONG_DONE (failures); a swallowed turn / PICKUP / TOGGLE used to be
-    # NOTHING (not a failure). The FROZEN label keeps exactly that.
+def test_frozen_actions_are_not_failures_except_done():
     spec = _spec({"frozen_tiles": [[2, 1]], "freeze_steps": 6})
     steps = _feedback(
         spec,
         [A.MOVE_FORWARD, A.MOVE_FORWARD, A.TURN_LEFT, A.PICKUP, A.TOGGLE, A.DONE, A.TURN_RIGHT],
     )
     assert [(s[1], s[2]) for s in steps] == [
-        ("MOVED", False),
-        ("FROZEN", True),
+        ("FROZEN", False),  # landed on the frozen tile
+        ("FROZEN", False),  # swallowed MOVE_FORWARD: the ice, not the model
         ("FROZEN", False),
         ("FROZEN", False),
         ("FROZEN", False),
-        ("FROZEN", True),
+        ("WRONG_DONE", True),  # DONE while frozen is still a wrong DONE
         ("FROZEN", False),
     ]
-    # Teleport and death were plain moves: not failures.
+    assert steps[5][0] == "WRONG DONE — DONE: DONE called but not at the goal."
+
+
+def test_done_on_the_last_frozen_step_is_a_wrong_done():
+    steps = _feedback(ice_spec(), [A.MOVE_FORWARD, A.TURN_LEFT, A.TURN_LEFT, A.DONE])
+    assert steps[-1][1:] == ("WRONG_DONE", True)
+
+
+def test_deaths_are_failures_teleports_are_not():
+    death = _feedback(death_spec(), [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD])
+    assert death[-1][2] is True
+    assert _feedback(_spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD])[0][2] is True
     assert _feedback(teleport_spec(), [A.MOVE_FORWARD] * 3)[-1][2] is False
-    assert _feedback(death_spec(), [A.MOVE_FORWARD] * 3)[-1][2] is False
-    # ...except a death that resets you onto the cell you just left, which the
-    # mechanic-blind outcome saw as a wall bump (BLOCKED): still a failure.
-    from_start = _feedback(_spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD])
-    assert from_start[0][1:] == ("DIED", True)
+
+
+def test_a_blocked_ride_is_still_a_failure_like_main():
+    blocked = _feedback(_ride_spec(), [A.MOVE_FORWARD, A.TURN_LEFT, A.TURN_LEFT, A.MOVE_FORWARD])
+    assert blocked[-1][1:] == ("ROTATING", True)
 
 
 # --- episode loop ----------------------------------------------------------------
@@ -407,24 +417,25 @@ def _run(spec: TaskSpecification, actions, **overrides):
     return result, steps, agent
 
 
-def test_runner_records_mechanic_events_and_keeps_failure_counting():
+def test_runner_records_mechanic_events_and_the_failure_rule():
     _, steps, _ = _run(
         ice_spec(),
         [A.MOVE_FORWARD, A.MOVE_FORWARD, A.TURN_LEFT, A.DONE, A.TURN_LEFT],
         feedback="standard",
     )
-    assert [s["event_type"] for s in steps[:5]] == ["MOVED", "FROZEN", "FROZEN", "FROZEN", "TURNED"]
+    assert [s["event_type"] for s in steps[:5]] == [
+        "FROZEN", "FROZEN", "FROZEN", "WRONG_DONE", "TURNED"
+    ]
     assert steps[1]["feedback"] == (
-        "FROZEN — MOVE_FORWARD: You are frozen; the action had no effect. "
-        "2 more steps until you thaw."
+        "FROZEN — MOVE_FORWARD: This action did nothing, wait until the freeze ends."
     )
-    assert [s["consecutive_failures_after"] for s in steps[:5]] == [0, 1, 0, 1, 0]
+    assert [s["consecutive_failures_after"] for s in steps[:5]] == [0, 0, 0, 1, 0]
     assert steps[0]["mechanic"] == {"kind": "froze", "cell_xy": (2, 1), "steps": 3}
     assert steps[3]["mechanic"] == {"kind": "frozen", "remaining": 0}
     assert "mechanic" not in steps[4]
 
 
-def test_runner_reports_teleport_and_death_as_non_failures():
+def test_runner_teleport_is_not_a_failure_death_is():
     _, steps, _ = _run(teleport_spec(), [A.MOVE_FORWARD] * 3, feedback="standard")
     assert steps[2]["event_type"] == "TELEPORTED"
     assert steps[2]["consecutive_failures_after"] == 0
@@ -434,10 +445,52 @@ def test_runner_reports_teleport_and_death_as_non_failures():
     _, steps, _ = _run(
         death_spec(), [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD]
     )
-    assert [s["event_type"] for s in steps[:4]] == ["MOVED", "PICKUP", "MOVED", "DIED"]
-    assert steps[3]["feedback"] == "DIED"  # R1 cell: minimal feedback
-    assert steps[3]["consecutive_failures_after"] == 0
+    assert [s["event_type"] for s in steps[:4]] == ["MOVED", "PICKUP", "MOVED", "DEATH RESET"]
+    assert steps[3]["feedback"] == "DEATH RESET"  # R1 cell: minimal feedback
+    assert steps[3]["consecutive_failures_after"] == 1
     assert steps[3]["mechanic"]["kind"] == "died"
+
+
+class _OneReplyAgent:
+    """Answers the first query with ``reply`` and every later one with DONE."""
+
+    def __init__(self, reply):
+        self._reply, self.calls = reply, 0
+        self.last_usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+
+    def __call__(self, messages):
+        self.calls += 1
+        return self._reply if self.calls == 1 else "FINAL_OUTPUT: DONE"
+
+
+def test_a_death_clears_the_queued_actions_and_asks_again():
+    agent = _OneReplyAgent(
+        "SUB_GOAL: east\n"
+        "FINAL_OUTPUT: MOVE_FORWARD, PICKUP, MOVE_FORWARD, MOVE_FORWARD, TURN_LEFT"
+    )
+    backend = MiniGridBackend(render_mode="rgb_array")
+    spec = death_spec()
+    backend.configure(spec)
+    config = ExperimentConfig(**{**R1_CELL, "querying": "subgoal"})
+    result = build_runner(config, backend, spec).run(agent, verbose=False)
+    steps = [rec for rec in result["transcript"] if rec.get("kind") == "step"]
+    assert [s["event_type"] for s in steps[:4]] == ["MOVED", "PICKUP", "MOVED", "DEATH RESET"]
+    # TURN_LEFT was dropped and the model asked again.
+    assert (steps[4]["query_index"], steps[4]["action"]) == (2, "DONE")
+
+
+def test_a_freeze_swallows_queued_moves_without_asking_again():
+    agent = _OneReplyAgent(
+        "SUB_GOAL: east\nFINAL_OUTPUT: MOVE_FORWARD, MOVE_FORWARD, MOVE_FORWARD"
+    )
+    backend = MiniGridBackend(render_mode="rgb_array")
+    spec = ice_spec()
+    backend.configure(spec)
+    config = ExperimentConfig(**{**R1_CELL, "querying": "subgoal"})
+    result = build_runner(config, backend, spec).run(agent, verbose=False)
+    steps = [rec for rec in result["transcript"] if rec.get("kind") == "step"]
+    assert [s["event_type"] for s in steps[:3]] == ["FROZEN", "FROZEN", "FROZEN"]
+    assert [s["query_index"] for s in steps[:3]] == [1, 1, 1]
 
 
 # --- activity summary ------------------------------------------------------------
