@@ -686,8 +686,9 @@ class CustomMiniGridEnv(MiniGridEnv):
             ):
                 info["invalid_action"] = True
         if transition is not None:
-            # Teleport / death / ice, named by the rulebook so feedback and the
-            # activity summary never re-derive the rules. Absent otherwise.
+            # Teleport / death / freeze / turntable, named by the rulebook so
+            # feedback and the activity summary never re-derive the rules.
+            # Absent when no tile mechanic shaped the step.
             mechanic = classify_mechanic(ctx, before, action, transition.label, after)
             if mechanic is not None:
                 info["mechanic"] = mechanic

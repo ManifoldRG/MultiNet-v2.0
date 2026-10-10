@@ -87,6 +87,9 @@ def test_m10_route_matches_pr61_feedback_step_for_step():
     ctx = TaskPlanningContext(spec)
     start = ctx.initial_state()
     goal = tuple(spec.resolved_goal())
+    # The route depends on successors()' yield order (BFS tie-breaks). If that
+    # order changes, this length check fails first and EXPECTED must be re-taken
+    # from #61's output, not edited to match.
     plan = _bfs(ctx, start, lambda t: t.label == "kill_reset")
     plan += _bfs(ctx, start, lambda t: t.next_state.agent_pos == goal and t.action == 2)
     assert len(plan) == 90

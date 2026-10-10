@@ -1,9 +1,9 @@
-"""Teleport, death and ice are reported to the model as what they are.
+"""Teleporters, death portals, frozen tiles and turntables are reported as such.
 
 The world model is the single source of truth: ``classify_mechanic`` labels a
-transition (teleported / died / froze / frozen) next to the rules, the env
-exposes it as ``info["mechanic"]``, and feedback + the activity summary only
-render it.
+transition (teleported / died / froze / frozen / carried / rotating) next to
+the rules, the env exposes it as ``info["mechanic"]``, and feedback + the
+activity summary only render it.
 """
 
 from __future__ import annotations
@@ -341,6 +341,13 @@ def test_a_ride_onto_a_teleporter_reports_the_teleport():
 
 def test_teleporting_onto_the_goal_is_still_success():
     *_, last = _feedback(_spec({"teleporters": [PORTAL]}, goal=(6, 3)), [A.MOVE_FORWARD] * 3)
+    assert last == ("SUCCESS — MOVE_FORWARD: Reached the goal.", "DONE", False)
+
+
+def test_riding_a_turntable_onto_the_goal_is_still_success():
+    # Turntable at (2, 1) points SOUTH after the first step; the goal is at (2, 2).
+    spec = _spec({"rotating_tiles": [[2, 1]], "rotating_initial_directions": [0]}, goal=(2, 2))
+    *_, last = _feedback(spec, [A.MOVE_FORWARD, A.MOVE_FORWARD])
     assert last == ("SUCCESS — MOVE_FORWARD: Reached the goal.", "DONE", False)
 
 

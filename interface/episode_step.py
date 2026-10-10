@@ -284,7 +284,7 @@ class EpisodeStepper:
                 action_int
             )
             self.state = state
-            # Teleport / death / ice, named by the world model (absent otherwise).
+            # Tile mechanic named by the world model (absent when none fired).
             mechanic = info.get("mechanic") if isinstance(info, dict) else None
             step_detail, event_type = format_step_feedback(
                 action, prev_state, state, reward, terminated, self.task_spec,

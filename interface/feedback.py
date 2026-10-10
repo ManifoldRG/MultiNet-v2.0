@@ -22,7 +22,8 @@ from interface.coords import (
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
-# Event types that count toward ``consecutive_failures`` and clear the action queue.
+# Mechanic-blind event types that count as failures; ``is_failed_step`` adds the
+# death and freeze exceptions from the world-model label.
 FAILURE_EVENT_TYPES = frozenset({"BLOCKED", "WRONG_DONE", "INVALID"})
 
 
@@ -59,16 +60,14 @@ def _xy_row_col(xy) -> tuple[int, int]:
 
 def _mechanic_outcome(
     action: str,
-    prev: GridState,
-    curr: GridState,
-    reward: float,
-    terminated: bool,
-    task_spec: TaskSpecification,
+    base_type: str,
     level: Literal["minimal", "standard", "causal"],
     mechanic: dict,
 ) -> tuple[str, str, str] | None:
-    """(event_type, message, minimal text) for a step the world model labelled, else None."""
-    base_type, _ = infer_step_outcome(action, prev, curr, reward, terminated, task_spec)
+    """(event_type, message, minimal text) for a step the world model labelled, else None.
+
+    ``base_type`` is the mechanic-blind event type of the same step.
+    """
     if base_type == "DONE":
         # Reaching the goal outranks the tile that delivered you there.
         return None
@@ -268,18 +267,14 @@ def format_step_feedback(
     level: Literal["minimal", "standard", "causal"] = "minimal",
     mechanic: dict | None = None,
 ) -> tuple[str, str]:
-    relabelled = (
-        _mechanic_outcome(action, prev, curr, reward, terminated, task_spec, level, mechanic)
-        if mechanic is not None
-        else None
+    event_type, event_message = infer_step_outcome(
+        action, prev, curr, reward, terminated, task_spec, level=level
     )
-    if relabelled is not None:
-        event_type, event_message, minimal_text = relabelled
-    else:
-        event_type, event_message = infer_step_outcome(
-            action, prev, curr, reward, terminated, task_spec, level=level
-        )
-        minimal_text = event_type
+    minimal_text = event_type
+    if mechanic is not None:
+        relabelled = _mechanic_outcome(action, event_type, level, mechanic)
+        if relabelled is not None:
+            event_type, event_message, minimal_text = relabelled
     if level == "minimal":
         return minimal_text, event_type
     if event_type == "BLOCKED":
