@@ -459,19 +459,27 @@ def classify_mechanic(
       tile (``cell_xy`` is the tile actually entered, also via a portal or a
       ride) and the whole maze reset;
     * ``{"kind": "froze", "cell_xy", "steps"}`` -- the move onto an ice tile;
-    * ``{"kind": "frozen", "remaining"}`` -- an action swallowed while frozen.
+    * ``{"kind": "frozen", "remaining"}`` -- an action swallowed while frozen;
+    * ``{"kind": "carried", "from_xy", "to_xy", "direction"}`` -- a turntable
+      ride moved the agent (``direction`` is the arrow it rode);
+    * ``{"kind": "rotating", "cell_xy", "pointing", "stayed"}`` -- the move onto
+      a turntable (``stayed`` False), or a ride its arrow blocked (True);
+      ``pointing`` is the arrow after this step's spin.
 
-    Positions are (x, y). ``action`` is accepted for symmetry with
-    ``successors``; the label and the two states decide everything.
+    The first that applies wins: died, teleported, froze, carried, rotating.
+    Positions are (x, y); directions are 0..3 (EAST, SOUTH, WEST, NORTH).
+    ``action`` is accepted for symmetry with ``successors``; the label and the
+    two states decide everything.
     """
     if transition_label == "freeze":
         return {"kind": "frozen", "remaining": after.freeze_remaining}
+    riding = transition_label == "rotate"
     if transition_label in ("move_forward", "kill_reset"):
         entered = _front_pos(before)
-    elif transition_label == "rotate":
+    elif riding:
         entered = _ride_target(ctx, before)
         if entered is None:
-            return None
+            return _rotating_label(ctx, after, before.agent_pos, stayed=True)
     else:
         return None
 
@@ -492,7 +500,31 @@ def classify_mechanic(
         }
     if landed in ctx.frozen_tiles and after.freeze_remaining > 0:
         return {"kind": "froze", "cell_xy": landed, "steps": after.freeze_remaining}
+    if riding:
+        return {
+            "kind": "carried",
+            "from_xy": before.agent_pos,
+            "to_xy": landed,
+            "direction": before.rotator_dirs[ctx.rotating_index[before.agent_pos]],
+        }
+    if landed in ctx.rotating_index:
+        return _rotating_label(ctx, after, landed, stayed=False)
     return None
+
+
+def _rotating_label(
+    ctx: TaskPlanningContext,
+    after: PlannerState,
+    cell: tuple[int, int],
+    *,
+    stayed: bool,
+) -> dict:
+    return {
+        "kind": "rotating",
+        "cell_xy": cell,
+        "pointing": after.rotator_dirs[ctx.rotating_index[cell]],
+        "stayed": stayed,
+    }
 
 
 def _teleporter_color(ctx: TaskPlanningContext, pad: tuple[int, int]) -> str:

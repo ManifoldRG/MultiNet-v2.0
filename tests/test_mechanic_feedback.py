@@ -160,7 +160,7 @@ def test_turntable_ride_onto_a_portal_pad_teleports():
     spec = _ride_spec(teleporters=[{**PORTAL, "position_a": [2, 2]}])
     state, mechanics = _play(spec, [A.MOVE_FORWARD, A.MOVE_FORWARD])
     assert mechanics == [
-        None,
+        {"kind": "rotating", "cell_xy": (2, 1), "pointing": 1, "stayed": False},
         {"kind": "teleported", "from_xy": (2, 2), "to_xy": (6, 3), "color": "purple"},
     ]
     assert state.agent_pos == (6, 3)
@@ -169,7 +169,7 @@ def test_turntable_ride_onto_a_portal_pad_teleports():
 def test_turntable_ride_onto_a_death_tile_dies():
     _, mechanics = _play(_ride_spec(death_portals=[[2, 2]]), [A.MOVE_FORWARD, A.MOVE_FORWARD])
     assert mechanics == [
-        None,
+        {"kind": "rotating", "cell_xy": (2, 1), "pointing": 1, "stayed": False},
         {"kind": "died", "cell_xy": (2, 2), "start_xy": (1, 1), "start_dir": 0},
     ]
 
@@ -178,15 +178,29 @@ def test_turntable_ride_onto_ice_freezes():
     _, mechanics = _play(
         _ride_spec(frozen_tiles=[[2, 2]], freeze_steps=2), [A.MOVE_FORWARD, A.MOVE_FORWARD]
     )
-    assert mechanics == [None, {"kind": "froze", "cell_xy": (2, 2), "steps": 2}]
+    assert mechanics == [{"kind": "rotating", "cell_xy": (2, 1), "pointing": 1, "stayed": False}, {"kind": "froze", "cell_xy": (2, 2), "steps": 2}]
 
 
-def test_plain_turntable_ride_and_waiting_on_it_are_not_mechanics():
-    state, mechanics = _play(_ride_spec(), [A.MOVE_FORWARD, A.TURN_LEFT, A.MOVE_FORWARD])
-    # Each step spins the arrow clockwise: SOUTH after boarding, WEST after the
-    # turn, so the ride goes back WEST to the start.
-    assert mechanics == [None, None, None]
-    assert state.agent_pos == (1, 1)
+def test_stepping_onto_a_turntable_then_riding_it():
+    # Turntable at (2, 1) starts EAST and spins clockwise every step: stepping
+    # onto it leaves it pointing SOUTH, so the next MOVE_FORWARD rides SOUTH.
+    _, mechanics = _play(_ride_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD])
+    assert mechanics == [
+        {"kind": "rotating", "cell_xy": (2, 1), "pointing": 1, "stayed": False},
+        {"kind": "carried", "from_xy": (2, 1), "to_xy": (2, 2), "direction": 1},
+    ]
+
+
+def test_waiting_on_a_turntable_is_not_a_mechanic_and_a_blocked_ride_stays():
+    # On the tile (SOUTH), two turns spin it to NORTH, into the border wall.
+    _, mechanics = _play(
+        _ride_spec(), [A.MOVE_FORWARD, A.TURN_LEFT, A.TURN_LEFT, A.MOVE_FORWARD]
+    )
+    assert mechanics[1:] == [
+        None,
+        None,
+        {"kind": "rotating", "cell_xy": (2, 1), "pointing": 0, "stayed": True},
+    ]
 
 
 # --- env exposes the label ---------------------------------------------------
