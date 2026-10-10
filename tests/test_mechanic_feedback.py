@@ -574,9 +574,46 @@ def test_demo_session_labels_mechanics_like_the_runner(tmp_path):
         "TELEPORTED — MOVE_FORWARD: You teleported to (3,6)."
     )
     assert last["mechanic"]["kind"] == "teleported"
-    assert "took the purple portal from (1, 4) to (3, 6)" in text_summary_history(
+    assert "teleported to (3,6)" in text_summary_history(
         session._model_transcript(), session.task_spec
     )
+    from demo.session import ProgressEvent
+
+    assert session.event_log[-1] == ProgressEvent(
+        "Teleported through the ", "purple", " teleporter", "purple", "teleport"
+    )
+
+
+def _demo_session(tmp_path, spec):
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / "maze.json"
+    path.write_text(json.dumps(spec.to_dict()))
+    return MiniGridPlaySession(task_path=str(path), config=replace(R1_CONFIG, feedback="standard"))
+
+
+def test_demo_session_logs_a_death_taken_from_the_start_cell(tmp_path):
+    session = _demo_session(tmp_path, _spec({"death_portals": [[2, 1]]}))
+    session._step_token("MOVE_FORWARD")
+    from demo.session import ProgressEvent
+
+    assert session.transcript[-1]["event_type"] == "DEATH RESET"
+    assert session.event_log[-1] == ProgressEvent(
+        "Stepped on a ", "death portal", "", "dark_red", "death"
+    )
+
+
+def test_demo_session_logs_turntable_landing_and_ride(tmp_path):
+    session = _demo_session(tmp_path, _ride_spec())
+    session._step_token("MOVE_FORWARD")
+    session._step_token("MOVE_FORWARD")
+    from demo.session import ProgressEvent
+
+    assert session.event_log[-2:] == [
+        ProgressEvent("Stepped on a ", "rotating tile", " pointing SOUTH", "orange", "rotate"),
+        ProgressEvent("Rode a ", "rotating tile", " pointing SOUTH", "orange", "rotate"),
+    ]
 
 
 def test_demo_sounds_for_mechanic_events():
@@ -595,8 +632,8 @@ def test_demo_sounds_for_mechanic_events():
         )
         return sfx_for_dispatch(session, 0)
 
-    assert sfx("TELEPORTED") == sfx("MOVED") == "step"
-    assert sfx("DIED") == sfx("FROZEN") == sfx("NOTHING") == "invalid"
+    assert sfx("TELEPORTED") == sfx("CARRIED") == sfx("ROTATING") == sfx("MOVED") == "step"
+    assert sfx("DEATH RESET") == sfx("FROZEN") == sfx("NOTHING") == "invalid"
 
 
 def test_prompt_preview_labels_mechanics():

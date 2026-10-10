@@ -31,13 +31,7 @@ from gridworld.actions import MiniGridActions
 from demo.compare import R1ResultCatalog, r1_task_id
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
-from interface.coords import (
-    agent_facing,
-    agent_row_col,
-    move_landing,
-    rotating_pointing,
-    to_row_col,
-)
+from interface.coords import agent_facing, agent_row_col, direction_name
 from interface.episode_log import state_snapshot
 from interface.feedback import format_step_feedback
 from interface.observation import (
@@ -393,7 +387,7 @@ class MiniGridPlaySession:
         _rgb, reward, terminated, truncated, self.state, info = self.backend.step(action_int)
         self.total_reward += reward
         self.last_action_name = token
-        self._record_events(prev_state, self.state, prev_doors)
+        self._record_events(prev_state, self.state, prev_doors, (info or {}).get("mechanic"))
 
         feedback_text, event_type = format_step_feedback(
             token, prev_state, self.state, reward, terminated, self.task_spec,
@@ -571,7 +565,11 @@ class MiniGridPlaySession:
         return result
 
     def _record_events(
-        self, prev: GridState, new: GridState, prev_doors: dict[str, bool]
+        self,
+        prev: GridState,
+        new: GridState,
+        prev_doors: dict[str, bool],
+        mechanic: Optional[dict] = None,
     ) -> None:
         """Append a ``ProgressEvent`` to ``event_log`` for each milestone
         that newly became true on this step (diffing ``prev`` -> ``new``,
@@ -656,46 +654,30 @@ class MiniGridPlaySession:
         if new.goal_reached and not prev.goal_reached:
             self.event_log.append(ProgressEvent("Reached the ", "goal", "!", "green", "goal"))
 
-        prev_rc = agent_row_col(prev)
-        new_rc = agent_row_col(new)
-        landing, link = move_landing(spec, prev)
-        kills = {to_row_col(cell) for cell in mech.kill_cells}
-        died = (
-            landing in kills
-            and new_rc == to_row_col(spec.maze.start)
-            and prev_rc != new_rc
-        )
-        if died:
+        # Tile mechanics, as the world model labelled this step.
+        kind = (mechanic or {}).get("kind")
+        if kind == "died":
             self.event_log.append(
                 ProgressEvent("Stepped on a ", "death portal", "", "dark_red", "death")
             )
-        if prev.freeze_remaining == 0 and new.freeze_remaining > 0:
+        elif kind == "froze":
             self.event_log.append(
                 ProgressEvent("Stepped on a ", "frozen tile", "", "light_blue", "freeze")
             )
-
-        rotating = {to_row_col(cell) for cell in mech.rotating_tiles}
-        if died:
-            return
-        if link is not None and new_rc == link[0] and prev_rc != new_rc:
+        elif kind == "teleported":
+            color = mechanic["color"]
             self.event_log.append(
-                ProgressEvent(
-                    "Teleported through the ",
-                    link[1],
-                    " teleporter",
-                    link[1],
-                    "teleport",
-                )
+                ProgressEvent("Teleported through the ", color, " teleporter", color, "teleport")
             )
-        elif prev_rc in rotating and new_rc != prev_rc:
-            direction = rotating_pointing(spec, prev, *prev_rc)
+        elif kind == "carried":
+            direction = direction_name(int(mechanic["direction"]))
             self.event_log.append(
                 ProgressEvent(
                     "Rode a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
                 )
             )
-        elif prev_rc not in rotating and new_rc in rotating:
-            direction = rotating_pointing(spec, new, *new_rc)
+        elif kind == "rotating" and not mechanic["stayed"]:
+            direction = direction_name(int(mechanic["pointing"]))
             self.event_log.append(
                 ProgressEvent(
                     "Stepped on a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
