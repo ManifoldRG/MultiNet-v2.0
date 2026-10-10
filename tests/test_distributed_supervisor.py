@@ -11,6 +11,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parent.parent
 
 
@@ -356,6 +358,7 @@ def test_snapshot_logs_coord_uses_log_tail_lines(tmp_path):
     assert "tail -n 60" not in log
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses the read-only parent this test needs to make mv fail")
 def test_pull_returns_1_when_mv_fails(tmp_path):
     # Staging succeeds, but relocating into a read-only parent makes mv fail;
     # pull must report failure (return 1), not a false success.
