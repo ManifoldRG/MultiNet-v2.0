@@ -24,11 +24,12 @@ if _repo_root_str not in sys.path:
     sys.path.insert(0, _repo_root_str)
 
 from gridworld.task_spec import TaskSpecification
-from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.backends import get_backend
 from gridworld.backends.base import GridState
 from gridworld.actions import MiniGridActions
 
 from demo.compare import R1ResultCatalog, r1_task_id
+from demo.theme import GRID_DISPLAY_SIZE
 from interface.config import ExperimentConfig
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
@@ -89,10 +90,12 @@ class ProgressEvent(NamedTuple):
 # (hotkey, ExperimentConfig attribute, choices | None for a bool toggle)
 SETTINGS_AXES: tuple[tuple[str, str, Optional[tuple[str, ...]]], ...] = (
     ("1", "observation", ("text_only", "image_text", "image_only")),
-    ("2", "context_window", ("current", "last3", "text_summary", "text_summary_and_last3")),
+    ("2", "context_window", ("current", "last_n", "text_summary", "text_summary_and_last_n")),
     ("3", "include_current_observation_description", None),
     ("4", "observation_text_includes_facing", None),
     ("5", "action_space", ("egocentric", "cardinal")),
+    ("6", "observation_text_format", ("coords", "json", "ascii")),
+    ("7", "feedback", ("minimal", "standard", "causal")),
 )
 
 
@@ -162,6 +165,8 @@ class MiniGridPlaySession:
         tasks_dir: Optional[str] = None,
         manifest: Optional[str] = None,
         experiment: Optional[str] = None,
+        backend: str = "minigrid",
+        camera: Optional[str] = None,
     ):
         self.base_dir = _REPO_ROOT
         self.record = record
@@ -202,8 +207,17 @@ class MiniGridPlaySession:
         if task_path is None:
             task_path = "ogbench/ogbench/procgen/maze_jsons/D1/10x10_dense_wrong_ky_kr_sg_kb_0.json"
 
-        # Backend for environment logic
-        self.backend = MiniGridBackend(render_mode="rgb_array")
+        # Backend for environment logic (and the frame the human sees).
+        backend_kwargs: dict = {"render_mode": "rgb_array"} if backend == "minigrid" else {}
+        if backend == "mujoco3d":
+            # Render at the panel size rather than stretching the 512 px
+            # model-facing default (display-only).
+            backend_kwargs["resolution"] = GRID_DISPLAY_SIZE
+        if camera is not None:
+            backend_kwargs["camera"] = camera
+        self.backend = get_backend(backend, **backend_kwargs)
+        # DROP is a demo affordance; set it on the state backend the 3D view wraps.
+        getattr(self.backend, "state_backend", self.backend).drop_available = True
 
         # Episode state
         self.state: Optional[GridState] = None
@@ -215,6 +229,7 @@ class MiniGridPlaySession:
         # BFS optimum + R1 step cap from pipeline canonical_paths.
         self.optimal_steps: int = 0
         self.last_action_name: str = ""
+        self.last_feedback: str = "Episode start."
         self.last_dispatched_token: str = ""
         self.step_index: int = 0
 
@@ -244,54 +259,83 @@ class MiniGridPlaySession:
     # Task loading
     # ------------------------------------------------------------------
 
-    def _load_task(self, path: str) -> None:
-        """Load a task JSON file, refresh directory browsing, and reset."""
-        resolved = self._resolve_path(path)
-
-        if not resolved.exists():
-            print(f"Error: task file not found: {resolved}")
-            return
-
-        self._checkpoint_trajectory()
-
-        self.task_path = resolved
-        raw_spec = TaskSpecification.from_json(str(resolved))
-        manifest_row = self.manifest_row_by_path.get(resolved)
-        task_id = manifest_row["task_id"] if manifest_row else r1_task_id(resolved)
-        try:
-            self.optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
-        except KeyError:
-            # Not an R1 task, or no results table is available at all --
-            # R1-comparison is simply off for this task; keep the maze's own
-            # max_steps rather than crashing the whole load.
-            self.optimal_steps = 0
-            self.task_spec = raw_spec
-        else:
-            cap = max(1, self.optimal_steps * 3)
-            self.task_spec = (
-                raw_spec if raw_spec.max_steps <= cap else dataclasses.replace(raw_spec, max_steps=cap)
-            )
-
+    def _resolved_task_list(self, resolved: Path) -> tuple[list[Path], int]:
+        """Compute the task list/index a load of ``resolved`` would produce,
+        *without* mutating session state. Called before the backend accepts
+        the new spec so a rejected load (see ``_load_task``) leaves the
+        current list/index untouched."""
         if self.task_list_locked:
             if resolved not in self.task_list:
                 raise ValueError(f"{resolved} is not in the locked task list")
+            task_list = self.task_list
         elif self.manifest_mode:
             # self.task_list is the manifest's resolved order; leave it alone
             # so [ / ] keeps stepping through the curated catalog rather than
             # whatever else happens to sit in this file's directory.
-            if resolved not in self.task_list:
-                self.task_list = sorted(set(self.task_list) | {resolved})
+            task_list = self.task_list
+            if resolved not in task_list:
+                task_list = sorted(set(task_list) | {resolved})
         else:
             tasks_dir = self.tasks_dir_override or resolved.parent
-            self.task_list = discover_tasks_in_dir(tasks_dir)
-            if resolved not in self.task_list:
-                self.task_list = sorted(set(self.task_list) | {resolved})
+            task_list = discover_tasks_in_dir(tasks_dir)
+            if resolved not in task_list:
+                task_list = sorted(set(task_list) | {resolved})
         try:
-            self.task_index = self.task_list.index(resolved)
+            task_index = task_list.index(resolved)
         except ValueError:
-            self.task_index = 0
+            task_index = 0
+        return task_list, task_index
 
-        self._reset_env()
+    def _load_task(self, path: str) -> bool:
+        """Load a task JSON file, refresh directory browsing, and reset.
+        Returns whether the task was loaded.
+
+        Session fields (``task_path``/``task_spec``/``task_list``/
+        ``task_index``) are assigned only after ``backend.configure()``
+        succeeds, so a spec the backend rejects (``UnsupportedSpecError`` on
+        ``--backend mujoco3d``, a ``ValueError`` subclass) leaves the session
+        exactly on its previous task rather than desyncing it from the
+        backend (see the mujoco3d backend's own atomic-configure guarantee).
+        """
+        resolved = self._resolve_path(path)
+
+        if not resolved.exists():
+            print(f"Error: task file not found: {resolved}")
+            return False
+
+        raw_spec = TaskSpecification.from_json(str(resolved))
+        manifest_row = self.manifest_row_by_path.get(resolved)
+        task_id = manifest_row["task_id"] if manifest_row else r1_task_id(resolved)
+        try:
+            optimal_steps = self._r1_catalog.lookup(task_id).optimal_steps
+        except KeyError:
+            # Not an R1 task, or no results table is available at all --
+            # R1-comparison is simply off for this task; keep the maze's own
+            # max_steps rather than crashing the whole load.
+            optimal_steps = 0
+            new_spec = raw_spec
+        else:
+            cap = max(1, optimal_steps * 3)
+            new_spec = (
+                raw_spec if raw_spec.max_steps <= cap else dataclasses.replace(raw_spec, max_steps=cap)
+            )
+
+        new_task_list, new_task_index = self._resolved_task_list(resolved)
+
+        try:
+            self.backend.configure(new_spec)
+        except ValueError as exc:
+            print(f"Error: backend cannot load {resolved}: {exc}")
+            return False
+
+        self._checkpoint_trajectory()
+        self.task_path = resolved
+        self.task_spec = new_spec
+        self.optimal_steps = optimal_steps
+        self.task_list = new_task_list
+        self.task_index = new_task_index
+        self._finish_reset()
+        return True
 
     @property
     def display_reward(self) -> float:
@@ -307,11 +351,25 @@ class MiniGridPlaySession:
         )
 
     def _reset_env(self) -> None:
-        """Reset the environment from the current task spec."""
+        """Reset the environment from the current task spec (restart the same
+        task). Guarded the same way task-switching is (see ``_load_task``):
+        a backend rejection prints and leaves the session as it was rather
+        than raising out of the pygame loop."""
         if self.task_spec is None:
             return
 
-        self.backend.configure(self.task_spec)
+        try:
+            self.backend.configure(self.task_spec)
+        except ValueError as exc:
+            print(f"Error: backend cannot load {self.task_path}: {exc}")
+            return
+
+        self._finish_reset()
+
+    def _finish_reset(self) -> None:
+        """Populate fresh episode state, assuming the backend is already
+        configured for ``self.task_spec`` (split out of ``_reset_env`` so
+        ``_load_task`` doesn't configure the backend twice per switch)."""
         _obs, self.state, _info = self.backend.reset(seed=self.task_spec.seed)
 
         self.episode_done = False
@@ -321,6 +379,7 @@ class MiniGridPlaySession:
         self._stall = ProgressStallWatchdog(k, self.state) if k else None
         self.total_reward = 0.0
         self.last_action_name = ""
+        self.last_feedback = "Episode start."
         self.last_dispatched_token = ""
         self.step_index = 0
         self.event_log = []
@@ -335,8 +394,13 @@ class MiniGridPlaySession:
         """Load the next (+1) or previous (-1) task in the current directory."""
         if not self.task_list:
             return
-        self.task_index = (self.task_index + delta) % len(self.task_list)
-        self._load_task(str(self.task_list[self.task_index]))
+        # The index is committed by a successful _load_task only, so it always
+        # names the loaded task; a task the backend rejects is stepped past
+        # (staying put if every other task is rejected).
+        count = len(self.task_list)
+        for hop in range(1, max(count, 2)):
+            if self._load_task(str(self.task_list[(self.task_index + delta * hop) % count])):
+                return
 
     # ------------------------------------------------------------------
     # Step execution
@@ -385,8 +449,10 @@ class MiniGridPlaySession:
         self._record_events(prev_state, self.state, prev_doors)
 
         feedback_text, event_type = format_step_feedback(
-            token, prev_state, self.state, reward, terminated, self.task_spec
+            token, prev_state, self.state, reward, terminated, self.task_spec,
+            level=self.config.feedback,
         )
+        self.last_feedback = feedback_text
         self._record_step(
             token, cardinal_source, prev_state, feedback_text, event_type,
             reward, terminated, truncated, info,
@@ -414,9 +480,14 @@ class MiniGridPlaySession:
             self.event_log.append(
                 ProgressEvent("Dropped the ", f"{color} key", "", color, "key")
             )
-            feedback_text = f"You drop the {color}. (human-only action)"
+            feedback_text = f"You drop the {color} on this cell."
+        elif prev_state.agent_carrying:
+            feedback_text = (
+                "Can't drop here — this cell already has something. "
+                "Step to an empty cell, then drop."
+            )
         else:
-            feedback_text = "Nothing to drop. (human-only action)"
+            feedback_text = "Nothing to drop."
         self._record_step(
             "DROP", None, prev_state, feedback_text, "DROPPED",
             reward, terminated, truncated, info,
@@ -479,8 +550,12 @@ class MiniGridPlaySession:
         transcript = self._model_transcript()
         sections: list[tuple[str, str]] = []
 
+        fmt = self.config.observation_text_format
         if obs in ("text_only", "image_text"):
-            sections.append(("Initial maze (system prompt)", render_initial_maze_text(self.task_spec)))
+            sections.append(("Initial maze (system prompt)", render_initial_maze_text(
+                self.task_spec, observation_text_format=fmt,
+                include_facing=self.config.observation_text_includes_facing,
+            )))
         else:
             sections.append(
                 ("Initial maze (system prompt)", "(not sent to the model in image_only mode)")
@@ -492,19 +567,27 @@ class MiniGridPlaySession:
             self.state,
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
+            observation_text_format=fmt,
+            stall_remaining=(self._stall.remaining if self._stall else None),
         )
         if obs_text:
             sections.append(("Current observation", obs_text))
 
-        hist = history_text(obs, ctx, transcript, self.task_spec)
-        if not hist and ctx == "text_summary_and_last3" and obs == "image_only":
-            # Delivered as a separate leading block ahead of last3 images in
-            # the real prompt (see interface/observation.leading_summary_blocks).
+        hist = history_text(
+            obs,
+            ctx,
+            transcript,
+            self.task_spec,
+            n=self.config.context_n,
+            observation_text_format=fmt,
+            include_facing=self.config.observation_text_includes_facing,
+        )
+        if not hist and ctx == "text_summary_and_last_n" and obs == "image_only":
             hist = text_summary_history(transcript, self.task_spec)
         if hist:
             sections.append(("History", hist))
 
-        if obs in ("image_only", "image_text") and ctx in ("last3", "text_summary_and_last3"):
+        if obs in ("image_only", "image_text") and ctx in ("last_n", "text_summary_and_last_n"):
             sections.append(
                 (
                     "History (images)",
@@ -521,23 +604,17 @@ class MiniGridPlaySession:
     # ------------------------------------------------------------------
 
     def _physical_door_states(self) -> dict[str, bool]:
-        """True ``is_open`` per door read directly off the live grid cell.
+        """True physical open/closed per door, from the backend.
 
-        ``GridState.open_doors`` (from the backend) counts a door as "open"
-        once it's ever been *unlocked*, even if the player has since closed
-        it again -- the right notion for goal/scoring purposes, since an
-        unlocked door no longer blocks progress. But it's the wrong notion
-        for this live progress log: closing a door you just opened should
-        show up as closed, not stay stuck saying "opened" forever. So the
-        progress log tracks true physical open/closed state separately, by
-        reading each door's ``is_open`` straight off the grid."""
-        if self.task_spec is None or self.backend.env is None:
+        ``GridState.open_doors`` counts a door as "open" once it's ever been
+        *unlocked*, even if the player has since closed it again -- the right
+        notion for goal/scoring purposes, but the wrong one for this live
+        progress log: closing a door you just opened should show up as closed.
+        ``AbstractGridBackend.door_states`` reports the physical state for any
+        backend (MiniGrid reads it off the grid)."""
+        if self.task_spec is None or not self.backend.is_configured:
             return {}
-        result: dict[str, bool] = {}
-        for door in self.task_spec.mechanisms.doors:
-            cell = self.backend.env.grid.get(door.position.x, door.position.y)
-            result[door.id] = bool(getattr(cell, "is_open", False))
-        return result
+        return self.backend.door_states()
 
     def _record_events(
         self, prev: GridState, new: GridState, prev_doors: dict[str, bool]
@@ -639,6 +716,45 @@ class MiniGridPlaySession:
             else:
                 setattr(self.config, attr, choices[(choices.index(current) + 1) % len(choices)])
             return
+
+    @property
+    def camera_names(self) -> tuple[str, ...]:
+        """Camera presets the backend offers (empty for 2D backends)."""
+        return tuple(getattr(self.backend, "camera_names", ()))
+
+    def cycle_camera(self) -> Optional[str]:
+        """Switch to the backend's next camera preset. Display-only: state and
+        transcript are untouched. Returns the new preset, or None for 2D."""
+        names = self.camera_names
+        if not names:
+            return None
+        nxt = names[(names.index(self.backend.camera) + 1) % len(names)]
+        self.backend.set_camera(nxt)
+        return nxt
+
+    def step_tilt(self, delta: int) -> Optional[int]:
+        """Tilt the 3D camera one level toward first person (+1) or top-down
+        (-1), walls rising as it drops. Display-only. Returns the new level,
+        or None for 2D."""
+        levels = getattr(self.backend, "tilt_levels", 0)
+        if not levels:
+            return None
+        current = self.backend.tilt
+        if current is None:  # start from where the current preset sits
+            current = {"top_down": 0, "fixed_angled": 1, "chase": 2, "first_person": levels - 1}.get(
+                self.backend.camera, 0
+            )
+        level = min(max(current + delta, 0), levels - 1)
+        self.backend.set_tilt(level)
+        return level
+
+    def tilt_status(self) -> Optional[str]:
+        """Footer text for the tilt level and wall height, None when not tilting."""
+        tilt = getattr(self.backend, "tilt", None)
+        if tilt is None:
+            return None
+        last = self.backend.tilt_levels - 1
+        return f"Tilt {tilt}/{last} · walls {self.backend.wall_height_shown:.1f}"
 
     # ------------------------------------------------------------------
     # Recording / trajectory saving

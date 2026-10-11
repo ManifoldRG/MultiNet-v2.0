@@ -34,6 +34,8 @@ DOOR_FADE_MS = 150
 GATE_FADE_MS = 110
 SWITCH_PRESS_MS = 80
 GOAL_PULSE_MS = 320
+KILL_MS = 480
+WARP_MS = 300
 
 BOUNCE_PX = 2
 
@@ -53,6 +55,46 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     if token == "MOVE_FORWARD" and prev_state is not None:
         return _DIR_DELTA.get(prev_state.agent_direction, (0, 0))
     return (0, 0)
+
+
+def bounce_offset(travel: tuple[int, int], heading: int, *, turns_with_agent: bool) -> tuple[int, int]:
+    """Wall-bounce offset (screen px): recoil opposite the travel direction as
+    drawn. North-up views draw world axes; views that turn with the agent draw
+    its ``heading`` at screen-up, so the travel is first expressed in view axes
+    (forward = screen-up, the agent's right = screen-right)."""
+    dx, dy = travel
+    if turns_with_agent:
+        hx, hy = _DIR_DELTA.get(int(heading), (0, -1))
+        forward = dx * hx + dy * hy
+        right = dx * -hy + dy * hx
+        dx, dy = right, -forward
+    return int(-dx * BOUNCE_PX), int(-dy * BOUNCE_PX)
+
+
+def portal_transition(
+    session, token: str, prev_state
+) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
+    """Return ``(kind, src, dest)`` for a kill reset or portal warp."""
+    if prev_state is None or session.task_spec is None:
+        return None
+    dx, dy = travel_delta(token, prev_state)
+    if (dx, dy) == (0, 0):
+        return None
+    px, py = prev_state.agent_position
+    front = (px + dx, py + dy)
+    mech = session.task_spec.mechanisms
+    warps: dict[tuple[int, int], tuple[int, int]] = {}
+    for spec in mech.teleporters:
+        a, b = spec.position_a.to_tuple(), spec.position_b.to_tuple()
+        warps[a] = b
+        if spec.bidirectional:
+            warps[b] = a
+    landed = warps.get(front, front)
+    if landed in {cell.to_tuple() for cell in mech.kill_cells}:
+        return ("kill", landed, session.task_spec.maze.start.to_tuple())
+    if landed != front:
+        return ("warp", front, landed)
+    return None
 
 
 def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
@@ -88,17 +130,28 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
     )
     event_type = last.get("event_type") if last else None
 
-    travel = travel_delta(token, prev_state)
-    if event_type == "BLOCKED" and travel != (0, 0):
-        dx, dy = travel
+    hit = portal_transition(session, token, prev_state)
+    if hit is not None:
+        kind, src, dst = hit
         plan.append(
             {
-                "kind": "bounce",
-                "dx": int(-dx * BOUNCE_PX),
-                "dy": int(-dy * BOUNCE_PX),
-                "durationMs": BOUNCE_MS,
+                "kind": kind,
+                "cell": [int(src[0]), int(src[1])],
+                "dest": [int(dst[0]), int(dst[1])],
+                "durationMs": KILL_MS if kind == "kill" else WARP_MS,
             }
         )
+
+    travel = travel_delta(token, prev_state)
+    if hit is None and event_type == "BLOCKED" and travel != (0, 0):
+        # The frame shows the heading after the step (a cardinal move turns first).
+        shown = session.state if session.state is not None else prev_state
+        dx, dy = bounce_offset(
+            travel,
+            shown.agent_direction,
+            turns_with_agent=bool(getattr(session.backend, "view_turns_with_agent", False)),
+        )
+        plan.append({"kind": "bounce", "dx": dx, "dy": dy, "durationMs": BOUNCE_MS})
 
     mech = session.task_spec.mechanisms if session.task_spec is not None else None
     new_state = session.state
@@ -168,12 +221,16 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
             }
         )
 
+    if not session.backend.frame_is_grid_aligned:
+        # Per-cell effects slice the frame into equal tiles -- meaningless on a
+        # perspective (3D) frame. Keep only the camera bounce.
+        plan = [item for item in plan if item["kind"] == "bounce"]
     return plan
 
 
 def _grid_size(session) -> tuple[int, int]:
-    env = session.backend.env
-    return int(env.width), int(env.height)
+    width, height = session.task_spec.maze.dimensions
+    return int(width), int(height)
 
 
 def _tile_image_b64(
@@ -241,7 +298,8 @@ def effects_for_dispatch(
     """Serialize ``plan_effects`` for the web player (adds tile PNGs)."""
     plan = plan_effects(session, token, prev_state, events_before)
     grid_w, grid_h = _grid_size(session)
-    prev_frame = recolor_walls(prev_rgb) if prev_rgb is not None else None
+    grid_aligned = session.backend.frame_is_grid_aligned
+    prev_frame = recolor_walls(prev_rgb) if (prev_rgb is not None and grid_aligned) else prev_rgb
     post_frame = None
     effects: list[dict] = []
 
@@ -254,16 +312,17 @@ def effects_for_dispatch(
         cell = item["cell"]
         duration = item["durationMs"]
 
-        if kind == "pulse":
-            effects.append(
-                {
-                    "kind": "pulse",
-                    "cell": cell,
-                    "gridW": grid_w,
-                    "gridH": grid_h,
-                    "durationMs": duration,
-                }
-            )
+        if kind in ("pulse", "kill", "warp"):
+            item_out = {
+                "kind": kind,
+                "cell": cell,
+                "gridW": grid_w,
+                "gridH": grid_h,
+                "durationMs": duration,
+            }
+            if "dest" in item:
+                item_out["dest"] = item["dest"]
+            effects.append(item_out)
             continue
 
         if kind == "press":
@@ -292,6 +351,52 @@ def _sin_pulse(t: float) -> float:
     return math.sin(max(0.0, min(1.0, t)) * math.pi)
 
 
+TURN_ANIM_MS = 250
+
+
+@dataclass
+class TurnAnimation:
+    """Timing for the 3D demo's turn animation: while it runs, the UI draws
+    ``backend.render_turn(direction, fraction)`` instead of the final frame.
+    Display-only: in-between frames are never recorded or sent to a model."""
+
+    _from_direction: Optional[int] = None
+    _start_ms: int = 0
+
+    def maybe_start(self, backend, prev_state, new_state, *, now_ms: int) -> bool:
+        """Start when a 3D view that turns with the agent sees a new heading."""
+        if not getattr(backend, "view_turns_with_agent", False):
+            return False
+        if prev_state is None or new_state is None:
+            return False
+        if int(prev_state.agent_direction) == int(new_state.agent_direction):
+            return False
+        self._from_direction = int(prev_state.agent_direction)
+        self._start_ms = now_ms
+        return True
+
+    def frame_request(self, now_ms: int) -> Optional[tuple[int, float]]:
+        """(from_direction, fraction) while running, else None."""
+        if self._from_direction is None:
+            return None
+        elapsed = now_ms - self._start_ms
+        if elapsed >= TURN_ANIM_MS:
+            self._from_direction = None
+            return None
+        return self._from_direction, max(0, elapsed) / TURN_ANIM_MS
+
+    def clear(self) -> None:
+        self._from_direction = None
+
+
+def _add_glow(out: "pygame.Surface", rect: "pygame.Rect", rgb: tuple[int, int, int], alpha: int) -> None:
+    if alpha <= 0 or pygame is None:
+        return
+    glow = pygame.Surface(rect.size, pygame.SRCALPHA)
+    glow.fill((*rgb, min(255, alpha)))
+    out.blit(glow, rect.topleft, special_flags=pygame.BLEND_RGBA_ADD)
+
+
 @dataclass
 class _Clip:
     kind: str
@@ -299,6 +404,7 @@ class _Clip:
     duration_ms: int
     offset: tuple[int, int] = (0, 0)
     cell: Optional[tuple[int, int]] = None
+    dest: Optional[tuple[int, int]] = None
     tile_surf: Optional["pygame.Surface"] = None
 
 
@@ -337,14 +443,13 @@ class DemoFx:
     ) -> None:
         if not self.enabled or pygame is None:
             return
-        env = session.backend.env
-        if env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
 
         # Rapid key-repeat shouldn't stack camera offsets.
         self._clips = [c for c in self._clips if c.kind != "bounce"]
 
-        grid_w, grid_h = int(env.width), int(env.height)
+        grid_w, grid_h = _grid_size(session)
         for item in plan_effects(session, token, prev_state, events_before):
             kind = item["kind"]
             duration = item["durationMs"]
@@ -362,9 +467,12 @@ class DemoFx:
 
             cell = (int(item["cell"][0]), int(item["cell"][1]))
 
-            if kind == "pulse":
-                self._clips.append(_Clip("pulse", now_ms, duration, cell=cell))
-                if prev_rgb is not None:
+            if kind in ("pulse", "kill", "warp"):
+                dest = tuple(item["dest"]) if "dest" in item else None
+                self._clips.append(
+                    _Clip(kind, now_ms, duration, cell=cell, dest=dest)
+                )
+                if kind == "pulse" and prev_rgb is not None:
                     self._success_pulse_pending = True
                 continue
 
@@ -454,6 +562,54 @@ class DemoFx:
                 glow = pygame.Surface(dest.size, pygame.SRCALPHA)
                 glow.fill((90, 220, 140, int(110 * _sin_pulse(t))))
                 out.blit(glow, dest.topleft, special_flags=pygame.BLEND_RGBA_ADD)
+
+            elif clip.kind == "kill":
+                veil_a = int(90 * max(0.0, 1.0 - t / 0.45)) if t < 0.45 else 0
+                if veil_a:
+                    veil = pygame.Surface(out.get_size(), pygame.SRCALPHA)
+                    veil.fill((160, 16, 16, veil_a))
+                    out.blit(veil, (0, 0))
+                _add_glow(out, dest, (220, 40, 40), int(200 * _sin_pulse(min(1.0, t / 0.5))))
+                if t < 0.55:
+                    mark = pygame.Surface(dest.size, pygame.SRCALPHA)
+                    pad = max(3, dest.width // 5)
+                    alpha = int(230 * (1.0 - t / 0.55))
+                    pygame.draw.line(
+                        mark, (255, 90, 90, alpha),
+                        (pad, pad), (dest.width - pad, dest.height - pad), 3,
+                    )
+                    pygame.draw.line(
+                        mark, (255, 90, 90, alpha),
+                        (dest.width - pad, pad), (pad, dest.height - pad), 3,
+                    )
+                    out.blit(mark, dest.topleft)
+                if clip.dest is not None and t > 0.35:
+                    rx, ry = clip.dest
+                    spawn = pygame.Rect(
+                        int(rx * cell_w), int(ry * cell_h),
+                        max(1, int(cell_w)), max(1, int(cell_h)),
+                    )
+                    _add_glow(out, spawn, (255, 210, 180), int(160 * _sin_pulse((t - 0.35) / 0.65)))
+
+            elif clip.kind == "warp":
+                _add_glow(out, dest, (170, 120, 255), int(170 * _sin_pulse(min(1.0, t / 0.65))))
+                if clip.dest is not None:
+                    rx, ry = clip.dest
+                    land = pygame.Rect(
+                        int(rx * cell_w), int(ry * cell_h),
+                        max(1, int(cell_w)), max(1, int(cell_h)),
+                    )
+                    _add_glow(
+                        out, land, (80, 210, 255),
+                        int(170 * _sin_pulse(max(0.0, (t - 0.2) / 0.8))),
+                    )
+                    if t < 0.85:
+                        beam = pygame.Surface(out.get_size(), pygame.SRCALPHA)
+                        pygame.draw.line(
+                            beam, (160, 200, 255, int(180 * (1.0 - t))),
+                            dest.center, land.center, 2,
+                        )
+                        out.blit(beam, (0, 0))
 
         return out, offset
 

@@ -260,15 +260,26 @@ class TaskParser:
         for hazard in spec.mechanisms.hazards:
             env.place_hazard(hazard.position.x, hazard.position.y, hazard.hazard_type)
 
-        # Place teleporters
-        # Teleporters come in pairs (A, B). Stepping on A teleports agent to B (and vice versa if bidirectional)
         for teleporter in spec.mechanisms.teleporters:
             env.place_teleporter(
                 teleporter.id,
                 teleporter.position_a.x, teleporter.position_a.y,
                 teleporter.position_b.x, teleporter.position_b.y,
                 teleporter.bidirectional,
+                color=teleporter.color,
             )
+
+        for kill in spec.mechanisms.kill_cells:
+            env.place_kill_cell(kill.x, kill.y)
+
+        for frozen in spec.mechanisms.frozen_tiles:
+            env.place_frozen_tile(frozen.x, frozen.y)
+
+        for tile, direction in zip(
+            spec.mechanisms.rotating_tiles,
+            spec.mechanisms.rotating_initial_directions,
+        ):
+            env.place_rotating_tile(tile.x, tile.y, direction)
 
         # Set agent position (overwrite anything at start position)
         # This is done last to ensure the agent always spawns at the correct location,

@@ -181,6 +181,12 @@ def test_parse_failure_requeries_without_step():
     assert messages is not None  # requeried
     assert stepper.state.step_count == step_count_before  # no env step
     assert not any(rec.get("kind") == "step" for rec in stepper.transcript)
+    retry_text = " ".join(
+        block.get("text", "") if isinstance(block, dict) else str(block)
+        for m in messages
+        for block in (m.get("content") if isinstance(m.get("content"), list) else [m.get("content")])
+    )
+    assert "Could not parse FINAL_OUTPUT" in retry_text
 
     # Second garbage reply: still under the cap, re-query again.
     stepper.apply_reply(Reply(text="still garbage"))

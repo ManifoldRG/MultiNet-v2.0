@@ -9,7 +9,7 @@ ONE_SHOT_EXAMPLE_INTRO = (
 )
 ONE_SHOT_SOLUTION_LINE = "Actions to solve: {actions}"
 
-LAST3_USER_PROMPT = {
+LAST_N_USER_PROMPT = {
     "header": "Recent steps (oldest first):\n",
     "image_text_step": "Your inventory: {inventory}.\nFINAL_OUTPUT: {action}\n",
     "image_only_step": "Your inventory: {inventory}.\nFINAL_OUTPUT: {action}\n",

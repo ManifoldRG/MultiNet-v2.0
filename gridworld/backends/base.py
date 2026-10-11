@@ -296,6 +296,26 @@ class AbstractGridBackend(ABC):
         """Shape of observations (H, W, C)."""
         return (64, 64, 3)  # Default, can be overridden
 
+    def door_states(self) -> dict[str, bool]:
+        """Physical open/closed state per door id (True = open).
+
+        ``GridState.open_doors`` means "unlocked": a door the agent re-closes
+        stays in it, which is right for scoring but wrong for anything that
+        draws doors (renderers, the demo's progress log). Backends whose doors
+        can be re-closed must override this; the default derives it from
+        ``open_doors``.
+        """
+        if self.task_spec is None:
+            return {}
+        open_ids = self.get_state().open_doors
+        return {door.id: door.id in open_ids for door in self.task_spec.mechanisms.doors}
+
+    @property
+    def frame_is_grid_aligned(self) -> bool:
+        """True when frames are a top-down image of equal-size cell tiles, so
+        per-cell 2D effects (demo tile fx, wall recolouring) are valid."""
+        return True
+
     def close(self) -> None:
         """Clean up resources."""
         pass
