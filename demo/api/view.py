@@ -17,7 +17,9 @@ from interface.action_space import EGOCENTRIC_ACTIONS, valid_actions
 
 
 def _grid_image_b64(session: MiniGridPlaySession) -> str:
-    rgb = recolor_walls(np.asarray(session.backend.render(), dtype=np.uint8))
+    rgb = np.asarray(session.backend.render(), dtype=np.uint8)
+    if session.backend.frame_is_grid_aligned:
+        rgb = recolor_walls(rgb)
     img = Image.fromarray(rgb[:, :, :3], mode="RGB")
     buf = io.BytesIO()
     img.save(buf, format="PNG")

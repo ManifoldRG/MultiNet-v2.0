@@ -7,6 +7,7 @@ same state is recoverable and must not be scored as doomed.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from gridworld.baselines import TaskPlanningContext, _successors
@@ -23,22 +24,15 @@ def _carrying_decoy(ctx):
     """A planner state holding the yellow decoy key."""
     decoy = next(k for k, v in ctx.keys_by_id.items() if v["color"] == "yellow")
     base = ctx.initial_state()
-    return base.__class__(
+    return replace(
+        base,
         agent_pos=ctx.keys_by_id[decoy]["position"],
-        agent_dir=base.agent_dir,
         carrying_key=decoy,
         collected_keys=frozenset({decoy}),
-        active_switches=base.active_switches,
-        used_switches=base.used_switches,
-        open_gates=base.open_gates,
-        open_doors=base.open_doors,
+        key_positions=frozenset(
+            item for item in base.key_positions if item[0] != decoy
+        ),
     )
-
-
-def test_no_drop_edge_by_default():
-    ctx = TaskPlanningContext(_spec())
-    labels = [t.label for t in _successors(ctx, _carrying_decoy(ctx))]
-    assert not any(l.startswith("drop:") for l in labels)
 
 
 def test_drop_edge_when_enabled():
@@ -48,9 +42,9 @@ def test_drop_edge_when_enabled():
     assert len(drops) == 1
     after = drops[0].next_state
     assert after.carrying_key is None
-    # The key stays "collected" — it is gone from the world, not re-acquirable.
-    assert after.collected_keys == state.collected_keys
+    assert after.collected_keys == state.collected_keys - {state.carrying_key}
     assert after.agent_pos == state.agent_pos
+    assert (state.carrying_key, state.agent_pos[0], state.agent_pos[1]) in after.key_positions
 
 
 def test_no_drop_edge_with_empty_hands():
@@ -65,7 +59,7 @@ def test_optimal_cost_is_unchanged_by_the_drop_edge():
     from gridworld.baselines import plan_bfs_path
 
     spec = _spec()
-    without = plan_bfs_path(spec)
+    without = plan_bfs_path(spec, drop_available=False)
     with_drop = plan_bfs_path(spec, drop_available=True)
     # The brief's test compares path length via len(); PlannedPath is a plain
     # dataclass with no __len__, so we compare the actual action-count field

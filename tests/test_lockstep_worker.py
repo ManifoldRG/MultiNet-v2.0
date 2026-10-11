@@ -120,11 +120,11 @@ def _corridor_task(task_id: str, w: int, goal_x: int) -> dict:
     }
 
 
-# (task_id, width, goal_x, marker, forwards-to-solve)
+# (task_id, width, goal_x, marker — the rendered interior size, forwards-to-solve)
 _CORRIDORS = [
-    ("corr_a", 4, 2, "3 by 4", 1),
-    ("corr_b", 5, 3, "3 by 5", 2),
-    ("corr_c", 6, 4, "3 by 6", 3),
+    ("corr_a", 4, 2, "1 by 2", 1),
+    ("corr_b", 5, 3, "1 by 3", 2),
+    ("corr_c", 6, 4, "1 by 4", 3),
 ]
 
 
@@ -246,7 +246,7 @@ def test_lockstep_worker_failing_unit_does_not_kill_loop(tmp_path):
     artifacts, plan = _write_job(tmp_path)
     # One attempt only, so the exploding unit fails once and is not retried.
     store = CoordinatorStore(artifacts, max_unit_attempts=1)
-    agent = ScriptedBatchAgent(_scripts_for(), explode_markers={"3 by 5"})
+    agent = ScriptedBatchAgent(_scripts_for(), explode_markers={"1 by 3"})
     caps = {"model_group": "claude-batch", "worker_concurrency": 2}
 
     result = run_lockstep_worker(
@@ -261,7 +261,7 @@ def test_lockstep_worker_failing_unit_does_not_kill_loop(tmp_path):
     by_task = {u["unit_id"]: u["task_id"] for u in plan["units"]}
     statuses = {by_task[uid]: st["status"] for uid, st in state["units"].items()}
 
-    # The exploding corridor (corr_b / "3 by 5") failed; the siblings verified.
+    # The exploding corridor (corr_b / "1 by 3") failed; the siblings verified.
     assert statuses["corr_b"] == "failed"
     assert statuses["corr_a"] == "verified"
     assert statuses["corr_c"] == "verified"

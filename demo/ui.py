@@ -42,7 +42,7 @@ except ImportError:
 
 from demo.session import MiniGridPlaySession, ProgressEvent, SETTINGS_AXES
 from demo.sounds import DemoSounds, sfx_for_dispatch
-from demo.fx import DemoFx
+from demo.fx import DemoFx, TurnAnimation
 from demo.compare import R1ResultCatalog, r1_task_id
 from demo.r1_tasks import restrict_to_r1_tasks
 from demo import icons
@@ -129,8 +129,7 @@ class MiniGridPlayerUI:
         self.show_start_screen = True
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
-        self.settings_editable = False
-        self.show_moves_bar = False
+        self.settings_editable = True
         self.model_view_scroll = 0
         self.text_only_scroll = 0
 
@@ -180,6 +179,7 @@ class MiniGridPlayerUI:
         # cosmetic -- never touch env state or observations.
         self.sounds = DemoSounds()
         self.fx = DemoFx()
+        self.turn_anim = TurnAnimation()  # 3D views that turn with the agent
         self.r1_catalog = R1ResultCatalog()
         restrict_to_r1_tasks(self.session, self.r1_catalog)
 
@@ -199,6 +199,7 @@ class MiniGridPlayerUI:
     def _reset(self) -> None:
         self.sounds.play("restart")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._checkpoint_trajectory()
         self.session._reset_env()
         self.model_view_scroll = 0
@@ -208,6 +209,7 @@ class MiniGridPlayerUI:
     def _switch_task(self, delta: int) -> None:
         self.sounds.play("navigate")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._load_adjacent_task(delta)
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -224,14 +226,15 @@ class MiniGridPlayerUI:
         events_before = len(session.event_log)
         prev_state = session.state
         prev_rgb = None
-        if session.backend.env is not None and session.config.observation != "text_only":
+        if session.backend.is_configured and session.config.observation != "text_only":
             prev_rgb = session.backend.render()
 
         session._dispatch_token(token)
-        self.sounds.play(sfx_for_dispatch(session, events_before))
+        self.sounds.play(sfx_for_dispatch(session, events_before, prev_state))
 
-        if session.backend.env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
+        self.turn_anim.maybe_start(session.backend, prev_state, session.state, now_ms=pygame.time.get_ticks())
         self.fx.trigger(
             now_ms=pygame.time.get_ticks(),
             session=session,
@@ -550,14 +553,17 @@ class MiniGridPlayerUI:
         reads as the centerpiece rather than a flat inset image. Display-only
         FX (nudge / cell flash / fade) are composited here and never touch
         the env's own render buffer."""
-        rgb_array = recolor_walls(self.session.backend.render())
+        turn = self.turn_anim.frame_request(pygame.time.get_ticks())
+        backend = self.session.backend
+        rgb_array = backend.render_turn(*turn) if turn else backend.render()
+        if backend.frame_is_grid_aligned:
+            rgb_array = recolor_walls(rgb_array)
         h, w, _c = rgb_array.shape
         surf = pygame.image.frombuffer(rgb_array.tobytes(), (w, h), "RGB")
         scaled = pygame.transform.smoothscale(surf, (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE))
 
-        env = self.session.backend.env
-        grid_w = env.width if env is not None else 1
-        grid_h = env.height if env is not None else 1
+        spec = self.session.task_spec
+        grid_w, grid_h = spec.maze.dimensions if spec is not None else (1, 1)
         framed, (ox, oy) = self.fx.apply(
             scaled, now_ms=pygame.time.get_ticks(), grid_w=grid_w, grid_h=grid_h,
         )
@@ -612,7 +618,11 @@ class MiniGridPlayerUI:
         # Built from segments and truncated at a whole-segment boundary
         # (rather than a hard character clip) so it degrades gracefully at
         # narrower window widths.
-        segments = ["[ / ] switch task", "Tab settings", "M model view", "Q quit"]
+        segments = ["[ / ] switch task", "Tab settings", "M model view"]
+        if self.session.camera_names:
+            tilt = self.session.tilt_status()
+            segments += ([tilt] if tilt else []) + ["V camera", ", . tilt"]
+        segments.append("Q quit")
         max_width = WINDOW_WIDTH - 28
         text = ""
         for seg in segments:
@@ -624,7 +634,7 @@ class MiniGridPlayerUI:
         self.screen.blit(surf, surf.get_rect(center=(WINDOW_WIDTH // 2, rect.top + 36)))
 
     def _render_main_pane(self) -> None:
-        if self.session.backend.env is None:
+        if not self.session.backend.is_configured:
             placeholder_surf = self.font_main.render(
                 "No environment loaded.", True, COLOR_TEXT_DIM
             )
@@ -642,6 +652,26 @@ class MiniGridPlayerUI:
     # values, and the occasional divider line, to match the flatter, quieter
     # reference layout. Debug-only info that isn't needed to actually play
     # (raw config axes, manifest metadata) lives in the Tab overlay instead.
+
+    def _draw_budget_bar(
+        self, x: int, y: int, width: int, label: str, remaining: int, total: int,
+        color: tuple | None = None,
+    ) -> int:
+        y = self._draw_status_label(x, y, label)
+        fraction = remaining / total if total else 0.0
+        if color is None:
+            if fraction < 0.3:
+                color = STATUS_MOVES_CRIT
+            elif fraction < 0.5:
+                color = STATUS_MOVES_WARN
+            else:
+                color = STATUS_MOVES_OK
+        count = self.font_main_bold.render(str(remaining), True, color)
+        self.screen.blit(count, (x, y))
+        bar_x = x + count.get_width() + 8
+        bar_w = max(20, width - count.get_width() - 8)
+        self._draw_progress_bar(bar_x, y + (count.get_height() - 10) // 2, bar_w, 10, fraction, color)
+        return y + count.get_height() + 8
 
     def _draw_status_label(self, x: int, y: int, label: str) -> int:
         label_surf = self.font_small_bold.render(" ".join(label.upper()), True, COLOR_TEXT_LABEL)
@@ -796,18 +826,13 @@ class MiniGridPlayerUI:
 
         state = session.state
         if state:
-            if self.show_moves_bar:
-                y = self._draw_status_label(x, y, "Moves")
-                remaining = max(0, state.max_steps - state.step_count)
-                fraction = remaining / state.max_steps if state.max_steps else 0.0
-                if fraction < 0.3:
-                    moves_color = STATUS_MOVES_CRIT
-                elif fraction < 0.5:
-                    moves_color = STATUS_MOVES_WARN
-                else:
-                    moves_color = STATUS_MOVES_OK
-                self._draw_progress_bar(x, y, width, 10, fraction, moves_color)
-                y += 10 + 8
+            remaining = state.max_steps - state.step_count
+            y = self._draw_budget_bar(x, y, width, "Moves", remaining, state.max_steps)
+            stall = session._stall
+            if stall:
+                y = self._draw_budget_bar(
+                    x, y, width, "Until stall", stall.remaining, stall.k, STATUS_MOVES_WARN
+                )
 
             direction = state.agent_direction
             dir_name = DIRECTION_NAMES.get(direction, "?").split(" (")[0]
@@ -1083,6 +1108,7 @@ class MiniGridPlayerUI:
 
         y = self._draw_wrapped_text(
             f"observation={session.config.observation} · "
+            f"observation_text_format={session.config.observation_text_format} · "
             f"context_window={session.config.context_window}",
             x, y, self.font_small_bold, COLOR_TEXT, inner_w,
         )
@@ -1320,6 +1346,18 @@ class MiniGridPlayerUI:
             return None
         if key == pygame.K_RIGHTBRACKET:
             self._switch_task(1)
+            return None
+
+        if key == pygame.K_v and session.camera_names:
+            session.cycle_camera()
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
+            return None
+
+        if key in (pygame.K_COMMA, pygame.K_PERIOD) and session.camera_names:
+            session.step_tilt(-1 if key == pygame.K_COMMA else 1)
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
             return None
 
         if session.episode_done:

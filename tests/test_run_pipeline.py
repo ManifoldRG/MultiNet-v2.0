@@ -1303,6 +1303,13 @@ def test_baseline_variant_of_every_launch_set_is_the_default_config():
         assert _config_key(configs[0][1]) == base_key
 
 
+def test_condition_configs_resolve_legacy_context_window_names():
+    """A run-config overlay written before the last3 -> last_n rename must run,
+    not just validate: _condition_configs builds the config the run uses."""
+    [(_name, cfg)] = _condition_configs(None, None, {"context_window": "text_summary_and_last3"})
+    assert cfg.context_window == "text_summary_and_last_n"
+
+
 def test_dedup_rollout_covers_every_unique_variant_config_once():
     """The deduplicated rollout must cover every distinct prompt config across
     the four launch sets, and run the shared baseline exactly once."""
@@ -1336,25 +1343,31 @@ def test_experiment_config_overlay_applies_under_condition_variant():
     assert cfg.context_window == "text_summary"  # variant still authoritative
 
 
-def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
+@pytest.mark.parametrize("model_cache_override", [None, False, True])
+def test_run_from_config_experiment_config_overlay_reaches_run_inputs(
+    tmp_path, model_cache_override
+):
     """The top-level experiment_config overlay in a run-config JSON must flow
     all the way into the per-run sidecar, proving run_from_config actually
     threads base_overrides down through _run_one_model/_run_one_unit."""
+    model_config = {
+        "provider": "claude",
+        "model": "stub-model",
+        "tasks": [str(default_maze_path("V01_empty_room.json"))],
+    }
+    if model_cache_override is not None:
+        model_config["enable_prompt_cache"] = model_cache_override
     run_config = {
-        "models": {
-            "stub": {
-                "provider": "claude",
-                "model": "stub-model",
-                "tasks": [str(default_maze_path("V01_empty_room.json"))],
-            }
-        },
-        "experiment_config": {"progress_stall_k": 20},
+        "models": {"stub": model_config},
+        "experiment_config": {"progress_stall_k": 20, "prompt_cache": True},
     }
     cfg_path = tmp_path / "run_config.json"
     cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
     artifacts = tmp_path / "artifacts"
+    agent_configs = []
 
     def factory(name, model_cfg):
+        agent_configs.append(model_cfg)
         return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
 
     run_from_config(
@@ -1372,6 +1385,10 @@ def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
     )
     sidecar = load_json(run_dir / "run_inputs.json")
     assert sidecar["experiment_config"]["progress_stall_k"] == 20
+    assert sidecar["experiment_config"]["prompt_cache"] is True
+    assert agent_configs[0]["enable_prompt_cache"] is (
+        True if model_cache_override is None else model_cache_override
+    )
 
 
 def test_progress_stall_k_reaches_stored_resolved_config(tmp_path):
@@ -2269,3 +2286,170 @@ def test_baseline_thinking_fixture_declares_its_unequal_caps():
     path = _FIXTURES / "run_config.conditional_baseline_thinking_claude_kimi_qwen.json"
     rc = load_run_config(path)
     assert rc.get("allow_unequal_max_tokens") is True
+
+
+def test_run_from_config_renders_through_the_3d_backend(tmp_path):
+    """A render block swaps the drawing layer only: same mechanics, its own
+    artifact directory, and frames at the 2D pixel budget."""
+    pytest.importorskip("mujoco")
+    task = default_maze_path("V01_empty_room.json")
+    run_config = {
+        "render": {"backend": "mujoco3d", "camera": "top_down"},
+        "models": {
+            "stub": {"provider": "claude", "model": "stub-model", "tasks": [str(task)]}
+        },
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+
+    def factory(name, model_cfg):
+        return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
+
+    run_from_config(
+        run_config_path=cfg_path,
+        manifest_path=_MANIFEST,
+        seeds=[0],
+        artifacts_root=artifacts,
+        run_set_id="cfg3d",
+        agent_factory=factory,
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+    run_dir = (
+        artifacts / "runs" / "validation_10_v01_empty_room" / "mujoco3d_top_down_grid"
+        / "stub-model" / "seed_0" / "default"
+    )
+    sidecar = load_json(run_dir / "run_inputs.json")
+    assert sidecar["backend"] == "mujoco3d_top_down_grid"
+    assert sidecar["render"]["backend"] == "mujoco3d"
+    assert sidecar["render"]["camera"] == "top_down"
+    assert sidecar["render"]["resolution"] == "grid"
+    episode = load_json(run_dir / "episode.json")
+    assert episode["render"]["camera"] == "top_down"
+    assert episode["steps_used"] > 0
+    # The aggregate rows and per-model report name the backend that drew the
+    # frames, not the 2D default.
+    rows = [json.loads(line) for line in (artifacts / "episode_runs.jsonl").read_text().splitlines()]
+    assert [r["backend"] for r in rows] == ["mujoco3d_top_down_grid"]
+    report = load_json(artifacts / "reports" / "cfg3d" / "models" / "stub-model.json")
+    assert report["backend"] == "mujoco3d_top_down_grid"
+
+    from PIL import Image
+
+    dims = max(task_spec_from_payload(load_json(task)).maze.dimensions)
+    frame = sorted((run_dir / "frames").glob("*.png"))[0]
+    assert Image.open(frame).size == (32 * dims, 32 * dims)
+
+
+def _run_3d_twice(tmp_path, monkeypatch, bump):
+    """Run the same 3D unit twice, applying ``bump`` between the runs; return
+    (model calls in run 1, model calls in run 2, the run's sidecar)."""
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps({
+        "render": {"backend": "mujoco3d", "camera": "top_down"},
+        "models": {"stub": {"provider": "claude", "model": "stub-model", "tasks": [str(task_file)]}},
+    }), encoding="utf-8")
+    artifacts = tmp_path / "artifacts"
+    agent = CountingReplayAgent(v01_empty_room_trajectory())
+
+    def run():
+        run_from_config(
+            run_config_path=cfg_path, manifest_path=_single_task_manifest(tmp_path, task_file),
+            seeds=[0], artifacts_root=artifacts, run_set_id="r3d",
+            agent_factory=lambda name, cfg: (agent, cfg["model"]),
+            difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        )
+
+    run()
+    first = agent.calls
+    bump()
+    run()
+    run_dir = artifacts / "runs" / "copy_v01" / "mujoco3d_top_down_grid" / "stub-model" / "seed_0" / "default"
+    return first, agent.calls - first, load_json(run_dir / "run_inputs.json")
+
+
+def test_unchanged_3d_rerun_reuses_the_episode(tmp_path, monkeypatch):
+    pytest.importorskip("mujoco")
+    first, second, sidecar = _run_3d_twice(tmp_path, monkeypatch, lambda: None)
+    assert first > 0 and second == 0
+
+
+def test_a_mujoco_upgrade_invalidates_cached_3d_episodes(tmp_path, monkeypatch):
+    """The renderer library draws the frames the model sees: a new mujoco must
+    not silently reuse episodes rendered by the old one."""
+    mujoco = pytest.importorskip("mujoco")
+    first, second, sidecar = _run_3d_twice(
+        tmp_path, monkeypatch, lambda: monkeypatch.setattr(mujoco, "__version__", "99.0.0")
+    )
+    assert first > 0 and second > 0
+    assert sidecar["render"]["mujoco_version"] == "99.0.0"
+
+
+def test_a_render3d_version_bump_invalidates_cached_3d_episodes(tmp_path, monkeypatch):
+    pytest.importorskip("mujoco")
+    import gridworld.render3d as render3d
+
+    first, second, sidecar = _run_3d_twice(
+        tmp_path, monkeypatch, lambda: monkeypatch.setattr(render3d, "RENDER3D_VERSION", "test-bump")
+    )
+    assert first > 0 and second > 0
+    assert sidecar["render"]["render3d_version"] == "test-bump"
+
+
+def test_3d_sidecar_records_the_resolved_frame_pixels_and_render_versions(tmp_path, monkeypatch):
+    mujoco = pytest.importorskip("mujoco")
+    from gridworld.render3d import RENDER3D_VERSION
+
+    _first, _second, sidecar = _run_3d_twice(tmp_path, monkeypatch, lambda: None)
+    dims = max(task_spec_from_payload(load_json(default_maze_path("V01_empty_room.json"))).maze.dimensions)
+    assert sidecar["render"] == {
+        "backend": "mujoco3d",
+        "camera": "top_down",
+        "resolution": "grid",
+        "frame_pixels": 32 * dims,
+        "render3d_version": RENDER3D_VERSION,
+        "mujoco_version": mujoco.__version__,
+    }
+
+
+# Computed on the pre-render-provenance code (PIPELINE_VERSION 0.1.2). A 2D run
+# hash must stay byte-identical, or every cached 2D episode is re-paid. It
+# moves only with PIPELINE_VERSION or a deliberate change to the 2D recipe.
+_PINNED_2D_RUN_HASH = "58244c31cd81a0e45a20ec0d2d5ee660564b790687a8a2f66e59f6d1bac56332"
+
+
+def test_2d_run_hash_is_byte_identical_to_the_pre_3d_recipe(tmp_path):
+    from scripts.run_pipeline import PIPELINE_VERSION
+
+    spec = _chain_spec()
+    kwargs = dict(
+        condition_set=None, prompt_variant="default",
+        experiment_config={"a": 1, "b": [2, 3]}, model_config={"temperature": 0.0, "max_tokens": 128},
+    )
+    if PIPELINE_VERSION == "0.1.2":
+        assert _expected_run_hash(spec, "model-x", 0, "minigrid", **kwargs) == _PINNED_2D_RUN_HASH
+
+    # End to end: a 2D run's sidecar hash is the plain recipe (no render key).
+    task_file = tmp_path / "task.json"
+    shutil.copy(default_maze_path("V01_empty_room.json"), task_file)
+    artifacts = tmp_path / "artifacts"
+    run_pipeline(manifest_path=_single_task_manifest(tmp_path, task_file), experiment="test1",
+                 agent=ReplayAgent(v01_empty_room_trajectory()), agent_name="stub",
+                 artifacts_root=artifacts, run_set_id="r",
+                 difficulty_max_static_score=_STABLE_DIFFICULTY_MAX)
+    run_dir = artifacts / "runs" / "copy_v01" / "minigrid" / "stub" / "seed_0" / "default"
+    sidecar = load_json(run_dir / "run_inputs.json")
+    episode = load_json(run_dir / "episode.json")
+    assert "render" not in sidecar and "render" not in episode
+    runtime_spec = _runtime_capped_spec(
+        task_spec_from_payload(load_json(task_file)),
+        load_json(artifacts / "tasks" / "copy_v01" / "canonical_paths.json"),
+    )
+    assert sidecar["inputs_hash"] == _expected_run_hash(
+        runtime_spec, "stub", 0, "minigrid", condition_set=sidecar["condition_set"],
+        prompt_variant=sidecar["prompt_variant"], experiment_config=sidecar["experiment_config"],
+        model_config=sidecar["model_config"],
+    )

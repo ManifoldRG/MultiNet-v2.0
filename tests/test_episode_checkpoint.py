@@ -181,7 +181,7 @@ def test_resume_r1_like_config(tmp_path):
     # image_only observation + text_summary_and_last3 history is the R1 config:
     # the post-resume query messages embed prior-step frames, so the frame
     # reattach on replay must reproduce them byte-for-byte.
-    cfg = dict(observation="image_only", context_window="text_summary_and_last3")
+    cfg = dict(observation="image_only", context_window="text_summary_and_last_n")
     baseline = _drive(_build_runner(_CORRIDOR_SPEC, **cfg), _CORRIDOR_REPLIES)
     ckpt = tmp_path / "checkpoint.json"
     stats = {}

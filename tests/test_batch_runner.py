@@ -125,14 +125,15 @@ def test_ragged_termination():
     # Three egocentric episodes of increasing length with DISTINCT action
     # scripts and distinct "H by W grid" markers, so a misrouted reply would
     # corrupt a transcript. They finish after 2 / 5 / 8 queries.
-    p = _make_unit("P", _spec("p", [5, 3], [1, 1], [3, 1]))          # "3 by 5"
-    q = _make_unit("Q", _spec("q", [5, 5], [1, 1], [3, 3]))          # "5 by 5"
-    r = _make_unit("R", _spec("r", [6, 7], [1, 1], [4, 5]))          # "7 by 6"
+    # Markers are the rendered *interior* size: dims [5, 3] renders as "1 by 3".
+    p = _make_unit("P", _spec("p", [5, 3], [1, 1], [3, 1]))          # "1 by 3"
+    q = _make_unit("Q", _spec("q", [5, 5], [1, 1], [3, 3]))          # "3 by 3"
+    r = _make_unit("R", _spec("r", [6, 7], [1, 1], [4, 5]))          # "5 by 4"
 
     scripts = {
-        "3 by 5": ["MOVE_FORWARD", "MOVE_FORWARD"],
-        "5 by 5": ["MOVE_FORWARD", "MOVE_FORWARD", "TURN_RIGHT", "MOVE_FORWARD", "MOVE_FORWARD"],
-        "7 by 6": ["MOVE_FORWARD"] * 3 + ["TURN_RIGHT"] + ["MOVE_FORWARD"] * 4,
+        "1 by 3": ["MOVE_FORWARD", "MOVE_FORWARD"],
+        "3 by 3": ["MOVE_FORWARD", "MOVE_FORWARD", "TURN_RIGHT", "MOVE_FORWARD", "MOVE_FORWARD"],
+        "5 by 4": ["MOVE_FORWARD"] * 3 + ["TURN_RIGHT"] + ["MOVE_FORWARD"] * 4,
     }
     agent = ScriptedBatchAgent(scripts)
 
@@ -151,9 +152,9 @@ def test_ragged_termination():
     assert results["R"]["query_count"] == 8
 
     # Each transcript's executed actions are its OWN script (no cross-contamination).
-    assert _steps(results["P"]) == scripts["3 by 5"]
-    assert _steps(results["Q"]) == scripts["5 by 5"]
-    assert _steps(results["R"]) == scripts["7 by 6"]
+    assert _steps(results["P"]) == scripts["1 by 3"]
+    assert _steps(results["Q"]) == scripts["3 by 3"]
+    assert _steps(results["R"]) == scripts["5 by 4"]
 
     # Working set only shrinks; later rounds are strictly smaller than the first.
     # (A trailing 0 is the silent all-finished heartbeat round.)
@@ -175,10 +176,10 @@ def test_refill_keeps_working_set_full():
     # working set holds at most 2. All four must complete.
     # (unit_id, dims, goal_x, marker); straight corridors from (1,1) east.
     specs = [
-        ("A", [4, 3], 2, "3 by 4"),
-        ("B", [5, 3], 3, "3 by 5"),
-        ("C", [6, 3], 4, "3 by 6"),
-        ("D", [7, 3], 5, "3 by 7"),
+        ("A", [4, 3], 2, "1 by 2"),
+        ("B", [5, 3], 3, "1 by 3"),
+        ("C", [6, 3], 4, "1 by 4"),
+        ("D", [7, 3], 5, "1 by 5"),
     ]
     pool = [
         _make_unit(uid, _spec(uid.lower(), dims, [1, 1], [goal_x, 1]))
@@ -228,9 +229,9 @@ class StubOnceAgent:
 
 
 def test_batch_stub_reply_is_parse_failure():
-    a = _make_unit("A", _spec("a", [6, 3], [1, 1], [4, 1]))   # "3 by 6"
-    b = _make_unit("B", _spec("b", [7, 3], [1, 1], [4, 1]))   # "3 by 7" (stubbed once)
-    agent = StubOnceAgent(stub_marker="3 by 7")
+    a = _make_unit("A", _spec("a", [6, 3], [1, 1], [4, 1]))   # "1 by 4"
+    b = _make_unit("B", _spec("b", [7, 3], [1, 1], [4, 1]))   # "1 by 5" (stubbed once)
+    agent = StubOnceAgent(stub_marker="1 by 5")
 
     runner = LockstepBatchRunner(agent, max_batches=2)
     for u in (a, b):
@@ -257,7 +258,7 @@ def test_batch_stub_reply_is_parse_failure():
 def test_on_round_called_with_active_units():
     a = _make_unit("A", _spec("a", [5, 3], [1, 1], [3, 1]))   # 2 queries
     b = _make_unit("B", _spec("b", [7, 3], [1, 1], [5, 1]))   # 4 queries
-    scripts = {"3 by 5": ["MOVE_FORWARD"] * 2, "3 by 7": ["MOVE_FORWARD"] * 4}
+    scripts = {"1 by 3": ["MOVE_FORWARD"] * 2, "1 by 5": ["MOVE_FORWARD"] * 4}
     agent = ScriptedBatchAgent(scripts)
 
     calls = []
@@ -286,7 +287,7 @@ def test_on_round_fires_on_silent_round():
     # unit active at the top but its next_query returns None (goal reached) so no
     # batch is submitted. on_round must still fire that round (empty active set).
     u = _make_unit("U", _spec("u", [4, 3], [1, 1], [2, 1]))   # 1 query then done
-    agent = ScriptedBatchAgent({"3 by 4": ["MOVE_FORWARD"]})
+    agent = ScriptedBatchAgent({"1 by 2": ["MOVE_FORWARD"]})
 
     calls = []
     runner = LockstepBatchRunner(
@@ -319,13 +320,13 @@ def test_checkpoint_write_failure_isolated_per_unit(tmp_path, monkeypatch):
 
     monkeypatch.setattr(br, "save_checkpoint", flaky_save)
 
-    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [4, 1]),   # "3 by 6"
+    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [4, 1]),   # "1 by 4"
                       checkpoint_path=good_ckpt)
-    bad = _make_unit("BAD", _spec("bad", [7, 3], [1, 1], [5, 1]),      # "3 by 7"
+    bad = _make_unit("BAD", _spec("bad", [7, 3], [1, 1], [5, 1]),      # "1 by 5"
                      checkpoint_path=bad_ckpt)
     agent = ScriptedBatchAgent({
-        "3 by 6": ["MOVE_FORWARD"] * 3,
-        "3 by 7": ["MOVE_FORWARD"] * 4,
+        "1 by 4": ["MOVE_FORWARD"] * 3,
+        "1 by 5": ["MOVE_FORWARD"] * 4,
     })
 
     runner = LockstepBatchRunner(agent, max_batches=2)
@@ -353,9 +354,9 @@ class ExplodingStepper:
 
 
 def test_unit_exception_is_captured_and_batch_continues():
-    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [4, 1]))   # "3 by 6"
+    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [4, 1]))   # "1 by 4"
     bad = LockstepUnit("BAD", ExplodingStepper())
-    agent = ScriptedBatchAgent({"3 by 6": ["MOVE_FORWARD"] * 3})
+    agent = ScriptedBatchAgent({"1 by 4": ["MOVE_FORWARD"] * 3})
 
     runner = LockstepBatchRunner(agent, max_batches=2)
     for u in (good, bad):
@@ -393,7 +394,7 @@ def test_checkpoint_only_at_query_boundary_and_deleted_on_finish(tmp_path, monke
         "U", _spec("u", [5, 5], [1, 1], [3, 3]),
         checkpoint_path=ckpt, action_space="cardinal",
     )
-    scripts = {"5 by 5": ["MOVE_EAST", "MOVE_EAST", "MOVE_SOUTH", "MOVE_SOUTH"]}
+    scripts = {"3 by 3": ["MOVE_EAST", "MOVE_EAST", "MOVE_SOUTH", "MOVE_SOUTH"]}
     agent = ScriptedBatchAgent(scripts)
 
     runner = LockstepBatchRunner(agent, max_batches=1)
@@ -446,8 +447,8 @@ def test_serial_equivalence_e2e():
     }
     assert all(r["success"] for r in serial.values())
 
-    # markers: "5 by 5", "3 by 7", "3 by 6"
-    scripts = {"5 by 5": s1, "3 by 7": s2, "3 by 6": s3}
+    # markers: "3 by 3", "1 by 5", "1 by 4"
+    scripts = {"3 by 3": s1, "1 by 5": s2, "1 by 4": s3}
     agent = ScriptedBatchAgent(scripts, usage=None)
     runner = LockstepBatchRunner(agent, max_batches=3)
     runner.add(_make_unit("M1", m1, action_space="cardinal"))
@@ -480,10 +481,10 @@ class RaiseOnRoundBatchAgent:
 def test_batch_exception_errors_round_but_keeps_prior_results():
     """A raised generate_batch marks that round's in-flight units as errors via
     the per-unit path; already-completed results survive and run() returns."""
-    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [2, 1]))   # "3 by 6", 1 move
-    bad = _make_unit("BAD", _spec("bad", [7, 3], [1, 1], [3, 1]))      # "3 by 7", 2 moves
+    good = _make_unit("GOOD", _spec("good", [6, 3], [1, 1], [2, 1]))   # "1 by 4", 1 move
+    bad = _make_unit("BAD", _spec("bad", [7, 3], [1, 1], [3, 1]))      # "1 by 5", 2 moves
     inner = ScriptedBatchAgent(
-        {"3 by 6": ["MOVE_FORWARD"], "3 by 7": ["MOVE_FORWARD", "MOVE_FORWARD"]}
+        {"1 by 4": ["MOVE_FORWARD"], "1 by 5": ["MOVE_FORWARD", "MOVE_FORWARD"]}
     )
     # Round 1: both submit (call #1, normal). Round 2: GOOD has finished and is
     # finalized before the batch; only BAD submits (call #2) -> raise.
