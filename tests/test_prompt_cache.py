@@ -255,6 +255,52 @@ def test_history_blocks_only_get_markers_when_enabled():
     assert enabled[-1]["cache_breakpoint"] is True
 
 
+@pytest.mark.parametrize("context_window", ["last3", "last_n", "full"])
+def test_runner_marks_history_only_for_full_context_window(context_window):
+    spec = _simple_spec()
+    backend = MiniGridBackend(render_mode="rgb_array")
+    backend.configure(spec)
+    config = ExperimentConfig(
+        observation="image_only",
+        context_window=context_window,
+        context_n=2,
+        prompt_cache=True,
+        in_context_learning="zero_shot",
+    )
+    runner = build_runner(config, backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "action": f"MOVE_{index}",
+            "position_after_row_col": (1, index + 2),
+            "facing_after": "EAST",
+            "prompt_feedback": f"feedback-{index}",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": np.zeros((2, 2, 3), dtype=np.uint8),
+        }
+        for index in range(4)
+    ]
+
+    message = runner._build_message(
+        state,
+        feedback_templates.INITIAL_FEEDBACK,
+        transcript,
+        with_one_shot=False,
+    )
+    marked_blocks = [
+        block
+        for block in message["content"]
+        if isinstance(block, dict) and "cache_breakpoint" in block
+    ]
+
+    if context_window == "full":
+        assert marked_blocks
+    else:
+        assert marked_blocks == []
+
+
 def _simple_spec() -> TaskSpecification:
     return TaskSpecification.from_dict(
         {
