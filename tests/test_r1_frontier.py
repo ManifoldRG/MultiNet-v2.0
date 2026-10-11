@@ -117,3 +117,19 @@ def test_estimator_prefers_measured_astra(tmp_path):
     assert est.main(["--artifacts-root", str(tmp_path), "--json", str(tmp_path / "r.json")]) == 0
     report = json.loads((tmp_path / "r.json").read_text())
     assert report["projection"]["is_astra_measured"] is True
+
+
+def test_estimator_prices_cache_writes(tmp_path):
+    usage = {
+        "input_tokens": 1_000_000_000,
+        "cached_input_tokens": 400_000_000,
+        "cache_creation_input_tokens": 200_000_000,
+        "output_tokens": 10_000_000,
+    }
+    _write_episode(tmp_path, "gpt-6-astra", "t1", [usage])
+    summary = est.summarize("gpt-6-astra", est.collect(tmp_path)["gpt-6-astra"])
+    assert summary["totals"]["cache_creation_input_tokens"] == 200_000_000
+    assert summary["actual_spend_usd_by_tier"]["default"] == pytest.approx(
+        (400_000_000 * 10 + 400_000_000 * 1
+         + 200_000_000 * 12.5 + 10_000_000 * 50) / 1_000_000
+    )

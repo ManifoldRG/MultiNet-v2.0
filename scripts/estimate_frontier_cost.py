@@ -49,7 +49,7 @@ def collect(root: Path) -> Dict[str, Dict[str, Any]]:
         agg = by_model.setdefault(
             model,
             {"episodes": 0, "successes": 0, "queries": [], "in": [], "out": [], "reasoning": [],
-             "cached": [], "truncated": 0, "end_reasons": {}, "tasks": []},
+             "cached": [], "cache_creation": [], "truncated": 0, "end_reasons": {}, "tasks": []},
         )
         agg["episodes"] += 1
         agg["successes"] += int(bool(ep.get("success")))
@@ -66,6 +66,7 @@ def collect(root: Path) -> Dict[str, Dict[str, Any]]:
             agg["out"].append(int(usage.get("output_tokens", 0)))
             agg["reasoning"].append(int(usage.get("reasoning_tokens", 0)))
             agg["cached"].append(int(usage.get("cached_input_tokens", 0)))
+            agg["cache_creation"].append(int(usage.get("cache_creation_input_tokens", 0)))
             if turn.get("stop_reason") in ("length", "max_tokens"):
                 agg["truncated"] += 1
         agg["queries"].append(n)
@@ -76,6 +77,7 @@ def summarize(model: str, agg: Dict[str, Any]) -> Dict[str, Any]:
     q = sum(agg["queries"])
     eps = agg["episodes"]
     totals = {"input_tokens": sum(agg["in"]), "cached_input_tokens": sum(agg["cached"]),
+              "cache_creation_input_tokens": sum(agg["cache_creation"]),
               "output_tokens": sum(agg["out"])}
     spend = {}
     if model in OPENAI_PRICES:

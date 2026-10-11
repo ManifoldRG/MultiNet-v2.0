@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_OPENAI_MODEL = "gpt-6-astra"
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _AGENT_NAME = "OpenAI agent"
+_BREAKPOINT = {"mode": "explicit"}
+_MAX_BREAKPOINTS = 4
+_CACHE_WRITE_MULTIPLIER = 1.25
 
 # USD per 1M tokens: (input, cached input, output). Source:
 # https://developers.openai.com/api/docs/pricing (fetched 2026-09-12). Flex and
@@ -72,14 +75,24 @@ def price_for(model: str, service_tier: Optional[str]) -> Tuple[float, float, fl
 
 
 def usage_cost_usd(usage: Optional[Mapping[str, int]], prices: Tuple[float, float, float]) -> float:
-    """Price one normalized usage dict. Cached input is billed at the cached rate."""
+    """Price one normalized usage dict, including cache reads and writes."""
     if not usage:
         return 0.0
     p_in, p_cached, p_out = prices
     total_in = int(usage.get("input_tokens", 0))
     cached = min(int(usage.get("cached_input_tokens", 0)), total_in)
+    written = min(
+        int(usage.get("cache_creation_input_tokens", 0)),
+        total_in - cached,
+    )
     out = int(usage.get("output_tokens", 0))
-    return ((total_in - cached) * p_in + cached * p_cached + out * p_out) / 1_000_000
+    uncached = total_in - cached - written
+    return (
+        uncached * p_in
+        + cached * p_cached
+        + written * p_in * _CACHE_WRITE_MULTIPLIER
+        + out * p_out
+    ) / 1_000_000
 
 
 class _SpendLedger:
@@ -106,7 +119,54 @@ class OpenAISpendCapReached(RuntimeError):
     """Raised before a request once the process-wide spend cap is reached."""
 
 
-def _to_openai_messages(messages: List[dict], image_detail: Optional[str]) -> List[Dict[str, object]]:
+def _as_parts(content: object) -> List[object]:
+    if isinstance(content, list):
+        return list(content)
+    return [{"type": "text", "text": "" if content is None else str(content)}]
+
+
+def _is_text(block: object) -> bool:
+    return (
+        isinstance(block, dict)
+        and block.get("type") == "text"
+        and bool(block.get("text"))
+    )
+
+
+def _translate_markers(content: object, enabled: bool) -> object:
+    """Translate runner breakpoints and always strip runner-only metadata."""
+    if not isinstance(content, list):
+        return content
+    out = []
+    for block in content:
+        if not isinstance(block, dict):
+            out.append(block)
+            continue
+        block = dict(block)
+        marked = block.pop("cache_breakpoint", False)
+        if marked and enabled and _is_text(block):
+            block["prompt_cache_breakpoint"] = dict(_BREAKPOINT)
+        out.append(block)
+    return out
+
+
+def _mark_last_text(message: Dict[str, object]) -> None:
+    parts = _as_parts(message["content"])
+    if (
+        parts
+        and _is_text(parts[-1])
+        and isinstance(parts[-1], dict)
+        and "prompt_cache_breakpoint" not in parts[-1]
+    ):
+        parts[-1] = {**parts[-1], "prompt_cache_breakpoint": dict(_BREAKPOINT)}
+        message["content"] = parts
+
+
+def _to_openai_messages(
+    messages: List[dict],
+    image_detail: Optional[str],
+    prompt_cache: bool = False,
+) -> List[Dict[str, object]]:
     out: List[Dict[str, object]] = []
     for message in messages:
         role = message.get("role")
@@ -122,7 +182,33 @@ def _to_openai_messages(messages: List[dict], image_detail: Optional[str]) -> Li
                 else block
                 for block in content
             ]
-        out.append({"role": role, "content": content})
+        out.append(
+            {
+                "role": role,
+                "content": _translate_markers(content, prompt_cache),
+            }
+        )
+    if prompt_cache:
+        system = next((message for message in out if message["role"] == "system"), None)
+        if system is not None:
+            _mark_last_text(system)
+        assistant = next(
+            (message for message in reversed(out) if message["role"] == "assistant"),
+            None,
+        )
+        if assistant is not None:
+            _mark_last_text(assistant)
+        used = sum(
+            1
+            for message in out
+            if isinstance(message["content"], list)
+            for block in message["content"]
+            if isinstance(block, dict) and "prompt_cache_breakpoint" in block
+        )
+        if used > _MAX_BREAKPOINTS:
+            raise ValueError(
+                f"{used} cache breakpoints; OpenAI allows {_MAX_BREAKPOINTS} writes per request"
+            )
     return out
 
 
@@ -133,6 +219,7 @@ def _build_body(
     max_tokens: int,
     reasoning_effort: Optional[str],
     service_tier: Optional[str],
+    prompt_cache: bool = False,
 ) -> Dict[str, object]:
     body: Dict[str, object] = {
         "model": model,
@@ -143,6 +230,8 @@ def _build_body(
         body["reasoning_effort"] = reasoning_effort
     if service_tier:
         body["service_tier"] = service_tier
+    if prompt_cache:
+        body["prompt_cache_options"] = {"mode": "explicit"}
     return body
 
 
@@ -194,6 +283,7 @@ class OpenAIConfig:
     max_attempts: int = 5
     spend_cap_usd: Optional[float] = None
     base_url: str = _DEFAULT_BASE_URL
+    enable_prompt_cache: bool = False
 
 
 @dataclass
@@ -273,11 +363,16 @@ class OpenAIAgent:
                 f"OpenAI spend cap ${cap:.2f} reached (running total ${SPEND.usd:.2f}); refusing request."
             )
         body = _build_body(
-            _to_openai_messages(messages, self.config.image_detail),
+            _to_openai_messages(
+                messages,
+                self.config.image_detail,
+                self.config.enable_prompt_cache,
+            ),
             model=self.config.model,
             max_tokens=self.config.max_tokens,
             reasoning_effort=self.config.reasoning_effort,
             service_tier=self.config.service_tier,
+            prompt_cache=self.config.enable_prompt_cache,
         )
         payload, headers = self._post(body)
         if headers:

@@ -13,10 +13,12 @@ from interface.agents.openai_agent import (
     OpenAIConfig,
     OpenAISpendCapReached,
     SPEND,
+    _build_body,
+    _to_openai_messages,
     price_for,
     usage_cost_usd,
 )
-from interface.telemetry import token_count_from_record
+from interface.telemetry import normalize_token_usage, token_count_from_record
 from scripts.run_pipeline import _build_agent_from_spec
 
 
@@ -198,6 +200,111 @@ def test_usage_cost_prices_cached_input_at_cached_rate():
     assert price_for("gpt-5.6-terra", None) == (2.00, 0.20, 12.00)
 
 
+def test_markers_translate_and_runner_key_never_leaks():
+    messages = [
+        {"role": "system", "content": "sys " * 5},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "a", "cache_breakpoint": True},
+                {"type": "text", "text": "tail"},
+            ],
+        },
+    ]
+    enabled = _to_openai_messages(messages, None, prompt_cache=True)
+    assert enabled[1]["content"][0]["prompt_cache_breakpoint"] == {"mode": "explicit"}
+    assert "cache_breakpoint" not in enabled[1]["content"][0]
+    assert "prompt_cache_breakpoint" not in enabled[1]["content"][1]
+    assert enabled[0]["content"][-1]["prompt_cache_breakpoint"] == {"mode": "explicit"}
+
+    disabled = _to_openai_messages(messages, None, prompt_cache=False)
+    assert disabled[0]["content"] == "sys " * 5
+    assert disabled[1]["content"][0] == {"type": "text", "text": "a"}
+
+
+def test_prompt_cache_options_only_when_enabled():
+    kwargs = {
+        "model": "gpt-6-luna",
+        "max_tokens": 10,
+        "reasoning_effort": None,
+        "service_tier": None,
+    }
+    assert "prompt_cache_options" not in _build_body([], **kwargs)
+    assert _build_body([], prompt_cache=True, **kwargs)["prompt_cache_options"] == {
+        "mode": "explicit"
+    }
+
+
+def test_cost_prices_cache_writes_and_is_unchanged_without_them():
+    prices = (10.0, 1.0, 50.0)
+    usage = {
+        "input_tokens": 1000,
+        "cached_input_tokens": 400,
+        "cache_creation_input_tokens": 200,
+        "output_tokens": 10,
+    }
+    assert usage_cost_usd(usage, prices) == pytest.approx(
+        (400 * 10 + 400 * 1 + 200 * 12.5 + 10 * 50) / 1e6
+    )
+    usage_without_writes = {
+        "input_tokens": 1000,
+        "cached_input_tokens": 400,
+        "output_tokens": 10,
+    }
+    assert usage_cost_usd(usage_without_writes, prices) == pytest.approx(
+        (600 * 10 + 400 * 1 + 10 * 50) / 1e6
+    )
+
+
+def test_normalize_is_idempotent():
+    anthropic_usage = normalize_token_usage(
+        {
+            "input_tokens": 10,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 80,
+            "cache_creation_input_tokens": 10,
+        }
+    )
+    assert anthropic_usage["input_tokens"] == 100
+    assert normalize_token_usage(anthropic_usage) == anthropic_usage
+
+    openai_usage = normalize_token_usage(
+        {
+            "prompt_tokens": 100,
+            "completion_tokens": 2,
+            "prompt_tokens_details": {"cached_tokens": 80, "cache_write_tokens": 10},
+        }
+    )
+    assert openai_usage["input_tokens"] == 100
+    assert normalize_token_usage(openai_usage) == openai_usage
+
+
+def test_more_than_four_cache_breakpoints_raises():
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": str(index), "cache_breakpoint": True}
+                for index in range(5)
+            ],
+        }
+    ]
+    with pytest.raises(ValueError, match="5 cache breakpoints"):
+        _to_openai_messages(messages, None, prompt_cache=True)
+
+
+def test_last_assistant_message_gets_breakpoint():
+    messages = [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "answer"},
+        {"role": "user", "content": "next"},
+    ]
+    converted = _to_openai_messages(messages, None, prompt_cache=True)
+    assistant = converted[2]["content"]
+    assert assistant[-1]["prompt_cache_breakpoint"] == {"mode": "explicit"}
+
+
 def test_spend_cap_requires_a_known_price():
     with pytest.raises(ValueError, match="No OpenAI price"):
         OpenAIAgent(OpenAIConfig(model="gpt-unknown", spend_cap_usd=5), api_key="k")
@@ -238,6 +345,43 @@ def test_factory_builds_openai_agent_from_run_config(monkeypatch):
         64000, "xhigh", "flex", "high",
     )
     assert (c.timeout, c.max_attempts, c.spend_cap_usd) == (1800.0, 30, 500.0)
+    assert c.enable_prompt_cache is False
+
+
+def test_factory_uses_experiment_cache_flag_unless_model_overrides(monkeypatch):
+    import scripts.run_pipeline as pipeline
+
+    config = {
+        "experiment_config": {"prompt_cache": True},
+        "models": {
+            "inherited": {"provider": "openai", "tasks": ["task-a"]},
+            "explicit": {
+                "provider": "openai",
+                "enable_prompt_cache": False,
+                "tasks": ["task-b"],
+            },
+        },
+    }
+    monkeypatch.setattr(pipeline, "load_run_config", lambda _path: config)
+    monkeypatch.setattr(pipeline, "check_run_config_expectations", lambda *_args: None)
+    monkeypatch.setattr(pipeline, "load_manifest", lambda *_args: [])
+    monkeypatch.setattr(pipeline, "resolve_task_rows", lambda *_args: [{"task_id": "task"}])
+    monkeypatch.setattr(pipeline, "_score_suite", lambda *_args, **_kwargs: ({}, 0.0))
+    monkeypatch.setattr(pipeline, "_run_one_model", lambda *_args, **_kwargs: ([], {}))
+    monkeypatch.setattr(pipeline, "_write_aggregate", lambda *_args: {})
+
+    received = {}
+
+    def capture_factory(name, model_cfg):
+        received[name] = dict(model_cfg)
+        return object(), name
+
+    pipeline.run_from_config(
+        run_config_path="unused.json",
+        agent_factory=capture_factory,
+    )
+    assert received["inherited"]["enable_prompt_cache"] is True
+    assert received["explicit"]["enable_prompt_cache"] is False
 
 
 def test_module_default_model_is_astra():

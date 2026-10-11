@@ -919,7 +919,7 @@ def run_from_config(
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
         agent_cfg = dict(model_cfg)
-        if (agent_cfg.get("provider") or "").lower() == "claude":
+        if (agent_cfg.get("provider") or "").lower() in {"claude", "openai"}:
             agent_cfg.setdefault(
                 "enable_prompt_cache",
                 bool(exp_overlay.get("prompt_cache", False)),
