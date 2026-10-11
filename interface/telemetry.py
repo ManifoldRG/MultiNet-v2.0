@@ -22,7 +22,11 @@ def normalize_token_usage(usage: Any) -> dict[str, int] | None:
     # and OpenAI's `prompt_tokens`, which already counts cached tokens).
     cache_read = usage.get("cache_read_input_tokens")
     cache_creation = usage.get("cache_creation_input_tokens")
-    if input_tokens is not None and (cache_read is not None or cache_creation is not None):
+    if (
+        total_tokens is None
+        and input_tokens is not None
+        and (cache_read is not None or cache_creation is not None)
+    ):
         input_tokens = int(input_tokens) + int(cache_read or 0) + int(cache_creation or 0)
 
     details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details")

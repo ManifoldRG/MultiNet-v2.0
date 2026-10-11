@@ -918,7 +918,13 @@ def run_from_config(
         if not entries:
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
-        agent, label = factory(name, model_cfg)
+        agent_cfg = dict(model_cfg)
+        if (agent_cfg.get("provider") or "").lower() == "claude":
+            agent_cfg.setdefault(
+                "enable_prompt_cache",
+                bool(exp_overlay.get("prompt_cache", False)),
+            )
+        agent, label = factory(name, agent_cfg)
         plans.append((_sanitize(label), agent, dict(model_cfg), rows))
         for r in rows:
             union.setdefault(r["task_id"], r)
