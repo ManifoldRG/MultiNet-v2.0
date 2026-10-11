@@ -163,6 +163,22 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
     return new_queries, stopped_early
 
 
+def refuse_non_2d_render(episode: dict, run_inputs: dict) -> None:
+    """This driver rebuilds a 2D MiniGrid backend, so an episode recorded with
+    a 3D render (run_inputs.json / episode.json ``render``, or a non-minigrid
+    backend label) would continue on 2D frames. Refuse it."""
+    for source, payload in (("run_inputs.json", run_inputs), ("episode.json", episode)):
+        render = payload.get("render") or {}
+        backend = render.get("backend", "minigrid") if isinstance(render, dict) else render
+        label = payload.get("backend", "minigrid")
+        if backend != "minigrid" or label != "minigrid":
+            raise SystemExit(
+                f"refusing to resume: {source} records a 3D render "
+                f"(render={render!r}, backend={label!r}); this driver replays and "
+                "continues on the 2D MiniGrid backend only"
+            )
+
+
 def scripted_action_from_spec(spec: str) -> str:
     prefix = "scripted:"
     if not spec.startswith(prefix) or not spec[len(prefix):]:
@@ -253,6 +269,7 @@ def main() -> int:
 
     episode = json.loads((archive_dir / "episode.json").read_text(encoding="utf-8"))
     run_inputs = json.loads((archive_dir / "run_inputs.json").read_text(encoding="utf-8"))
+    refuse_non_2d_render(episode, run_inputs)
 
     # Everything derives from the archive: experiment config (incl. stall K and
     # parse-retry caps) from run_inputs, the task (incl. the runtime-capped

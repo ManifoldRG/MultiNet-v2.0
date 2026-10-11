@@ -189,3 +189,107 @@ def test_continue_loop_stops_when_a_scripted_agent_reports_exhausted():
     )
     assert (new_queries, stopped_early) == (0, "scripted_agent_exhausted")
     assert stepper.query_count == 0
+
+
+# --------------------------------------------------------------------------
+# 3D archives: the driver rebuilds a 2D MiniGrid backend, so a 3D episode
+# would continue with 2D frames. It must refuse instead.
+# --------------------------------------------------------------------------
+
+_RENDER_3D = {"backend": "mujoco3d", "camera": "top_down", "resolution": "grid"}
+
+
+def _parse_failed_archive(tmp_path: Path) -> Path:
+    """A real infra-killed (parse_failed) 2D episode archive."""
+    import itertools
+    import json
+
+    from interface.loader import default_maze_path
+    from scripts.run_pipeline import run_from_config
+
+    replies = itertools.chain(["FINAL_OUTPUT: MOVE_FORWARD"], itertools.repeat("(network outage)"))
+
+    class _DyingAgent:
+        last_usage = None
+
+        def __call__(self, messages):
+            self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
+            return next(replies)
+
+    cfg = tmp_path / "run_config.json"
+    cfg.write_text(json.dumps({"models": {"stub": {
+        "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path("V01_empty_room.json"))],
+    }}}))
+    artifacts = tmp_path / "artifacts"
+    run_from_config(
+        run_config_path=cfg, manifest_path=Path(__file__).resolve().parents[1] / "gridworld/fixtures/manifest.json",
+        seeds=[0], artifacts_root=artifacts, run_set_id="r", agent_factory=lambda n, c: (_DyingAgent(), c["model"]),
+        difficulty_max_static_score=1000.0,
+    )
+    [archive] = [p.parent for p in artifacts.rglob("episode.json")]
+    assert json.loads((archive / "episode.json").read_text())["end_reason"] == "parse_failed"
+    return archive
+
+
+def _mark_3d(archive: Path) -> None:
+    import json
+
+    for name in ("episode.json", "run_inputs.json"):
+        payload = json.loads((archive / name).read_text())
+        payload["render"] = dict(_RENDER_3D)
+        if name == "run_inputs.json":
+            payload["backend"] = "mujoco3d_top_down_grid"
+        (archive / name).write_text(json.dumps(payload))
+
+
+def _resume(archive: Path, out_dir: Path):
+    import subprocess
+    import sys
+
+    repo = Path(__file__).resolve().parents[1]
+    return subprocess.run(
+        [sys.executable, str(repo / "scripts" / "resume_from_archive.py"), "--archive-dir", str(archive),
+         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", "replay-verify"],
+        capture_output=True, text=True, timeout=300,
+    )
+
+
+def test_resume_replays_a_2d_archive(tmp_path: Path):
+    result = _resume(_parse_failed_archive(tmp_path), tmp_path / "out")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "replay-verify: PASS" in result.stdout
+
+
+def test_resume_refuses_a_3d_archive_instead_of_continuing_in_2d(tmp_path: Path):
+    archive = _parse_failed_archive(tmp_path)
+    _mark_3d(archive)
+    result = _resume(archive, tmp_path / "out")
+    assert result.returncode != 0
+    assert "replay-verify: PASS" not in result.stdout
+    assert "3D" in result.stderr and "mujoco3d" in result.stderr
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize(
+    "episode, run_inputs",
+    [
+        ({"render": _RENDER_3D}, {}),
+        ({}, {"render": _RENDER_3D}),
+        ({}, {"backend": "mujoco3d_chase_grid"}),
+    ],
+)
+def test_refuse_non_2d_render_names_the_recorded_render(episode, run_inputs):
+    from scripts.resume_from_archive import refuse_non_2d_render
+
+    with pytest.raises(SystemExit, match="mujoco3d"):
+        refuse_non_2d_render(episode, run_inputs)
+
+
+@pytest.mark.parametrize(
+    "episode, run_inputs",
+    [({}, {}), ({}, {"backend": "minigrid"}), ({"render": {"backend": "minigrid"}}, {"backend": "minigrid"})],
+)
+def test_refuse_non_2d_render_accepts_2d_archives(episode, run_inputs):
+    from scripts.resume_from_archive import refuse_non_2d_render
+
+    assert refuse_non_2d_render(episode, run_inputs) is None
