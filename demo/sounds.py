@@ -233,7 +233,7 @@ def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
     if session.episode_done and session.episode_success:
         return "success"
 
-    hit = portal_transition(session, prev_state)
+    hit = portal_transition(session, session.last_dispatched_token, prev_state)
     if hit is not None:
         return hit[0]
 
@@ -255,7 +255,7 @@ def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
         None,
     )
     event_type = last.get("event_type") if last else None
-    if event_type in ("MOVED", "TELEPORTED", "CARRIED", "ROTATING"):
+    if event_type == "MOVED":
         return "step"
     if event_type == "TURNED":
         return "turn"
@@ -273,7 +273,7 @@ def sfx_for_dispatch(session, events_before: int, prev_state=None) -> str:
         # Successful drops already returned "pickup" via the Progress event
         # above; reaching here means X with an empty inventory.
         return "invalid"
-    if event_type in ("NOTHING", "INVALID", "WRONG_DONE", "DEATH RESET", "FROZEN"):
+    if event_type in ("NOTHING", "INVALID", "WRONG_DONE"):
         return "invalid"
     return "invalid"
 

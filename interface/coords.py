@@ -49,6 +49,25 @@ def rotating_dirs(task_spec: TaskSpecification, state: GridState | None) -> tupl
     return tuple(int(d) for d in state.rotator_dirs)
 
 
+def teleporter_link(
+    task_spec: TaskSpecification,
+    row: int,
+    col: int,
+) -> tuple[tuple[int, int], str] | None:
+    """Where stepping on ``(row, col)`` lands, and that teleporter's color.
+
+    One-way teleporters only send from the first end to the second.
+    """
+    for teleporter in task_spec.mechanisms.teleporters:
+        end_a = to_row_col(teleporter.position_a)
+        end_b = to_row_col(teleporter.position_b)
+        if (row, col) == end_a:
+            return end_b, teleporter.color
+        if teleporter.bidirectional and (row, col) == end_b:
+            return end_a, teleporter.color
+    return None
+
+
 def rotating_pointing(
     task_spec: TaskSpecification,
     state: GridState | None,
@@ -88,6 +107,32 @@ def forward_cell(state: GridState) -> tuple[int, int]:
     row, col = agent_row_col(state)
     dr, dc = FACING_TO_DELTA[agent_facing(state)]
     return (row + dr, col + dc)
+
+
+def entered_cell(task_spec: TaskSpecification, state: GridState) -> tuple[int, int]:
+    """Cell a MOVE_FORWARD from ``state`` enters, in ``(row, col)``.
+
+    Standing on a rotating tile enters the arrow's cell. Otherwise, the cell ahead.
+    """
+    row, col = agent_row_col(state)
+    pointing = rotating_pointing(task_spec, state, row, col)
+    if pointing is None:
+        return forward_cell(state)
+    dr, dc = FACING_TO_DELTA[pointing]
+    return (row + dr, col + dc)
+
+
+def move_landing(
+    task_spec: TaskSpecification,
+    state: GridState,
+) -> tuple[tuple[int, int], tuple[tuple[int, int], str] | None]:
+    """Where a MOVE_FORWARD from ``state`` lands, and the teleporter it used.
+
+    An active teleporter end lands on the other end.
+    """
+    entered = entered_cell(task_spec, state)
+    link = teleporter_link(task_spec, *entered)
+    return (link[0] if link is not None else entered), link
 
 
 def live_key_position(key, state: GridState):
