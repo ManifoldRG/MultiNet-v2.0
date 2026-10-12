@@ -9,6 +9,9 @@ History when ``context_window`` is ``last_n`` / ``text_summary_and_last_n``
 * **image_text** — that text history **and** prior decision-frame PNGs.
 
 History is derived from enriched ``transcript`` step records.
+Explicit cache breakpoints are emitted only for ``full`` history. They mark
+the newest included step and, when available, the newest step included by the
+previous request.
 """
 
 from __future__ import annotations
@@ -464,11 +467,14 @@ def history_content_blocks(
         return []
 
     blocks: list[dict] = []
+    text_block_indices: dict[int, int] = {}
     for rec in recs:
         rgb = rec.get("_decision_frame_rgb")
         if rgb is None:
             continue
         blocks.append(rgb_to_image_block(rgb))
+        inventory = _history_record_inventory(rec)
+        ...  # rest unchanged, including text_block_indices[id(rec)] = len(blocks) + 1
         inventory = _history_record_inventory(rec)
         text = (
             user_templates.LAST_N_USER_PROMPT["image_only_step"].format(
@@ -481,6 +487,7 @@ def history_content_blocks(
                 action=_history_record_action(rec),
             )
         )
+        text_block_indices[id(rec)] = len(blocks) + 1
         blocks.append({"type": "text", "text": text})
 
     if not blocks:
@@ -492,13 +499,38 @@ def history_content_blocks(
         else user_templates.LAST_N_USER_PROMPT["header"]
     )
     out = [{"type": "text", "text": header}] + blocks
-    if cache_breakpoints:
-        pair_texts = [
-            i for i, block in enumerate(out)
-            if i > 0 and block.get("type") == "text"
-        ]
-        for i in pair_texts[-2:]:
-            out[i] = {**out[i], "cache_breakpoint": True}
+    if cache_breakpoints and context_window == "full":
+        transcript_positions = {id(rec): index for index, rec in enumerate(transcript)}
+        last_query_index = next(
+            (
+                index
+                for index in range(len(transcript) - 1, -1, -1)
+                if transcript[index].get("kind") == "query"
+            ),
+            None,
+        )
+        previous_step_text_index = None
+        if last_query_index is not None:
+            previous_step_text_index = next(
+                (
+                    text_block_indices[id(rec)]
+                    for rec in reversed(recs)
+                    if id(rec) in text_block_indices
+                    and transcript_positions[id(rec)] < last_query_index
+                ),
+                None,
+            )
+        current_step_text_index = next(
+            (
+                text_block_indices[id(rec)]
+                for rec in reversed(recs)
+                if id(rec) in text_block_indices
+            ),
+            None,
+        )
+        for index in (previous_step_text_index, current_step_text_index):
+            if index is not None:
+                out[index] = {**out[index], "cache_breakpoint": True}
     return out
 
 

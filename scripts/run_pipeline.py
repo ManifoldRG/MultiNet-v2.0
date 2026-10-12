@@ -248,6 +248,10 @@ _NON_RUNTIME_MODEL_KEYS = {
     "batch_deadline_s",
     "batch_cancel_grace_s",
     "batch_poll_interval_s",
+    "enable_prompt_cache",
+    "cache_ttl",
+    "batch_cache_ttl",
+    "prompt_cache_ttl",
     "device_map",
     "local_files_only",
     "max_memory",
@@ -262,6 +266,17 @@ _NON_RUNTIME_MODEL_KEYS = {
     "use_tqdm",
     "engine_kwargs",
 }
+
+_VALID_CACHE_TTLS = ("5m", "1h")
+
+
+def _validate_cache_ttls(model_cfg: dict[str, Any]) -> None:
+    for key in ("cache_ttl", "batch_cache_ttl", "prompt_cache_ttl"):
+        value = model_cfg.get(key)
+        if value is not None and value not in _VALID_CACHE_TTLS:
+            raise ValueError(
+                f"{key} must be None or one of {_VALID_CACHE_TTLS}, got {value!r}"
+            )
 
 
 def _jsonable(value: Any) -> Any:
@@ -1001,6 +1016,8 @@ def check_run_config_expectations(
             f"Run-config expects --conditions {run_config['conditions']!r} but got {conditions!r}. "
             "Pass the matching --conditions."
         )
+    for model_cfg in (run_config.get("models") or {}).values():
+        _validate_cache_ttls(model_cfg)
     _check_equal_token_caps(run_config)
 
 

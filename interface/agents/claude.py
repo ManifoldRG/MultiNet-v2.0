@@ -151,8 +151,7 @@ def _as_block_list(content: object) -> List[dict]:
 
 
 def _cache_control(ttl: str) -> Dict[str, str]:
-    if ttl not in ("5m", "1h"):
-        raise ValueError(f"cache ttl must be '5m' or '1h', got {ttl!r}")
+    # TTLs are validated in scripts.run_pipeline.
     return {"type": "ephemeral", "ttl": "1h"} if ttl == "1h" else {"type": "ephemeral"}
 
 
