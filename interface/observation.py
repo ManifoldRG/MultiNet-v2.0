@@ -20,6 +20,7 @@ import numpy as np
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
+from interface.coords import move_landing, rotating_pointing, to_row_col
 from interface.renderer import (
     render_user_observation_text,
     rgb_to_image_block,
@@ -355,6 +356,45 @@ def _extract_mechanism_events(
                         ),
                     )
                 )
+
+        elif event_type == "DEATH RESET":
+            landing, _ = move_landing(task_spec, GridState.from_dict(sb))
+            events.append((
+                index,
+                observation_templates.TEXT_SUMMARY_DEATH_PORTAL.format(
+                    row=landing[0], col=landing[1]
+                ),
+            ))
+
+        elif event_type == "FROZEN":
+            before = int(sb.get("freeze_remaining") or 0)
+            after = int(sa.get("freeze_remaining") or 0)
+            if before == 0 and after > 0:
+                row, col = rec["position_after_row_col"]
+                events.append((
+                    index,
+                    observation_templates.TEXT_SUMMARY_FROZEN.format(row=int(row), col=int(col)),
+                ))
+
+        elif event_type == "CARRIED":
+            row, col = (int(v) for v in rec["position_before_row_col"])
+            events.append((
+                index,
+                observation_templates.TEXT_SUMMARY_CARRIED.format(
+                    row=row,
+                    col=col,
+                    direction=rotating_pointing(
+                        task_spec, GridState.from_dict(sb), row, col
+                    ),
+                ),
+            ))
+
+        elif event_type == "TELEPORTED":
+            row, col = to_row_col(sa["agent_position"])
+            events.append((
+                index,
+                observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col),
+            ))
 
     return events
 
