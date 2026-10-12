@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from minigrid.core.constants import COLORS as _MINIGRID_COLORS
+# MiniGrid's COLORS (minigrid.core.constants), inlined so the demo theme does not
+# import minigrid. Must stay identical (tests/test_demo_theme_palette.py): the
+# wall recolour and mechanism colours match MiniGrid's rendered pixels.
+_MINIGRID_COLORS = {
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "purple": (112, 39, 195),
+    "yellow": (255, 255, 0),
+    "grey": (100, 100, 100),
+}
 
 
 APP_TITLE = "MultiNet v2.0 Benchmark"
