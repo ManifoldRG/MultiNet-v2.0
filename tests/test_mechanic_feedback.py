@@ -549,7 +549,7 @@ def test_summary_reports_a_death_taken_from_the_start_cell():
 
 def test_summary_reports_a_turntable_ride():
     summary = _summary(_ride_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD])
-    assert "stepped on a rotating tile at (1,2) and rode it in SOUTH" in summary
+    assert "stepped on a rotating tile at (1,2) and rode it SOUTH" in summary
 
 
 def test_summary_survives_a_json_round_trip():

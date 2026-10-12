@@ -126,6 +126,6 @@ def test_m10_route_matches_pr61_feedback_step_for_step():
         "teleported to (11,2)",
         "teleported to (15,14)",
         "stepped on a frozen tile at",
-        "and rode it in",
+        "and rode it ",
     ):
         assert phrase in summary
