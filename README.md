@@ -1,13 +1,13 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet 2.0 Preview: Goal Progress Decays with Task Horizon for Frontier VLMs in Interactive 2D Environments</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet 2.0 Preview: Frontier VLMs fail interactive, 2D environments</h1>
   </kbd>
 </p>
 
 <p align="center">
   <a href="https://multinet.ai/"><img src="https://img.shields.io/badge/Website-009688?style=flat-square&logo=googlechrome&logoColor=white" alt="Website"></a>
-  <a href="https://www.fig.inc/multinet-v2-preview/"><img src="https://img.shields.io/badge/Technical%20Report-8B0000?style=flat-square&logo=googledocs&logoColor=white" alt="Technical Report"></a>
+  <a href="https://www.fig.inc/blog/multinet-v2-preview-astra-opus/"><img src="https://img.shields.io/badge/Technical%20Report-8B0000?style=flat-square&logo=googledocs&logoColor=white" alt="Technical Report"></a>
   <a href="https://github.com/ManifoldRG/MultiNet"><img src="https://img.shields.io/badge/MultiNet%20v1.0-181717?style=flat-square&logo=github&logoColor=white" alt="MultiNet v1.0"></a>
   <a href="https://discord.gg/Rk4gAq5aYr"><img src="https://img.shields.io/badge/Contribute-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Contribute"></a>
 </p>
@@ -25,6 +25,11 @@
     <img src="assets/manifold_logo.png" alt="Manifold Research Logo" height="40">
     </kbd>
   </a>
+  <a href="https://www.mit.edu/" target="_blank">
+    <kbd>
+    <img src="assets/mit_logo_v1.jpg" alt="MIT Logo" height="40">
+    </kbd>
+  </a>
   <a href="https://www.gatech.edu/" target="_blank">
     <kbd>
     <img src="assets/gt_logo.png" alt="Georgia Tech Logo" style="height:40px; border-radius:50%;">
@@ -37,17 +42,18 @@
   </a>
 </p>
 
-### _Interested in evaluating your agent on long horizon tasks, or collaborating on research? [Let's work together](https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0)_
+### _Interested in evaluating your agent on long horizon tasks, or collaborating on research? [Let's work together](https://tally.so/r/7RGXaZ?utm_source=multinet-codebase&utm_medium=github&utm_campaign=multinet-v2-r1-astra-opus)_
 
 <p align="center">
-  <img src="assets/r1_failure_reels.gif" alt="Failure replay reels for Claude Opus 4.8, Kimi K2.6 and Qwen3.6-27B" width="100%">
+  <img src="assets/failure_reels_five_models.gif" alt="Failure replay reels for Claude Opus 4.8, Kimi K2.6, Qwen3.6-27B, GPT-6 Astra and Claude Opus 5.5" width="100%">
   <br>
-  <em>Claude Opus 4.8, Kimi K2.6 and Qwen 3.6 27B models failing on 2D mazes.</em>
+  <em>Claude Opus 4.8, Kimi K2.6, Qwen 3.6 27B, GPT-6 Astra and Claude Opus 5.5 models failing on 2D mazes.</em>
 </p>
 
 ## 📢 News
 
-- 🌀 2026-08-26: A Preview of our Multi-Domain Agentic Benchmark - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://www.fig.inc/multinet-v2-preview/).
+- 🔬 2026-10: 2.0 Preview Addendum - We evaluate GPT-6 Astra and Claude Opus 5.5 on the same 50 2D mazes. Astra solves 11 and Opus 5.5 solves 7, including 14x14 mazes of 77 to 89 actions, and neither solves any of the 35 mazes with a switch. Read our technical report [here](https://www.fig.inc/blog/multinet-v2-preview-astra-opus/).
+- 🌀 2026-08-26: A Preview of our Multi-Domain Agentic Benchmark - We evaluate 3 frontier VLMs on 50 2D mazes to understand how, where, and why they break in an environment that requires exploration, planning, long-horizon action taking, and causal reasoning. Read our technical report [here](https://www.fig.inc/blog/multinet-v2-preview/).
 - 🎓 2026-04-03: Paper accepted at CVPR 2026! Our work has been accepted at the [MMFM Workshop](https://mmfm-workshop.github.io/) at CVPR 2026! Read our paper [here](https://arxiv.org/abs/2512.11315).
 - 🌟 2025-10-13: Multinet v1.0 - We release our most comprehensive benchmark yet - evaluating a SoTA VLM, VLA, and generalist model on a wide variety of multimodal understanding and action datasets. Read more [here](https://multinet.ai/static/pages/Multinetv1.html)
 - 🏅 2025-06-10: Paper accepted at ICML 2025! Our paper detailing the Open-Source contributions of Multinet that benefit the AI community has been accepted at the [CodeML Workshop](https://codeml-workshop.github.io/codeml2025/) at ICML 2025! Read our paper [here](https://multinet.ai/static/pdfs/An%20Open-Source%20Software%20Toolkit%20&%20Benchmark%20Suite%20for%20the%20Evaluation%20and%20Adaptation%20of%20Multimodal%20Action%20Models.pdf).
@@ -59,7 +65,7 @@
 
 With MultiNet v2.0 we aim to build interactive environments that are proxies for real-world scenarios. However, at the same time we are keen to keep the setup controllable, which will allow us to deterministically vary parameters in our environment in order to make it easier or more difficult for models to succeed in.
 
-The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. Additionally, mazes with mechanisms are projectable into multiple domains: the same maze can be re-rendered in language or 3D or many other domains, quantifying cross-domain generalization. In this release, MultiNet 2.0 Preview: Interactive 2D Mazes, we evaluated 3 frontier VLMs on 50 2D mazes.
+The capabilities we aim to benchmark are long-horizon action taking and causal reasoning, which involves various sub-capabilities such as planning, action execution, error recovery, visual object association, and so much more. A simple underlying substrate that brings all these aspects together for an environment and benchmarking task is a maze with mechanisms. Additionally, mazes with mechanisms are projectable into multiple domains: the same maze can be re-rendered in language or 3D or many other domains, quantifying cross-domain generalization. In this release, MultiNet 2.0 Preview: Interactive 2D Mazes, we evaluated 5 frontier VLMs on 50 2D mazes.
 
 ## 🧩 What we built
 
@@ -70,7 +76,7 @@ The capabilities we aim to benchmark are long-horizon action taking and causal r
 
 ## 📊 A peek into the results
 
-We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and **Qwen3.6-27B** (thinking) on 50 difficulty-balanced mazes, with an equal 64k output-token budget.
+We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), **Qwen3.6-27B** (thinking), **GPT-6 Astra** (xhigh reasoning effort), and **Claude Opus 5.5** (xhigh thinking) on 50 difficulty-balanced mazes, with an equal 64k output-token budget.
 
 <div align="center">
 <table>
@@ -80,6 +86,8 @@ We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and
       <th>Claude Opus 4.8</th>
       <th>Kimi k2.6</th>
       <th>Qwen3.6-27B</th>
+      <th>GPT-6 Astra</th>
+      <th>Claude Opus 5.5</th>
     </tr>
   </thead>
   <tbody>
@@ -88,26 +96,32 @@ We evaluated **Claude Opus 4.8** (xhigh thinking), **Kimi k2.6** (thinking), and
       <td align="center">4</td>
       <td align="center">1</td>
       <td align="center">1</td>
+      <td align="center">11</td>
+      <td align="center">7</td>
     </tr>
     <tr>
       <td>Mean action progress</td>
-      <td align="center">0.19</td>
-      <td align="center">0.23</td>
-      <td align="center">0.23</td>
+      <td align="center">0.14</td>
+      <td align="center">0.18</td>
+      <td align="center">0.18</td>
+      <td align="center">0.45</td>
+      <td align="center">0.34</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-**6 solves out of 150 episodes. 45 of the 50 mazes were solved by no model at all.** These are puzzles a person who has never seen one solves in a few minutes. Try out some of the mazes [here](https://multinet.ai/#play-the-maze) and see how you fare!
+**24 solves out of 250 episodes. 38 of the 50 mazes were solved by no model at all, and none of the 175 episodes on a maze with a switch was solved.** These are puzzles a person who has never seen one solves in a few minutes. Try out some of the mazes [here](https://multinet.ai/#play-the-maze) and see how you fare!
+
+Shortest-path length explains 11% to 21% of the variation in progress for Claude Opus 4.8, Kimi k2.6 and Qwen3.6-27B, which solve only mazes of 45 actions or fewer. For GPT-6 Astra and Claude Opus 5.5 it explains 2% and 0.3%, and both solve 14x14 mazes of 77 to 89 actions.
 
 <p align="center">
-  <img src="assets/r1_progress_grid.png" alt="Progress score per maze × model" width="100%">
+  <img src="assets/progress_grid_five_models.png" alt="Progress score per maze × model" width="100%">
   <br>
-  <em>Progress per maze (columns) per model (rows); stars mark the six solves.</em>
+  <em>Progress per maze (columns) per model (rows); stars mark the 24 solves.</em>
 </p>
 
-For a deeper dive, read our [technical report](https://www.fig.inc/multinet-v2-preview/).
+For a deeper dive, read our [technical report](https://www.fig.inc/blog/multinet-v2-preview-astra-opus/).
 
 ## 🚀 Quickstart
 
@@ -195,9 +209,7 @@ Or use the BibTeX citation:
 If you build models or agents, or work on benchmarking and evaluation, we would love to hear from you - whether that means getting your model on the MultiNet 2.0 Benchmark, collaborating on the next version of the benchmark, or working with us on what comes after.
 
 <p align="center">
-  <a href="https://sparkly-broccoli-3c7.notion.site/3bf4b1d3c487800596bbe4a150962cc0">🧪 Let's work together</a>
-  &nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="mailto:contact@fig.inc?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
+  <a href="https://tally.so/r/7RGXaZ?utm_source=multinet-codebase&amp;utm_medium=github&amp;utm_campaign=multinet-v2-r1-astra-opus">🧪 Let's work together</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
   <a href="https://discord.gg/Rk4gAq5aYr">💬 Join the Discord</a>
 </p>

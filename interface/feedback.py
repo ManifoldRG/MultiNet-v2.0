@@ -13,12 +13,106 @@ from interface.coords import (
     compact_ids,
     forward_cell,
     gate_at_cell,
+    direction_name,
     goal_row_col,
     switch_at_cell,
     switches_controlling_gate,
     door_at_cell,
+    to_row_col,
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+
+# Mechanic-blind event types that count as failures; ``is_failed_step`` adds the
+# death and freeze exceptions from the world-model label.
+FAILURE_EVENT_TYPES = frozenset({"BLOCKED", "WRONG_DONE", "INVALID"})
+
+
+def is_failed_step(
+    action: str,
+    prev: GridState,
+    curr: GridState,
+    reward: float,
+    terminated: bool,
+    task_spec: TaskSpecification,
+    mechanic: dict | None = None,
+) -> bool:
+    """Whether a step counts as a failure: it bumps ``consecutive_failures`` and
+    clears the queued actions, so the model is asked again.
+
+    Mechanic-blind (as on main), with two exceptions from the world-model label:
+    a death always fails, because the queued plan started from a cell the maze
+    just reset away from; while frozen, only a DONE fails (a wrong DONE), since
+    a swallowed move is the ice's doing, not the model's.
+    """
+    kind = (mechanic or {}).get("kind")
+    if kind == "died":
+        return True
+    if kind == "frozen":
+        return action == "DONE"
+    event_type, _ = infer_step_outcome(action, prev, curr, reward, terminated, task_spec)
+    return event_type in FAILURE_EVENT_TYPES
+
+
+def _xy_row_col(xy) -> tuple[int, int]:
+    # Mechanic positions are (x, y); a JSON round trip turns them into lists.
+    return to_row_col((int(xy[0]), int(xy[1])))
+
+
+def _mechanic_outcome(
+    action: str,
+    base_type: str,
+    level: Literal["minimal", "standard", "causal"],
+    mechanic: dict,
+) -> tuple[str, str, str] | None:
+    """(event_type, message, minimal text) for a step the world model labelled, else None.
+
+    ``base_type`` is the mechanic-blind event type of the same step.
+    """
+    if base_type == "DONE":
+        # Reaching the goal outranks the tile that delivered you there.
+        return None
+    kind = mechanic.get("kind")
+    if kind == "frozen":
+        if action == "DONE":
+            # Calling DONE while frozen is still a wrong DONE.
+            return None
+        remaining = int(mechanic["remaining"])
+        if remaining <= 0:
+            return "FROZEN", feedback_templates.FROZEN_ENDED, "FROZEN"
+        if level == "causal":
+            return "FROZEN", feedback_templates.FROZEN_STILL_CAUSAL.format(n=remaining), "FROZEN"
+        return "FROZEN", feedback_templates.FROZEN_STILL, "FROZEN"
+    if kind == "froze":
+        if level == "causal":
+            message = feedback_templates.FROZEN_LANDED_CAUSAL.format(n=int(mechanic["steps"]))
+        else:
+            message = feedback_templates.FROZEN_LANDED
+        return "FROZEN", message, "FROZEN"
+    if kind == "died":
+        return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET, "DEATH RESET"
+    if kind == "teleported":
+        row, col = _xy_row_col(mechanic["to_xy"])
+        return (
+            "TELEPORTED",
+            feedback_templates.TELEPORTED.format(row=row, col=col),
+            f"TELEPORTED ({row},{col})",
+        )
+    if kind == "carried":
+        direction = direction_name(int(mechanic["direction"]))
+        return (
+            "CARRIED",
+            feedback_templates.ROTATING_CARRIED.format(direction=direction),
+            f"CARRIED {direction}",
+        )
+    if kind == "rotating":
+        direction = direction_name(int(mechanic["pointing"]))
+        template = (
+            feedback_templates.ROTATING_STAYED
+            if mechanic["stayed"]
+            else feedback_templates.ROTATING_LANDED
+        )
+        return "ROTATING", template.format(direction=direction), f"ROTATING {direction}"
+    return None
 
 
 def infer_step_outcome(
@@ -171,12 +265,18 @@ def format_step_feedback(
     terminated: bool,
     task_spec: TaskSpecification,
     level: Literal["minimal", "standard", "causal"] = "minimal",
+    mechanic: dict | None = None,
 ) -> tuple[str, str]:
     event_type, event_message = infer_step_outcome(
         action, prev, curr, reward, terminated, task_spec, level=level
     )
+    minimal_text = event_type
+    if mechanic is not None:
+        relabelled = _mechanic_outcome(action, event_type, level, mechanic)
+        if relabelled is not None:
+            event_type, event_message, minimal_text = relabelled
     if level == "minimal":
-        return event_type, event_type
+        return minimal_text, event_type
     if event_type == "BLOCKED":
         return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "TURNED":
