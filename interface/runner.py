@@ -240,11 +240,24 @@ class ExperimentRunner:
         stepper.start()
         return self.drive(stepper, agent)
 
-    def drive(self, stepper, agent: Callable[[List[dict]], str]) -> dict:
+    def drive(
+        self,
+        stepper,
+        agent: Callable[[List[dict]], str],
+        *,
+        at_query_boundary: Callable | None = None,
+        after_reply: Callable | None = None,
+    ) -> dict:
         """Query ``agent`` until ``stepper`` (started, or resumed by
-        ``resume_stepper``) finishes; return the episode result."""
+        ``resume_stepper``) finishes; return the episode result.
+
+        ``at_query_boundary(stepper)`` runs once a query is built, before the
+        agent is called (the only point a checkpoint can be taken);
+        ``after_reply(stepper, reply)`` runs once a reply is applied."""
         agent_error: str | None = None
         while (messages := stepper.next_query()) is not None:
+            if at_query_boundary is not None:
+                at_query_boundary(stepper)
             _reset_agent_usage(agent)
             try:
                 if hasattr(agent, "generate"):
@@ -260,6 +273,8 @@ class ExperimentRunner:
                         thinking=getattr(agent, "last_thinking", None),
                     )
                 stepper.apply_reply(reply)
+                if after_reply is not None:
+                    after_reply(stepper, reply)
             except Exception as exc:  # noqa: BLE001 — never lose paid work
                 # Episode artifacts are only written after this method returns
                 # and callers (run_pipeline) have no per-episode isolation, so a
