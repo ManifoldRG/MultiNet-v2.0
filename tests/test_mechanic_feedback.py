@@ -564,6 +564,85 @@ def test_summary_survives_a_json_round_trip():
 # --- other feedback callers: demo + prompt preview ------------------------------
 
 
+def test_demo_session_labels_mechanics_like_the_runner(tmp_path):
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / "teleport.json"
+    path.write_text(json.dumps(teleport_spec().to_dict()))
+    session = MiniGridPlaySession(
+        task_path=str(path), config=replace(R1_CONFIG, feedback="standard")
+    )
+    for _ in range(3):
+        session._step_token("MOVE_FORWARD")
+    last = session.transcript[-1]
+    assert last["event_type"] == "TELEPORTED"
+    assert last["feedback"] == (
+        "TELEPORTED — MOVE_FORWARD: You teleported to (3,6)."
+    )
+    assert last["mechanic"]["kind"] == "teleported"
+    assert "teleported to (3,6)" in text_summary_history(
+        session._model_transcript(), session.task_spec
+    )
+    from demo.session import ProgressEvent
+
+    assert session.event_log[-1] == ProgressEvent(
+        "Teleported through the ", "purple", " teleporter", "purple", "teleport"
+    )
+
+
+def _demo_session(tmp_path, spec):
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / "maze.json"
+    path.write_text(json.dumps(spec.to_dict()))
+    return MiniGridPlaySession(task_path=str(path), config=replace(R1_CONFIG, feedback="standard"))
+
+
+def test_demo_session_logs_a_death_taken_from_the_start_cell(tmp_path):
+    session = _demo_session(tmp_path, _spec({"death_portals": [[2, 1]]}))
+    session._step_token("MOVE_FORWARD")
+    from demo.session import ProgressEvent
+
+    assert session.transcript[-1]["event_type"] == "DEATH RESET"
+    assert session.event_log[-1] == ProgressEvent(
+        "Stepped on a ", "death portal", "", "dark_red", "death"
+    )
+
+
+def test_demo_session_logs_turntable_landing_and_ride(tmp_path):
+    session = _demo_session(tmp_path, _ride_spec())
+    session._step_token("MOVE_FORWARD")
+    session._step_token("MOVE_FORWARD")
+    from demo.session import ProgressEvent
+
+    assert session.event_log[-2:] == [
+        ProgressEvent("Stepped on a ", "rotating tile", " pointing SOUTH", "orange", "rotate"),
+        ProgressEvent("Rode a ", "rotating tile", " pointing SOUTH", "orange", "rotate"),
+    ]
+
+
+def test_demo_sounds_for_mechanic_events():
+    from types import SimpleNamespace
+
+    from demo.sounds import sfx_for_dispatch
+
+    # The event_type fallback only: no prev_state and no mechanic tag, so the
+    # warp/kill clips (tests/test_demo_fx_mechanics.py) do not fire.
+    def sfx(event_type):
+        session = SimpleNamespace(
+            episode_done=False,
+            episode_success=False,
+            event_log=[],
+            transcript=[{"kind": "step", "event_type": event_type}],
+        )
+        return sfx_for_dispatch(session, 0)
+
+    assert sfx("TELEPORTED") == sfx("CARRIED") == sfx("ROTATING") == sfx("MOVED") == "step"
+    assert sfx("DEATH RESET") == sfx("FROZEN") == sfx("NOTHING") == "invalid"
+
+
 def test_demo_summary_matches_the_runner(tmp_path):
     # The summary reads the world-model label from each record's top level, so
     # the demo has to store it there as the runner does.
@@ -666,3 +745,21 @@ def test_a_cardinal_move_the_freeze_swallows_is_dropped_whole():
         (r0, c0), (r1, c1) = s["position_before_row_col"], s["position_after_row_col"]
         if (r0, c0) != (r1, c1):
             assert (r1 - r0, c1 - c0) == delta[s["cardinal_action"]], s
+
+
+def test_demo_drops_a_cardinal_move_the_freeze_swallows(tmp_path):
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    path = tmp_path / "ice.json"
+    path.write_text(json.dumps(ice_spec().to_dict()))
+    session = MiniGridPlaySession(
+        task_path=str(path), config=replace(R1_CONFIG, action_space="cardinal")
+    )
+    for token in ("MOVE_EAST", "MOVE_NORTH", "MOVE_NORTH", "MOVE_NORTH"):
+        session._dispatch_token(token)
+    delta = {"MOVE_NORTH": (-1, 0), "MOVE_SOUTH": (1, 0), "MOVE_EAST": (0, 1), "MOVE_WEST": (0, -1)}
+    for s in (rec for rec in session.transcript if rec.get("kind") == "step"):
+        (r0, c0), (r1, c1) = s["position_before_row_col"], s["position_after_row_col"]
+        if (r0, c0) != (r1, c1):
+            assert (r1 - r0, c1 - c0) == delta[s["cardinal_source"]], s

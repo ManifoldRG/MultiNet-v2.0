@@ -21,8 +21,6 @@ from typing import Optional
 import numpy as np
 
 from demo.theme import recolor_walls
-from gridworld.backends.base import GridState
-from interface.coords import agent_row_col, entered_cell, move_landing, to_row_col
 
 try:
     import pygame
@@ -59,9 +57,29 @@ def travel_delta(token: str, prev_state) -> tuple[int, int]:
     return (0, 0)
 
 
-def _xy(row_col: tuple[int, int]) -> tuple[int, int]:
-    row, col = row_col
-    return (col, row)
+def _dispatch_steps(session, prev_state) -> list[dict]:
+    """Step records the last dispatch appended (oldest first).
+
+    One dispatch can run several primitives (a cardinal move is turns plus
+    MOVE_FORWARD); a dispatch after the episode ended runs none. Records are
+    matched on the env step counter, which every step advances.
+    """
+    if prev_state is None:
+        return []
+    steps: list[dict] = []
+    for rec in reversed(session.transcript):
+        if rec.get("kind") != "step":
+            break
+        before = rec.get("state_before") or {}
+        if before.get("step_count", -1) < prev_state.step_count:
+            break
+        steps.append(rec)
+    steps.reverse()
+    return steps
+
+
+def _xy(value) -> tuple[int, int]:
+    return int(value[0]), int(value[1])
 
 
 def bounce_offset(travel: tuple[int, int], heading: int, *, turns_with_agent: bool) -> tuple[int, int]:
@@ -79,32 +97,20 @@ def bounce_offset(travel: tuple[int, int], heading: int, *, turns_with_agent: bo
 
 
 def portal_transition(
-    session, _token: str, prev_state
+    session, prev_state
 ) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
-    """Return ``(kind, src, dest)`` when this step actually warped or died.
+    """Return ``(kind, src, dest)`` for a kill reset or portal warp, else None.
 
-    The cell in front of the agent is not enough: on a rotating tile,
-    MOVE_FORWARD follows the arrow, so facing a teleporter does not use it.
+    Read from the world model's ``mechanic`` tag on this dispatch's step
+    records (``info["mechanic"]`` from the backend step), so turntable rides
+    and moves swallowed by ice animate what actually happened.
     """
-    if prev_state is None or session.task_spec is None or session.state is None:
-        return None
-    if tuple(session.state.agent_position) == tuple(prev_state.agent_position):
-        return None
-    last = next(
-        (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
-        None,
-    )
-    if last is None or last.get("action") != "MOVE_FORWARD":
-        return None
-    spec = session.task_spec
-    before = GridState.from_dict(last["state_before"])
-    landing, link = move_landing(spec, before)
-    arrived = agent_row_col(session.state)
-    kills = {to_row_col(cell) for cell in spec.mechanisms.kill_cells}
-    if landing in kills and arrived == to_row_col(spec.maze.start):
-        return ("kill", _xy(landing), spec.maze.start.to_tuple())
-    if link is not None and arrived == link[0]:
-        return ("warp", _xy(entered_cell(spec, before)), _xy(link[0]))
+    for rec in reversed(_dispatch_steps(session, prev_state)):
+        mechanic = rec.get("mechanic") or {}
+        if mechanic.get("kind") == "died":
+            return ("kill", _xy(mechanic["cell_xy"]), _xy(mechanic["start_xy"]))
+        if mechanic.get("kind") == "teleported":
+            return ("warp", _xy(mechanic["from_xy"]), _xy(mechanic["to_xy"]))
     return None
 
 
@@ -141,7 +147,7 @@ def plan_effects(session, token: str, prev_state, events_before: int) -> list[di
     )
     event_type = last.get("event_type") if last else None
 
-    hit = portal_transition(session, token, prev_state)
+    hit = portal_transition(session, prev_state)
     if hit is not None:
         kind, src, dst = hit
         plan.append(
