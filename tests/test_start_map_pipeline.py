@@ -82,7 +82,7 @@ def _never(name, cfg):
         ),
         ({"backend": "mujoco3d", "camera": "top_down", "start_map": True}, {}, "top_down"),
         ({"backend": "minigrid", "start_map": True}, {}, "start_map"),
-        ({"backend": "mujoco3d", "camera": "chase", "start_map": "true"}, {}, "bool"),
+        ({"backend": "mujoco3d", "camera": "first_person", "start_map": "true"}, {}, "bool"),
     ],
 )
 def test_bad_start_map_configs_fail_before_any_agent(tmp_path, render, extra, message):

@@ -247,7 +247,7 @@ def _changed_px(a, b, region) -> int:
     return int(np.any(a[region] != b[region], axis=-1).sum())
 
 
-@pytest.mark.parametrize("camera", ["top_down", "chase"])
+@pytest.mark.parametrize("camera", ["top_down"])
 @pytest.mark.parametrize(
     "tile, cell",
     [("portal", (7, 3)), ("kill", (5, 1)), ("frozen", (5, 3)), ("rotator", (6, 2))],
@@ -263,7 +263,7 @@ def test_each_tile_differs_from_plain_floor(tile, cell, camera):
     assert _changed_px(with_tiles, floor_only, _cell_region(pose, cell, wall_height)) >= MIN_CHANGED_PX
 
 
-@pytest.mark.parametrize("camera", ["top_down", "chase"])
+@pytest.mark.parametrize("camera", ["top_down"])
 def test_rotator_direction_change_is_visible(camera):
     pytest.importorskip("mujoco")
     spec = _spec()

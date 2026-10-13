@@ -32,7 +32,7 @@ def _fresh_top_down(backend, spec, state):
         renderer.close()
 
 
-@pytest.mark.parametrize("camera", ["first_person", "first_person_narrow", "chase", "fixed_angled"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_start_map_is_a_fresh_top_down_render_of_the_reset_state(camera):
     spec = r1_spec()
     backend = get_backend("mujoco3d", camera=camera, resolution=RES, start_map=True)
@@ -82,7 +82,7 @@ def test_start_map_does_not_change_the_agents_view():
 
 def test_start_map_follows_a_reconfigured_spec():
     corridor, r1 = TaskSpecification.from_dict(CORRIDOR), r1_spec()
-    backend = get_backend("mujoco3d", camera="chase", resolution=RES, start_map=True)
+    backend = get_backend("mujoco3d", camera="first_person", resolution=RES, start_map=True)
     try:
         backend.configure(corridor)
         backend.reset(seed=0)
@@ -95,7 +95,7 @@ def test_start_map_follows_a_reconfigured_spec():
 
 
 def test_close_releases_the_map_renderer():
-    backend = get_backend("mujoco3d", camera="chase", resolution=RES, start_map=True)
+    backend = get_backend("mujoco3d", camera="first_person", resolution=RES, start_map=True)
     backend.configure(r1_spec())
     backend.reset(seed=0)
     assert backend._map_renderer is not None

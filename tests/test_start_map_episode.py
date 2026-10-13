@@ -165,11 +165,11 @@ def test_map_comes_before_the_one_shot_example_too():
 
 
 def test_standard_labels_the_current_view_and_uses_the_standard_map_text():
-    runner, spec = _build(camera="chase", prompting="standard")
+    runner, spec = _build(camera="first_person", prompting="standard")
     _, requests, _ = _drive(runner, spec)
     _assert_map_opens_every_request(requests, user_templates.START_MAP_STANDARD, _fresh_map_url(spec))
     content = requests[0][1]["content"]
-    label = "Your view now (from behind and above you):"
+    label = "Your view now (first person):"
     i = next(i for i, b in enumerate(content) if b["type"] == "text" and label in b["text"])
     assert content[i]["text"].rstrip("\n").endswith(label)
     assert content[i + 1]["type"] == "image_url"  # right before the current image
