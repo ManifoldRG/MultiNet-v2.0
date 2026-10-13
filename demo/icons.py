@@ -121,6 +121,42 @@ def draw_box_icon(
     pygame.draw.line(surface, color, rect.topright, rect.bottomleft, 1)
 
 
+def draw_death_icon(
+    surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
+) -> None:
+    cx, cy = center
+    pygame.draw.circle(surface, color, (cx, cy), size * 0.36, width=2)
+    r = size * 0.14
+    pygame.draw.line(surface, color, (cx - r, cy - r), (cx + r, cy + r), 2)
+    pygame.draw.line(surface, color, (cx + r, cy - r), (cx - r, cy + r), 2)
+
+
+def draw_teleport_icon(
+    surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
+) -> None:
+    cx, cy = center
+    pygame.draw.circle(surface, color, (cx, cy), size * 0.38, width=2)
+    pygame.draw.circle(surface, color, (cx, cy), size * 0.16, width=2)
+
+
+def draw_rotate_icon(
+    surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
+) -> None:
+    draw_arrow_triangle(surface, center, size * 0.85, "right", color)
+
+
+def draw_freeze_icon(
+    surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
+) -> None:
+    cx, cy = center
+    r = size * 0.38
+    pygame.draw.line(surface, color, (cx, cy - r), (cx, cy + r), 2)
+    pygame.draw.line(surface, color, (cx - r, cy), (cx + r, cy), 2)
+    d = r * 0.72
+    pygame.draw.line(surface, color, (cx - d, cy - d), (cx + d, cy + d), 2)
+    pygame.draw.line(surface, color, (cx - d, cy + d), (cx + d, cy - d), 2)
+
+
 def draw_restart_icon(
     surface: pygame.Surface, center: tuple[int, int], size: float, color: tuple,
 ) -> None:
@@ -145,6 +181,10 @@ def progress_icon_fn(icon_kind: Optional[str]) -> Optional[Callable]:
         "gate": draw_gate_icon,
         "block": draw_box_icon,
         "goal": draw_trophy_icon,
+        "death": draw_death_icon,
+        "freeze": draw_freeze_icon,
+        "rotate": draw_rotate_icon,
+        "teleport": draw_teleport_icon,
     }.get(icon_kind)
 
 
