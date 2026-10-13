@@ -101,6 +101,15 @@ recorded backend and refuses one its worktree would draw differently.
 Text-only (NL) runs need nothing extra: set `"experiment_config":
 {"observation": "text_only"}` on the 2D backend.
 
+**Pre-scored Stage 2 (`PRESCORED_TASKS`).** Static scoring of the PR #57
+mechanics mazes takes minutes to tens of minutes per maze, and the coordinator
+runs it for every task before any unit exists. Score them ahead of time with a
+local `python -m scripts.run_pipeline --distributed-role coordinator-prepare`
+(Stage 2 only, no model calls) and launch with `PRESCORED_TASKS=<that
+artifacts root>`: the coordinator start ships its `tasks/` to the coordinator
+first. Stage 2 reuses a bundle only when its hash matches the current maze and
+scorer config, so a stale one is recomputed, never trusted.
+
 ## 6. Evaluate your own model
 
 Implement an agent in `interface/agents/` exposing

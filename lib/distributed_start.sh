@@ -14,7 +14,24 @@ for w in json.load(sys.stdin).get("workers", []):
 ' "$1" "$2"
 }
 
-start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT]
+# Optional PRESCORED_TASKS=<local artifacts root with tasks/>: ship Stage 2 task
+# bundles scored elsewhere (e.g. a local coordinator-prepare, which makes no model
+# calls) into the coordinator's artifacts root before it prepares. Static scoring
+# of the PR #57 mechanics mazes takes minutes to tens of minutes per maze. Stage 2
+# reuses a bundle only when its inputs_hash matches the current spec and scorer
+# config, so a stale bundle is recomputed, never trusted.
+seed_prescored_tasks() {  # uses globals COORD ZONE RUN_ID [PRESCORED_TASKS]
+  [[ -n "${PRESCORED_TASKS:-}" ]] || return 0
+  if [[ ! -d "$PRESCORED_TASKS/tasks" ]]; then
+    echo "PRESCORED_TASKS=$PRESCORED_TASKS has no tasks/ directory" >&2; return 1
+  fi
+  tar -C "$PRESCORED_TASKS" -cf - tasks \
+    | gcloud compute ssh "$COORD" --zone "$ZONE" --command \
+        "mkdir -p ~/MultiNet-v2.0/artifacts/$RUN_ID && tar -x -C ~/MultiNet-v2.0/artifacts/$RUN_ID"
+}
+
+start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT] [PRESCORED_TASKS]
+  seed_prescored_tasks || return 1
   local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}"
   # Conditional sweeps: --conditions is required (run_pipeline's H1/H2 guard
   # rejects a mispaired prepare) and --prompt-variant selects one dedup variant.
@@ -82,6 +99,7 @@ REMOTE
 # each batch's hard-maze tail. Globals: COORD ZONE RUN_ID MANIFEST [SEEDS]
 # [DIFFICULTY_MAX] MASSIVE_BATCHES [SWEEP_TOPO].
 start_coordinator_combined() {
+  seed_prescored_tasks || return 1
   local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}" batch_args="" n
   for n in $MASSIVE_BATCHES; do batch_args="$batch_args --batch $n"; done
   gcloud compute ssh "$COORD" --zone "$ZONE" \

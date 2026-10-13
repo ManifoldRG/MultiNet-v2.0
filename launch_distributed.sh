@@ -262,6 +262,9 @@ main() {
 
   log "run id: $RUN_ID  floor: $MAX_RUN_DURATION  watchdog +$(watchdog_minutes "$MAX_RUN_DURATION")m"
 
+  if [[ -n "${PRESCORED_TASKS:-}" && ! -d "$PRESCORED_TASKS/tasks" ]]; then
+    echo "PRESCORED_TASKS=$PRESCORED_TASKS has no tasks/ directory" >&2; exit 1
+  fi
   require_clean_tree
   CODE_SHA="$(git rev-parse HEAD)"
   [[ -n "${COORD:-}" ]] || derive_names
