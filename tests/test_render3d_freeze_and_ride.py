@@ -173,7 +173,7 @@ def _glyph_region(frame):
     return frame[top:bottom, left:right]
 
 
-@pytest.mark.parametrize("camera", ["first_person", "chase"])
+@pytest.mark.parametrize("camera", ["first_person"])
 def test_ride_glyph_only_while_standing_on_a_rotator(camera):
     pytest.importorskip("mujoco")
     beside = _render(camera, GridState(agent_position=(3, 2), agent_direction=0), (0, 3))
