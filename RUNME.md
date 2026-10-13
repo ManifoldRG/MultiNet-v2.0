@@ -88,6 +88,19 @@ Batch-starting subcommands **require** `BATCH_CAP` and `MAX_RUN_DURATION` —
 they have no defaults by design. STOP VMs rather than deleting them, and
 pull artifacts before spindown.
 
+**3D on the fleet.** Put the same top-level `render` block in the fleet
+run-config as for a local run (see *3D render backend* below); nothing else
+changes. `launch_distributed.sh` then runs `deploy/setup_mujoco3d.sh` on every
+VM after the code sync (OSMesa plus the `mujoco3d` extra, one test frame),
+requires the same mujoco version on every VM, and STOPs the fleet otherwise.
+Every VM draws with `MUJOCO_GL=osmesa` so frames match across workers. The
+machine that runs `coordinator-prepare` needs `mujoco` importable: its version
+goes into each 3D unit's hash, and the coordinator rejects an upload drawn by
+another version. `scripts/resume_from_archive.py` rebuilds a 3D archive's
+recorded backend and refuses one its worktree would draw differently.
+Text-only (NL) runs need nothing extra: set `"experiment_config":
+{"observation": "text_only"}` on the 2D backend.
+
 ## 6. Evaluate your own model
 
 Implement an agent in `interface/agents/` exposing
@@ -130,7 +143,11 @@ only what lies ahead of the agent, plus status
 slots along the bottom for the key it carries and the switch it stands on (its
 own cell, where PICKUP and a switch TOGGLE act, is out of view). A run-config
 selects it with a top-level `"render": {"backend": "mujoco3d", "camera":
-"first_person"}` block; each camera gets its own artifact directory.
+"first_person"}` block; each camera and render version gets its own artifact
+directory, labelled `mujoco3d_<camera>_<resolution>[_map]_r<RENDER3D_VERSION>`
+(e.g. `mujoco3d_first_person_grid_r4`), so a visual change never overwrites
+older episodes. A 3D render needs an image observation: `text_only` with a 3D
+render block is refused at load.
 Resolution defaults to `"grid"`: 32 px (MiniGrid's tile) per cell of the
 maze's longer side. The 3D frame is square, so it costs the
 same image tokens as the 2D frame only for a square maze; a 20x8 maze renders
@@ -147,7 +164,8 @@ pip install -e ".[dev,visual,mujoco3d]"
 ```
 
 Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
-(software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
+(software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed
+(local only: fleet runs draw with OSMesa everywhere, since EGL frames differ slightly).
 Elsewhere it is left unset so mujoco uses the native GL. Play with it via
 `--backend mujoco3d --camera <preset>` (`V` switches between `top_down` and
 `first_person` live; `first_person` is the wide eye, fovy 110 with 1.0 walls
