@@ -21,18 +21,32 @@ rejected explicitly rather than silently reconstructed wrong.
 
 This module never touches ``interface/episode_log.py`` (final-write semantics
 are unchanged); it only *reads* its JSON-safe/serialisation helpers.
+
+Each query's request (``agent_messages``) is written once, to a part file in
+``<checkpoint>.parts/`` with its images stored once each, and the checkpoint
+refers to it. Rewriting every request with every round grew as steps squared
+under full-history prompts; this way each round rewrites only the step and
+query metadata. ``resume_stepper`` also accepts requests stored inline.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_row_col
-from interface.episode_log import _json_safe, state_snapshot
+from interface.episode_log import (
+    ImageFiles,
+    _json_safe,
+    deserialize_messages,
+    serialize_messages,
+    state_snapshot,
+)
 from interface.episode_step import EpisodeStepper
 from interface.progress_watchdog import ProgressStallWatchdog
 from prompting_experiments.prompt_templates import feedback as feedback_templates
@@ -63,11 +77,13 @@ def save_checkpoint(path: str | Path, stepper: EpisodeStepper) -> None:
             f"action_queue={stepper.action_queue!r} "
             f"primitive_buffer={stepper.primitive_buffer!r}"
         )
+    path = Path(path)
+    parts = parts_dir(path)
     payload = {
-        # ``_json_safe`` drops the "_"-prefixed rgb frames (numpy, not JSON) and
+        # ``_json_safe`` drops the "_"-prefixed frames (PNG bytes, not JSON) and
         # coerces numpy scalars; frames are regenerated deterministically on the
         # post-resume steps and are not needed to replay the backend.
-        "transcript": _json_safe(stepper.transcript),
+        "transcript": [_checkpoint_record(rec, parts) for rec in stepper.transcript],
         "seed": stepper.seed,
         "query_count": stepper.query_count,
         "parse_failures": stepper.parse_failures,
@@ -75,13 +91,68 @@ def save_checkpoint(path: str | Path, stepper: EpisodeStepper) -> None:
         "finished": stepper.finished,
         "end_reason": stepper.end_reason,
     }
-    path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     # os.replace is atomic against process crash (no torn checkpoint); it is
     # NOT fsync'd, so power loss can still lose the write — out of scope of the
     # threat model (a lost checkpoint just re-runs the episode).
     os.replace(tmp, path)
+
+
+def parts_dir(path: str | Path) -> Path:
+    """Directory holding the checkpoint's write-once request and image files."""
+    path = Path(path)
+    return path.with_name(path.name + ".parts")
+
+
+def discard_checkpoint(path: str | Path) -> None:
+    """Remove a checkpoint and its parts directory."""
+    Path(path).unlink(missing_ok=True)
+    shutil.rmtree(parts_dir(path), ignore_errors=True)
+
+
+def _checkpoint_record(rec: dict, parts: Path) -> dict:
+    """JSON-safe record; a query's request is replaced by a reference to its part file.
+
+    A query record never changes after it is appended, so its part is written
+    once and remembered on the record ("_" key, never serialized).
+    """
+    if rec.get("kind") != "query" or not isinstance(rec.get("agent_messages"), list):
+        return _json_safe(rec)
+    out = _json_safe({k: v for k, v in rec.items() if k != "agent_messages"})
+    cached = rec.get("_checkpoint_part")
+    if cached is None or cached[0] != parts:
+        messages = serialize_messages(
+            rec["agent_messages"], parts, "", ImageFiles(parts)
+        )
+        text = json.dumps(_json_safe(messages), sort_keys=True)
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        name = f"query_{rec['query_index']:03d}_{digest}.json"
+        part = parts / name
+        if not part.exists():
+            parts.mkdir(parents=True, exist_ok=True)
+            tmp = part.with_name(part.name + ".tmp")
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, part)
+        cached = rec["_checkpoint_part"] = (parts, name)
+    out["agent_messages"] = {"part": cached[1]}
+    return out
+
+
+def _load_parts(transcript: list[dict], parts: Path) -> None:
+    """Inline each referenced request again, exactly as it was sent."""
+    cache: dict[Path, str] = {}
+    for rec in transcript:
+        ref = rec.get("agent_messages")
+        if rec.get("kind") != "query" or not isinstance(ref, dict):
+            continue
+        part = parts / ref["part"]
+        try:
+            messages = json.loads(part.read_text(encoding="utf-8"))
+            rec["agent_messages"] = deserialize_messages(messages, parts, cache)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"checkpoint part {part} is missing or corrupted: {exc}") from exc
+        rec["_checkpoint_part"] = (parts, ref["part"])
 
 
 def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
@@ -110,6 +181,7 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
         )
 
     transcript = data["transcript"]
+    _load_parts(transcript, parts_dir(path))
     reset_rec = transcript[0]
     if reset_rec.get("kind") != "reset":
         raise ValueError("checkpoint transcript does not start with a reset record")
@@ -131,11 +203,11 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
 
     # Replay the recorded action tokens through the fresh backend, verifying each
     # outcome against the record, and rebuild stall-K state from the replayed
-    # states using the SAME signature function the stepper uses. The rgb frames
+    # states using the SAME signature function the stepper uses. The frames
     # were dropped from the JSON checkpoint; they are regenerated here (replay is
     # deterministic) and re-attached so the reconstructed observation history is
     # byte-identical to an uninterrupted run.
-    reset_rec["_reset_frame_rgb"] = reset_rgb
+    reset_rec["_reset_frame_png"] = stepper._png(reset_rgb)
     state = stepper.state
     stall_k = stepper.stall_k
     stall_watchdog = ProgressStallWatchdog(stall_k, state) if stall_k is not None else None
@@ -152,14 +224,14 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
                     "corrupted checkpoint: unconvertible action "
                     f"{action!r} recorded a position change"
                 )
-            rec["_decision_frame_rgb"] = decision_rgb
-            rec["_post_step_rgb"] = decision_rgb
+            rec["_decision_frame_png"] = stepper._png(decision_rgb)
+            rec["_post_step_png"] = stepper._png(decision_rgb)
             continue
         stepper._runner.last_rgb, _reward, terminated, truncated, state, _info = (
             stepper.backend.step(action_int)
         )
-        rec["_decision_frame_rgb"] = decision_rgb
-        rec["_post_step_rgb"] = stepper._runner.last_rgb
+        rec["_decision_frame_png"] = stepper._png(decision_rgb)
+        rec["_post_step_png"] = stepper._png(stepper._runner.last_rgb)
         if list(agent_row_col(state)) != rec["position_after_row_col"]:
             raise ValueError(
                 "corrupted or stale checkpoint: replayed step "

@@ -23,8 +23,11 @@ from gridworld.task_spec import TaskSpecification
 from interface.coords import direction_name, to_row_col
 from interface.config import DEFAULT_MAX_HISTORY_TOKENS
 from interface.renderer import (
+    image_url_block,
+    png_data_url,
     render_user_observation_text,
     rgb_to_image_block,
+    rgb_to_png_data_url,
 )
 from prompting_experiments.prompt_templates import observation as observation_templates
 from prompting_experiments.prompt_templates import user as user_templates
@@ -503,10 +506,9 @@ def history_content_blocks(
 
     blocks: list[dict] = []
     for rec in recs:
-        rgb = rec.get("_decision_frame_rgb")
-        if rgb is None:
+        if not _has_decision_frame(rec):
             continue
-        blocks.append(rgb_to_image_block(rgb))
+        blocks.append(_decision_frame_block(rec))
         inventory = _history_record_inventory(rec)
         text = (
             user_templates.LAST_N_USER_PROMPT["image_only_step"].format(
@@ -532,6 +534,29 @@ def history_content_blocks(
     return [{"type": "text", "text": header}] + blocks
 
 
+def _has_decision_frame(rec: dict[str, Any]) -> bool:
+    return rec.get("_decision_frame_png") is not None or rec.get("_decision_frame_rgb") is not None
+
+
+def _decision_frame_block(rec: dict[str, Any]) -> dict:
+    """The step's decision frame as an image block, encoded once per step.
+
+    Full history resends every prior frame on each query. Caching the data URL
+    on the record (an "_" key, so never serialized) keeps encoding linear in
+    steps, and every query's block shares the same string object, so stored
+    query records hold references rather than copies of the image. The stepper
+    stores PNG bytes; records built elsewhere may carry the raw array.
+    """
+    frame = rec.get("_decision_frame_png")
+    if frame is None:
+        frame = rec["_decision_frame_rgb"]
+    cached = rec.get("_decision_frame_url")
+    if cached is None or cached[0] is not frame:
+        url = png_data_url(frame) if isinstance(frame, bytes) else rgb_to_png_data_url(frame)
+        cached = rec["_decision_frame_url"] = (frame, url)
+    return image_url_block(cached[1])
+
+
 def _history_step_token_estimate(
     step: dict[str, Any], observation: ObservationMode
 ) -> int:
@@ -544,7 +569,7 @@ def _history_step_token_estimate(
         feedback=step.get("prompt_feedback", ""),
     )
     estimate = max(1, (len(text) + 3) // 4)
-    if observation in ("image_only", "image_text") and step.get("_decision_frame_rgb") is not None:
+    if observation in ("image_only", "image_text") and _has_decision_frame(step):
         estimate += _IMAGE_HISTORY_TOKEN_ESTIMATE
     return estimate
 

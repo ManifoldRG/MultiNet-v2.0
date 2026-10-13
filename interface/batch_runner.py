@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Deque, Dict, List, Optional
 
-from interface.episode_checkpoint import save_checkpoint
+from interface.episode_checkpoint import discard_checkpoint, save_checkpoint
 from interface.episode_step import EpisodeStepper
 
 logger = logging.getLogger(__name__)
@@ -246,4 +246,4 @@ class LockstepBatchRunner:
     @staticmethod
     def _delete_checkpoint(unit: LockstepUnit) -> None:
         if unit.checkpoint_path is not None:
-            Path(unit.checkpoint_path).unlink(missing_ok=True)
+            discard_checkpoint(unit.checkpoint_path)
