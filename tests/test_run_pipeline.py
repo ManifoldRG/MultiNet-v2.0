@@ -2344,7 +2344,7 @@ def test_run_from_config_refuses_3d_text_only_before_any_paid_call(tmp_path):
     def no_paid_call(name, model_cfg):
         raise AssertionError("agent factory reached: a paid model call would follow")
 
-    with pytest.raises(ValueError, match="text_only"):
+    with pytest.raises(ValueError, match="observation 'text_only'"):
         run_from_config(
             run_config_path=cfg_path, manifest_path=_MANIFEST, seeds=[0],
             artifacts_root=tmp_path / "artifacts", run_set_id="t3d", agent_factory=no_paid_call,
