@@ -56,6 +56,8 @@ def test_coordinator_prepares_serves_healthchecks(tmp_path):
     # coordinator-serve.log path is load-bearing (Spec-2 supervisor snapshot_logs expects it)
     assert "coordinator-serve.log" in log
     assert "127.0.0.1:8765/status" in log
+    # 3D frames draw with OSMesa on every VM: EGL rasterises differently
+    assert "export MUJOCO_GL=osmesa" in log
 
 
 _CLAUDE_TOPO = ('{"workers":[{"name":"r1-claude-api-0","kind":"api",'
@@ -89,6 +91,7 @@ def test_api_worker_claude_exports_anthropic_key(tmp_path):
     # the unquoted heredoc keeps \$COORD_IP literal; the IP arrives via the injected env
     assert "COORD_IP='10.0.0.2'" in log and "coordinator-url" in log
     assert ".venv-multinet" in log
+    assert "export MUJOCO_GL=osmesa" in log
     # SECURITY (load-bearing): the key is delivered ONLY via the remote heredoc stdin —
     # never on the --command argv (which leaks to `ps`/gcloud logs) or the launcher stdout.
     args_line = next(line for line in log.splitlines() if line.startswith("ARGS:"))
@@ -118,6 +121,7 @@ def test_gpu_worker_uses_vllm_venv_and_offline(tmp_path):
     assert r.returncode == 0, r.stderr
     log = glog.read_text()
     assert ".venv-qwen-vllm" in log
+    assert "export MUJOCO_GL=osmesa" in log
     assert "HF_HUB_OFFLINE=1" in log
     assert "--hardware-profile local-gpu" in log
     assert "--local-model-cache" in log and "Qwen/Qwen3.6-27B" in log

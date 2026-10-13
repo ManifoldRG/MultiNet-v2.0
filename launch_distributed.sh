@@ -180,6 +180,41 @@ sync_and_verify() {  # $1 sha  $2 zone  $3.. vms
   return 0
 }
 
+# A run-config whose render block names mujoco3d draws 3D frames: every VM needs
+# MuJoCo + OSMesa, and the coordinator reads the mujoco version into each unit's hash.
+needs_mujoco3d() {  # $1 run-config path -> exit 0 when its render backend is mujoco3d
+  python3 - "$1" <<'PY'
+import json, sys
+render = json.load(open(sys.argv[1])).get("render") or {}
+sys.exit(0 if render.get("backend") == "mujoco3d" else 1)
+PY
+}
+
+vm_venv() {  # $1 vm -> the venv its coordinator/worker processes run in
+  if [[ " ${GPU_VMS[*]:-} " == *" $1 "* ]]; then echo .venv-qwen-vllm; else echo .venv-multinet; fi
+}
+
+# Run deploy/setup_mujoco3d.sh on each VM (after code sync) and require one mujoco
+# version everywhere: a worker on another version would fail every upload's hash
+# check. Returns 1 on any miss.
+setup_mujoco3d_on_vms() {  # $1 zone  $2.. vms (coordinator first)
+  local zone="$1"; shift
+  local vm out version expected="" first=""
+  for vm in "$@"; do
+    out="$(gcloud compute ssh "$vm" --zone "$zone" --command \
+      "cd ~/MultiNet-v2.0 && bash deploy/setup_mujoco3d.sh $(vm_venv "$vm")" 2>&1)" \
+      || { echo "mujoco3d setup failed on $vm: $out" >&2; return 1; }
+    version="$(printf '%s\n' "$out" | awk '$1 == "mujoco3d-ok" { print $2 }' | tail -1)"
+    [[ -n "$version" ]] || { echo "mujoco3d self-test on $vm printed no version: $out" >&2; return 1; }
+    if [[ -z "$expected" ]]; then
+      expected="$version"; first="$vm"
+    elif [[ "$version" != "$expected" ]]; then
+      echo "mujoco version differs: $vm has $version, $first has $expected" >&2; return 1
+    fi
+  done
+  log "mujoco3d ready on $# VM(s): mujoco $expected, MUJOCO_GL=osmesa"
+}
+
 # Populate COORD, GPU_VMS[], API_VMS[], ALL_WORKERS[] from the topology helper.
 derive_names() {
   local topo; topo="$(python3 -m scripts.distributed_topology "$RUN_CONFIG" "$RUN_ID")"
@@ -255,6 +290,9 @@ main() {
 
   for vm in "${ALL_VMS[@]}"; do wait_for_ssh "$vm" "$ZONE" || abort_stop "ssh wait failed on $vm"; done
   sync_and_verify "$CODE_SHA" "$ZONE" "${ALL_VMS[@]}" || abort_stop "code-sync verification failed"
+  if needs_mujoco3d "$RUN_CONFIG"; then
+    setup_mujoco3d_on_vms "$ZONE" "${ALL_VMS[@]}" || abort_stop "mujoco3d setup failed"
+  fi
   for vm in "${ALL_VMS[@]}"; do arm_watchdog "$vm" "$ZONE" 1 || abort_stop "watchdog arm failed on $vm"; done
   for vm in "${ALL_VMS[@]}"; do assert_no_resource_policy "$vm" "$ZONE" || abort_stop "resource policy found on $vm"; done
 

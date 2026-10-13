@@ -25,6 +25,7 @@ start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEE
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 if python - <<'PY'
 import socket, time
 # Wait for a just-killed prior coordinator-serve to release :8765 rather than
@@ -88,6 +89,7 @@ start_coordinator_combined() {
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 if python - <<'PY'
 import socket, time
 deadline = time.time() + 90
@@ -143,6 +145,7 @@ start_worker() {  # $1 vm  $2 coord_ip  — metadata from TOPO_JSON
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-qwen-vllm/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 source lib/vllm_serve_args.sh   # vllm_serve_args(): two-tier phase-dependent serve args
 mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
 
@@ -212,6 +215,7 @@ set -euo pipefail
 export ${key_var}=${key_q}
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 mkdir -p "\$HOME/multinet-worker-artifacts/\$RUN_ID"
 nohup python -m scripts.run_pipeline \\
   --distributed-role "\$API_ROLE" \\
