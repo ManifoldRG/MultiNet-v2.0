@@ -206,7 +206,9 @@ class EpisodeStepper:
                         len(agent_messages),
                         has_image,
                     )
-                self._pending_agent_messages = agent_messages
+                # Snapshot the list: rolling chat appends the reply and trims old
+                # turns from self.messages, which must not rewrite the logged request.
+                self._pending_agent_messages = list(agent_messages)
                 self._pending_has_image = has_image
                 self._t_llm = time.perf_counter()
                 return agent_messages
