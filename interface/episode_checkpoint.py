@@ -155,6 +155,24 @@ def _load_parts(transcript: list[dict], parts: Path) -> None:
         rec["_checkpoint_part"] = (parts, ref["part"])
 
 
+# GridState fields serialized from sets: their list order follows
+# PYTHONHASHSEED, so two processes can write the same state in different
+# orders (next-run-fixes item 3). Replay compares them as sets.
+_SET_VALUED_STATE_FIELDS = (
+    "open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells",
+)
+
+
+def _canonical_state(state):
+    if not isinstance(state, dict):
+        return state
+    out = dict(state)
+    for key in _SET_VALUED_STATE_FIELDS:
+        if isinstance(out.get(key), list):
+            out[key] = sorted(out[key], key=lambda v: json.dumps(v, sort_keys=True))
+    return out
+
+
 def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
     """Rebuild an ``EpisodeStepper`` from a checkpoint via deterministic replay.
 
@@ -192,7 +210,7 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
     stepper.start()
     reset_rgb = stepper._runner.last_rgb  # regenerated reset frame
 
-    if _json_safe(stepper.initial_state) != reset_rec.get("state"):
+    if _canonical_state(_json_safe(stepper.initial_state)) != _canonical_state(reset_rec.get("state")):
         raise ValueError(
             "checkpoint initial state does not match a fresh reset "
             "(stale checkpoint or mismatched task/seed)"
@@ -241,7 +259,7 @@ def resume_stepper(path: str | Path, *, runner) -> EpisodeStepper:
                 f"{list(agent_row_col(state))} but record has "
                 f"{rec['position_after_row_col']}"
             )
-        if _json_safe(state_snapshot(state)) != rec["state_after"]:
+        if _canonical_state(_json_safe(state_snapshot(state))) != _canonical_state(rec["state_after"]):
             raise ValueError(
                 "corrupted or stale checkpoint: replayed step "
                 f"{rec.get('step_index')} ({action!r}) diverged from recorded "

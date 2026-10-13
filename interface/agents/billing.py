@@ -26,6 +26,15 @@ class BillingParked(BillingExhausted):
         super().__init__(provider, "parked: another episode hit this provider's billing limit")
 
 
+def is_park_echo(end_reason: str | None) -> bool:
+    """A BillingParked end_reason: the episode stopped because its provider was
+    already parked. It must not (re)park the provider after an unpark."""
+    if billing_provider(end_reason) is None:
+        return False
+    rest = end_reason[len(BILLING_END_REASON_PREFIX):].strip()
+    return rest.split(":", 1)[-1].strip().startswith("parked:")
+
+
 def billing_provider(end_reason: str | None) -> str | None:
     """The provider named by a billing end_reason, else None."""
     if not end_reason or not end_reason.startswith(BILLING_END_REASON_PREFIX):

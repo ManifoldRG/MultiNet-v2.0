@@ -293,6 +293,8 @@ class KimiK26Agent:
             def _one(messages: List[dict]) -> Reply:
                 try:
                     return self.generate(messages)
+                except BillingExhausted:
+                    raise  # the account is out: the round parks, it is not a parse failure
                 except Exception:
                     logging.getLogger(__name__).warning(
                         "kimi sync-transport item failed", exc_info=True

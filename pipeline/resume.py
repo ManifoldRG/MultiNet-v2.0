@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import hashlib
 import io
 import json
 import shutil
@@ -37,11 +38,19 @@ def current_code_sha() -> str:
     try:
         sha = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
                              capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "-C", str(REPO_ROOT), "status", "--porcelain", "--untracked-files=no"],
-                               capture_output=True, text=True, check=True).stdout.strip()
+        diff = subprocess.run(["git", "-C", str(REPO_ROOT), "diff", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
-    return f"{sha}-dirty" if dirty else sha
+    return _sha_with_dirt(sha, diff)
+
+
+def _sha_with_dirt(sha: str, diff: str) -> str:
+    """HEAD, plus a digest of uncommitted tracked changes so two different dirty
+    trees never compare equal."""
+    if not diff.strip():
+        return sha
+    return f"{sha}-dirty-{hashlib.sha256(diff.encode()).hexdigest()[:12]}"
 
 
 def unpack_archive(archive_b64: str, dest: Path) -> Path:

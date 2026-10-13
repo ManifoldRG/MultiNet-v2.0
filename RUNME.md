@@ -145,7 +145,11 @@ Text-only (NL) runs need nothing extra: set `"experiment_config":
   units, and in-flight episodes park at their next query as resumable. Other
   providers keep running. After topping up, on the coordinator:
   `python -m scripts.run_pipeline --distributed-role coordinator-unpark
-  --artifacts-root artifacts/<RUN_ID> --provider <claude|kimi|openai>`.
+  --artifacts-root artifacts/<RUN_ID> --provider <claude|kimi|openai>`. Parked
+  workers exit, so start that group's workers again after the unpark
+  (`start_worker`, or `sweep_run.sh next-batch`). While units wait, the
+  supervisor counts them as work left (no "partial" stop) until its stall
+  timeout.
 - *Local runs.* `run_pipeline` keeps a cached killed episode as-is; pass
   `--resume-killed` to resume it. A serial episode checkpoints every query
   (`checkpoint.json`, `queries.jsonl` in its run dir), so a process killed
