@@ -530,7 +530,7 @@ class EpisodeStepper:
 
     def result(self) -> dict:
         success = self.end_reason == "success"
-        return self._runner._result(
+        result = self._runner._result(
             success,
             self.state,
             self.transcript,
@@ -539,3 +539,8 @@ class EpisodeStepper:
             self.initial_state,
             self.maze_path,
         )
+        if self._stall_watchdog is not None:
+            # Where the stall counter stood when the episode ended, so a killed
+            # unit's report can say how soon a resume would stop (item 1).
+            result["stall"] = {"k": self.stall_k, "remaining": self._stall_watchdog.remaining}
+        return result
