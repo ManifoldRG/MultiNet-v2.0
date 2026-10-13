@@ -909,8 +909,8 @@ def run_from_config(
     # frames. Parsed here so a bad block fails before any paid model call; the
     # 2D default leaves artifact paths and run hashes exactly as they were.
     render = RenderSettings.from_run_config(run_config)
-    if render.start_map:
-        # The map is an image: every experiment cell must carry images.
+    if render.backend != "minigrid":
+        # 3D frames (and a start map) are images: every experiment cell must carry them.
         for _variant, cell in _condition_configs(
             conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay
         ):

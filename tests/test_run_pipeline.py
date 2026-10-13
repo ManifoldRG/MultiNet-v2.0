@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from gridworld.render3d import RENDER3D_VERSION
+from gridworld.render_settings import RenderSettings
 from interface.loader import default_maze_path
 from interface.smoke_tests.plans import v01_empty_room_trajectory
 from scorer import load_scorer_config, score_task_file
@@ -2305,12 +2307,10 @@ def test_run_from_config_renders_through_the_3d_backend(tmp_path):
         difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
     )
 
-    run_dir = (
-        artifacts / "runs" / "validation_10_v01_empty_room" / "mujoco3d_top_down_grid"
-        / "stub-model" / "seed_0" / "default"
-    )
+    label = f"mujoco3d_top_down_grid_r{RENDER3D_VERSION}"
+    run_dir = artifacts / "runs" / "validation_10_v01_empty_room" / label / "stub-model" / "seed_0" / "default"
     sidecar = load_json(run_dir / "run_inputs.json")
-    assert sidecar["backend"] == "mujoco3d_top_down_grid"
+    assert sidecar["backend"] == label
     assert sidecar["render"]["backend"] == "mujoco3d"
     assert sidecar["render"]["camera"] == "top_down"
     assert sidecar["render"]["resolution"] == "grid"
@@ -2320,15 +2320,37 @@ def test_run_from_config_renders_through_the_3d_backend(tmp_path):
     # The aggregate rows and per-model report name the backend that drew the
     # frames, not the 2D default.
     rows = [json.loads(line) for line in (artifacts / "episode_runs.jsonl").read_text().splitlines()]
-    assert [r["backend"] for r in rows] == ["mujoco3d_top_down_grid"]
+    assert [r["backend"] for r in rows] == [label]
     report = load_json(artifacts / "reports" / "cfg3d" / "models" / "stub-model.json")
-    assert report["backend"] == "mujoco3d_top_down_grid"
+    assert report["backend"] == label
 
     from PIL import Image
 
     dims = max(task_spec_from_payload(load_json(task)).maze.dimensions)
     frame = sorted((run_dir / "frames").glob("*.png"))[0]
     assert Image.open(frame).size == (32 * dims, 32 * dims)
+
+
+def test_run_from_config_refuses_3d_text_only_before_any_paid_call(tmp_path):
+    run_config = {
+        "render": {"backend": "mujoco3d", "camera": "top_down"},
+        "experiment_config": {"observation": "text_only"},
+        "models": {"stub": {"provider": "claude", "model": "stub-model",
+                            "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
+    }
+    cfg_path = tmp_path / "run_config.json"
+    cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
+
+    def no_paid_call(name, model_cfg):
+        raise AssertionError("agent factory reached: a paid model call would follow")
+
+    with pytest.raises(ValueError, match="text_only"):
+        run_from_config(
+            run_config_path=cfg_path, manifest_path=_MANIFEST, seeds=[0],
+            artifacts_root=tmp_path / "artifacts", run_set_id="t3d", agent_factory=no_paid_call,
+            difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+        )
+    assert not (tmp_path / "artifacts" / "runs").exists()
 
 
 def _run_3d_twice(tmp_path, monkeypatch, bump):
@@ -2356,7 +2378,9 @@ def _run_3d_twice(tmp_path, monkeypatch, bump):
     first = agent.calls
     bump()
     run()
-    run_dir = artifacts / "runs" / "copy_v01" / "mujoco3d_top_down_grid" / "stub-model" / "seed_0" / "default"
+    # The label carries RENDER3D_VERSION, so read it after ``bump``.
+    label = RenderSettings.from_run_config(json.loads(cfg_path.read_text())).label
+    run_dir = artifacts / "runs" / "copy_v01" / label / "stub-model" / "seed_0" / "default"
     return first, agent.calls - first, load_json(run_dir / "run_inputs.json")
 
 
