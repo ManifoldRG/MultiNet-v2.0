@@ -1,0 +1,285 @@
+{
+ "description": "Mechanics-15: the ogbench M7-M10 mazes, every non-empty combination of the four world-model mechanics (portals, death, rotating, frozen) on the 18x18 dense kr/sg/kb skeleton, one maze each. Domain-agnostic: the run config picks 2D (MiniGrid, no render block), NL (text observation) or 3D (render block).",
+ "selection": {
+  "source_set": "ogbench procgen M7-M10 (submodule commit 84be88f)",
+  "maze_count": 15,
+  "order": "new_mechanism_count, then ascending BFS optimal_steps (rank)",
+  "optimal_steps": "executable-action BFS (gridworld.baselines.plan_bfs_path), the runtime's 3x step-cap base",
+  "note": "M7's box maze is excluded (no new mechanic). Run these on the MiniGrid backend (2D, or 3D through mujoco3d); the multigrid backend does not implement death, frozen or rotating tiles.",
+  "static_scores": "computed by Stage 2 (tasks/<task_id>/scored_static.json, tasks/_suite.json); they run to the thousands and take tens of minutes per maze, so pre-score with coordinator-prepare before a fleet launch and set the difficulty cap from tasks/_suite.json"
+ },
+ "tasks": [
+  {
+   "task_id": "mech15_M7_18x18_dense_kr_sg_kb_portals_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M7/18x18_dense_kr_sg_kb_portals_0.json",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 1,
+   "optimal_steps": 90,
+   "new_mechanisms": [
+    "portals"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M7_18x18_dense_kr_sg_kb_death_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_death_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M7/18x18_dense_kr_sg_kb_death_0.json",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 2,
+   "optimal_steps": 121,
+   "new_mechanisms": [
+    "death"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M7_18x18_dense_kr_sg_kb_rotating_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_rotating_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M7/18x18_dense_kr_sg_kb_rotating_0.json",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 3,
+   "optimal_steps": 128,
+   "new_mechanisms": [
+    "rotating"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M7_18x18_dense_kr_sg_kb_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M7/18x18_dense_kr_sg_kb_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 4,
+   "optimal_steps": 131,
+   "new_mechanisms": [
+    "frozen"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M8_18x18_dense_kr_sg_kb_portals_rotating_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_rotating_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M8/18x18_dense_kr_sg_kb_portals_rotating_0.json",
+   "maze_family": "M",
+   "maze_category": "M8",
+   "rank": 5,
+   "optimal_steps": 49,
+   "new_mechanisms": [
+    "portals",
+    "rotating"
+   ],
+   "new_mechanism_count": 2,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M8_18x18_dense_kr_sg_kb_portals_death_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_death_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M8/18x18_dense_kr_sg_kb_portals_death_0.json",
+   "maze_family": "M",
+   "maze_category": "M8",
+   "rank": 6,
+   "optimal_steps": 77,
+   "new_mechanisms": [
+    "portals",
+    "death"
+   ],
+   "new_mechanism_count": 2,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M8_18x18_dense_kr_sg_kb_death_rotating_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_death_rotating_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M8/18x18_dense_kr_sg_kb_death_rotating_0.json",
+   "maze_family": "M",
+   "maze_category": "M8",
+   "rank": 7,
+   "optimal_steps": 95,
+   "new_mechanisms": [
+    "death",
+    "rotating"
+   ],
+   "new_mechanism_count": 2,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M8_18x18_dense_kr_sg_kb_portals_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M8/18x18_dense_kr_sg_kb_portals_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M8",
+   "rank": 8,
+   "optimal_steps": 95,
+   "new_mechanisms": [
+    "portals",
+    "frozen"
+   ],
+   "new_mechanism_count": 2,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M8_18x18_dense_kr_sg_kb_frozen_rotating_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_frozen_rotating_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M8/18x18_dense_kr_sg_kb_frozen_rotating_0.json",
+   "maze_family": "M",
+   "maze_category": "M8",
+   "rank": 9,
+   "optimal_steps": 144,
+   "new_mechanisms": [
+    "rotating",
+    "frozen"
+   ],
+   "new_mechanism_count": 2,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M8_18x18_dense_kr_sg_kb_death_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_death_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M8/18x18_dense_kr_sg_kb_death_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M8",
+   "rank": 10,
+   "optimal_steps": 161,
+   "new_mechanisms": [
+    "death",
+    "frozen"
+   ],
+   "new_mechanism_count": 2,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M9_18x18_dense_kr_sg_kb_portals_death_rotating_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_death_rotating_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M9/18x18_dense_kr_sg_kb_portals_death_rotating_0.json",
+   "maze_family": "M",
+   "maze_category": "M9",
+   "rank": 11,
+   "optimal_steps": 63,
+   "new_mechanisms": [
+    "portals",
+    "death",
+    "rotating"
+   ],
+   "new_mechanism_count": 3,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M9_18x18_dense_kr_sg_kb_portals_rotating_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_rotating_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M9/18x18_dense_kr_sg_kb_portals_rotating_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M9",
+   "rank": 12,
+   "optimal_steps": 75,
+   "new_mechanisms": [
+    "portals",
+    "rotating",
+    "frozen"
+   ],
+   "new_mechanism_count": 3,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M9_18x18_dense_kr_sg_kb_portals_death_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_death_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M9/18x18_dense_kr_sg_kb_portals_death_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M9",
+   "rank": 13,
+   "optimal_steps": 81,
+   "new_mechanisms": [
+    "portals",
+    "death",
+    "frozen"
+   ],
+   "new_mechanism_count": 3,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M9_18x18_dense_kr_sg_kb_death_rotating_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_death_rotating_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M9/18x18_dense_kr_sg_kb_death_rotating_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M9",
+   "rank": 14,
+   "optimal_steps": 147,
+   "new_mechanisms": [
+    "death",
+    "rotating",
+    "frozen"
+   ],
+   "new_mechanism_count": 3,
+   "topology": "dense",
+   "grid": "18x18"
+  },
+  {
+   "task_id": "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+   "experiment": "mechanics_15",
+   "condition": "M",
+   "variant": "18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+   "source": "ogbench/ogbench/procgen/maze_jsons/M10/18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0.json",
+   "maze_family": "M",
+   "maze_category": "M10",
+   "rank": 15,
+   "optimal_steps": 75,
+   "new_mechanisms": [
+    "portals",
+    "death",
+    "rotating",
+    "frozen"
+   ],
+   "new_mechanism_count": 4,
+   "topology": "dense",
+   "grid": "18x18"
+  }
+ ]
+}
