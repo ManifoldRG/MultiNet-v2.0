@@ -241,6 +241,8 @@ _NON_RUNTIME_MODEL_KEYS = {
     "max_in_flight",
     "worker_role",
     "worker_concurrency",
+    # billing: cache breakpoints change what a call costs, never what the model emits
+    "enable_prompt_cache",
     # transport / model-loading (do not affect outputs)
     "timeout",
     "max_attempts",
@@ -1045,6 +1047,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
         if "effort" in model_cfg:
             cfg.effort = str(model_cfg["effort"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
         if "batch_deadline_s" in model_cfg:
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:

@@ -38,6 +38,7 @@
       "timeout": 600,
       "enable_thinking": true,
       "effort": "xhigh",
+      "enable_prompt_cache": false,
       "group": "claude-api",
       "worker_count": 1,
       "worker_role": "lockstep-worker",
@@ -67,5 +68,6 @@
       ]
     }
   },
-  "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: the calibration scores only its own maze. Run it locally (python -m scripts.run_pipeline); the Claude client then uses the synchronous API at standard price."
+  "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: the calibration scores only its own maze. Run it locally (python -m scripts.run_pipeline); the Claude client then uses the synchronous API at standard price.",
+  "_note_cache": "enable_prompt_cache=false for Opus: the Claude agent's default breakpoint sits at the end of each request, and with context_window=full every request changes there, so it writes the whole prompt to cache (1.25x input) on every query and never reads it (measured: two consecutive 60-step queries, 28k cache-creation tokens each, 0 read). Turn caching on only with breakpoints on the stable history prefix, after a two-query check shows reads. Kimi K3 caches implicitly and hits on this prompt shape (measured 99.8% of input cached)."
 }

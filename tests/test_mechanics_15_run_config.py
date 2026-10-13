@@ -70,3 +70,14 @@ def test_calibration_is_the_full_run_on_one_maze():
             k: v for k, v in model.items() if k not in strip}
         assert calib["models"][name]["tasks"] == [
             "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"]
+
+
+def test_opus_prompt_cache_is_off_and_hash_invariant(monkeypatch):
+    """Opus caching stays off for full context (writes every query, never reads) and the
+    switch is a billing knob: flipping it must not re-key already-paid episodes."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "secret")
+    opus = _CFG["models"]["claude_opus55"]
+    agent, _ = _build_agent_from_spec("claude_opus55", opus)
+    assert agent.config.enable_prompt_cache is False
+    flipped = {**opus, "enable_prompt_cache": True}
+    assert _runtime_model_config(opus) == _runtime_model_config(flipped)

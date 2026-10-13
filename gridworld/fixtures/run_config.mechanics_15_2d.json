@@ -38,6 +38,7 @@
       "timeout": 600,
       "enable_thinking": true,
       "effort": "xhigh",
+      "enable_prompt_cache": false,
       "group": "claude-api",
       "worker_count": 1,
       "worker_role": "lockstep-worker",
@@ -67,6 +68,7 @@
       ]
     }
   },
-  "_note_cost": "Estimate (uncached; per-query input = first frame + ~140-190 tokens per prior step): at R1-like episode lengths Opus 5.5 ~$28, Astra ~$57, Kimi K3 ~$16 input + output; at 150 steps/episode Opus ~$102, Astra ~$157, Kimi ~$86 input + output. Kimi K3 output ($15/1M) is the largest unknown: at K2.6's ~20k thinking tokens/query it alone is ~$280 (R1-like) to ~$700 (150 steps). Run run_config.mechanics_15_2d_calib.json (one maze) first and project from its measured tokens.",
-  "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: pre-score with a local coordinator-prepare and launch with PRESCORED_TASKS. Serve the coordinator with STALE_AFTER_SECONDS >= 12600 for the lockstep Opus group."
+  "_note_cost": "Measured (worst-case smoke, 483 frames of 576x576 in one request; both providers accepted it): ~470 input tokens per frame (Opus 5.5 229,544 tokens, Kimi K3 223,303), so an episode of N queries sends ~470*N^2/2 input tokens. Per model over 15 mazes: ~17M tokens at ~70 queries/episode, ~79M at 150. Opus 5.5 batch $2/M uncached: ~$35 / ~$160. Kimi K3 with its implicit cache ($0.30/M on the ~99.8% cached prefix): ~$5 / ~$25 input, plus output at $15/M (K3 max effort is the open term). GPT-6 Astra flex $5/M uncached: ~$86 / ~$400 if its image tokens match (unmeasured; image_detail=high), so spend_cap_usd=160 stops it on long episodes unless OpenAI caching hits. Calibrate on M10 (run_config.mechanics_15_2d_calib.json) and re-project before launch.",
+  "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: pre-score with a local coordinator-prepare and launch with PRESCORED_TASKS. Serve the coordinator with STALE_AFTER_SECONDS >= 12600 for the lockstep Opus group.",
+  "_note_cache": "enable_prompt_cache=false for Opus: the Claude agent's default breakpoint sits at the end of each request, and with context_window=full every request changes there, so it writes the whole prompt to cache (1.25x input) on every query and never reads it (measured: two consecutive 60-step queries, 28k cache-creation tokens each, 0 read). Turn caching on only with breakpoints on the stable history prefix, after a two-query check shows reads. Kimi K3 caches implicitly and hits on this prompt shape (measured 99.8% of input cached)."
 }
