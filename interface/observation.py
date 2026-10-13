@@ -34,14 +34,12 @@ from prompting_experiments.prompt_templates import user as user_templates
 ObservationMode = Literal["text_only", "image_text", "image_only"]
 ContextWindow = Literal[
     "current",
-    "last3",
     "last_n",
     "text_summary",
-    "text_summary_and_last3",
     "text_summary_and_last_n",
     "full",
 ]
-_LAST_N = ("last3", "last_n", "text_summary_and_last3", "text_summary_and_last_n")
+_LAST_N = ("last_n", "text_summary_and_last_n")
 
 # Approximate history budget: Anthropic's exact tokenizer is not available in
 # this package. Four characters per text token plus 256 tokens per image keeps
@@ -97,7 +95,7 @@ def history_text(
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
-    if context_window in ("text_summary_and_last_n", "text_summary_and_last3"):
+    if context_window == "text_summary_and_last_n":
         if observation not in ("text_only", "image_text"):
             return ""
         recent_text = _last_n_history_text(
@@ -137,10 +135,10 @@ def leading_summary_blocks(
     task_spec: TaskSpecification | None = None,
 ) -> list[dict]:
     """Text-summary content block that must precede the last-n image blocks."""
-    if context_window not in (
-        "text_summary_and_last3",
-        "text_summary_and_last_n",
-    ) or observation not in ("image_only", "image_text"):
+    if context_window != "text_summary_and_last_n" or observation not in (
+        "image_only",
+        "image_text",
+    ):
         return []
     summary = text_summary_history(transcript, task_spec)
     if not summary:
@@ -182,11 +180,15 @@ def _last_n_history_text(
         return ""
 
     header = (
-        "Full history (oldest first):"
+        user_templates.FULL_HISTORY_USER_PROMPT["header"].removesuffix("\n")
         if context_window == "full"
         else observation_templates.RECENT_HISTORY_HEADER.format(n=len(recs))
     )
-    lines = [header]
+    lines = (
+        []
+        if context_window == "full" and observation == "image_text"
+        else [header]
+    )
     for rec in recs:
         lines.append(
             _history_step_text(
@@ -494,7 +496,7 @@ def history_content_blocks(
         return []
 
     header = (
-        "Full history (oldest first):\n"
+        user_templates.FULL_HISTORY_USER_PROMPT["header"]
         if context_window == "full"
         else user_templates.LAST_N_USER_PROMPT["header"]
     )
