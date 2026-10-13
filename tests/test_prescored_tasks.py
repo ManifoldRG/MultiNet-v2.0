@@ -116,6 +116,7 @@ def test_combined_job_replaces_a_stale_seed_in_the_root_workers_read(tmp_path):
 def _bash(snippet: str, env: dict) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
+    e["DIFFICULTY_MAX"] = "3000"  # required, no default (next-run-fixes item 7)
     e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, cwd=REPO, env=e)
 

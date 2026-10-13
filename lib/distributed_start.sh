@@ -30,9 +30,10 @@ seed_prescored_tasks() {  # uses globals COORD ZONE RUN_ID [PRESCORED_TASKS]
         "mkdir -p ~/MultiNet-v2.0/artifacts/$RUN_ID && tar -x -C ~/MultiNet-v2.0/artifacts/$RUN_ID"
 }
 
-start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT] [PRESCORED_TASKS]
+start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST DIFFICULTY_MAX [SEEDS] [CONDITIONS] [PROMPT_VARIANT] [PRESCORED_TASKS]
+  [[ -n "${DIFFICULTY_MAX:-}" ]] || { echo "DIFFICULTY_MAX is required (no default; see require_difficulty_max)" >&2; return 1; }
   seed_prescored_tasks || return 1
-  local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}"
+  local seeds="${SEEDS:-0}" diff="$DIFFICULTY_MAX"
   # Conditional sweeps: --conditions is required (run_pipeline's H1/H2 guard
   # rejects a mispaired prepare) and --prompt-variant selects one dedup variant.
   # Empty when unset -> the remote guarded appends skip both flags.
@@ -97,10 +98,11 @@ REMOTE
 # several batches (MASSIVE_BATCHES = space-separated batch indices) via
 # scripts.prepare_combined_job, so the fleet stays saturated instead of idling through
 # each batch's hard-maze tail. Globals: COORD ZONE RUN_ID MANIFEST [SEEDS]
-# [DIFFICULTY_MAX] MASSIVE_BATCHES [SWEEP_TOPO].
+# DIFFICULTY_MAX MASSIVE_BATCHES [SWEEP_TOPO].
 start_coordinator_combined() {
+  [[ -n "${DIFFICULTY_MAX:-}" ]] || { echo "DIFFICULTY_MAX is required (no default; see require_difficulty_max)" >&2; return 1; }
   seed_prescored_tasks || return 1
-  local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}" batch_args="" n
+  local seeds="${SEEDS:-0}" diff="$DIFFICULTY_MAX" batch_args="" n
   for n in $MASSIVE_BATCHES; do batch_args="$batch_args --batch $n"; done
   gcloud compute ssh "$COORD" --zone "$ZONE" \
     --command "RUN_ID='$RUN_ID' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' BATCH_ARGS='$batch_args' SWEEP_TOPO='${SWEEP_TOPO:-}' bash -s" <<'REMOTE'

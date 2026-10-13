@@ -84,8 +84,9 @@ multinet-score-json --help
 `scripts/distributed_run_pipeline.py` provides coordinator/worker jobs;
 `sweep_run.sh` drives fleets (provision / next-batch / run-massive /
 finalize-batch / publish / teardown) with `lib/cost_safety.sh` rails.
-Batch-starting subcommands **require** `BATCH_CAP` and `MAX_RUN_DURATION` —
-they have no defaults by design. STOP VMs rather than deleting them, and
+Batch-starting subcommands **require** `BATCH_CAP`, `MAX_RUN_DURATION` and
+`DIFFICULTY_MAX` (the static-score normaliser; it must cover the panel's
+largest static score: R1 used 3000) — they have no defaults by design. STOP VMs rather than deleting them, and
 pull artifacts before spindown.
 
 **3D on the fleet.** Put the same top-level `render` block in the fleet

@@ -15,6 +15,7 @@ REPO = Path(__file__).resolve().parent.parent
 def bash(snippet: str, env: dict | None = None) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
+    e["DIFFICULTY_MAX"] = "3000"  # required, no default (next-run-fixes item 7)
     if env:
         e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, cwd=REPO, env=e)
