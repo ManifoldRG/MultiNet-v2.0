@@ -9,7 +9,7 @@ _API_KEY_FILE = Path(__file__).resolve().parents[2] / "api_key.txt"
 
 
 def ensure_api_keys_from_file() -> None:
-    """If ``api_key.txt`` exists: line 1 → Anthropic, line 2 → Moonshot."""
+    """If ``api_key.txt`` exists: line 1 → Anthropic, line 2 → Moonshot, line 3 → OpenAI."""
     if not _API_KEY_FILE.is_file():
         return
     lines = [line.strip() for line in _API_KEY_FILE.read_text().splitlines() if line.strip()]
@@ -17,3 +17,5 @@ def ensure_api_keys_from_file() -> None:
         os.environ["ANTHROPIC_API_KEY"] = lines[0]
     if len(lines) > 1 and not os.environ.get("MOONSHOT_API_KEY"):
         os.environ["MOONSHOT_API_KEY"] = lines[1]
+    if len(lines) > 2 and not os.environ.get("OPENAI_API_KEY"):
+        os.environ["OPENAI_API_KEY"] = lines[2]

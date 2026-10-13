@@ -29,6 +29,31 @@ logger = logging.getLogger(__name__)
 
 _ANTHROPIC_VERSION = "2023-06-01"
 
+# Creating a batch while the account's prepaid credit is momentarily exhausted
+# (e.g. a parallel run drained it before auto-refill fired) returns HTTP 400
+# "Your credit balance is too low ...". Raised, that would error every
+# in-flight unit of the lockstep round, so batch creation waits for the refill
+# instead, bounded by `credit_wait_s`.
+_CREDIT_WAIT_S = 3600.0
+_CREDIT_POLL_S = 60.0
+
+
+class AnthropicBatchHTTPError(RuntimeError):
+    """A non-retryable HTTP error from the batches API, with its status/body."""
+
+    def __init__(self, code: int, detail: str):
+        super().__init__(f"Anthropic Batches HTTP {code}: {detail}")
+        self.code = code
+        self.detail = detail
+
+
+def _is_low_credit(exc: BaseException) -> bool:
+    return (
+        isinstance(exc, AnthropicBatchHTTPError)
+        and exc.code == 400
+        and "credit balance" in exc.detail.lower()
+    )
+
 
 def _request(
     url: str,
@@ -62,7 +87,7 @@ def _request(
         return call_with_retry(_do_request, max_attempts=max_attempts)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
-        raise RuntimeError(f"Anthropic Batches HTTP {exc.code}: {detail}") from exc
+        raise AnthropicBatchHTTPError(exc.code, detail) from exc
 
 
 def _request_json(url: str, **kwargs) -> dict:
@@ -82,6 +107,33 @@ def _parse_results_jsonl(text: str) -> Dict[str, dict]:
             continue  # one malformed line must not discard the whole batch
         out[custom_id] = record.get("result", {})
     return out
+
+
+def _create_batch(
+    url: str,
+    requests: List[dict],
+    *,
+    api_key: str,
+    credit_wait_s: float,
+    credit_poll_s: float,
+) -> dict:
+    """POST the batch, waiting out a low-credit 400 for up to `credit_wait_s`."""
+    deadline = time.monotonic() + credit_wait_s
+    while True:
+        try:
+            return _request_json(
+                url, api_key=api_key, method="POST", body={"requests": requests}
+            )
+        except AnthropicBatchHTTPError as exc:
+            if not _is_low_credit(exc) or time.monotonic() >= deadline:
+                raise
+            logger.warning(
+                "Anthropic batch create refused for low credit balance; "
+                "retrying in %.0fs (waiting for auto-refill): %s",
+                credit_poll_s,
+                exc.detail,
+            )
+            time.sleep(credit_poll_s)
 
 
 def _poll_until_ended(
@@ -109,6 +161,8 @@ def run_message_batch(
     deadline_s: float = 7200.0,
     cancel_grace_s: float = 300.0,
     base_url: str = "https://api.anthropic.com",
+    credit_wait_s: float = _CREDIT_WAIT_S,
+    credit_poll_s: float = _CREDIT_POLL_S,
 ) -> Dict[str, dict]:
     """Create a message batch, poll to completion, return `{custom_id: result}`.
 
@@ -117,13 +171,16 @@ def run_message_batch(
     `cancel_grace_s` more until it reaches `"ended"` so already-finished (billed)
     item results are salvaged; missing `custom_id`s are simply absent. If it
     never ends within the grace period (`results_url` still null), returns `{}`.
+    A low-credit refusal at creation is retried every `credit_poll_s` for up to
+    `credit_wait_s` (see `_create_batch`).
     """
     base = base_url.rstrip("/")
-    created = _request_json(
+    created = _create_batch(
         f"{base}/v1/messages/batches",
+        requests,
         api_key=api_key,
-        method="POST",
-        body={"requests": requests},
+        credit_wait_s=credit_wait_s,
+        credit_poll_s=credit_poll_s,
     )
     batch_id = created["id"]
     status_url = f"{base}/v1/messages/batches/{batch_id}"
