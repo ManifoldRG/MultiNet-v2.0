@@ -20,7 +20,7 @@ import numpy as np
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
-from interface.coords import move_landing, rotating_pointing, to_row_col
+from interface.coords import direction_name, to_row_col
 from interface.renderer import (
     render_user_observation_text,
     rgb_to_image_block,
@@ -276,6 +276,11 @@ def _extract_mechanism_events(
         gate.id: getattr(gate, "color", "grey") for gate in task_spec.mechanisms.gates
     } if task_spec else {}
     for index, rec in enumerate(steps):
+        mechanic_event = _mechanic_summary_event(rec.get("mechanic"))
+        if mechanic_event is not None:
+            events.append((index, mechanic_event))
+            continue
+
         event_type = rec.get("event_type", "")
         sb = rec.get("state_before") or {}
         sa = rec.get("state_after") or {}
@@ -357,46 +362,38 @@ def _extract_mechanism_events(
                     )
                 )
 
-        elif event_type == "DEATH RESET":
-            landing, _ = move_landing(task_spec, GridState.from_dict(sb))
-            events.append((
-                index,
-                observation_templates.TEXT_SUMMARY_DEATH_PORTAL.format(
-                    row=landing[0], col=landing[1]
-                ),
-            ))
-
-        elif event_type == "FROZEN":
-            before = int(sb.get("freeze_remaining") or 0)
-            after = int(sa.get("freeze_remaining") or 0)
-            if before == 0 and after > 0:
-                row, col = rec["position_after_row_col"]
-                events.append((
-                    index,
-                    observation_templates.TEXT_SUMMARY_FROZEN.format(row=int(row), col=int(col)),
-                ))
-
-        elif event_type == "CARRIED":
-            row, col = (int(v) for v in rec["position_before_row_col"])
-            events.append((
-                index,
-                observation_templates.TEXT_SUMMARY_CARRIED.format(
-                    row=row,
-                    col=col,
-                    direction=rotating_pointing(
-                        task_spec, GridState.from_dict(sb), row, col
-                    ),
-                ),
-            ))
-
-        elif event_type == "TELEPORTED":
-            row, col = to_row_col(sa["agent_position"])
-            events.append((
-                index,
-                observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col),
-            ))
-
     return events
+
+
+def _mechanic_summary_event(mechanic: dict[str, Any] | None) -> str | None:
+    """Summary text for a step the world model labelled, else None.
+
+    Swallowed ``frozen`` steps and ``rotating`` landings add nothing: the
+    ``froze`` step already names the frozen tile, and a ride names its tile.
+    """
+    if not mechanic:
+        return None
+
+    def row_col(xy) -> tuple[int, int]:
+        # (x, y) on the record; lists after a JSON round trip.
+        return to_row_col((int(xy[0]), int(xy[1])))
+
+    kind = mechanic.get("kind")
+    if kind == "died":
+        row, col = row_col(mechanic["cell_xy"])
+        return observation_templates.TEXT_SUMMARY_DEATH_PORTAL.format(row=row, col=col)
+    if kind == "froze":
+        row, col = row_col(mechanic["cell_xy"])
+        return observation_templates.TEXT_SUMMARY_FROZEN.format(row=row, col=col)
+    if kind == "teleported":
+        row, col = row_col(mechanic["to_xy"])
+        return observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col)
+    if kind == "carried":
+        row, col = row_col(mechanic["from_xy"])
+        return observation_templates.TEXT_SUMMARY_CARRIED.format(
+            row=row, col=col, direction=direction_name(int(mechanic["direction"]))
+        )
+    return None
 
 
 def _format_summary_chain(events: list[str]) -> str:
