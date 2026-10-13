@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -83,10 +84,44 @@ def run_episode(
     ``phase_label``, ``max_tokens``, ``max_model_len``) stamped onto the runner
     result so ``flush_episode_log`` persists it on ``episode.json``. It is never
     part of any input hash.
+
+    Item 17: a stateless episode checkpoints ``out_dir/checkpoint.json`` at every
+    query boundary and every episode appends one usage line per query to
+    ``out_dir/queries.jsonl``, so a process killed mid-episode leaves a
+    resumable partial and its spend record; the next run of the same unit
+    resumes from that checkpoint. Both go once ``episode.json`` is written.
     """
+    from interface.episode_checkpoint import resume_stepper, save_checkpoint
+    from interface.episode_step import EpisodeStepper
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint = out_dir / "checkpoint.json"
+    ledger = out_dir / "queries.jsonl"
     runner = build_episode_runner(task_source, config, seed, max_steps=max_steps, render=render)
-    if resume_from is None:
-        result = runner.run(agent, verbose=False, maze_path=str(task_source))
+    checkpointed = config.chat_history == "stateless"
+
+    def at_query_boundary(stepper) -> None:
+        if checkpointed:
+            save_checkpoint(checkpoint, stepper)
+
+    def after_reply(stepper, reply) -> None:
+        line = {"query_index": stepper.query_count, "usage": reply.usage, "ts": time.time()}
+        with ledger.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line) + "\n")
+
+    hooks = {"at_query_boundary": at_query_boundary, "after_reply": after_reply}
+    if resume_from is None and checkpointed and checkpoint.exists() and not (out_dir / "episode.json").exists():
+        # A previous process died mid-episode: continue from its last boundary.
+        stepper = resume_stepper(checkpoint, runner=runner)
+        stepper.maze_path = str(task_source)
+        killed_at = stepper.query_count
+        result = runner.drive(stepper, agent, **hooks)
+        provenance = {**(provenance or {}), "resumed_from": {"checkpoint": True, "killed_at_query": killed_at}}
+    elif resume_from is None:
+        stepper = EpisodeStepper(runner, verbose=False, maze_path=str(task_source))
+        stepper.start()
+        result = runner.drive(stepper, agent, **hooks)
     else:
         # ``resume_from``: {archive_dir, expected_inputs_hash, resume_count, label}
         # (pipeline.resume): replay-verify the killed run, then continue it.
@@ -99,13 +134,12 @@ def run_episode(
             label=str(resume_from.get("label", "")),
         )
         stepper.maze_path = str(task_source)
-        result = runner.drive(stepper, agent)
+        result = runner.drive(stepper, agent, **hooks)
         provenance = {**(provenance or {}), **resume_provenance}
     if provenance:
         for key, value in provenance.items():
             if value is not None:
                 result[key] = value
 
-    out_dir = Path(out_dir)
-    episode_path = flush_episode_log(result, out_dir)
+    episode_path = flush_episode_log(result, out_dir)  # rewrites out_dir: checkpoint + ledger go
     return json.loads(episode_path.read_text(encoding="utf-8"))
