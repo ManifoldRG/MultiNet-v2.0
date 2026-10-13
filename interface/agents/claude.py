@@ -28,12 +28,14 @@ DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 _AGENT_NAME = "Claude agent"
 
 # Model families that REJECT sampling params (temperature/top_p/top_k) with an
-# HTTP 400: Opus 4.7+, Fable, Mythos. Sonnet 4.6 and Opus <=4.6 still accept
+# HTTP 400: Opus 4.7+ (incl. the Opus 5 line: "claude-opus-5" also matches
+# "claude-opus-5-5"), Fable, Mythos. Sonnet 4.6 and Opus <=4.6 still accept
 # `temperature`, so we only drop it for these. Depth on the thinking families is
 # controlled by adaptive thinking + `output_config.effort`, never `temperature`.
 _SAMPLING_UNSUPPORTED_PREFIXES = (
     "claude-opus-4-8",
     "claude-opus-4-7",
+    "claude-opus-5",
     "claude-fable",
     "claude-mythos",
 )
@@ -189,7 +191,24 @@ def _parse_response(
         elif block.get("type") == "thinking":
             thinking_parts.append(str(block.get("thinking", "")))
     thinking = "\n".join(t for t in thinking_parts if t).strip() or None
-    return "".join(parts).strip(), normalize_token_usage(payload.get("usage")), thinking
+    return "".join(parts).strip(), _usage_from_payload(payload.get("usage")), thinking
+
+
+def _usage_from_payload(raw: object) -> Optional[Dict[str, int]]:
+    """Normalized usage plus the billed thinking-token count.
+
+    `usage.output_tokens_details.thinking_tokens` is the raw reasoning size
+    (billed inside `output_tokens`), reported even when the thinking text comes
+    back empty. Surfaced as ``reasoning_tokens``, the key the OpenAI agent uses,
+    so cross-provider analysis reads one field.
+    """
+    usage = normalize_token_usage(raw)
+    if usage is None or not isinstance(raw, dict):
+        return usage
+    thinking_tokens = (raw.get("output_tokens_details") or {}).get("thinking_tokens")
+    if thinking_tokens is not None:
+        usage["reasoning_tokens"] = int(thinking_tokens)
+    return usage
 
 
 def _post_messages(
