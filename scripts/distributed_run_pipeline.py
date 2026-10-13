@@ -33,7 +33,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
 from gridworld.render_settings import RenderSettings
-from interface.agents.billing import BillingExhausted, BillingParked, billing_provider
+from interface.agents.billing import BillingExhausted, BillingParked, billing_provider, is_park_echo
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -88,13 +88,14 @@ class _Park:
 
 
 def _infra_killed_rows(plan: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Units that ended on an infra kill and are not finished: resumable, or
-    failed after MAX_RESUMES."""
+    """Units whose last upload was an infra kill and that have not since
+    verified: resumable, being resumed (assigned/running/stale), or failed after
+    MAX_RESUMES. Their run dir holds the killed partial, never a scored row."""
     rows = []
     for unit in plan["units"]:
         unit_state = state["units"].get(unit["unit_id"], {})
         kill = unit_state.get("infra_kill")
-        if not kill or unit_state.get("status") not in ("resumable", "failed"):
+        if not kill or unit_state.get("status") == "verified":
             continue
         count, k = kill.get("stall_count"), kill.get("stall_k")
         rows.append({
@@ -281,6 +282,13 @@ def _reset_state_for_rerun(
         prev = existing_units.get(uid)
         if prev is not None and prev.get("status") in _TERMINAL_OK_STATUSES:
             merged_units[uid] = prev
+        elif prev is not None and prev.get("infra_kill") and not prev.get("terminal"):
+            # A killed unit (resumable, or mid-resume when the coordinator
+            # restarted): its archive is still here, so it stays resumable with
+            # its kill counts, instead of re-paying the partial from scratch.
+            kept = {k: v for k, v in prev.items() if k not in ("resume_pending", "worker_id")}
+            kept.update({"status": "resumable", "updated_at": _iso()})
+            merged_units[uid] = kept
         else:
             merged_units[uid] = fresh_unit
     merged = dict(existing_state)
@@ -701,6 +709,11 @@ class CoordinatorStore:
                 if status not in self.REASSIGNABLE_STATUSES or unit_state.get("terminal"):
                     continue
                 resuming = status == "resumable"
+                if resuming and not (_uploads_root(self.artifacts_root) / f"{unit['unit_id']}.tar.gz").exists():
+                    # The killed run's archive is gone (e.g. a coordinator restored
+                    # from the bucket mirror): rerun it fresh rather than strand it.
+                    logger.warning("unit %s: no archive to resume from; rerunning it fresh", unit["unit_id"])
+                    resuming = False
                 if not resuming and int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
                     continue  # attempt cap reached -> leave terminal, report at finalize
                 if unit.get("model_group") in parked_groups:
@@ -761,6 +774,12 @@ class CoordinatorStore:
             unit_state = state["units"].get(unit_id)
             if unit_state is None:
                 raise KeyError(f"Unknown unit_id: {unit_id}")
+            if unit_state.get("status") not in ACTIVE_STATUSES or unit_state.get("worker_id") != worker_id:
+                # A late report (the worker gave up on an upload that landed, or
+                # the unit went stale and moved on): it must not overwrite the
+                # unit's real state.
+                return {"ok": False, "ignored": f"unit is {unit_state.get('status')} "
+                                                f"(worker {unit_state.get('worker_id')})"}
             unit_state.update(
                 {
                     "status": "failed",
@@ -829,7 +848,7 @@ class CoordinatorStore:
                 kills = int(unit_state.get("infra_kills", 0)) + (0 if billing else 1)
                 status = "resumable" if billing or kills <= self.max_resumes else "failed"
                 unit_state.update({"infra_kill": kill, "infra_kills": kills})
-                if billing:
+                if billing and not is_park_echo(end_reason):
                     provider = str(unit.get("provider") or billing_provider(end_reason))
                     state.setdefault("parked_providers", {})[provider] = {
                         "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
@@ -1610,7 +1629,7 @@ def _api_client_groups(
         if model_group is not None and unit.get("model_group") != model_group:
             continue
         unit_state = state["units"].get(unit["unit_id"], {})
-        if unit_state.get("status") not in {"pending", "stale", "assigned", "running"}:
+        if unit_state.get("status") not in {"pending", "stale", "assigned", "running", "resumable"}:
             continue
         groups.append(str(unit["model_group"]))
     return sorted(set(groups))
@@ -1929,17 +1948,24 @@ def run_lockstep_worker(
             finalized.add(unit_id)
             _finalize_unit(unit_id, result)
 
-    first_unit = None
-    try:
-        first_unit = client.assign(worker_id, capabilities).get("unit")
-    except Exception as exc:
-        logger.warning("lockstep worker %s: initial assign failed: %s", worker_id, exc)
-    if not first_unit:
-        return {"worker_id": worker_id, "model_key": None, "completed": 0, "failed": []}
-
-    first_lsu = _build_unit(first_unit)
+    # Take units until one builds: a refused resume or a foreign model key is
+    # failed back by _build_unit, and the worker moves on to the next unit.
+    first_lsu = None
+    seen: set[str] = set()
+    while first_lsu is None:
+        try:
+            response = client.assign(worker_id, capabilities)
+        except Exception as exc:
+            logger.warning("lockstep worker %s: initial assign failed: %s", worker_id, exc)
+            break
+        first_unit = response.get("unit")
+        if not first_unit or first_unit["unit_id"] in seen:
+            break
+        seen.add(first_unit["unit_id"])
+        first_lsu = _build_unit(first_unit)
     if first_lsu is None:
-        return {"worker_id": worker_id, "model_key": group_model_key["key"], "completed": 0, "failed": failed}
+        return {"worker_id": worker_id, "model_key": group_model_key["key"], "completed": 0, "failed": failed,
+                "parked": parked}
 
     runner = LockstepBatchRunner(
         agent_box["agent"],

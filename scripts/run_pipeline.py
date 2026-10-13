@@ -803,6 +803,7 @@ def _run_one_unit(
             },
             render=render,
             resume_from=resume_from,
+            fresh=force,
         )
         # ``phase`` and resume provenance ride in the run_inputs extras (additive;
         # written AFTER the inputs_hash is computed, so recorded but not hashed).

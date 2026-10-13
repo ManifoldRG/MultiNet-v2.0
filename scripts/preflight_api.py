@@ -62,7 +62,11 @@ def preflight(
     balance: Callable[[], float] = _moonshot_balance,
 ) -> list[dict[str, str]]:
     rows = []
-    for name, cfg in run_config.get("models", {}).items():
+    models = run_config.get("models", {})
+    # Every Kimi model spends from the one Moonshot balance: it must cover their sum.
+    kimi_caps = sum(float(c.get("spend_cap_usd") or 0.0) for c in models.values()
+                    if str(c.get("provider") or "").lower() == "kimi")
+    for name, cfg in models.items():
         provider = str(cfg.get("provider") or "").lower()
         row = {"model": name, "provider": provider, "status": "ok", "detail": ""}
         rows.append(row)
@@ -80,7 +84,7 @@ def preflight(
         if provider != "kimi":
             row["detail"] = "key and model answered (no balance API for this key type)"
             continue
-        need = max(float(cfg.get("spend_cap_usd") or 0.0), MIN_BALANCE_USD)
+        need = max(kimi_caps, MIN_BALANCE_USD)
         try:
             available = balance()
         except Exception as exc:  # noqa: BLE001
@@ -89,7 +93,7 @@ def preflight(
         if available < need:
             row.update(status="failed", detail=(
                 f"Moonshot balance ${available:.2f} is below ${need:.2f} "
-                f"(the model's spend cap, or the ${MIN_BALANCE_USD:.2f} floor)"))
+                f"(the Kimi models' spend caps together, or the ${MIN_BALANCE_USD:.2f} floor)"))
         else:
             row["detail"] = f"key answered; Moonshot balance ${available:.2f} covers ${need:.2f}"
     return rows

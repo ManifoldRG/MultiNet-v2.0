@@ -445,13 +445,19 @@ def test_low_credit_create_waits_for_refill_then_succeeds(monkeypatch):
 
 
 def test_low_credit_create_gives_up_after_wait(monkeypatch):
+    # Still out of credit after the wait: a billing error, so the lockstep
+    # worker parks the provider instead of failing every unit in the round.
+    from interface.agents.billing import BillingExhausted
+
     responder = _CreateFailsFirst(fail_times=10**6, status_sequence=["ended"])
     _patch(monkeypatch, responder)
-    with pytest.raises(batch_mod.AnthropicBatchHTTPError) as info:
+    with pytest.raises(BillingExhausted) as info:
         run_message_batch(
             [{"custom_id": "a", "params": {}}], api_key="k", credit_wait_s=0.0
         )
-    assert info.value.code == 400
+    assert info.value.provider == "claude"
+    assert isinstance(info.value.__cause__, batch_mod.AnthropicBatchHTTPError)
+    assert info.value.__cause__.code == 400
     assert responder.count("POST", "/v1/messages/batches") == 1
 
 
