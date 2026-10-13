@@ -1,0 +1,73 @@
+{
+  "description": "Mechanics-15 2D calibration: the full run's cell and model settings on ONE maze (M10, all four mechanics) to measure per-query input/output tokens and cost before launching run_config.mechanics_15_2d.json.",
+  "manifest": "gridworld/fixtures/manifest.mechanics_15.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_requires": "context_window=full comes from PR #54 (R2 full context). Launching before it is on the launched SHA fails at config load.",
+  "_note_model_params": "Equal 64k output caps (max_tokens; max_completion_tokens for OpenAI and Kimi K3). Thinking on for all three. Opus 5.5: effort=xhigh, no sampling params, Message Batches API via the lockstep worker (worker_role=lockstep-worker; coordinator STALE_AFTER_SECONDS >= 12600). Kimi K3: always thinks, reasoning_effort=max (Moonshot's default, set explicitly for provenance), no thinking object or sampling params; plain worker on the sync API (Moonshot Batch support for kimi-k3 unverified). GPT-6 Astra: reasoning_effort=xhigh, flex tier, image_detail=high, plain worker (the OpenAI agent has no batch path), spend_cap_usd=160 is a per-process hard stop sized to the uncached 150-steps-per-episode estimate (pair it with an OpenAI project budget). context_window=full resends every prior decision frame each query (history capped by max_history_tokens), so per-episode input grows quadratically with steps: estimate cost before launch.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30
+  },
+  "models": {
+    "kimi_k3": {
+      "provider": "kimi",
+      "model": "kimi-k3",
+      "max_tokens": 64000,
+      "timeout": 2400,
+      "enable_thinking": true,
+      "reasoning_effort": "max",
+      "group": "kimi-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 15,
+      "tasks": [
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"
+      ]
+    },
+    "claude_opus55": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "max_tokens": 64000,
+      "timeout": 600,
+      "enable_thinking": true,
+      "effort": "xhigh",
+      "enable_prompt_cache": false,
+      "group": "claude-api",
+      "worker_count": 1,
+      "worker_role": "lockstep-worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 64,
+      "tasks": [
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"
+      ]
+    },
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 160,
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 15,
+      "tasks": [
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"
+      ]
+    }
+  },
+  "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: the calibration scores only its own maze. Run it locally (python -m scripts.run_pipeline); the Claude client then uses the synchronous API at standard price.",
+  "_note_cache": "enable_prompt_cache=false for Opus: the Claude agent's default breakpoint sits at the end of each request, and with context_window=full every request changes there, so it writes the whole prompt to cache (1.25x input) on every query and never reads it (measured: two consecutive 60-step queries, 28k cache-creation tokens each, 0 read). Turn caching on only with breakpoints on the stable history prefix, after a two-query check shows reads. Kimi K3 caches implicitly and hits on this prompt shape (measured 99.8% of input cached)."
+}

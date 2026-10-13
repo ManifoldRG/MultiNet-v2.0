@@ -110,3 +110,7 @@ def test_api_worker_role_override_wiring():
     # role (the \$ is the heredoc escape as stored in the function body).
     assert '--distributed-role "\\$API_ROLE"' in body
     assert '--worker-concurrency "\\$API_CONC"' in body
+    # A run-config model's worker_role / worker_concurrency (via the topology)
+    # override the env defaults per group.
+    assert 'worker_field "$vm" worker_role' in body
+    assert 'worker_field "$vm" worker_concurrency' in body
