@@ -18,10 +18,8 @@ class ExperimentConfig:
     observation_text_includes_facing: bool = True
     context_window: Literal[
         "current",
-        "last3",
         "last_n",
         "text_summary",
-        "text_summary_and_last3",
         "text_summary_and_last_n",
         "full",
     ] = "last_n"

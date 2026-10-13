@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
@@ -511,6 +512,47 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
     assert summary_idx < prompt_text.index("Recent history (last 1 steps, oldest first):")
 
 
+@pytest.mark.parametrize("observation", ["image_only", "image_text", "text_only"])
+def test_full_history_header_is_rendered_once(observation):
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_before_row_col": (1, index + 1),
+            "facing_before": "EAST",
+            "position_after_row_col": (1, index + 2),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        }
+        for index in range(3)
+    ]
+    backend, spec = load_task(default_maze_path())
+    cfg = ExperimentConfig(
+        observation=observation,
+        context_window="full",
+        in_context_learning="zero_shot",
+    )
+    runner = build_runner(cfg, backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+
+    message = runner._build_message(
+        state, feedback_templates.INITIAL_FEEDBACK, transcript
+    )
+
+    content = message["content"]
+    blocks = content if isinstance(content, list) else [{"type": "text", "text": content}]
+    text = "\n".join(
+        block["text"]
+        for block in blocks
+        if isinstance(block, dict) and block.get("type") == "text"
+    )
+    assert text.count("Full history (oldest first):") == 1
+
+
 def test_observation_format_image_only_differs_from_image_text_default():
     # After the fair-default rebase the baseline is image_text (with description),
     # so the image_only ablation arm no longer matches the default prompt text.
@@ -569,7 +611,7 @@ def test_step_budget_line_present_in_user_prompt():
     step count so the model can plan for efficiency. The default maze has
     max_steps=100 and the initial state is at step_count=0, so the first
     prompt should read 'Step 1 of 100 (100 remaining).'"""
-    cfg = ExperimentConfig(observation="text_only", context_window="last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, [])
 
