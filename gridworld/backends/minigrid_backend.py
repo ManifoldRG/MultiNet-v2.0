@@ -205,6 +205,14 @@ class MiniGridBackend(AbstractGridBackend):
             states[door.id] = bool(getattr(cell, "is_open", False))
         return states
 
+    def rotator_directions(self) -> tuple[int, ...]:
+        if self.env is None:
+            return ()
+        return tuple(int(tile.direction) for tile in self.env.rotators)
+
+    def freeze_remaining(self) -> int:
+        return int(self.env.freeze_remaining) if self.env is not None else 0
+
     def _get_grid_state(self) -> GridState:
         """
         Extract GridState from current environment state.
