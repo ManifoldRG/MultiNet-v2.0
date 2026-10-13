@@ -23,6 +23,11 @@ from interface.renderer import rgb_to_image_block
 from interface.runner import build_runner
 from interface.telemetry import normalize_token_usage
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+from scripts.run_pipeline import (
+    _NON_RUNTIME_MODEL_KEYS,
+    _expected_run_hash,
+    _validate_cache_ttls,
+)
 
 
 def test_markers_become_cache_control():
@@ -231,9 +236,11 @@ def test_run_config_plumbs_provider_cache_options(monkeypatch):
     assert kimi.config.prompt_cache_ttl == "1h"
 
 
-def test_history_blocks_only_get_markers_when_enabled():
+@pytest.mark.parametrize("context_window", ["last3", "last_n", "full"])
+def test_history_breakpoints_only_apply_to_full_context(context_window):
     rgb = np.zeros((2, 2, 3), dtype=np.uint8)
     transcript = [
+        {"kind": "query"},
         {
             "kind": "step",
             "event_type": "VALID",
@@ -245,14 +252,177 @@ def test_history_blocks_only_get_markers_when_enabled():
             "_decision_frame_rgb": rgb,
         }
     ]
-    disabled = history_content_blocks(
-        "image_only", "full", transcript, cache_breakpoints=False
+    blocks = history_content_blocks(
+        "image_only",
+        context_window,
+        transcript,
+        cache_breakpoints=True,
     )
-    enabled = history_content_blocks(
+    markers = [block for block in blocks if "cache_breakpoint" in block]
+    if context_window == "full":
+        assert markers
+        assert all(block["type"] == "text" for block in markers)
+        assert "Full history" not in markers[0]["text"]
+    else:
+        assert markers == []
+
+
+def _history_step(index: int) -> dict:
+    return {
+        "kind": "step",
+        "event_type": "VALID",
+        "action": f"MOVE_{index}",
+        "position_after_row_col": (1, index + 1),
+        "facing_after": "EAST",
+        "prompt_feedback": f"feedback-{index}",
+        "state_before": {"inventory": []},
+        "_decision_frame_rgb": np.full((2, 2, 3), index, dtype=np.uint8),
+    }
+
+
+def _marked_history_texts(blocks: list[dict]) -> list[dict]:
+    return [
+        block
+        for block in blocks
+        if isinstance(block, dict)
+        and block.get("type") == "text"
+        and block.get("cache_breakpoint")
+    ]
+
+
+def test_one_step_per_query_marks_last_two_history_steps():
+    transcript = [{"kind": "query"}, _history_step(0)]
+    transcript.extend(({"kind": "query"}, _history_step(1)))
+
+    blocks = history_content_blocks(
         "image_only", "full", transcript, cache_breakpoints=True
     )
-    assert not any("cache_breakpoint" in block for block in disabled)
-    assert enabled[-1]["cache_breakpoint"] is True
+
+    marked_texts = _marked_history_texts(blocks)
+    assert len(marked_texts) == 2
+    assert "MOVE_0" in marked_texts[0]["text"]
+    assert "MOVE_1" in marked_texts[1]["text"]
+
+
+
+
+def test_subgoal_cache_markers_cover_previous_and_current_boundaries():
+    transcript = [_history_step(0), {"kind": "query"}]
+    transcript.extend(_history_step(index) for index in range(1, 13))
+
+    blocks = history_content_blocks(
+        "image_only", "full", transcript, cache_breakpoints=True
+    )
+
+    marked_texts = _marked_history_texts(blocks)
+    marked_actions = [
+        block["text"].split("FINAL_OUTPUT: MOVE_", 1)[1].splitlines()[0]
+        for block in marked_texts
+    ]
+    marked_actions = [int(action) for action in marked_actions]
+    assert marked_actions == [0, 12]
+    assert marked_actions[-1] - marked_actions[0] > 10
+
+
+@pytest.mark.parametrize("steps_per_query", range(1, 31))
+def test_cache_prefix_reuses_a_previous_breakpoint(steps_per_query):
+    transcript = [_history_step(0)]
+    previous_last_prefix = None
+    query_number = 0
+
+    for _ in range(3):
+        blocks = history_content_blocks(
+            "image_only", "full", transcript, cache_breakpoints=True
+        )
+        marked_indices = [
+            index
+            for index, block in enumerate(blocks)
+            if isinstance(block, dict) and block.get("cache_breakpoint")
+        ]
+        stripped = strip_cache_markers(blocks)
+        prefixes = [stripped[: index + 1] for index in marked_indices]
+        assert prefixes
+        if previous_last_prefix is not None:
+            assert previous_last_prefix in prefixes
+        previous_last_prefix = prefixes[-1]
+
+        transcript.append({"kind": "query", "query_index": query_number})
+        transcript.extend(
+            _history_step(1 + query_number * steps_per_query + offset)
+            for offset in range(steps_per_query)
+        )
+        query_number += 1
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        (key, value)
+        for key in ("cache_ttl", "batch_cache_ttl", "prompt_cache_ttl")
+        for value in (None, "5m", "1h")
+    ],
+)
+def test_validate_cache_ttls_accepts_supported_values(key, value):
+    _validate_cache_ttls({key: value})
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        (key, value)
+        for key in ("cache_ttl", "batch_cache_ttl", "prompt_cache_ttl")
+        for value in ("2h", "30m", 5)
+    ],
+)
+def test_validate_cache_ttls_rejects_unsupported_values(key, value):
+    with pytest.raises(ValueError) as exc_info:
+        _validate_cache_ttls({key: value})
+
+    message = str(exc_info.value)
+    assert key in message
+    assert "5m" in message and "1h" in message
+
+
+def test_cache_options_are_non_runtime_model_keys():
+    assert {
+        "enable_prompt_cache",
+        "cache_ttl",
+        "batch_cache_ttl",
+        "prompt_cache_ttl",
+    } <= _NON_RUNTIME_MODEL_KEYS
+
+
+def test_prompt_cache_model_options_do_not_change_run_hash():
+    common = {
+        "provider": "claude",
+        "model": "claude-test",
+        "temperature": 0,
+    }
+    first = {
+        **common,
+        "enable_prompt_cache": False,
+        "cache_ttl": "5m",
+        "batch_cache_ttl": "1h",
+        "prompt_cache_ttl": None,
+    }
+    second = {
+        **common,
+        "enable_prompt_cache": True,
+        "cache_ttl": "1h",
+        "batch_cache_ttl": "5m",
+        "prompt_cache_ttl": "1h",
+    }
+
+    def expected_hash(model_config: dict) -> str:
+        return _expected_run_hash(
+            _simple_spec(),
+            "claude-test",
+            0,
+            "minigrid",
+            model_config=model_config,
+        )
+
+    assert expected_hash(first) == expected_hash(second)
 
 
 @pytest.mark.parametrize("context_window", ["last3", "last_n", "full"])

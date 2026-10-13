@@ -9,6 +9,9 @@ History when ``context_window`` is ``last_n`` / ``text_summary_and_last_n``
 * **image_text** — that text history **and** prior decision-frame PNGs.
 
 History is derived from enriched ``transcript`` step records.
+Explicit cache breakpoints are emitted only for ``full`` history. They mark
+the newest included step and, when available, the newest step included by the
+previous request.
 """
 
 from __future__ import annotations
@@ -31,14 +34,12 @@ from prompting_experiments.prompt_templates import user as user_templates
 ObservationMode = Literal["text_only", "image_text", "image_only"]
 ContextWindow = Literal[
     "current",
-    "last3",
     "last_n",
     "text_summary",
-    "text_summary_and_last3",
     "text_summary_and_last_n",
     "full",
 ]
-_LAST_N = ("last3", "last_n", "text_summary_and_last3", "text_summary_and_last_n")
+_LAST_N = ("last_n", "text_summary_and_last_n")
 
 # Approximate history budget: Anthropic's exact tokenizer is not available in
 # this package. Four characters per text token plus 256 tokens per image keeps
@@ -94,7 +95,7 @@ def history_text(
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
-    if context_window in ("text_summary_and_last_n", "text_summary_and_last3"):
+    if context_window == "text_summary_and_last_n":
         if observation not in ("text_only", "image_text"):
             return ""
         recent_text = _last_n_history_text(
@@ -134,10 +135,10 @@ def leading_summary_blocks(
     task_spec: TaskSpecification | None = None,
 ) -> list[dict]:
     """Text-summary content block that must precede the last-n image blocks."""
-    if context_window not in (
-        "text_summary_and_last3",
-        "text_summary_and_last_n",
-    ) or observation not in ("image_only", "image_text"):
+    if context_window != "text_summary_and_last_n" or observation not in (
+        "image_only",
+        "image_text",
+    ):
         return []
     summary = text_summary_history(transcript, task_spec)
     if not summary:
@@ -179,11 +180,15 @@ def _last_n_history_text(
         return ""
 
     header = (
-        "Full history (oldest first):"
+        user_templates.FULL_HISTORY_USER_PROMPT["header"].removesuffix("\n")
         if context_window == "full"
         else observation_templates.RECENT_HISTORY_HEADER.format(n=len(recs))
     )
-    lines = [header]
+    lines = (
+        []
+        if context_window == "full" and observation == "image_text"
+        else [header]
+    )
     for rec in recs:
         lines.append(
             _history_step_text(
@@ -464,11 +469,14 @@ def history_content_blocks(
         return []
 
     blocks: list[dict] = []
+    text_block_indices: dict[int, int] = {}
     for rec in recs:
         rgb = rec.get("_decision_frame_rgb")
         if rgb is None:
             continue
         blocks.append(rgb_to_image_block(rgb))
+        inventory = _history_record_inventory(rec)
+        ...  # rest unchanged, including text_block_indices[id(rec)] = len(blocks) + 1
         inventory = _history_record_inventory(rec)
         text = (
             user_templates.LAST_N_USER_PROMPT["image_only_step"].format(
@@ -481,24 +489,50 @@ def history_content_blocks(
                 action=_history_record_action(rec),
             )
         )
+        text_block_indices[id(rec)] = len(blocks) + 1
         blocks.append({"type": "text", "text": text})
 
     if not blocks:
         return []
 
     header = (
-        "Full history (oldest first):\n"
+        user_templates.FULL_HISTORY_USER_PROMPT["header"]
         if context_window == "full"
         else user_templates.LAST_N_USER_PROMPT["header"]
     )
     out = [{"type": "text", "text": header}] + blocks
-    if cache_breakpoints:
-        pair_texts = [
-            i for i, block in enumerate(out)
-            if i > 0 and block.get("type") == "text"
-        ]
-        for i in pair_texts[-2:]:
-            out[i] = {**out[i], "cache_breakpoint": True}
+    if cache_breakpoints and context_window == "full":
+        transcript_positions = {id(rec): index for index, rec in enumerate(transcript)}
+        last_query_index = next(
+            (
+                index
+                for index in range(len(transcript) - 1, -1, -1)
+                if transcript[index].get("kind") == "query"
+            ),
+            None,
+        )
+        previous_step_text_index = None
+        if last_query_index is not None:
+            previous_step_text_index = next(
+                (
+                    text_block_indices[id(rec)]
+                    for rec in reversed(recs)
+                    if id(rec) in text_block_indices
+                    and transcript_positions[id(rec)] < last_query_index
+                ),
+                None,
+            )
+        current_step_text_index = next(
+            (
+                text_block_indices[id(rec)]
+                for rec in reversed(recs)
+                if id(rec) in text_block_indices
+            ),
+            None,
+        )
+        for index in (previous_step_text_index, current_step_text_index):
+            if index is not None:
+                out[index] = {**out[index], "cache_breakpoint": True}
     return out
 
 
