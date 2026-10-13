@@ -8,6 +8,7 @@ unit at a time against the same helpers used by the single-process pipeline.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import logging
 import shutil
@@ -50,31 +51,35 @@ ACTIVE_STATUSES = {"assigned", "running"}
 
 AgentFactory = Callable[[str, dict[str, Any]], tuple[pipeline.Agent, str]]
 
-LOCAL_ONLY_RENDER = (
-    "3D render runs are local-only (scripts.run_pipeline) for now; distributed support is a follow-up"
-)
-
-
-def _require_2d_render(run_config: dict[str, Any], source: Any) -> None:
-    """Fail closed on a non-2D ``render`` block: these paths hard-code the 2D
-    artifact dir and run hash and never pass ``render=``, so a 3D run-config
-    would silently run 2D (and could reuse 2D episodes)."""
+def render_settings_for(
+    run_config: dict[str, Any], conditions: Optional[str], prompt_variant: Optional[str] = None
+) -> RenderSettings:
+    """The run-config's render block, checked against every experiment cell
+    before any work (a 3D frame needs an observation that carries images)."""
     render = RenderSettings.from_run_config(run_config)
-    if render != RenderSettings():
-        raise ValueError(f"{source}: render {render.label!r}: {LOCAL_ONLY_RENDER}")
+    if render.backend != "minigrid":
+        overlay = run_config.get("experiment_config") or {}
+        for _variant, cell in pipeline._condition_configs(
+            conditions, prompt_variant=prompt_variant, base_overrides=overlay
+        ):
+            render.check_observation(cell.observation)
+    return render
 
 
-def _require_2d_unit(unit: dict[str, Any]) -> None:
-    """Worker-side guard for a unit from a plan built elsewhere (hand-edited,
-    newer coordinator): refuse anything but the 2D backend before any work."""
-    backend = unit.get("backend", "minigrid")
-    # Read the render block's backend directly, not via from_run_config: a unit
-    # may carry the resolved provenance (frame_pixels, versions), whose extra
-    # keys would raise "unknown render keys" instead of this refusal.
-    render = unit.get("render")
-    render_backend = render.get("backend", "minigrid") if isinstance(render, dict) else render
-    if backend != "minigrid" or render_backend not in (None, "minigrid"):
-        raise ValueError(f"unit {unit.get('unit_id')} (backend {backend!r}): {LOCAL_ONLY_RENDER}")
+def _unit_render(unit: dict[str, Any]) -> RenderSettings:
+    """The render settings a worker draws ``unit`` with. A 2D unit carries no
+    ``render`` block. A 3D unit's label pins the render version it was planned
+    under; a worker on other render code would write another run_dir and hash,
+    so it refuses before any work."""
+    block = unit.get("render")
+    render = RenderSettings() if block is None else RenderSettings.from_run_config({"render": block})
+    planned = unit.get("backend", "minigrid")
+    if render.label != planned:
+        raise ValueError(
+            f"unit {unit.get('unit_id')} was planned as {planned!r} but this worker renders "
+            f"{render.label!r}: render version or settings differ between the plan and this worker's code"
+        )
+    return render
 
 
 def _now() -> float:
@@ -260,7 +265,7 @@ def prepare_job(
     artifacts_root = Path(artifacts_root)
     config = scorer_config or load_scorer_config()
     run_config = pipeline.load_run_config(run_config_path)
-    _require_2d_render(run_config, run_config_path)
+    render = render_settings_for(run_config, conditions, prompt_variant)
     pipeline.check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = pipeline.load_manifest(manifest_path)
     prompt_variants = pipeline.condition_variant_names(conditions)
@@ -354,7 +359,7 @@ def prepare_job(
                     run_rel = (
                         Path("runs")
                         / task_id
-                        / "minigrid"
+                        / render.label
                         / model_id
                         / f"seed_{int(seed)}"
                         / variant
@@ -377,22 +382,25 @@ def prepare_job(
                         "prompt_variant": variant,
                         "condition_set": conditions,
                         "experiment_config": variant_configs[variant],
-                        "backend": "minigrid",
+                        "backend": render.label,
                         "run_dir": run_rel.as_posix(),
                         "expected_files": list(EXPECTED_RUN_FILES),
                         "hardware_profile": model_cfg.get("hardware_profile"),
                         "worker_tags": _as_list(model_cfg.get("worker_tags")),
                         "max_in_flight": model_cfg.get("max_in_flight"),
                     }
+                    if render.backend != "minigrid":
+                        unit["render"] = dataclasses.asdict(render)
                     episode_inputs_hash = pipeline._expected_run_hash(
                         runtime_spec,
                         model_id,
                         int(seed),
-                        "minigrid",
+                        render.label,
                         condition_set=conditions,
                         prompt_variant=variant,
                         experiment_config=variant_configs[variant],
                         model_config=model_cfg,
+                        render=render.provenance(runtime_spec),  # None for 2D
                     )
                     unit["episode_inputs_hash"] = episode_inputs_hash
                     unit["inputs_hash"] = _unit_inputs_hash(
@@ -1172,7 +1180,7 @@ def run_assigned_unit(
     progress: Optional[ProgressCounter] = None,
 ) -> tuple[dict[str, Any], Optional[float]]:
     artifacts_root = Path(artifacts_root)
-    _require_2d_unit(unit)
+    render = _unit_render(unit)
     row = materialize_worker_inputs(unit, artifacts_root)
     factory = agent_factory or pipeline._build_agent_from_spec
     agent, _ = factory(unit["model_key"], unit["model_config"])
@@ -1200,6 +1208,7 @@ def run_assigned_unit(
         prompt_variant=str(unit["prompt_variant"]),
         experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
         conditions=unit.get("condition_set"),
+        render=render,
         force=force,
     )
     if result is None:
@@ -1562,7 +1571,7 @@ def run_lockstep_worker(
         unit_id = unit["unit_id"]
         model_key = unit["model_key"]
         try:
-            _require_2d_unit(unit)
+            render = _unit_render(unit)
         except ValueError as exc:
             # Fail it back rather than raise: a refill must not kill the batch.
             _safe_fail(client, worker_id, unit_id, str(exc))
@@ -1596,13 +1605,14 @@ def run_lockstep_worker(
             prompt_variant=str(unit["prompt_variant"]),
             experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
             conditions=unit.get("condition_set"),
+            render=render,
         )
         # The run dir must exist before the runner writes its per-round checkpoint.
         prep.run_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_path = prep.run_dir / "checkpoint.json"
         runner = build_episode_runner(
             prep.source, prep.experiment_config, int(unit["seed"]),
-            max_steps=prep.runtime_spec.max_steps,
+            max_steps=prep.runtime_spec.max_steps, render=render,
         )
         if checkpoint_path.exists():
             # Crash resume: rebuild the stepper at the query boundary the previous
@@ -1626,6 +1636,9 @@ def run_lockstep_worker(
                 failed.append(unit_id)
                 return
             prep = preps[unit_id]
+            render = _unit_render(unit)
+            if render.backend != "minigrid":                 # as run_episode stamps it
+                result["render"] = render.provenance(prep.runtime_spec)
             flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
             prep.write_run_inputs(extras={"pricing_tier": "batch"})
             episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))
@@ -1756,12 +1769,14 @@ def finalize_job(
         static_score = _read_json(artifacts_root / "tasks" / task_id / "scored_static.json")
         manifest_row = dict(unit["task_row"])
         metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
+        backend = unit.get("backend", "minigrid")
         enriched = episode_metrics.enrich_run_for_scoring(
             episode,
             manifest_row,
             agent_or_model=unit["model_id"],
             seed=int(unit["seed"]),
             metrics=metrics,
+            backend=backend,
         )
         run_score = compute_runtime_score(
             enriched,
@@ -1780,6 +1795,7 @@ def finalize_job(
             raw_output_ref=str((run_dir / "episode.json").relative_to(artifacts_root)),
             metrics=metrics,
             prompt_variant=str(unit["prompt_variant"]),
+            backend=backend,
         )
         run_rows.append(run_row)
         composites[
