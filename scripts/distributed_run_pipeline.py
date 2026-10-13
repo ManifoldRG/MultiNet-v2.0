@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
 from gridworld.render_settings import RenderSettings
+from interface.agents.billing import billing_provider
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -48,6 +49,52 @@ PLAN_FILENAME = "job_plan.json"
 STATE_FILENAME = "job_state.json"
 EXPECTED_RUN_FILES = ("episode.json", "run_inputs.json", "run_score.json")
 ACTIVE_STATUSES = {"assigned", "running"}
+# Resumes allowed per unit for kills that are not billing (a deterministic error,
+# e.g. a context-overflow 400, would otherwise loop forever).
+MAX_RESUMES = 2
+
+
+def _infra_kill_summary(episode: dict[str, Any]) -> dict[str, Any]:
+    """What a killed unit's report needs: where it stopped and how much a resume
+    can still spend (steps left; K minus the stall counter until it stops)."""
+    max_steps = (episode.get("task_spec") or {}).get("max_steps")
+    steps_used = episode.get("steps_used")
+    stall = episode.get("stall") or {}
+    k, remaining = stall.get("k"), stall.get("remaining")
+    return {
+        "end_reason": episode.get("end_reason"),
+        "steps_used": steps_used,
+        "max_steps": max_steps,
+        "steps_left": (int(max_steps) - int(steps_used)) if max_steps is not None and steps_used is not None else None,
+        "query_count": episode.get("query_count"),
+        "stall_k": k,
+        "stall_count": (int(k) - int(remaining)) if k is not None and remaining is not None else None,
+    }
+
+
+def _infra_killed_rows(plan: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Units that ended on an infra kill and are not finished: resumable, or
+    failed after MAX_RESUMES."""
+    rows = []
+    for unit in plan["units"]:
+        unit_state = state["units"].get(unit["unit_id"], {})
+        kill = unit_state.get("infra_kill")
+        if not kill or unit_state.get("status") not in ("resumable", "failed"):
+            continue
+        count, k = kill.get("stall_count"), kill.get("stall_k")
+        rows.append({
+            "unit_id": unit["unit_id"],
+            "task_id": unit["task_id"],
+            "model_id": unit["model_id"],
+            "status": unit_state["status"],
+            "end_reason": kill.get("end_reason"),
+            "stall": f"{count}/{k}" if count is not None and k is not None else None,
+            "stall_count": count,
+            "steps_left": kill.get("steps_left"),
+            "queries": kill.get("query_count"),
+            "resumes": int(unit_state.get("resume_count", 0)),
+        })
+    return rows
 
 AgentFactory = Callable[[str, dict[str, Any]], tuple[pipeline.Agent, str]]
 
@@ -488,7 +535,9 @@ class CoordinatorStore:
     # Statuses a unit can be (re)handed out from. "failed"/"stale" units are
     # retried so a transient worker/upload failure does not strand a paid unit;
     # the attempt cap stops a poison unit from re-spending tokens forever.
-    REASSIGNABLE_STATUSES = frozenset({"pending", "stale", "failed"})
+    # "resumable" units ended on an infra kill (agent_error:*) and resume from
+    # their archive; handing one out burns no attempt (see MAX_RESUMES).
+    REASSIGNABLE_STATUSES = frozenset({"pending", "stale", "failed", "resumable"})
 
     def __init__(
         self,
@@ -496,8 +545,10 @@ class CoordinatorStore:
         stale_after_seconds: float = 300.0,
         storage: Optional[StorageConfig] = None,
         max_unit_attempts: int = 3,
+        max_resumes: int = MAX_RESUMES,
     ):
         self.artifacts_root = Path(artifacts_root)
+        self.max_resumes = int(max_resumes)
         self.stale_after_seconds = float(stale_after_seconds)
         self.storage = storage
         self.max_unit_attempts = int(max_unit_attempts)
@@ -615,13 +666,22 @@ class CoordinatorStore:
             )
             if active_units and len(active_units) >= worker_concurrency:
                 self.save_state(state)
-                return {"unit": self._unit_payload(plan, active_units[0]), "job_id": plan["job_id"]}
+                held = active_units[0]
+                return {"unit": self._assignment(plan, held, state["units"][held["unit_id"]]),
+                        "job_id": plan["job_id"]}
 
-            for unit in plan["units"]:
+            # Fresh/stale/failed work first, then resumable units.
+            ordered = sorted(
+                plan["units"],
+                key=lambda u: state["units"][u["unit_id"]].get("status") == "resumable",
+            )
+            for unit in ordered:
                 unit_state = state["units"][unit["unit_id"]]
-                if unit_state.get("status") not in self.REASSIGNABLE_STATUSES:
+                status = unit_state.get("status")
+                if status not in self.REASSIGNABLE_STATUSES or unit_state.get("terminal"):
                     continue
-                if int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
+                resuming = status == "resumable"
+                if not resuming and int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
                     continue  # attempt cap reached -> leave terminal, report at finalize
                 if not self._unit_matches_worker(unit, worker):
                     continue
@@ -633,14 +693,18 @@ class CoordinatorStore:
                         "worker_id": worker_id,
                         "assigned_at": _iso(),
                         "heartbeat_at": _now(),
-                        "attempts": int(unit_state.get("attempts", 0)) + 1,
                         "updated_at": _iso(),
                     }
                 )
+                if resuming:
+                    unit_state["resume_count"] = int(unit_state.get("resume_count", 0)) + 1
+                    unit_state["resume_pending"] = True
+                else:
+                    unit_state["attempts"] = int(unit_state.get("attempts", 0)) + 1
                 worker["status"] = "assigned"
                 worker["current_unit_id"] = unit["unit_id"]
                 self.save_state(state)
-                return {"unit": self._unit_payload(plan, unit), "job_id": plan["job_id"]}
+                return {"unit": self._assignment(plan, unit, unit_state), "job_id": plan["job_id"]}
 
             worker["status"] = "idle"
             worker.pop("current_unit_id", None)
@@ -725,10 +789,30 @@ class CoordinatorStore:
                 self.save_state(state)
                 raise
 
+            # A finished episode is verified. One that ended on an infra kill
+            # (agent_error:*) is a partial run: resumable, requeued, reported
+            # separately. Billing kills never count against MAX_RESUMES; after
+            # MAX_RESUMES other kills the unit fails with the last reason.
+            episode = _read_json(self.artifacts_root / unit["run_dir"] / "episode.json")
+            end_reason = str(episode.get("end_reason") or "")
+            unit_state.pop("resume_pending", None)
+            if end_reason.startswith("agent_error:"):
+                kill = _infra_kill_summary(episode)
+                billing = billing_provider(end_reason) is not None
+                kills = int(unit_state.get("infra_kills", 0)) + (0 if billing else 1)
+                status = "resumable" if billing or kills <= self.max_resumes else "failed"
+                unit_state.update({"infra_kill": kill, "infra_kills": kills})
+                if status == "failed":
+                    # Terminal: unlike a transient worker failure, it is not retried.
+                    unit_state.update({"failure_reason": end_reason, "terminal": True})
+            else:
+                status = "verified"
+                unit_state.pop("infra_kill", None)
             unit_state.update(
                 {
-                    "status": "verified",
-                    "verified_at": _iso(),
+                    "status": status,
+                    "end_reason": end_reason,
+                    f"{status}_at": _iso(),
                     "updated_at": _iso(),
                 }
             )
@@ -742,7 +826,7 @@ class CoordinatorStore:
         # Durable off-box copy happens outside the lock so a slow gsutil call does
         # not block other workers' heartbeats/uploads.
         self._mirror_unit(unit_id, run_dir, run_set_id)
-        return {"ok": True, "status": "verified"}
+        return {"ok": True, "status": status}
 
     def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
         """Best-effort mirror of a verified run dir to the configured bucket.
@@ -785,6 +869,7 @@ class CoordinatorStore:
                 "units": counts,
                 "worker_count": len(state["workers"]),
                 "progress_total": progress_total,
+                "infra_killed": _infra_killed_rows(plan, state),
             }
 
     def _mark_stale(self, plan: dict[str, Any], state: dict[str, Any]) -> None:
@@ -853,6 +938,18 @@ class CoordinatorStore:
             if other and other.get("model_group") == unit.get("model_group"):
                 active += 1
         return active < limit
+
+    def _assignment(self, plan: dict[str, Any], unit: dict[str, Any], unit_state: dict[str, Any]) -> dict[str, Any]:
+        payload = self._unit_payload(plan, unit)
+        if unit_state.get("resume_pending"):
+            # The killed run the worker resumes from (replay-verified there).
+            # Frames are re-rendered by the replay, so only the JSON travels.
+            run_dir = self.artifacts_root / unit["run_dir"]
+            payload["resume"] = {
+                "episode": _read_json(run_dir / "episode.json"),
+                "run_inputs": _read_json(run_dir / "run_inputs.json"),
+            }
+        return payload
 
     def _unit_payload(self, plan: dict[str, Any], unit: dict[str, Any]) -> dict[str, Any]:
         task_id = unit["task_id"]
@@ -1761,7 +1858,11 @@ def finalize_job(
     run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
 
+    infra_killed = _infra_killed_rows(plan, state)
+    killed_ids = {row["unit_id"] for row in infra_killed}
     for unit in plan["units"]:
+        if unit["unit_id"] in killed_ids:
+            continue  # a partial run: resumable or failed, never a scored row
         missing_files = _validate_final_run_files(unit, artifacts_root)
         unit_state = state["units"].setdefault(unit["unit_id"], {})
         if missing_files:
@@ -1815,6 +1916,17 @@ def finalize_job(
         ] = run_score.get("composite")
         unit_state.update({"status": "verified", "finalized_at": _iso(), "updated_at": _iso()})
 
+    if infra_killed:
+        print(f"{len(infra_killed)} infra-killed unit(s), not in the rows:")
+        for row in infra_killed:
+            print(f"  {row['unit_id']} {row['task_id']} {row['model_id']} {row['status']} "
+                  f"stall={row['stall']} steps_left={row['steps_left']} queries={row['queries']} "
+                  f"resumes={row['resumes']} {row['end_reason']}")
+    if infra_killed and not allow_partial:
+        raise RuntimeError(
+            f"{len(infra_killed)} infra-killed unit(s) are not finished (resume them, or finalize with "
+            f"--allow-partial-finalize): {[row['unit_id'] for row in infra_killed]}"
+        )
     if missing and not allow_partial:
         raise RuntimeError(f"Missing distributed work units: {missing}")
 
@@ -1853,6 +1965,7 @@ def finalize_job(
         "job_id": plan["job_id"],
         "run_count": len(run_rows),
         "missing_units": missing,
+        "infra_killed": infra_killed,
         "payloads": payloads,
     }
 

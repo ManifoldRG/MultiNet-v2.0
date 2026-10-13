@@ -259,7 +259,7 @@ def flush_episode_log(result: dict[str, Any], out_dir: Path) -> Path:
     # episode ran under when the caller set them on ``result``, plus the
     # ``render`` block for a 3D run. Additive and optional — absent on
     # non-two-tier / 2D runs — and never part of any input hash.
-    for key in ("pass", "max_tokens", "max_model_len", "phase_label", "render"):
+    for key in ("pass", "max_tokens", "max_model_len", "phase_label", "render", "stall"):
         value = result.get(key)
         if value is not None:
             episode[key] = _json_safe(value)
