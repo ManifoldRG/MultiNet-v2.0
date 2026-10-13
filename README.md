@@ -25,6 +25,11 @@
     <img src="assets/manifold_logo.png" alt="Manifold Research Logo" height="40">
     </kbd>
   </a>
+  <a href="https://www.mit.edu/" target="_blank">
+    <kbd>
+    <img src="assets/mit_logo.png" alt="MIT Logo" height="40">
+    </kbd>
+  </a>
   <a href="https://www.gatech.edu/" target="_blank">
     <kbd>
     <img src="assets/gt_logo.png" alt="Georgia Tech Logo" style="height:40px; border-radius:50%;">
@@ -205,8 +210,6 @@ If you build models or agents, or work on benchmarking and evaluation, we would 
 
 <p align="center">
   <a href="https://tally.so/r/7RGXaZ?utm_source=multinet-codebase&amp;utm_medium=github&amp;utm_campaign=multinet-v2-r1-astra-opus">🧪 Let's work together</a>
-  &nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="mailto:contact@fig.inc?subject=Collaborating%20on%20MultiNet%20v2.0">✉️ Work with us</a>
   &nbsp;&nbsp;&middot;&nbsp;&nbsp;
   <a href="https://discord.gg/Rk4gAq5aYr">💬 Join the Discord</a>
 </p>
