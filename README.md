@@ -27,7 +27,7 @@
   </a>
   <a href="https://www.mit.edu/" target="_blank">
     <kbd>
-    <img src="assets/mit_logo.png" alt="MIT Logo" height="40">
+    <img src="assets/mit_logo_v1.jpg" alt="MIT Logo" height="40">
     </kbd>
   </a>
   <a href="https://www.gatech.edu/" target="_blank">
