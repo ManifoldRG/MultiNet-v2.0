@@ -280,3 +280,15 @@ def test_lockstep_worker_fails_back_a_unit_planned_for_another_render_version(tm
     assert result["completed"] == 0 and len(result["failed"]) == 1
     [(_unit_id, reason)] = store.failures
     assert "render version" in reason
+
+
+def test_batch_smoke_prepares_a_3d_unit_with_its_render(tmp_path):
+    pytest.importorskip("mujoco")
+    from scripts.run_batch_smoke import _prep_and_stepper
+
+    artifacts = tmp_path / "coordinator"
+    plan = _prepare(tmp_path, _run_config(tmp_path, THREE_D), root="coordinator")
+    [unit_raw] = plan["units"]
+    unit, prep, stepper = _prep_and_stepper(CoordinatorStore(artifacts), plan, unit_raw, artifacts)
+    assert prep.run_dir == artifacts / unit["run_dir"]
+    assert type(stepper.backend).__name__ == "Mujoco3DBackend"
