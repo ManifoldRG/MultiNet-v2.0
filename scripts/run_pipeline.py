@@ -1299,9 +1299,11 @@ def main(argv: Optional[list[str]] = None) -> None:
             "lockstep-worker",
             "coordinator-run-api-client",
             "coordinator-finalize",
+            "coordinator-unpark",
         ],
         help="Run one distributed pipeline role instead of the single-process pipeline.",
     )
+    parser.add_argument("--provider", help="coordinator-unpark: the provider to release (claude, kimi, openai).")
     parser.add_argument("--job-id", help="Optional durable distributed job id for coordinator-prepare.")
     parser.add_argument(
         "--storage-config",

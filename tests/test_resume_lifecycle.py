@@ -136,9 +136,10 @@ def test_billing_kills_do_not_count_against_max_resumes(tmp_path):
     artifacts = _prepare(tmp_path)
     statuses = []
     for i in range(4):
-        _s, _u, result = _run_and_upload(
+        store, _u, result = _run_and_upload(
             artifacts, tmp_path, _Agent(3, BillingExhausted("claude", f"credit balance too low {i}")), worker=f"w{i}")
         statuses.append(result["status"])
+        store.unpark("claude")  # a billing kill parks the provider until a top-up
     assert statuses == ["resumable"] * 4
 
 

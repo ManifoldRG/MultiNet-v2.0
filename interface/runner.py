@@ -9,6 +9,8 @@ from typing import Callable, List
 
 import numpy as np
 
+from interface.agents.billing import BillingExhausted
+
 from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
@@ -266,7 +268,10 @@ class ExperimentRunner:
                 # says plainly that this is an infra outcome, not a model one.
                 # KeyboardInterrupt/SystemExit are BaseException and still
                 # propagate — Ctrl-C must stay an interrupt.
-                agent_error = f"agent_error:{type(exc).__name__}: {exc}"[:200]
+                # Billing (incl. subclasses like a spend cap) gets one prefix the
+                # coordinator parks on (interface.agents.billing).
+                name = "BillingExhausted" if isinstance(exc, BillingExhausted) else type(exc).__name__
+                agent_error = f"agent_error:{name}: {exc}"[:200]
                 logger.error("episode aborted by agent error: %s", exc)
                 # next_query already reserved this round's index; roll it back so
                 # query_count equals the applied-query count.

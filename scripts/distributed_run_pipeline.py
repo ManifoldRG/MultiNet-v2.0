@@ -33,7 +33,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
 from gridworld.render_settings import RenderSettings
-from interface.agents.billing import billing_provider
+from interface.agents.billing import BillingExhausted, BillingParked, billing_provider
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -71,6 +71,20 @@ def _infra_kill_summary(episode: dict[str, Any]) -> dict[str, Any]:
         "stall_k": k,
         "stall_count": (int(k) - int(remaining)) if k is not None and remaining is not None else None,
     }
+
+
+def _parked_groups(state: dict[str, Any]) -> set[str]:
+    """Model groups whose provider is parked on a billing error."""
+    return {g for info in (state.get("parked_providers") or {}).values() for g in info.get("groups", [])}
+
+
+class _Park:
+    """A worker's park signal, shared by its in-flight episodes: once set (its
+    provider hit a billing limit), each episode raises BillingParked at its
+    next query and the worker takes no new units."""
+
+    def __init__(self) -> None:
+        self.event = threading.Event()
 
 
 def _infra_killed_rows(plan: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -650,6 +664,11 @@ class CoordinatorStore:
             worker["heartbeat_at"] = _now()
             worker["status"] = "polling"
             self._mark_stale(plan, state)
+            parked_groups = _parked_groups(state)
+            if (worker.get("capabilities") or {}).get("model_group") in parked_groups:
+                worker["status"] = "parked"
+                self.save_state(state)
+                return {"unit": None, "parked": True, "job_id": plan["job_id"]}
 
             # A worker may hold up to its declared concurrency in active units at once
             # (served-vLLM workers run many episodes in parallel so the server batches
@@ -684,6 +703,8 @@ class CoordinatorStore:
                 resuming = status == "resumable"
                 if not resuming and int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
                     continue  # attempt cap reached -> leave terminal, report at finalize
+                if unit.get("model_group") in parked_groups:
+                    continue
                 if not self._unit_matches_worker(unit, worker):
                     continue
                 if not self._below_max_in_flight(unit, state, plan):
@@ -730,8 +751,9 @@ class CoordinatorStore:
                         # Monotonic: a re-attempt that resets to 0 must not move it backwards.
                         unit_state["progress"] = max(int(unit_state.get("progress", 0)), int(progress))
                     worker["current_unit_id"] = unit_id
+            park = (worker.get("capabilities") or {}).get("model_group") in _parked_groups(state)
             self.save_state(state)
-            return {"ok": True}
+            return {"ok": True, "park": park}
 
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         with self._guard():
@@ -807,6 +829,14 @@ class CoordinatorStore:
                 kills = int(unit_state.get("infra_kills", 0)) + (0 if billing else 1)
                 status = "resumable" if billing or kills <= self.max_resumes else "failed"
                 unit_state.update({"infra_kill": kill, "infra_kills": kills})
+                if billing:
+                    provider = str(unit.get("provider") or billing_provider(end_reason))
+                    state.setdefault("parked_providers", {})[provider] = {
+                        "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
+                        "since": _iso(),
+                        "unit_id": unit_id,
+                        "reason": end_reason,
+                    }
                 if status == "failed":
                     # Terminal: unlike a transient worker failure, it is not retried.
                     unit_state.update({"failure_reason": end_reason, "terminal": True})
@@ -831,7 +861,19 @@ class CoordinatorStore:
         # Durable off-box copy happens outside the lock so a slow gsutil call does
         # not block other workers' heartbeats/uploads.
         self._mirror_unit(unit_id, run_dir, run_set_id)
-        return {"ok": True, "status": status}
+        return {"ok": True, "status": status, "parked": unit.get("model_group") in _parked_groups(state)}
+
+    def unpark(self, provider: str) -> dict[str, Any]:
+        """Release a provider parked on a billing error (after a top-up): its
+        groups take units again, resumable ones included."""
+        with self._guard():
+            state = self.load_state()
+            info = (state.get("parked_providers") or {}).pop(provider, None)
+            if info is None:
+                parked = sorted(state.get("parked_providers") or {})
+                raise KeyError(f"provider {provider!r} is not parked (parked: {parked})")
+            self.save_state(state)
+            return {"ok": True, "unparked": provider, "groups": info["groups"]}
 
     def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
         """Best-effort mirror of a verified run dir to the configured bucket.
@@ -875,6 +917,7 @@ class CoordinatorStore:
                 "worker_count": len(state["workers"]),
                 "progress_total": progress_total,
                 "infra_killed": _infra_killed_rows(plan, state),
+                "parked_providers": state.get("parked_providers") or {},
             }
 
     def _mark_stale(self, plan: dict[str, Any], state: dict[str, Any]) -> None:
@@ -1057,6 +1100,9 @@ class CoordinatorClient:
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         return self._json("POST", "/fail", {"worker_id": worker_id, "unit_id": unit_id, "reason": reason})
 
+    def unpark(self, provider: str) -> dict[str, Any]:
+        return self._json("POST", "/unpark", {"provider": provider})
+
     def upload(self, worker_id: str, unit_id: str, archive_path: Path) -> dict[str, Any]:
         query = urllib.parse.urlencode({"worker_id": worker_id, "unit_id": unit_id})
         req = urllib.request.Request(
@@ -1140,6 +1186,8 @@ def make_coordinator_server(
                             payload.get("progress"),
                         ),
                     )
+                elif parsed.path == "/unpark":
+                    self._send_json(200, store.unpark(str(payload["provider"])))
                 elif parsed.path == "/fail":
                     self._send_json(
                         200,
@@ -1233,13 +1281,21 @@ class _CountingAgent:
     silently drop usage telemetry for agents without a ``reset_usage()`` method
     (e.g. the Kimi/Claude agents)."""
 
-    def __init__(self, inner: Any, counter: ProgressCounter) -> None:
-        # Bypass our own __setattr__ for the two private fields; everything else
+    def __init__(self, inner: Any, counter: ProgressCounter,
+                 park: Optional["_Park"] = None, provider: str = "") -> None:
+        # Bypass our own __setattr__ for the private fields; everything else
         # must reach the inner agent.
         object.__setattr__(self, "_inner", inner)
         object.__setattr__(self, "_counter", counter)
+        object.__setattr__(self, "_park", park)
+        object.__setattr__(self, "_provider", provider)
+
+    def _check_park(self) -> None:
+        if self._park is not None and self._park.event.is_set():
+            raise BillingParked(self._provider)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        self._check_park()
         result = self._inner(*args, **kwargs)
         self._counter.count += 1
         return result
@@ -1247,7 +1303,7 @@ class _CountingAgent:
     def __getattr__(self, name: str) -> Any:
         # Only fires for names not found normally; guard the private fields so a
         # lookup before __init__ finishes cannot recurse forever.
-        if name in ("_inner", "_counter"):
+        if name in ("_inner", "_counter", "_park", "_provider"):
             raise AttributeError(name)
         attr = getattr(self._inner, name)
         if name == "generate" and callable(attr):
@@ -1259,6 +1315,7 @@ class _CountingAgent:
             # wrapper only when the inner actually HAS generate preserves the
             # runner's ``hasattr(agent, "generate")`` legacy-double check.
             def _counting_generate(*args: Any, **kwargs: Any) -> Any:
+                self._check_park()
                 result = attr(*args, **kwargs)
                 self._counter.count += 1
                 return result
@@ -1267,7 +1324,7 @@ class _CountingAgent:
         return attr
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("_inner", "_counter"):
+        if name in ("_inner", "_counter", "_park", "_provider"):
             object.__setattr__(self, name, value)
         else:
             setattr(self._inner, name, value)
@@ -1280,6 +1337,7 @@ def run_assigned_unit(
     agent_factory: Optional[AgentFactory] = None,
     force: bool = False,
     progress: Optional[ProgressCounter] = None,
+    park: Optional[_Park] = None,
 ) -> tuple[dict[str, Any], Optional[float]]:
     artifacts_root = Path(artifacts_root)
     render = _unit_render(unit)
@@ -1289,8 +1347,9 @@ def run_assigned_unit(
         unit["model_key"],
         pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
     )
-    if progress is not None:
-        agent = _CountingAgent(agent, progress)
+    if progress is not None or park is not None:
+        agent = _CountingAgent(agent, progress or ProgressCounter(), park=park,
+                               provider=str(unit.get("provider") or ""))
     from interface.config import ExperimentConfig
 
     if "experiment_config" not in unit:
@@ -1364,16 +1423,20 @@ def _load_worker_state(path: Path) -> dict[str, Any]:
     return {}
 
 
-def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optional[int] = None) -> bool:
+def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optional[int] = None,
+                    park: Optional[_Park] = None) -> bool:
     """Send a heartbeat, swallowing transient errors so a brief coordinator
     outage cannot kill the heartbeat thread (which would let the unit go stale
-    and be double-assigned while this worker is still running it)."""
+    and be double-assigned while this worker is still running it). A response
+    saying the worker's provider is parked sets ``park``."""
     try:
-        client.heartbeat(worker_id, unit_id, progress)
-        return True
+        response = client.heartbeat(worker_id, unit_id, progress)
     except Exception as exc:
         logger.warning("Heartbeat failed for unit %s (will retry next interval): %s", unit_id, exc)
         return False
+    if park is not None and isinstance(response, dict) and response.get("park"):
+        park.event.set()
+    return True
 
 
 def _process_assigned_unit(
@@ -1384,6 +1447,7 @@ def _process_assigned_unit(
     artifacts_root: str | Path,
     agent_factory: Optional[AgentFactory],
     heartbeat_interval_seconds: float,
+    park: Optional[_Park] = None,
 ) -> bool:
     """Run one assigned unit end-to-end (heartbeat thread + episode + upload) or report
     it failed. Returns True on success, False on a *reported* failure. A unit failure
@@ -1396,17 +1460,19 @@ def _process_assigned_unit(
 
     def heartbeat_loop() -> None:
         while not stop_heartbeat.wait(heartbeat_interval_seconds):
-            _safe_heartbeat(client, worker_id, unit_id, progress.count)
+            _safe_heartbeat(client, worker_id, unit_id, progress.count, park=park)
 
     hb = threading.Thread(target=heartbeat_loop, daemon=True)
     try:
         client.heartbeat(worker_id, unit_id)
         hb.start()
         run_assigned_unit(
-            unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
+            unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress, park=park
         )
         archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
-        client.upload(worker_id, unit_id, archive_path)
+        response = client.upload(worker_id, unit_id, archive_path)
+        if park is not None and isinstance(response, dict) and response.get("parked"):
+            park.event.set()  # this episode (or another) hit the provider's billing limit
         return True
     except Exception as exc:
         client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
@@ -1457,17 +1523,33 @@ def run_worker_loop(
     local_state["worker_id"] = worker_id
     _write_json_atomic(state_file, local_state)
 
+    park = _Park()
+
     def _process(unit: dict[str, Any]) -> bool:
         if process_fn is not None:
             return process_fn(client, worker_id, unit)
         return _process_assigned_unit(
             client, worker_id, unit, artifacts_root=artifacts_root,
             agent_factory=agent_factory, heartbeat_interval_seconds=heartbeat_interval_seconds,
+            park=park,
         )
 
+    def _parked() -> bool:
+        if park.event.is_set():
+            logger.warning("worker %s parked: its provider hit a billing limit; taking no more units "
+                           "(coordinator-unpark after a top-up)", worker_id)
+            print(f"Worker {worker_id} parked: billing exhausted on its provider.")
+            return True
+        return False
+
     def _next_unit() -> Optional[dict[str, Any]]:
+        if park.event.is_set():
+            return None
         try:
-            return client.assign(worker_id, capabilities).get("unit")
+            response = client.assign(worker_id, capabilities)
+            if response.get("parked"):
+                park.event.set()
+            return response.get("unit")
         except Exception as exc:
             # A transient coordinator outage must not kill a long-running worker.
             logger.warning(
@@ -1477,14 +1559,18 @@ def run_worker_loop(
             return None
 
     if concurrency <= 1:
+        any_done = False
         while True:
             unit = _next_unit()
             if not unit:
+                if _parked():
+                    return any_done
                 if once or drain:
-                    return False
+                    return any_done
                 time.sleep(poll_interval_seconds)
                 continue
             ok = _process(unit)
+            any_done = any_done or ok
             if once:
                 return ok
 
@@ -1501,7 +1587,7 @@ def run_worker_loop(
                     break
                 in_flight.add(executor.submit(_process, unit))
             if not in_flight:
-                if once or drain:
+                if _parked() or once or drain:
                     return any_done
                 time.sleep(poll_interval_seconds)
                 continue
@@ -1687,6 +1773,8 @@ def run_lockstep_worker(
     group_model_key: dict[str, Optional[str]] = {"key": None}
     agent_box: dict[str, Any] = {}
     runner_box: dict[str, Any] = {}
+    park = _Park()
+    parked: list[str] = []
 
     def _build_unit(unit: dict[str, Any]):
         unit_id = unit["unit_id"]
@@ -1700,10 +1788,11 @@ def run_lockstep_worker(
             return None
         if group_model_key["key"] is None:
             group_model_key["key"] = model_key
-            agent_box["agent"], _ = factory(
+            inner, _ = factory(
                 model_key,
                 pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
             )
+            agent_box["agent"] = _ParkingBatchAgent(inner, park, str(unit.get("provider") or ""))
         elif model_key != group_model_key["key"]:
             # One lockstep worker serves exactly one model group/key. A unit of a
             # different key would need a different agent, so fail it back to the
@@ -1773,7 +1862,18 @@ def run_lockstep_worker(
     def _finalize_unit(unit_id: str, result: dict[str, Any]) -> None:
         unit = handed_out[unit_id]
         try:
-            if isinstance(result, dict) and "error" in result:
+            if isinstance(result, dict) and "error" in result and result.get("billing"):
+                # Billing (or a park): upload the episode as it stood at its last
+                # query boundary, resumable; the coordinator parks the provider.
+                stepper = lockstep_units[unit_id].stepper
+                stepper.query_count -= 1  # the query in flight was never answered
+                partial = stepper.result()
+                partial["end_reason"] = f"agent_error:BillingExhausted: {result['error']}"[:200]
+                partial["success"] = False
+                result = partial
+                park.event.set()
+                parked.append(unit_id)
+            elif isinstance(result, dict) and "error" in result:
                 _safe_fail(client, worker_id, unit_id, str(result["error"]))
                 failed.append(unit_id)
                 return
@@ -1798,11 +1898,17 @@ def run_lockstep_worker(
             failed.append(unit_id)
 
     def refill():
+        if park.event.is_set():
+            return None  # parked: take nothing new
         try:
-            unit = client.assign(worker_id, capabilities).get("unit")
+            response = client.assign(worker_id, capabilities)
         except Exception as exc:
             logger.warning("lockstep worker %s: assign failed: %s", worker_id, exc)
             return None
+        if response.get("parked"):
+            park.event.set()
+            return None
+        unit = response.get("unit")
         if not unit:
             return None
         unit_id = unit["unit_id"]
@@ -1815,7 +1921,7 @@ def run_lockstep_worker(
     def on_round(active) -> None:
         active_ids = {u.unit_id for u in active}
         for u in active:
-            _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0))
+            _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0), park=park)
         # Finalize units that dropped out of the working set this round. Their
         # results are already in the runner's results map (populated before this
         # hook fires), including the ``{"error": ...}`` shape for failed steppers.
@@ -1852,12 +1958,33 @@ def run_lockstep_worker(
     runner.add(first_lsu)
     runner.run()
 
+    if park.event.is_set():
+        print(f"Lockstep worker {worker_id} parked: billing exhausted on its provider "
+              f"({len(parked)} episode(s) parked resumable).")
     return {
         "worker_id": worker_id,
         "model_key": group_model_key["key"],
         "completed": len(completed),
         "failed": failed,
+        "parked": parked,
     }
+
+
+class _ParkingBatchAgent:
+    """The lockstep worker's batch agent: once its provider is parked, the next
+    round raises BillingParked, so every in-flight episode parks at that query
+    boundary through the batch runner's billing path."""
+
+    def __init__(self, inner: Any, park: _Park, provider: str) -> None:
+        self._inner, self._park, self._provider = inner, park, provider
+
+    def generate_batch(self, batch):
+        if self._park.event.is_set():
+            raise BillingParked(self._provider)
+        return self._inner.generate_batch(batch)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 def _safe_fail(client: Any, worker_id: str, unit_id: str, reason: str) -> bool:
@@ -2111,6 +2238,12 @@ def dispatch_distributed_role(args: Any) -> None:
             f"Coordinator API client completed {result['completed']} unit(s) "
             f"for groups={result['groups']}."
         )
+        return
+    if role == "coordinator-unpark":
+        if not args.provider:
+            raise SystemExit("--provider is required for coordinator-unpark.")
+        result = CoordinatorStore(args.artifacts_root).unpark(args.provider)
+        print(f"Unparked provider {result['unparked']}: groups {', '.join(result['groups'])} take units again.")
         return
     if role == "coordinator-finalize":
         result = finalize_job(
