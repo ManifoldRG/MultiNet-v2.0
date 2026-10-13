@@ -39,6 +39,14 @@ class MinimalPromptStrategy:
         )
 
 
+class MinimalInteractionRulesStandPromptStrategy(MinimalPromptStrategy):
+    """The minimal prompt plus one interaction-rules line after the Valid actions line."""
+
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        hint = system_templates.INTERACTION_RULES_STAND_HINT
+        return "\n".join([super().build_system_prompt(querying_suffix), hint])
+
+
 class StandardPromptStrategy(MinimalPromptStrategy):
     def build_system_prompt(self, querying_suffix: str = "") -> str:
         del querying_suffix

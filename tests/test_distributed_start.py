@@ -58,6 +58,38 @@ def test_coordinator_prepares_serves_healthchecks(tmp_path):
     assert "127.0.0.1:8765/status" in log
 
 
+def test_coordinator_passes_stale_after_seconds_when_set(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; STALE_AFTER_SECONDS=12600; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "STALE_AFTER='12600'" in log
+    assert '--stale-after-seconds "$STALE_AFTER"' in log
+
+
+def test_coordinator_stale_after_empty_when_unset(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    assert "STALE_AFTER=''" in glog.read_text()
+
+
 _CLAUDE_TOPO = ('{"workers":[{"name":"r1-claude-api-0","kind":"api",'
                 '"model_group":"claude-api","provider":"claude","model":"claude-sonnet-4-6"}]}')
 _KIMI_TOPO = ('{"workers":[{"name":"r1-kimi-api-0","kind":"api",'
@@ -89,6 +121,8 @@ def test_api_worker_claude_exports_anthropic_key(tmp_path):
     # the unquoted heredoc keeps \$COORD_IP literal; the IP arrives via the injected env
     assert "COORD_IP='10.0.0.2'" in log and "coordinator-url" in log
     assert ".venv-multinet" in log
+    # hash seed pinned so a restarted worker can replay-resume its checkpoints
+    assert "export PYTHONHASHSEED=0" in log
     # SECURITY (load-bearing): the key is delivered ONLY via the remote heredoc stdin —
     # never on the --command argv (which leaks to `ps`/gcloud logs) or the launcher stdout.
     args_line = next(line for line in log.splitlines() if line.startswith("ARGS:"))

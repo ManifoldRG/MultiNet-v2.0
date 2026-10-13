@@ -28,5 +28,11 @@ def test_resolve_keys_precedence_env_over_dotenv_over_file(tmp_path):
 
 def test_resolve_keys_absent_is_none(tmp_path):
     keys = resolve_keys(repo_root=tmp_path, env={})
-    assert keys == {"anthropic": None, "kimi": None}
-    assert set(PROVIDER_ENV) == {"anthropic", "kimi"}
+    assert keys == {"anthropic": None, "kimi": None, "openai": None}
+    assert set(PROVIDER_ENV) == {"anthropic", "kimi", "openai"}
+
+
+def test_resolve_keys_openai_is_api_key_txt_line_3(tmp_path):
+    (tmp_path / "api_key.txt").write_text("a\nk\nsk-openai\n", encoding="utf-8")
+    keys = resolve_keys(repo_root=tmp_path, env={})
+    assert keys["openai"] == "sk-openai"
