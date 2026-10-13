@@ -72,6 +72,7 @@ def run_episode(
     max_steps: int | None = None,
     provenance: Optional[dict[str, Any]] = None,
     render: RenderSettings | None = None,
+    resume_from: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Run one episode and flush ``episode.json`` into ``out_dir``.
 
@@ -84,7 +85,22 @@ def run_episode(
     part of any input hash.
     """
     runner = build_episode_runner(task_source, config, seed, max_steps=max_steps, render=render)
-    result = runner.run(agent, verbose=False, maze_path=str(task_source))
+    if resume_from is None:
+        result = runner.run(agent, verbose=False, maze_path=str(task_source))
+    else:
+        # ``resume_from``: {archive_dir, expected_inputs_hash, resume_count, label}
+        # (pipeline.resume): replay-verify the killed run, then continue it.
+        from pipeline import resume
+
+        stepper, resume_provenance = resume.resumed_stepper(
+            runner, Path(resume_from["archive_dir"]),
+            expected_inputs_hash=resume_from.get("expected_inputs_hash"),
+            resume_count=int(resume_from.get("resume_count", 1)),
+            label=str(resume_from.get("label", "")),
+        )
+        stepper.maze_path = str(task_source)
+        result = runner.drive(stepper, agent)
+        provenance = {**(provenance or {}), **resume_provenance}
     if provenance:
         for key, value in provenance.items():
             if value is not None:

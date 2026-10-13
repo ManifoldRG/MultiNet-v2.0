@@ -7,6 +7,7 @@ unit at a time against the same helpers used by the single-process pipeline.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import dataclasses
 import json
@@ -747,6 +748,10 @@ class CoordinatorStore:
                     "updated_at": _iso(),
                 }
             )
+            if "ResumeRefused" in reason:
+                # Another SHA, a diverged replay, an unsupported chat mode: the
+                # same resume would be refused again, so it is not retried.
+                unit_state["terminal"] = True
             worker = state["workers"].setdefault(worker_id, {"worker_id": worker_id})
             worker["status"] = "failed"
             worker.pop("current_unit_id", None)
@@ -942,12 +947,12 @@ class CoordinatorStore:
     def _assignment(self, plan: dict[str, Any], unit: dict[str, Any], unit_state: dict[str, Any]) -> dict[str, Any]:
         payload = self._unit_payload(plan, unit)
         if unit_state.get("resume_pending"):
-            # The killed run the worker resumes from (replay-verified there).
-            # Frames are re-rendered by the replay, so only the JSON travels.
-            run_dir = self.artifacts_root / unit["run_dir"]
+            # The killed run's own upload: the worker replay-verifies it and
+            # continues; its query images keep the resumed episode complete.
+            archive = _uploads_root(self.artifacts_root) / f"{unit['unit_id']}.tar.gz"
             payload["resume"] = {
-                "episode": _read_json(run_dir / "episode.json"),
-                "run_inputs": _read_json(run_dir / "run_inputs.json"),
+                "archive_b64": base64.b64encode(archive.read_bytes()).decode("ascii"),
+                "resume_count": int(unit_state.get("resume_count", 1)),
             }
         return payload
 
@@ -1294,6 +1299,20 @@ def run_assigned_unit(
             "predates the resolved-config change; regenerate it with the coordinator-prepare role."
         )
 
+    resume_from = None
+    if unit.get("resume"):
+        # A resumable unit: continue the killed run from its archive (pipeline.resume).
+        from pipeline import resume
+
+        archive_dir = resume.unpack_archive(
+            unit["resume"]["archive_b64"], artifacts_root / DISTRIBUTED_DIR / "resume" / unit["unit_id"]
+        )
+        resume_from = {
+            "archive_dir": archive_dir,
+            "expected_inputs_hash": unit.get("episode_inputs_hash"),
+            "resume_count": int(unit["resume"].get("resume_count", 1)),
+            "label": unit["unit_id"],
+        }
     result = pipeline._run_one_unit(
         row,
         agent,
@@ -1310,6 +1329,7 @@ def run_assigned_unit(
         conditions=unit.get("condition_set"),
         render=render,
         force=force,
+        resume_from=resume_from,
     )
     if result is None:
         raise RuntimeError(f"Assigned unit {unit['unit_id']} is not runnable.")
@@ -1660,6 +1680,7 @@ def run_lockstep_worker(
     handed_out: dict[str, dict[str, Any]] = {}   # unit_id -> assign payload
     lockstep_units: dict[str, Any] = {}          # unit_id -> LockstepUnit
     preps: dict[str, Any] = {}                    # unit_id -> _PreparedUnitRun
+    resumed: dict[str, dict[str, Any]] = {}       # unit_id -> resume provenance
     finalized: set[str] = set()
     completed: list[str] = []
     failed: list[str] = []
@@ -1717,7 +1738,25 @@ def run_lockstep_worker(
             prep.source, prep.experiment_config, int(unit["seed"]),
             max_steps=prep.runtime_spec.max_steps, render=render,
         )
-        if checkpoint_path.exists():
+        resumed.pop(unit_id, None)
+        if unit.get("resume") and not checkpoint_path.exists():
+            # A resumable unit: replay-verify the killed run, then continue it.
+            from pipeline import resume
+
+            try:
+                archive_dir = resume.unpack_archive(
+                    unit["resume"]["archive_b64"], artifacts_root / DISTRIBUTED_DIR / "resume" / unit_id
+                )
+                stepper, resumed[unit_id] = resume.resumed_stepper(
+                    runner, archive_dir, expected_inputs_hash=unit.get("episode_inputs_hash"),
+                    resume_count=int(unit["resume"].get("resume_count", 1)), label=unit_id,
+                )
+            except resume.ResumeRefused as exc:
+                _safe_fail(client, worker_id, unit_id, f"{type(exc).__name__}: {exc}")
+                failed.append(unit_id)
+                return None
+            stepper.maze_path = str(prep.source)
+        elif checkpoint_path.exists():
             # Crash resume: rebuild the stepper at the query boundary the previous
             # attempt checkpointed instead of re-running from scratch.
             stepper = resume_stepper(checkpoint_path, runner=runner)
@@ -1742,8 +1781,9 @@ def run_lockstep_worker(
             render = _unit_render(unit)
             if render.backend != "minigrid":                 # as run_episode stamps it
                 result["render"] = render.provenance(prep.runtime_spec)
+            result.update(resumed.get(unit_id, {}))           # resumed_from / resume
             flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
-            prep.write_run_inputs(extras={"pricing_tier": "batch"})
+            prep.write_run_inputs(extras={"pricing_tier": "batch", **resumed.get(unit_id, {})})
             episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))
             prep.score_episode(episode)                      # run_score.json
             archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
