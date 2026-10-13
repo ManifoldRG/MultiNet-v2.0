@@ -532,6 +532,7 @@ class MiniGridPlaySession:
                 "terminated": terminated,
                 "truncated": truncated,
                 "backend_info": info,
+                **({"mechanic": info["mechanic"]} if info and info.get("mechanic") else {}),
             }
         )
 

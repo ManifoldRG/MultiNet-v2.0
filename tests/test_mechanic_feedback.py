@@ -561,7 +561,31 @@ def test_summary_survives_a_json_round_trip():
         )
 
 
-# --- other feedback callers: prompt preview ----------------------------------------
+# --- other feedback callers: demo + prompt preview ------------------------------
+
+
+def test_demo_summary_matches_the_runner(tmp_path):
+    # The summary reads the world-model label from each record's top level, so
+    # the demo has to store it there as the runner does.
+    from demo.r1_config import R1_CONFIG
+    from demo.session import MiniGridPlaySession
+
+    cases = [
+        (teleport_spec(), [A.MOVE_FORWARD] * 4),
+        (ice_spec(), [A.MOVE_FORWARD] * 5),
+        (death_spec(), [A.MOVE_FORWARD, A.PICKUP, A.MOVE_FORWARD, A.MOVE_FORWARD, A.MOVE_FORWARD]),
+        (_spec({"death_portals": [[2, 1]]}), [A.MOVE_FORWARD]),
+        (_ride_spec(), [A.MOVE_FORWARD, A.MOVE_FORWARD]),
+    ]
+    for i, (spec, actions) in enumerate(cases):
+        path = tmp_path / f"maze_{i}.json"
+        path.write_text(json.dumps(spec.to_dict()))
+        session = MiniGridPlaySession(
+            task_path=str(path), config=replace(R1_CONFIG, feedback="standard")
+        )
+        for action in actions:
+            session._step_token(A(action).name)
+        assert text_summary_history(session._model_transcript(), spec) == _summary(spec, actions)
 
 
 def test_prompt_preview_labels_mechanics():
