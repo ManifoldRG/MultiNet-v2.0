@@ -239,6 +239,8 @@ _NON_RUNTIME_MODEL_KEYS = {
     "hardware_profile",
     "worker_tags",
     "max_in_flight",
+    "worker_role",
+    "worker_concurrency",
     # transport / model-loading (do not affect outputs)
     "timeout",
     "max_attempts",
@@ -1062,6 +1064,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "reasoning_effort" in model_cfg:
+            cfg.reasoning_effort = str(model_cfg["reasoning_effort"])
         if "batch_deadline_s" in model_cfg:
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:
