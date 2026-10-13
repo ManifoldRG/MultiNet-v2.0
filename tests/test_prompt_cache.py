@@ -236,7 +236,8 @@ def test_run_config_plumbs_provider_cache_options(monkeypatch):
     assert kimi.config.prompt_cache_ttl == "1h"
 
 
-@pytest.mark.parametrize("context_window", ["last3", "last_n", "full"])
+
+@pytest.mark.parametrize("context_window", ["last_n", "text_summary_and_last_n", "full"])
 def test_history_breakpoints_only_apply_to_full_context(context_window):
     rgb = np.zeros((2, 2, 3), dtype=np.uint8)
     transcript = [
@@ -425,7 +426,8 @@ def test_prompt_cache_model_options_do_not_change_run_hash():
     assert expected_hash(first) == expected_hash(second)
 
 
-@pytest.mark.parametrize("context_window", ["last3", "last_n", "full"])
+
+@pytest.mark.parametrize("context_window", ["last_n", "text_summary_and_last_n", "full"])
 def test_runner_marks_history_only_for_full_context_window(context_window):
     spec = _simple_spec()
     backend = MiniGridBackend(render_mode="rgb_array")
