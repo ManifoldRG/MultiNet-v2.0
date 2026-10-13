@@ -1,7 +1,7 @@
 <p align="center">
   <kbd>
   <img src="assets/multinet_logo.png" alt="MultiNet Logo" style="height:200px; border-radius:50%;">
-  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet 2.0 Preview: Goal Progress Decays with Task Horizon for Frontier VLMs in Interactive 2D Environments</h1>
+  <h1 align="center" style="display: inline-block; vertical-align: middle; margin-left: 20px;">MultiNet 2.0 Preview: Frontier VLMs fail interactive, 2D environments</h1>
   </kbd>
 </p>
 
