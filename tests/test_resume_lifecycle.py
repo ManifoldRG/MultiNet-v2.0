@@ -9,7 +9,10 @@ its stall counter and steps left, and keeps it out of the final rows.
 
 from __future__ import annotations
 
+import base64
+import io
 import json
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -106,8 +109,12 @@ def test_a_resumable_unit_is_handed_out_again_with_its_archive_and_no_attempt_bu
     attempts = store.load_state()["units"][unit["unit_id"]]["attempts"]
     again = store.assign("w2", {"model_group": "stub"})["unit"]
     assert again["unit_id"] == unit["unit_id"]
-    assert again["resume"]["episode"]["end_reason"].startswith("agent_error:")
-    assert again["resume"]["run_inputs"]["inputs_hash"] == unit["episode_inputs_hash"]
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(again["resume"]["archive_b64"])), mode="r:gz") as tar:
+        episode = json.load(tar.extractfile("episode.json"))
+        run_inputs = json.load(tar.extractfile("run_inputs.json"))
+    assert episode["end_reason"].startswith("agent_error:")
+    assert run_inputs["inputs_hash"] == unit["episode_inputs_hash"]
+    assert again["resume"]["resume_count"] == 1
     state = store.load_state()["units"][unit["unit_id"]]
     assert state["attempts"] == attempts and state["resume_count"] == 1
 

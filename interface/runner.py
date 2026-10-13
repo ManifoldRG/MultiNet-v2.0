@@ -226,6 +226,11 @@ class ExperimentRunner:
 
         stepper = EpisodeStepper(self, verbose=verbose, maze_path=maze_path)
         stepper.start()
+        return self.drive(stepper, agent)
+
+    def drive(self, stepper, agent: Callable[[List[dict]], str]) -> dict:
+        """Query ``agent`` until ``stepper`` (started, or resumed by
+        ``resume_stepper``) finishes; return the episode result."""
         agent_error: str | None = None
         while (messages := stepper.next_query()) is not None:
             _reset_agent_usage(agent)
