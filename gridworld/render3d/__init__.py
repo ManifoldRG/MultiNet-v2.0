@@ -12,5 +12,6 @@ applies that default first.
 # palette, materials, lighting, cameras, HUD): it is folded into the 3D episode
 # cache key and run_inputs.json, so a bump re-runs episodes whose frames were
 # drawn by older renderer code instead of silently reusing them.
-RENDER3D_VERSION = "3"  # 3: first-person status slots (carried key, switch underfoot)
-#                          2: top_down compass moved off the interior cells
+# 4: first-person status slots (PR #55) on top of 3: PR #58 tiles, red agent,
+# wide first-person eye; 2: top_down compass off the interior cells.
+RENDER3D_VERSION = "4"

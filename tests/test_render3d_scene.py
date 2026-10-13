@@ -24,10 +24,6 @@ def _spec(d):
     [
         ({"mechanisms": {"blocks": [{"id": "b1", "position": [4, 1]}]}}, "blocks"),
         ({"mechanisms": {"hazards": [{"id": "h1", "position": [4, 1], "hazard_type": "lava"}]}}, "hazards"),
-        (
-            {"mechanisms": {"teleporters": [{"id": "t1", "position_a": [4, 1], "position_b": [5, 1]}]}},
-            "teleporters",
-        ),
         ({"goal": {"type": "collect_all", "target_ids": ["k1"]}}, "goal_type"),
         ({"rules": {"observability": "view_cone"}}, "observability"),
         (
