@@ -117,6 +117,7 @@ def _bash(snippet: str, env: dict) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
     e["DIFFICULTY_MAX"] = "3000"  # required, no default (next-run-fixes item 7)
+    e["API_PREFLIGHT_CMD"] = "true"  # no live API probe from tests (tests/test_api_preflight.py covers it)
     e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, cwd=REPO, env=e)
 
