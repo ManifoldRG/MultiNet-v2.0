@@ -18,6 +18,14 @@ class BillingExhausted(RuntimeError):
         super().__init__(f"{provider}: {detail}")
 
 
+class BillingParked(BillingExhausted):
+    """Raised at an episode's next query once its provider is parked: another
+    episode hit the provider's billing limit. The episode ends resumable."""
+
+    def __init__(self, provider: str):
+        super().__init__(provider, "parked: another episode hit this provider's billing limit")
+
+
 def billing_provider(end_reason: str | None) -> str | None:
     """The provider named by a billing end_reason, else None."""
     if not end_reason or not end_reason.startswith(BILLING_END_REASON_PREFIX):

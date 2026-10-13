@@ -12,6 +12,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from interface.agents.billing import BillingExhausted
 from interface.agents.http_retry import call_with_retry
 from interface.agents.moonshot_batch import MoonshotBatchDeadline, run_moonshot_batch
 from interface.agents.reply import Reply, detect_token_truncated
@@ -149,6 +150,8 @@ def _post_chat_completions(
         payload = call_with_retry(_do_request, max_attempts=max_attempts)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
+        if any(marker in detail.lower() for marker in ("insufficient balance", "exceeded_current_quota")):
+            raise BillingExhausted("kimi", f"Moonshot API HTTP {exc.code}: {detail}") from exc
         raise RuntimeError(f"Moonshot API HTTP {exc.code}: {detail}") from exc
     except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
         if isinstance(exc, urllib.error.URLError) and not isinstance(
