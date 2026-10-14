@@ -9,6 +9,8 @@ from typing import Callable, List
 
 import numpy as np
 
+from interface.agents.billing import BillingExhausted
+
 from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
@@ -24,6 +26,7 @@ from interface.observation import (
     leading_summary_blocks,
 )
 from interface.prompt_strategies import (
+    MinimalInteractionRulesStandPromptStrategy,
     MinimalPromptStrategy,
     PromptStrategy,
     RenderContext,
@@ -42,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
+    "minimal_interaction_rules_stand": MinimalInteractionRulesStandPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
     "text_initial_maze": TextInitialMazePromptStrategy,
@@ -224,8 +228,26 @@ class ExperimentRunner:
 
         stepper = EpisodeStepper(self, verbose=verbose, maze_path=maze_path)
         stepper.start()
+        return self.drive(stepper, agent)
+
+    def drive(
+        self,
+        stepper,
+        agent: Callable[[List[dict]], str],
+        *,
+        at_query_boundary: Callable | None = None,
+        after_reply: Callable | None = None,
+    ) -> dict:
+        """Query ``agent`` until ``stepper`` (started, or resumed by
+        ``resume_stepper``) finishes; return the episode result.
+
+        ``at_query_boundary(stepper)`` runs once a query is built, before the
+        agent is called (the only point a checkpoint can be taken);
+        ``after_reply(stepper, reply)`` runs once a reply is applied."""
         agent_error: str | None = None
         while (messages := stepper.next_query()) is not None:
+            if at_query_boundary is not None:
+                at_query_boundary(stepper)
             _reset_agent_usage(agent)
             try:
                 if hasattr(agent, "generate"):
@@ -241,6 +263,8 @@ class ExperimentRunner:
                         thinking=getattr(agent, "last_thinking", None),
                     )
                 stepper.apply_reply(reply)
+                if after_reply is not None:
+                    after_reply(stepper, reply)
             except Exception as exc:  # noqa: BLE001 — never lose paid work
                 # Episode artifacts are only written after this method returns
                 # and callers (run_pipeline) have no per-episode isolation, so a
@@ -249,7 +273,10 @@ class ExperimentRunner:
                 # says plainly that this is an infra outcome, not a model one.
                 # KeyboardInterrupt/SystemExit are BaseException and still
                 # propagate — Ctrl-C must stay an interrupt.
-                agent_error = f"agent_error:{type(exc).__name__}: {exc}"[:200]
+                # Billing (incl. subclasses like a spend cap) gets one prefix the
+                # coordinator parks on (interface.agents.billing).
+                name = "BillingExhausted" if isinstance(exc, BillingExhausted) else type(exc).__name__
+                agent_error = f"agent_error:{name}: {exc}"[:200]
                 logger.error("episode aborted by agent error: %s", exc)
                 # next_query already reserved this round's index; roll it back so
                 # query_count equals the applied-query count.

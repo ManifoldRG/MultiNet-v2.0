@@ -12,6 +12,7 @@ import pytest
 from scripts.resume_from_archive import (
     IN_PROGRESS_END_REASON,
     build_checkpoint_payload,
+    build_live_agent,
     drive_continue_loop,
     rehydrate_agent_messages,
     scripted_action_from_spec,
@@ -60,6 +61,86 @@ def test_build_checkpoint_payload_refuses_finished_episodes():
     episode = {"end_reason": "success", "task_spec": {"seed": 0}, "transcript": []}
     with pytest.raises(SystemExit):
         build_checkpoint_payload(episode)
+
+
+def test_build_checkpoint_payload_clears_an_agent_error_kill():
+    """R1-frontier: OpenAI billing exhaustion ended episodes mid-run. The
+    runner rolls back the failed query's index, so the transcript ends at a
+    clean query boundary with no trailing parse failures."""
+    episode = {
+        "end_reason": "agent_error:RuntimeError: OpenAI API quota exhausted "
+                      "(HTTP 429 insufficient_quota): {",
+        "task_spec": {"seed": 0},
+        "transcript": [{"kind": "reset"}, _query(1, True), _step(1), _query(2, True), _step(2)],
+    }
+    payload = build_checkpoint_payload(episode)
+    assert payload["query_count"] == 2
+    assert payload["parse_failures"] == 0
+    assert payload["finished"] is False
+    assert payload["end_reason"] == IN_PROGRESS_END_REASON
+
+
+@pytest.mark.parametrize(
+    "end_reason",
+    ["stalled", "truncated", "max_steps", "wrong_done", "resume_interrupted:agent_error:X", None],
+)
+def test_build_checkpoint_payload_refuses_model_outcomes(end_reason):
+    with pytest.raises(SystemExit):
+        build_checkpoint_payload({"end_reason": end_reason, "task_spec": {"seed": 0}, "transcript": []})
+
+
+_OPENAI_RUN_CFG = {
+    "provider": "openai", "model": "gpt-6-astra", "max_tokens": 64000,
+    "reasoning_effort": "xhigh", "service_tier": "flex", "image_detail": "high",
+    "timeout": 1800, "max_attempts": 30, "spend_cap_usd": 150,
+    "group": "openai-api", "worker_count": 1, "max_in_flight": 50, "tasks": ["all"],
+}
+
+
+def test_build_live_agent_openai_keeps_archived_params_and_overrides_the_cap(monkeypatch):
+    from interface.agents.openai_agent import OpenAIAgent
+
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    agent = build_live_agent(_OPENAI_RUN_CFG, spend_cap_usd=13.0, log=lambda _m: None)
+    assert isinstance(agent, OpenAIAgent)
+    c = agent.config
+    assert (c.model, c.max_tokens, c.reasoning_effort, c.service_tier, c.image_detail) == (
+        "gpt-6-astra", 64000, "xhigh", "flex", "high",
+    )
+    assert (c.timeout, c.max_attempts) == (1800, 30)
+    # Never the archived per-run cap: this process's ledger starts at $0.
+    assert c.spend_cap_usd == 13.0
+
+
+def test_build_live_agent_openai_requires_a_spend_cap(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    with pytest.raises(SystemExit, match="spend-cap-usd"):
+        build_live_agent(_OPENAI_RUN_CFG, spend_cap_usd=None, log=lambda _m: None)
+
+
+def test_build_live_agent_timeout_override_is_client_patience_only(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    agent = build_live_agent(_OPENAI_RUN_CFG, spend_cap_usd=5, timeout=99, log=lambda _m: None)
+    assert agent.config.timeout == 99
+    assert agent.config.reasoning_effort == "xhigh"
+
+
+def test_build_live_agent_kimi_path_unchanged(monkeypatch):
+    from interface.agents.kimi_k26 import KimiK26Agent
+
+    monkeypatch.setenv("MOONSHOT_API_KEY", "k")
+    agent = build_live_agent(
+        {"provider": "kimi", "model": "kimi-k2.6", "max_tokens": 64000, "temperature": 1.0,
+         "enable_thinking": True, "timeout": 2400, "group": "kimi-api"},
+        log=lambda _m: None,
+    )
+    assert isinstance(agent, KimiK26Agent)
+    assert (agent.config.enable_thinking, agent.config.timeout) == (True, 2400)
+
+
+def test_build_live_agent_rejects_unknown_provider():
+    with pytest.raises(SystemExit, match="provider"):
+        build_live_agent({"provider": "qwen_vllm_api"}, log=lambda _m: None)
 
 
 def test_rehydrate_restores_present_images_and_placeholders_missing(tmp_path: Path):

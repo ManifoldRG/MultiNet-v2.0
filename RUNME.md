@@ -70,6 +70,26 @@ python -m scripts.run_pipeline \
   --seeds 0
 ```
 
+### R1-frontier: frontier models on the R1 cell (paid)
+
+A separate experimental set: GPT-6 Astra on the same 50-maze panel and the
+same fixed cell (`run_config.r1_frontier.json`, provider `openai`, xhigh
+reasoning, 64k cap, flex tier). Claude Opus 5.5 runs the same cell from
+`run_config.r1_frontier_opus55.json` through the Batch API lockstep worker
+(`API_WORKER_ROLE=lockstep-worker`; serve the coordinator with
+`STALE_AFTER_SECONDS` of at least 12600 so a slow batch is not reaped). `OPENAI_API_KEY` resolves from env, `.env`,
+or line 3 of `api_key.txt`; `python -m deploy.check_api_keys --provider
+openai` round-trips it and prints the key's rate limits (OpenAI reserves the
+64k `max_completion_tokens` against TPM, so the tier bounds concurrency).
+Every config carries a `spend_cap_usd` hard stop.
+
+1. Calibrate: `run_config.r1_frontier_calib_terra.json` (Terra, 5 smoke
+   mazes) and optionally `run_config.r1_frontier_probe_astra.json` (Astra, one
+   maze) over `manifest.r1_smoke_batch.json`.
+2. Project: `python -m scripts.estimate_frontier_cost --artifacts-root <root>`.
+3. Launch: `launch_distributed.sh` with `RUN_CONFIG=gridworld/fixtures/run_config.r1_frontier.json`
+   (one coordinator + one API VM; `API_WORKER_CONCURRENCY` sized to the tier).
+
 ## 4. Scoring
 
 Scoring runs inside the pipeline (`scorer/`): static maze/difficulty scores
@@ -101,6 +121,39 @@ another version. `scripts/resume_from_archive.py` rebuilds a 3D archive's
 recorded backend and refuses one its worktree would draw differently.
 Text-only (NL) runs need nothing extra: set `"experiment_config":
 {"observation": "text_only"}` on the 2D backend.
+
+**Infra kills, resume and billing.**
+- *Preflight.* Before any VM, the launcher (and `sweep_run.sh next-batch` /
+  `run-massive`) sends one tiny request per API model in the run-config and
+  checks Moonshot's balance against the model's spend cap. An invalid key or an
+  empty account stops the launch. `SKIP_API_PREFLIGHT=1` skips it (dev only,
+  with a loud warning).
+- *Killed units resume.* An episode that ends on `agent_error:*` (transport,
+  billing, an API 400) is uploaded as **resumable**, not verified, and handed
+  out again: the worker replays every recorded action against a fresh backend,
+  refuses on any divergence, and continues, so only the rest of the episode is
+  paid for. Automatic resume needs the same code SHA (replay checks the
+  environment, not the prompts); a cross-SHA resume is a manual
+  `scripts/resume_from_archive.py` job. After `MAX_RESUMES` (2) non-billing
+  kills a unit fails. Resumed episodes record `resumed_from` and `resume`
+  (as-run SHA, replay-verified, resume query index).
+- *Reports.* `/status` lists `infra_killed` units with their stall counter
+  (`s/K`) and steps left (`max_steps - steps_used`), and `parked_providers`.
+  `coordinator-finalize` refuses while killed units remain, unless
+  `--allow-partial-finalize`.
+- *Billing.* A billing error parks every model group on that provider: no new
+  units, and in-flight episodes park at their next query as resumable. Other
+  providers keep running. After topping up, on the coordinator:
+  `python -m scripts.run_pipeline --distributed-role coordinator-unpark
+  --artifacts-root artifacts/<RUN_ID> --provider <claude|kimi|openai>`. Parked
+  workers exit, so start that group's workers again after the unpark
+  (`start_worker`, or `sweep_run.sh next-batch`). While units wait, the
+  supervisor counts them as work left (no "partial" stop) until its stall
+  timeout.
+- *Local runs.* `run_pipeline` keeps a cached killed episode as-is; pass
+  `--resume-killed` to resume it. A serial episode checkpoints every query
+  (`checkpoint.json`, `queries.jsonl` in its run dir), so a process killed
+  mid-episode resumes from its last query on the next run.
 
 **Pre-scored Stage 2 (`PRESCORED_TASKS`).** Static scoring of the PR #57
 mechanics mazes takes minutes to tens of minutes per maze, and the coordinator

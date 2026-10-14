@@ -38,6 +38,14 @@ def test_opus_47_and_fable_and_mythos_omit_sampling_params():
         assert "temperature" not in _body(model)
 
 
+def test_opus_5_line_omits_sampling_params():
+    # Opus 5 / 5.5 reject sampling params like Opus 4.7+; the "claude-opus-5"
+    # prefix must cover "claude-opus-5-5" (the R1-frontier Opus 5.5 run).
+    for model in ("claude-opus-5", "claude-opus-5-5"):
+        assert _omits_sampling_params(model), model
+        assert "temperature" not in _body(model)
+
+
 def test_sonnet_46_and_opus_46_keep_temperature():
     for model in ("claude-sonnet-4-6", "claude-opus-4-6"):
         assert not _omits_sampling_params(model), model
@@ -86,3 +94,31 @@ def test_parse_response_thinking_none_when_absent():
     text, _usage, thinking = _parse_response(payload)
     assert text == "FINAL_OUTPUT: MOVE_FORWARD"
     assert thinking is None
+
+
+def test_parse_response_surfaces_thinking_tokens_as_reasoning_tokens():
+    # Opus 5.5 reports the billed reasoning size even when the thinking text is
+    # empty (as on the Batch API); keep it under the OpenAI agent's key.
+    payload = {
+        "content": [
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": "FINAL_OUTPUT: MOVE_FORWARD"},
+        ],
+        "usage": {
+            "input_tokens": 296,
+            "output_tokens": 1271,
+            "output_tokens_details": {"thinking_tokens": 892},
+        },
+    }
+    text, usage, thinking = _parse_response(payload)
+    assert text == "FINAL_OUTPUT: MOVE_FORWARD"
+    assert thinking is None
+    assert usage["reasoning_tokens"] == 892
+    assert usage["output_tokens"] == 1271
+
+
+def test_parse_response_without_thinking_details_has_no_reasoning_tokens():
+    payload = {"content": [{"type": "text", "text": "x"}],
+               "usage": {"input_tokens": 1, "output_tokens": 2}}
+    _, usage, _ = _parse_response(payload)
+    assert "reasoning_tokens" not in usage
