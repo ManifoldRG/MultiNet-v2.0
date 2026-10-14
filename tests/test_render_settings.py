@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from gridworld.render3d import RENDER3D_VERSION
 from gridworld.render_settings import RenderSettings
 from gridworld.task_spec import TaskSpecification
 from render3d_test_utils import CORRIDOR  # 7x3 maze
 
 SPEC = TaskSpecification.from_dict(CORRIDOR)
+V = f"_r{RENDER3D_VERSION}"  # every 3D label ends with the render version
 
 
 def test_default_is_the_2d_backend_and_changes_nothing():
@@ -21,7 +23,7 @@ def test_default_is_the_2d_backend_and_changes_nothing():
 
 def test_3d_block_sets_camera_and_sizes_the_frame_by_the_longer_side():
     settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "first_person"}})
-    assert settings.label == "mujoco3d_first_person_grid"
+    assert settings.label == "mujoco3d_first_person_grid" + V
     # "grid" = MiniGrid's 32 px per cell of the longer side, in a square frame:
     # the 2D pixel budget only for a square maze (this 7x3 one is 224x96 in 2D)
     assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 7 * 32}
@@ -31,8 +33,20 @@ def test_fixed_resolution_is_recorded_in_the_label():
     settings = RenderSettings.from_run_config(
         {"render": {"backend": "mujoco3d", "camera": "first_person", "resolution": 512}}
     )
-    assert settings.label == "mujoco3d_first_person_512"
+    assert settings.label == "mujoco3d_first_person_512" + V
     assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 512}
+
+
+def test_a_render_version_bump_moves_3d_artifacts_to_a_new_label(monkeypatch):
+    """The version is in the artifact path: a rerun after a visual change writes
+    beside the old episodes instead of over them. 2D has no render version."""
+    import gridworld.render3d as render3d
+
+    settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "top_down"}})
+    before = settings.label
+    monkeypatch.setattr(render3d, "RENDER3D_VERSION", "99")
+    assert settings.label == "mujoco3d_top_down_grid_r99" != before
+    assert RenderSettings().label == "minigrid"
 
 
 @pytest.mark.parametrize(
@@ -64,7 +78,7 @@ def test_start_map_gets_its_own_label_kwarg_and_provenance():
     settings = RenderSettings.from_run_config({"render": FIRST_PERSON_MAP})
     assert settings.start_map is True
     # its own artifact directory and run hash: never collides with a no-map run
-    assert settings.label == "mujoco3d_first_person_grid_map"
+    assert settings.label == "mujoco3d_first_person_grid_map" + V
     assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 7 * 32, "start_map": True}
     # the flag is part of the 3D cache key and the recorded render provenance
     assert settings.provenance(SPEC)["start_map"] is True
@@ -77,7 +91,7 @@ def test_start_map_gets_its_own_label_kwarg_and_provenance():
 def test_no_start_map_changes_nothing(block):
     settings = RenderSettings.from_run_config({"render": block})
     assert settings.start_map is False
-    assert settings.label == "mujoco3d_first_person_grid"
+    assert settings.label == "mujoco3d_first_person_grid" + V
     assert settings.backend_kwargs(SPEC) == {"camera": "first_person", "resolution": 7 * 32}
     assert settings.provenance(SPEC)["start_map"] is False
 
@@ -104,8 +118,18 @@ def test_start_map_needs_an_observation_that_carries_images():
     settings.check_observation("image_text")
     with pytest.raises(ValueError, match="text_only"):
         settings.check_observation("text_only")
-    # without a start map every observation stays allowed
+    # 2D allows every observation
     RenderSettings().check_observation("text_only")
+
+
+def test_3d_refuses_text_only_observation():
+    """text_only never shows a frame, so a 3D run would repeat the 2D run under
+    another label and pay for GL work the model never sees."""
+    settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "top_down"}})
+    settings.check_observation("image_only")
+    settings.check_observation("image_text")
+    with pytest.raises(ValueError, match="text_only"):
+        settings.check_observation("text_only")
 
 
 @pytest.mark.parametrize("block", [[], "", 0, False, None, "mujoco3d", ["mujoco3d"]])
