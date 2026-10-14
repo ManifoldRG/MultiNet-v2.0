@@ -1,4 +1,4 @@
-"""next-run-fixes item 17 (cheap part): a serial episode killed mid-run leaves a
+"""A serial episode killed mid-run leaves a
 resumable partial and its spend record.
 
 run_episode checkpoints at every query boundary (stateless chat) and appends

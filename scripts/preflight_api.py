@@ -1,5 +1,5 @@
 """Launch preflight: every API key and account a run-config uses must work
-before any VM starts (next-run-fixes item 2).
+before any VM starts.
 
 Each API model gets one tiny live request through its real agent, with its own
 model id, so an invalidated key (GPT-6 Astra's 401 on 2026-10-13), a model the

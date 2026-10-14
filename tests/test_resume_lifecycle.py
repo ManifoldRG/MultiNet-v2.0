@@ -1,4 +1,4 @@
-"""next-run-fixes items 1-2: an infra-killed unit is resumable, not verified.
+"""An infra-killed unit is resumable, not verified.
 
 An episode that ends on ``agent_error:*`` (dead transport, billing, an API 400)
 is a partial run. The coordinator used to verify it like a finished one, so a

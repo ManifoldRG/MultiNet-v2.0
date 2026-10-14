@@ -1,4 +1,4 @@
-"""next-run-fixes item 2: billing exhaustion parks the provider instead of
+"""Billing exhaustion parks the provider instead of
 ending the run's episodes.
 
 Agents raise BillingExhausted for an exhausted account or a spend cap. The

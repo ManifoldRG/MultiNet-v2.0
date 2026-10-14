@@ -1,4 +1,4 @@
-"""next-run-fixes item 2: a launch preflight refuses a run whose API key or
+"""A launch preflight refuses a run whose API key or
 account cannot work, before any VM starts.
 
 Every API model in the run-config gets one tiny live request through its real

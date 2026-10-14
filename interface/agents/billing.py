@@ -1,7 +1,7 @@
 """Billing exhaustion: the provider account is out of credit or a spend cap was hit.
 
-Agents raise ``BillingExhausted`` instead of a generic error so the run can pause
-(next-run-fixes item 2): the runner ends the episode as
+Agents raise ``BillingExhausted`` instead of a generic error so the run can pause:
+the runner ends the episode as
 ``agent_error:BillingExhausted: <provider>: ...``, the coordinator keeps it
 resumable without counting it against MAX_RESUMES, and parks every model group
 on that provider until someone tops up and unparks.

@@ -541,6 +541,6 @@ class EpisodeStepper:
         )
         if self._stall_watchdog is not None:
             # Where the stall counter stood when the episode ended, so a killed
-            # unit's report can say how soon a resume would stop (item 1).
+            # unit's report can say how soon a resume would stop.
             result["stall"] = {"k": self.stall_k, "remaining": self._stall_watchdog.remaining}
         return result
