@@ -1,4 +1,4 @@
-"""3D render runs on the fleet (next-run-fixes item 20).
+"""3D render runs on the fleet.
 
 The run-config ``render`` block reaches every distributed entry point: the
 coordinator plans 3D units under the versioned 3D label (their own artifact

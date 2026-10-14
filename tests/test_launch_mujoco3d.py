@@ -1,4 +1,4 @@
-"""Fleet VMs for 3D runs (next-run-fixes item 20): a run-config whose render
+"""Fleet VMs for 3D runs: a run-config whose render
 block names mujoco3d gets MuJoCo + OSMesa on every VM, one mujoco version
 everywhere (it is in every 3D unit's hash), before any coordinator or worker
 starts. All cloud and git calls are stubbed."""
@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parent.parent
 def bash(snippet: str, env: dict | None = None) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
-    e["DIFFICULTY_MAX"] = "3000"  # required, no default (next-run-fixes item 7)
+    e["DIFFICULTY_MAX"] = "3000"  # required, no default
     if env:
         e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, cwd=REPO, env=e)
