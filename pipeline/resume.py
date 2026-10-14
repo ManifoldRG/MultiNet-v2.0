@@ -1,4 +1,4 @@
-"""Resume an infra-killed episode from its archive (next-run-fixes item 1).
+"""Resume an infra-killed episode from its archive.
 
 One gate for every worker type (serial, lockstep, local run_pipeline): the
 killed run's recorded actions are replayed against a fresh backend and checked

@@ -157,7 +157,7 @@ def _load_parts(transcript: list[dict], parts: Path) -> None:
 
 # GridState fields serialized from sets: their list order follows
 # PYTHONHASHSEED, so two processes can write the same state in different
-# orders (next-run-fixes item 3). Replay compares them as sets.
+# orders. Replay compares them as sets.
 _SET_VALUED_STATE_FIELDS = (
     "open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells",
 )

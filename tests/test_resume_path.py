@@ -1,4 +1,4 @@
-"""next-run-fixes item 1: a resumable unit resumes on a worker through the
+"""A resumable unit resumes on a worker through the
 replay-verify gate and finishes as one episode with resume provenance.
 
 The worker gets the killed run's archive, replays every recorded action

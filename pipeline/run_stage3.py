@@ -89,7 +89,7 @@ def run_episode(
     result so ``flush_episode_log`` persists it on ``episode.json``. It is never
     part of any input hash.
 
-    Item 17: a stateless episode checkpoints ``out_dir/checkpoint.json`` at every
+    Crash safety: a stateless episode checkpoints ``out_dir/checkpoint.json`` at every
     query boundary and every episode appends one usage line per query to
     ``out_dir/queries.jsonl``, so a process killed mid-episode leaves a
     resumable partial and its spend record; the next run of the same unit
