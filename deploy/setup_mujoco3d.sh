@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Make this VM able to draw 3D frames for a fleet run (next-run-fixes item 20).
+# Make this VM able to draw 3D frames for a fleet run.
 #
 # Run ON the VM from the repo root:  bash deploy/setup_mujoco3d.sh <venv-dir>
 # launch_distributed.sh does this on every VM when the run-config's render

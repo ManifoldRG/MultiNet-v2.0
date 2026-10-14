@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 def bash(snippet: str, env: dict | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
-    e["DIFFICULTY_MAX"] = "3000"  # required, no default (next-run-fixes item 7)
+    e["DIFFICULTY_MAX"] = "3000"  # required, no default
     e["API_PREFLIGHT_CMD"] = "true"  # no live API probe from tests (tests/test_api_preflight.py covers it)
     if env:
         e.update(env)

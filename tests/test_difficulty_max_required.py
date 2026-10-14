@@ -1,4 +1,4 @@
-"""next-run-fixes item 7: DIFFICULTY_MAX normalises every run's difficulty
+"""DIFFICULTY_MAX normalises every run's difficulty
 score, so a launcher default silently scored runs against another scale (the
 default was 1000; R1 used 3000). It is required, like MAX_RUN_DURATION: no
 default, fail closed before any VM or coordinator call."""
