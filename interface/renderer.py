@@ -46,9 +46,21 @@ def rgb_to_png_bytes(rgb: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
+def png_data_url(png: bytes) -> str:
+    b64 = base64.b64encode(png).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
+
+
+def rgb_to_png_data_url(rgb: np.ndarray) -> str:
+    return png_data_url(rgb_to_png_bytes(rgb))
+
+
+def image_url_block(url: str) -> dict:
+    return {"type": "image_url", "image_url": {"url": url}}
+
+
 def rgb_to_image_block(rgb: np.ndarray) -> dict:
-    b64 = base64.b64encode(rgb_to_png_bytes(rgb)).decode("utf-8")
-    return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+    return image_url_block(rgb_to_png_data_url(rgb))
 
 
 def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
