@@ -324,6 +324,12 @@ def _experiment_config_payload(experiment_config: Any | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"value": payload}
 
 
+def _experiment_config_hash_payload(experiment_config: Any | None) -> dict[str, Any]:
+    payload = _experiment_config_payload(experiment_config)
+    payload.pop("prompt_cache", None)
+    return payload
+
+
 def _expected_run_hash(
     spec,
     model_name: str,
@@ -353,7 +359,7 @@ def _expected_run_hash(
         "backend": backend,
         "condition_set": condition_set,
         "prompt_variant": prompt_variant,
-        "experiment_config": _experiment_config_payload(experiment_config),
+        "experiment_config": _experiment_config_hash_payload(experiment_config),
         "pipeline_version": PIPELINE_VERSION,
     }
     if render is not None:
