@@ -1185,6 +1185,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.timeout = float(model_cfg["timeout"])
         if "max_attempts" in model_cfg:
             cfg.max_attempts = int(model_cfg["max_attempts"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
         if model_cfg.get("spend_cap_usd") is not None:
             cfg.spend_cap_usd = float(model_cfg["spend_cap_usd"])
         for key in ("reasoning_effort", "service_tier", "image_detail", "base_url"):
@@ -1257,7 +1259,11 @@ def main(argv: Optional[list[str]] = None) -> None:
     )
     # Single-model fallback (when --run-config is not supplied):
     parser.add_argument("--experiment", choices=["test1", "test2", "test3", "r1", "all"], default="all")
-    parser.add_argument("--agent", choices=["claude", "kimi", "qwen"], help="Single-model provider.")
+    parser.add_argument(
+        "--agent",
+        choices=["claude", "kimi", "openai", "qwen"],
+        help="Single-model provider (claude, kimi, openai, or qwen).",
+    )
     args = parser.parse_args(argv)
 
     if args.distributed_role:

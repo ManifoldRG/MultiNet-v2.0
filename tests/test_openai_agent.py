@@ -348,17 +348,36 @@ def test_factory_builds_openai_agent_from_run_config(monkeypatch):
     assert c.enable_prompt_cache is False
 
 
+@pytest.mark.parametrize(
+    ("model_config", "expected"),
+    [
+        ({"provider": "openai", "enable_prompt_cache": True}, True),
+        ({"provider": "openai"}, False),
+        ({"provider": "openai", "enable_prompt_cache": False}, False),
+    ],
+)
+def test_openai_factory_applies_model_cache_flag(monkeypatch, model_config, expected):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    agent, _ = _build_agent_from_spec("test", model_config)
+    assert isinstance(agent, OpenAIAgent)
+    assert agent.config.enable_prompt_cache is expected
+
+
 def test_factory_uses_experiment_cache_flag_unless_model_overrides(monkeypatch):
     import scripts.run_pipeline as pipeline
 
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
     config = {
         "experiment_config": {"prompt_cache": True},
         "models": {
-            "inherited": {"provider": "openai", "tasks": ["task-a"]},
-            "explicit": {
-                "provider": "openai",
-                "enable_prompt_cache": False,
-                "tasks": ["task-b"],
+            "claude_inherited": {"provider": "claude", "tasks": ["task-a"]},
+            "claude_explicit": {
+                "provider": "claude", "enable_prompt_cache": False, "tasks": ["task-b"]
+            },
+            "openai_inherited": {"provider": "openai", "tasks": ["task-c"]},
+            "openai_explicit": {
+                "provider": "openai", "enable_prompt_cache": False, "tasks": ["task-d"]
             },
         },
     }
@@ -367,21 +386,61 @@ def test_factory_uses_experiment_cache_flag_unless_model_overrides(monkeypatch):
     monkeypatch.setattr(pipeline, "load_manifest", lambda *_args: [])
     monkeypatch.setattr(pipeline, "resolve_task_rows", lambda *_args: [{"task_id": "task"}])
     monkeypatch.setattr(pipeline, "_score_suite", lambda *_args, **_kwargs: ({}, 0.0))
-    monkeypatch.setattr(pipeline, "_run_one_model", lambda *_args, **_kwargs: ([], {}))
+    constructed_flags = []
+
+    def capture_constructed_agent(_rows, agent, model_name, **_kwargs):
+        constructed_flags.append(agent.config.enable_prompt_cache)
+        return [], {}
+
+    monkeypatch.setattr(pipeline, "_run_one_model", capture_constructed_agent)
     monkeypatch.setattr(pipeline, "_write_aggregate", lambda *_args: {})
-
-    received = {}
-
-    def capture_factory(name, model_cfg):
-        received[name] = dict(model_cfg)
-        return object(), name
 
     pipeline.run_from_config(
         run_config_path="unused.json",
-        agent_factory=capture_factory,
     )
-    assert received["inherited"]["enable_prompt_cache"] is True
-    assert received["explicit"]["enable_prompt_cache"] is False
+    assert constructed_flags == [True, False, True, False]
+
+
+def test_explicit_openai_cache_flag_matches_resume_factory(monkeypatch):
+    from scripts.resume_from_archive import build_live_agent
+
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    model_config = {
+        "provider": "openai",
+        "enable_prompt_cache": True,
+        "spend_cap_usd": 5,
+    }
+    pipeline_agent, _ = _build_agent_from_spec("test", model_config)
+    resumed_agent = build_live_agent(
+        model_config, spend_cap_usd=5, log=lambda _message: None
+    )
+
+    assert pipeline_agent.config.enable_prompt_cache is True
+    assert resumed_agent.config.enable_prompt_cache is True
+
+
+def test_main_parser_accepts_openai_agent(monkeypatch, capsys):
+    import scripts.run_pipeline as pipeline
+
+    factory_calls = []
+
+    def fake_factory(name, model_cfg):
+        factory_calls.append((name, model_cfg))
+        return object(), "openai-test"
+
+    monkeypatch.setattr(pipeline, "_build_agent_from_spec", fake_factory)
+    monkeypatch.setattr(
+        pipeline,
+        "run_pipeline",
+        lambda **_kwargs: {
+            "scoring_calibration_summary": {"run_count": 0, "task_count": 0}
+        },
+    )
+
+    pipeline.main(["--agent", "openai"])
+
+    assert factory_calls == [("openai", {"provider": "openai"})]
+    assert "Pipeline complete" in capsys.readouterr().out
 
 
 def test_module_default_model_is_astra():
