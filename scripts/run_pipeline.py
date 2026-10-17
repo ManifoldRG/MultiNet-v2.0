@@ -248,6 +248,10 @@ _NON_RUNTIME_MODEL_KEYS = {
     "batch_deadline_s",
     "batch_cancel_grace_s",
     "batch_poll_interval_s",
+    "enable_prompt_cache",
+    "cache_ttl",
+    "batch_cache_ttl",
+    "prompt_cache_ttl",
     "device_map",
     "local_files_only",
     "max_memory",
@@ -262,6 +266,17 @@ _NON_RUNTIME_MODEL_KEYS = {
     "use_tqdm",
     "engine_kwargs",
 }
+
+_VALID_CACHE_TTLS = ("5m", "1h")
+
+
+def _validate_cache_ttls(model_cfg: dict[str, Any]) -> None:
+    for key in ("cache_ttl", "batch_cache_ttl", "prompt_cache_ttl"):
+        value = model_cfg.get(key)
+        if value is not None and value not in _VALID_CACHE_TTLS:
+            raise ValueError(
+                f"{key} must be None or one of {_VALID_CACHE_TTLS}, got {value!r}"
+            )
 
 
 def _jsonable(value: Any) -> Any:
@@ -309,6 +324,12 @@ def _experiment_config_payload(experiment_config: Any | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"value": payload}
 
 
+def _experiment_config_hash_payload(experiment_config: Any | None) -> dict[str, Any]:
+    payload = _experiment_config_payload(experiment_config)
+    payload.pop("prompt_cache", None)
+    return payload
+
+
 def _expected_run_hash(
     spec,
     model_name: str,
@@ -338,7 +359,7 @@ def _expected_run_hash(
         "backend": backend,
         "condition_set": condition_set,
         "prompt_variant": prompt_variant,
-        "experiment_config": _experiment_config_payload(experiment_config),
+        "experiment_config": _experiment_config_hash_payload(experiment_config),
         "pipeline_version": PIPELINE_VERSION,
     }
     if render is not None:
@@ -918,7 +939,13 @@ def run_from_config(
         if not entries:
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
-        agent, label = factory(name, model_cfg)
+        agent_cfg = dict(model_cfg)
+        if (agent_cfg.get("provider") or "").lower() in {"claude", "openai"}:
+            agent_cfg.setdefault(
+                "enable_prompt_cache",
+                bool(exp_overlay.get("prompt_cache", False)),
+            )
+        agent, label = factory(name, agent_cfg)
         plans.append((_sanitize(label), agent, dict(model_cfg), rows))
         for r in rows:
             union.setdefault(r["task_id"], r)
@@ -995,6 +1022,8 @@ def check_run_config_expectations(
             f"Run-config expects --conditions {run_config['conditions']!r} but got {conditions!r}. "
             "Pass the matching --conditions."
         )
+    for model_cfg in (run_config.get("models") or {}).values():
+        _validate_cache_ttls(model_cfg)
     _check_equal_token_caps(run_config)
 
 
@@ -1041,6 +1070,12 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
+        if "cache_ttl" in model_cfg:
+            cfg.cache_ttl = str(model_cfg["cache_ttl"])
+        if "batch_cache_ttl" in model_cfg:
+            cfg.batch_cache_ttl = str(model_cfg["batch_cache_ttl"])
         if "effort" in model_cfg:
             cfg.effort = str(model_cfg["effort"])
         if "batch_deadline_s" in model_cfg:
@@ -1062,6 +1097,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "prompt_cache_ttl" in model_cfg:
+            cfg.prompt_cache_ttl = str(model_cfg["prompt_cache_ttl"])
         if "batch_deadline_s" in model_cfg:
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:
@@ -1136,9 +1173,29 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])
         return QwenVLLMAPIAgent(config=cfg), model or cfg.model
+    if provider == "openai":
+        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
+
+        cfg = OpenAIConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        if "timeout" in model_cfg:
+            cfg.timeout = float(model_cfg["timeout"])
+        if "max_attempts" in model_cfg:
+            cfg.max_attempts = int(model_cfg["max_attempts"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
+        if model_cfg.get("spend_cap_usd") is not None:
+            cfg.spend_cap_usd = float(model_cfg["spend_cap_usd"])
+        for key in ("reasoning_effort", "service_tier", "image_detail", "base_url"):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
+        return OpenAIAgent(config=cfg), model or cfg.model
     raise ValueError(
         f"Model {name!r}: unknown provider {provider!r} "
-        "(expected 'claude', 'kimi', 'qwen', or 'qwen_vllm')."
+        "(expected 'claude', 'kimi', 'openai', 'qwen', or 'qwen_vllm')."
     )
 
 
@@ -1202,7 +1259,11 @@ def main(argv: Optional[list[str]] = None) -> None:
     )
     # Single-model fallback (when --run-config is not supplied):
     parser.add_argument("--experiment", choices=["test1", "test2", "test3", "r1", "all"], default="all")
-    parser.add_argument("--agent", choices=["claude", "kimi", "qwen"], help="Single-model provider.")
+    parser.add_argument(
+        "--agent",
+        choices=["claude", "kimi", "openai", "qwen"],
+        help="Single-model provider (claude, kimi, openai, or qwen).",
+    )
     args = parser.parse_args(argv)
 
     if args.distributed_role:

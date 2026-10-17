@@ -9,7 +9,11 @@ import re
 from typing import Any
 
 # provider -> required credential env var (only API providers need one).
-_CREDENTIAL_BY_PROVIDER = {"kimi": "MOONSHOT_API_KEY", "claude": "ANTHROPIC_API_KEY"}
+_CREDENTIAL_BY_PROVIDER = {
+    "kimi": "MOONSHOT_API_KEY",
+    "claude": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+}
 
 
 def sanitize_vm_name(raw: str) -> str:
@@ -23,7 +27,7 @@ def sanitize_vm_name(raw: str) -> str:
 def _classify(model: dict[str, Any]) -> str:
     if model.get("hardware_profile") == "local-gpu":
         return "gpu"
-    if str(model.get("provider")) in {"kimi", "claude"}:
+    if str(model.get("provider")) in _CREDENTIAL_BY_PROVIDER:
         return "api"
     # Fall through: any other hardware_profile is treated as an API worker.
     return "api"
