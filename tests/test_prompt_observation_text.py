@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
 from interface.coords import inventory_list
 from interface.loader import default_maze_path, load_task
-from interface.observation import current_observation_text, history_content_blocks
+from interface.observation import (
+    current_observation_text,
+    history_content_blocks,
+    history_text,
+    recent_history_steps,
+)
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
@@ -212,6 +218,41 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
     }
 
 
+def _full_history_transcript():
+    return [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after_row_col": (1, index + 1),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+        }
+        for index in range(4)
+    ]
+
+
+def test_full_history_returns_all_steps_under_token_budget():
+    transcript = _full_history_transcript()
+
+    selected = recent_history_steps(transcript, "full", max_history_tokens=10_000)
+
+    assert selected == transcript
+    text = history_text("text_only", "full", transcript, max_history_tokens=10_000)
+    assert "FINAL_OUTPUT: MOVE_0" in text
+    assert "FINAL_OUTPUT: MOVE_3" in text
+
+
+def test_full_history_omits_newest_step_when_it_exceeds_budget():
+    transcript = _full_history_transcript()
+
+    selected = recent_history_steps(transcript, "full", max_history_tokens=1)
+
+    assert selected == []
+    text = history_text("text_only", "full", transcript, max_history_tokens=1)
+    assert text == ""
+
+
 def test_non_observation_format_conditions_omit_current_description_from_prompt():
     for condition_name, condition in CONDITION_SETS.items():
         if condition is CONDITION_SET:
@@ -325,6 +366,34 @@ def test_text_last3_prompt_includes_recent_history_text():
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
     assert "Last feedback:" not in prompt_text
+
+
+def test_configurable_last_n_limits_prompt_history():
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "position_before_row_col": (1, index + 1),
+            "facing_before": "EAST",
+            "position_after_row_col": (1, index + 1),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+        }
+        for index in range(4)
+    ]
+    cfg = ExperimentConfig(
+        observation="text_only",
+        context_window="last_n",
+        context_n=2,
+    )
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
+
+    assert "feedback-2" in prompt_text
+    assert "feedback-3" in prompt_text
+    assert "feedback-0" not in prompt_text
+    assert "feedback-1" not in prompt_text
 
 
 def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
@@ -443,6 +512,47 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
     assert summary_idx < prompt_text.index("Recent history (last 1 steps, oldest first):")
 
 
+@pytest.mark.parametrize("observation", ["image_only", "image_text", "text_only"])
+def test_full_history_header_is_rendered_once(observation):
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_before_row_col": (1, index + 1),
+            "facing_before": "EAST",
+            "position_after_row_col": (1, index + 2),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        }
+        for index in range(3)
+    ]
+    backend, spec = load_task(default_maze_path())
+    cfg = ExperimentConfig(
+        observation=observation,
+        context_window="full",
+        in_context_learning="zero_shot",
+    )
+    runner = build_runner(cfg, backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+
+    message = runner._build_message(
+        state, feedback_templates.INITIAL_FEEDBACK, transcript
+    )
+
+    content = message["content"]
+    blocks = content if isinstance(content, list) else [{"type": "text", "text": content}]
+    text = "\n".join(
+        block["text"]
+        for block in blocks
+        if isinstance(block, dict) and block.get("type") == "text"
+    )
+    assert text.count("Full history (oldest first):") == 1
+
+
 def test_observation_format_image_only_differs_from_image_text_default():
     # After the fair-default rebase the baseline is image_text (with description),
     # so the image_only ablation arm no longer matches the default prompt text.
@@ -496,6 +606,16 @@ def test_prompting_variants_share_image_only_user_prompt():
     assert "Last result:" not in standard_text
     assert "Hints:" not in standard_text
 
+def test_step_budget_line_present_in_user_prompt():
+    """Step budget awareness: the user prompt should surface the remaining
+    step count so the model can plan for efficiency. The default maze has
+    max_steps=100 and the initial state is at step_count=0, so the first
+    prompt should read 'Step 1 of 100 (100 remaining).'"""
+    cfg = ExperimentConfig(observation="text_only", context_window="last_n")
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, [])
+
+    assert "Step 1 of 100 (100 remaining)." in prompt_text
 
 def test_each_set_has_exactly_one_baseline_equal_to_default():
     # After the fair-default rebase the baseline arm of most sets carries an
