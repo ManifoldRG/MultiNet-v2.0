@@ -513,8 +513,6 @@ def history_content_blocks(
             continue
         blocks.append(rgb_to_image_block(rgb))
         inventory = _history_record_inventory(rec)
-        ...  # rest unchanged, including text_block_indices[id(rec)] = len(blocks) + 1
-        inventory = _history_record_inventory(rec)
         text = (
             user_templates.LAST_N_USER_PROMPT["image_only_step"].format(
                 inventory=inventory,

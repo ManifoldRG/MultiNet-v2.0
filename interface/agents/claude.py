@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 _AGENT_NAME = "Claude agent"
+_CACHE_TTLS = ("5m", "1h")
 
 # Model families that REJECT sampling params (temperature/top_p/top_k) with an
 # HTTP 400: Opus 4.7+, Fable, Mythos. Sonnet 4.6 and Opus <=4.6 still accept
@@ -151,7 +152,8 @@ def _as_block_list(content: object) -> List[dict]:
 
 
 def _cache_control(ttl: str) -> Dict[str, str]:
-    # TTLs are validated in scripts.run_pipeline.
+    if ttl not in _CACHE_TTLS:
+        raise ValueError(f"cache ttl must be one of {_CACHE_TTLS}, got {ttl!r}")
     return {"type": "ephemeral", "ttl": "1h"} if ttl == "1h" else {"type": "ephemeral"}
 
 
@@ -337,8 +339,25 @@ class ClaudeAnthropicAgent:
     api_key: Optional[str] = None
     last_usage: Optional[Dict[str, int]] = field(default=None, init=False)
     last_thinking: Optional[str] = field(default=None, init=False)
+    _batch_rounds: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
+        _cache_control(self.config.cache_ttl)
+        _cache_control(self.config.batch_cache_ttl)
+        batch_cache_ttl_s = 300 if self.config.batch_cache_ttl == "5m" else 3600
+        if (
+            self.config.enable_prompt_cache
+            and self.config.batch_deadline_s > batch_cache_ttl_s
+        ):
+            logger.warning(
+                "Claude batch deadline %.0fs exceeds the %s prompt-cache TTL (%ds). "
+                "Cache lifetime is measured from the start of the request that writes it, "
+                "so a batch round longer than the TTL pays the write premium without reads "
+                "(1h write 2.00x, 5m write 1.25x, versus 1.00x uncached).",
+                self.config.batch_deadline_s,
+                self.config.batch_cache_ttl,
+                batch_cache_ttl_s,
+            )
         key = (self.api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
         if not key:
             raise ValueError(
@@ -430,7 +449,38 @@ class ClaudeAnthropicAgent:
             deadline_s=self.config.batch_deadline_s,
             cancel_grace_s=self.config.batch_cancel_grace_s,
         )
-        return [self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))]
+        replies = [
+            self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))
+        ]
+        cache_reads = sum(
+            (reply.usage or {}).get("cache_read_input_tokens", 0) or 0
+            for reply in replies
+        )
+        cache_writes = sum(
+            (reply.usage or {}).get("cache_creation_input_tokens", 0) or 0
+            for reply in replies
+        )
+        self._batch_rounds += 1
+        logger.info(
+            "Claude batch round %d cache usage: reads=%d writes=%d",
+            self._batch_rounds,
+            cache_reads,
+            cache_writes,
+        )
+        if (
+            self.config.enable_prompt_cache
+            and self._batch_rounds > 1
+            and cache_writes > 0
+            and cache_reads == 0
+        ):
+            logger.warning(
+                "Claude batch round %d wrote prompt cache but read none; cache may be "
+                "expiring before the next round (batch_cache_ttl=%s, batch_deadline_s=%s).",
+                self._batch_rounds,
+                self.config.batch_cache_ttl,
+                self.config.batch_deadline_s,
+            )
+        return replies
 
     def __call__(self, messages: List[dict]) -> str:
         reply = self.generate(messages)

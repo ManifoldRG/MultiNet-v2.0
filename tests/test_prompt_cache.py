@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 import numpy as np
@@ -11,6 +12,7 @@ from gridworld.task_spec import TaskSpecification
 from interface.agents.claude import (
     ClaudeAnthropicAgent,
     ClaudeAnthropicConfig,
+    _cache_control,
     _resolve_cache_markers,
 )
 from interface.agents.kimi_k26 import _build_body, _to_openai_messages
@@ -25,9 +27,110 @@ from interface.telemetry import normalize_token_usage
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 from scripts.run_pipeline import (
     _NON_RUNTIME_MODEL_KEYS,
+    _experiment_config_hash_payload,
+    _experiment_config_payload,
     _expected_run_hash,
     _validate_cache_ttls,
 )
+
+
+@pytest.mark.parametrize("ttl", ["10m", ""])
+def test_cache_control_rejects_unsupported_ttl(ttl):
+    with pytest.raises(
+        ValueError,
+        match=r"cache ttl must be one of \('5m', '1h'\)",
+    ):
+        _cache_control(ttl)
+
+
+@pytest.mark.parametrize(
+    ("ttl", "expected"),
+    [
+        ("5m", {"type": "ephemeral"}),
+        ("1h", {"type": "ephemeral", "ttl": "1h"}),
+    ],
+)
+def test_cache_control_returns_supported_ttl(ttl, expected):
+    assert _cache_control(ttl) == expected
+
+
+@pytest.mark.parametrize("ttl_key", ["cache_ttl", "batch_cache_ttl"])
+def test_claude_agent_rejects_unsupported_cache_ttl_at_construction(ttl_key):
+    with pytest.raises(ValueError, match="cache ttl"):
+        ClaudeAnthropicAgent(
+            config=ClaudeAnthropicConfig(**{ttl_key: "10m"}),
+            api_key="x",
+        )
+
+
+def test_claude_agent_warns_when_batch_deadline_exceeds_cache_ttl(caplog):
+    with caplog.at_level(logging.WARNING, logger="interface.agents.claude"):
+        ClaudeAnthropicAgent(api_key="x")
+
+    assert "write premium without reads" in caplog.text
+    assert "2.00x" in caplog.text and "1.25x" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        ClaudeAnthropicConfig(batch_deadline_s=3600),
+        ClaudeAnthropicConfig(enable_prompt_cache=False),
+    ],
+)
+def test_claude_agent_does_not_warn_when_cache_lifetime_is_adequate_or_disabled(
+    config, caplog
+):
+    with caplog.at_level(logging.WARNING, logger="interface.agents.claude"):
+        ClaudeAnthropicAgent(config=config, api_key="x")
+
+    assert "write premium without reads" not in caplog.text
+
+
+def test_claude_batch_round_cache_usage_warnings(monkeypatch, caplog):
+    import interface.agents.claude as claude_module
+
+    usage_by_round = [
+        {"cache_creation_input_tokens": 12, "cache_read_input_tokens": 0},
+        {"cache_creation_input_tokens": 8, "cache_read_input_tokens": 0},
+        {"cache_creation_input_tokens": 5, "cache_read_input_tokens": 20},
+    ]
+    call_index = 0
+
+    def fake_run_message_batch(_requests, **_kwargs):
+        nonlocal call_index
+        usage = usage_by_round[call_index]
+        call_index += 1
+        return {
+            "i0": {
+                "type": "succeeded",
+                "message": {
+                    "content": [{"type": "text", "text": "FINAL_OUTPUT: MOVE_FORWARD"}],
+                    "usage": {
+                        "input_tokens": 100,
+                        "output_tokens": 2,
+                        **usage,
+                    },
+                    "stop_reason": "end_turn",
+                },
+            }
+        }
+
+    monkeypatch.setattr(claude_module, "run_message_batch", fake_run_message_batch)
+    agent = ClaudeAnthropicAgent(
+        config=ClaudeAnthropicConfig(batch_deadline_s=3600),
+        api_key="x",
+    )
+    batch = [[{"role": "user", "content": "go"}]]
+    with caplog.at_level(logging.WARNING, logger="interface.agents.claude"):
+        agent.generate_batch(batch)
+        assert "wrote prompt cache but read none" not in caplog.text
+        caplog.clear()
+        agent.generate_batch(batch)
+        assert "wrote prompt cache but read none" in caplog.text
+        caplog.clear()
+        agent.generate_batch(batch)
+        assert "wrote prompt cache but read none" not in caplog.text
 
 
 def test_markers_become_cache_control():
@@ -424,6 +527,52 @@ def test_prompt_cache_model_options_do_not_change_run_hash():
         )
 
     assert expected_hash(first) == expected_hash(second)
+
+
+def test_experiment_prompt_cache_is_not_part_of_run_hash_payload():
+    enabled = ExperimentConfig(prompt_cache=True)
+    disabled = ExperimentConfig(prompt_cache=False)
+    hashed_payload = _experiment_config_hash_payload(enabled)
+
+    assert "prompt_cache" not in hashed_payload
+    assert _experiment_config_payload(enabled)["prompt_cache"] is True
+    assert _expected_run_hash(
+        _simple_spec(), "claude-test", 0, "minigrid", experiment_config=enabled
+    ) == _expected_run_hash(
+        _simple_spec(), "claude-test", 0, "minigrid", experiment_config=disabled
+    )
+
+
+def test_history_record_inventory_is_computed_once_per_step(monkeypatch):
+    import interface.observation as observation_module
+
+    calls = 0
+    original = observation_module._history_record_inventory
+
+    def counted_inventory(record):
+        nonlocal calls
+        calls += 1
+        return original(record)
+
+    monkeypatch.setattr(
+        observation_module, "_history_record_inventory", counted_inventory
+    )
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "action": f"MOVE_{index}",
+            "position_after_row_col": (1, index + 1),
+            "facing_after": "EAST",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": np.zeros((2, 2, 3), dtype=np.uint8),
+        }
+        for index in range(3)
+    ]
+
+    history_content_blocks("image_only", "last_n", transcript)
+
+    assert calls == 3
 
 
 
