@@ -37,6 +37,22 @@ watchdog_minutes() {
   echo "$(( secs / 60 + 60 ))"
 }
 
+# DIFFICULTY_MAX normalises every run's difficulty score (--difficulty-max-static-score).
+# No default: a launcher default once scored runs against another scale with no error
+# (default 1000, R1 used 3000). It must cover the panel's largest static score.
+require_difficulty_max() {
+  if [[ -z "${DIFFICULTY_MAX:-}" ]]; then
+    echo "DIFFICULTY_MAX is required (no default — it normalises every run's difficulty" >&2
+    echo "score and must cover the panel's largest static score; R1 used 3000)." >&2
+    echo "  e.g. export DIFFICULTY_MAX=3000" >&2
+    return 1
+  fi
+  if ! [[ "$DIFFICULTY_MAX" =~ ^[0-9]+(\.[0-9]+)?$ ]] || ! awk -v d="$DIFFICULTY_MAX" 'BEGIN { exit !(d > 0) }'; then
+    echo "DIFFICULTY_MAX malformed: '${DIFFICULTY_MAX}' (a positive number, e.g. 3000)." >&2
+    return 1
+  fi
+}
+
 require_max_run_duration() {
   if [[ -z "${MAX_RUN_DURATION:-}" ]]; then
     echo "MAX_RUN_DURATION is required (no default — a wrong default either kills a" >&2
