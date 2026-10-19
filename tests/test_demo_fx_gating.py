@@ -71,7 +71,7 @@ def _blocked_session(heading: int, *, turns: bool):
     from types import SimpleNamespace
 
     return SimpleNamespace(
-        transcript=[{"kind": "step", "event_type": "BLOCKED"}],
+        transcript=[{"kind": "step", "event_type": "BLOCKED", "state_before": {"step_count": 0}}],
         task_spec=None,
         event_log=[],
         state=SimpleNamespace(agent_direction=heading, agent_position=(1, 1)),
@@ -86,7 +86,7 @@ def _bounce(session, token: str, prev_heading: int) -> tuple[int, int]:
 
     from demo.fx import plan_effects
 
-    prev = SimpleNamespace(agent_direction=prev_heading, agent_position=(1, 1))
+    prev = SimpleNamespace(agent_direction=prev_heading, agent_position=(1, 1), step_count=0)
     [item] = plan_effects(session, token, prev, 0)
     assert item["kind"] == "bounce"
     return item["dx"], item["dy"]
