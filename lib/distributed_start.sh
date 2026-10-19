@@ -209,13 +209,19 @@ REMOTE
   # coordinator must be serving with --stale-after-seconds >= worst-case batch
   # round (see docs/batch-api-lockstep-runner-design.md).
   # Exactly ONE lockstep worker per API model group — a second one double-pays.
-  local api_role="${API_WORKER_ROLE:-worker}"
+  # A run-config model's worker_role / worker_concurrency override both per group
+  # (e.g. lockstep Claude/Kimi next to a sync-only OpenAI model in one run).
+  local api_role api_conc
+  api_role="$(worker_field "$vm" worker_role)"
+  api_role="${api_role:-${API_WORKER_ROLE:-worker}}"
+  api_conc="$(worker_field "$vm" worker_concurrency)"
+  api_conc="${api_conc:-${API_WORKER_CONCURRENCY:-1}}"
   case "$api_role" in
     worker|lockstep-worker) ;;
     *) echo "invalid API_WORKER_ROLE '$api_role' (worker|lockstep-worker)" >&2; return 1 ;;
   esac
   gcloud compute ssh "$vm" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='${API_WORKER_CONCURRENCY:-1}' bash -s" <<REMOTE
+    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='$api_conc' bash -s" <<REMOTE
 set -euo pipefail
 export ${key_var}=${key_q}
 # Pin the hash seed: checkpoint resume replays and compares state snapshots, and
