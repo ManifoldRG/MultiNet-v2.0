@@ -142,16 +142,17 @@ def test_view_label_precedes_the_current_image_placeholder():
 
     state = GridState(agent_position=(1, 1), agent_direction=0)
     placeholder = user_templates.CURRENT_IMAGE_PLACEHOLDER
-    labelled = _strategy("standard", "chase", start_map=True).build_user_prompt(
+    labelled = _strategy("standard", "first_person", start_map=True).build_user_prompt(
         "", "", state, observation="image_only"
     )
-    assert labelled == (
-        f"{VIEW_LABELS['chase']}\n{placeholder}\nYour inventory: empty.\nMoves remaining: 100.\nWhat is your next action?"
-    )
+    # The label leads the image; the budget lines before the question are pinned
+    # by the prompt-budget tests, not here.
+    assert labelled.startswith(f"{VIEW_LABELS['first_person']}\n{placeholder}\nYour inventory: empty.\n")
+    assert labelled.endswith("\nWhat is your next action?")
     for level in ("minimal",):
-        plain = _strategy(level, "chase", start_map=True).build_user_prompt("", "", state, observation="image_only")
+        plain = _strategy(level, "first_person", start_map=True).build_user_prompt("", "", state, observation="image_only")
         assert plain.startswith(placeholder)
-    no_map = _strategy("standard", "chase").build_user_prompt("", "", state, observation="image_only")
+    no_map = _strategy("standard", "first_person").build_user_prompt("", "", state, observation="image_only")
     assert no_map.startswith(placeholder)
 
 
