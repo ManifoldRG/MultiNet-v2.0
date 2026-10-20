@@ -15,8 +15,9 @@ from typing import Callable, Optional, TypeVar
 
 T = TypeVar("T")
 
-# 429 = rate limit; 500/502/503/504 = transient server-side failures.
-_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+# 429 = rate limit; 500/502/503/504 = transient server-side failures;
+# 529 = Anthropic "overloaded" (transient; other providers never send it).
+_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504, 529})
 
 
 def is_retryable_error(exc: BaseException) -> bool:
