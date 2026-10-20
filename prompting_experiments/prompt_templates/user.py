@@ -15,6 +15,8 @@ LAST_N_USER_PROMPT = {
     "image_only_step": "Your inventory: {inventory}.\nFINAL_OUTPUT: {action}\n",
 }
 
+FULL_HISTORY_USER_PROMPT = {"header": "Full history (oldest first):\n"}
+
 STANDARD_IMAGE_ONLY_USER_PROMPT = ( # the standard prompt
     f"{CURRENT_IMAGE_PLACEHOLDER}\n"
     "Your inventory: {inventory}.\n"
