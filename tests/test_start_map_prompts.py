@@ -145,7 +145,9 @@ def test_view_label_precedes_the_current_image_placeholder():
     labelled = _strategy("standard", "chase", start_map=True).build_user_prompt(
         "", "", state, observation="image_only"
     )
-    assert labelled == f"{VIEW_LABELS['chase']}\n{placeholder}\nYour inventory: empty.\nWhat is your next action?"
+    assert labelled == (
+        f"{VIEW_LABELS['chase']}\n{placeholder}\nYour inventory: empty.\nMoves remaining: 100.\nWhat is your next action?"
+    )
     for level in ("minimal",):
         plain = _strategy(level, "chase", start_map=True).build_user_prompt("", "", state, observation="image_only")
         assert plain.startswith(placeholder)

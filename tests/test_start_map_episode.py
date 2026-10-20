@@ -18,7 +18,7 @@ from interface.config import ExperimentConfig  # noqa: E402
 from interface.episode_checkpoint import resume_stepper, save_checkpoint  # noqa: E402
 from interface.episode_log import flush_episode_log  # noqa: E402
 from interface.episode_step import EpisodeStepper  # noqa: E402
-from interface.renderer import rgb_to_image_block  # noqa: E402
+from interface.renderer import png_data_url, rgb_to_image_block  # noqa: E402
 from interface.runner import build_runner  # noqa: E402
 from prompting_experiments.prompt_templates import user as user_templates  # noqa: E402
 from start_map_test_utils import R1_CELL, r1_spec, scripted_replies  # noqa: E402
@@ -109,7 +109,7 @@ def test_stateless_every_query_opens_with_the_map(context_window):
     stepper, requests, _ = _drive(runner, spec)
     map_text, map_url = user_templates.START_MAP_MINIMAL, _fresh_map_url(spec)
     _assert_map_opens_every_request(requests, map_text, map_url)
-    reset_url = rgb_to_image_block(stepper.transcript[0]["_reset_frame_rgb"])["image_url"]["url"]
+    reset_url = png_data_url(stepper.transcript[0]["_reset_frame_png"])
     # turn 1: map + the current first-person view, nothing else
     assert _urls(requests[0][1]) == [map_url, reset_url]
     for request in requests:
@@ -130,7 +130,7 @@ def test_rolling_puts_the_map_on_the_oldest_user_turn_in_the_window(turns):
     map_text, map_url = user_templates.START_MAP_MINIMAL, _fresh_map_url(spec)
     _assert_map_opens_every_request(requests, map_text, map_url)
     _assert_stored_chat_is_lean(stored, map_text, map_url)
-    reset_url = rgb_to_image_block(stepper.transcript[0]["_reset_frame_rgb"])["image_url"]["url"]
+    reset_url = png_data_url(stepper.transcript[0]["_reset_frame_png"])
     for q, request in enumerate(requests, start=1):
         users = [m for m in request if m["role"] == "user"]
         assert len(users) == min(q, turns + 1)  # the trimmed window
@@ -148,7 +148,7 @@ def test_full_chat_carries_the_map_once_on_turn_one():
     map_text, map_url = user_templates.START_MAP_MINIMAL, _fresh_map_url(spec)
     _assert_map_opens_every_request(requests, map_text, map_url)
     _assert_stored_chat_is_lean(stored, map_text, map_url)
-    reset_url = rgb_to_image_block(stepper.transcript[0]["_reset_frame_rgb"])["image_url"]["url"]
+    reset_url = png_data_url(stepper.transcript[0]["_reset_frame_png"])
     for request in requests:
         assert _urls(_first_user(request)) == [map_url, reset_url]  # turn 1, kept whole
     assert _logged(stepper) == requests
