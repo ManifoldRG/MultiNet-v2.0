@@ -14,16 +14,17 @@ for w in json.load(sys.stdin).get("workers", []):
 ' "$1" "$2"
 }
 
-start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT] [STALE_AFTER_SECONDS]
+start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT]
   local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}"
-  # Lockstep batch runs: a batch round sends no heartbeat while in flight, so the
-  # coordinator must serve with --stale-after-seconds >= the worst-case round
-  # (docs/batch-api-lockstep-runner-design.md). Unset -> run_pipeline's default.
-  local stale_after="${STALE_AFTER_SECONDS:-}"
   # Conditional sweeps: --conditions is required (run_pipeline's H1/H2 guard
   # rejects a mispaired prepare) and --prompt-variant selects one dedup variant.
   # Empty when unset -> the remote guarded appends skip both flags.
   local conditions="${CONDITIONS:-}" prompt_variant="${PROMPT_VARIANT:-}"
+  # [STALE_AFTER_SECONDS] Lockstep batch runs: a batch round sends no heartbeat
+  # while in flight, so the coordinator must serve with --stale-after-seconds >=
+  # the worst-case round (docs/batch-api-lockstep-runner-design.md). Unset ->
+  # run_pipeline's default.
+  local stale_after="${STALE_AFTER_SECONDS:-}"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
     --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' bash -s" <<'REMOTE'
 set -euo pipefail
