@@ -18,7 +18,7 @@ from gridworld.actions import MiniGridActions as A  # noqa: E402
 from gridworld.backends import get_backend  # noqa: E402
 from gridworld.backends.minigrid_backend import MiniGridBackend  # noqa: E402
 from gridworld.baselines import plan_bfs_path  # noqa: E402
-from gridworld.render3d.scene import UnsupportedSpecError  # noqa: E402
+from gridworld.render3d.scene import UnsupportedSpecError, check_supported  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 from maze_test_utils import MAZE_JSON_DIR  # noqa: E402
 from render3d_test_utils import CORRIDOR, MECHANISMS, corpus_sample  # noqa: E402
@@ -80,6 +80,10 @@ def test_random_actions_replay_identically_through_wrapper(path, seed):
 )
 def test_full_corpus_bfs_replays_identically_through_wrapper(path):
     spec = TaskSpecification.from_json(str(path))
+    try:
+        check_supported(spec)
+    except UnsupportedSpecError as exc:
+        pytest.skip(f"never drawn in 3D: {exc}")  # e.g. pushable blocks
     _assert_lockstep(spec, plan_bfs_path(spec).actions)
 
 
