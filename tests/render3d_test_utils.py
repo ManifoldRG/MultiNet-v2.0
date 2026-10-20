@@ -93,3 +93,34 @@ def make_play_session(tmp_path, backend: str, camera: str | None = None, spec: d
         backend=backend,
         camera=camera,
     )
+
+
+# 11x5 room with every PR #57 tile: purple portal (3,1)<->(7,3), cyan portal
+# (3,3)<->(7,1), kill cell (5,1), frozen tile (5,3), rotating tiles (4,2)
+# facing EAST and (6,2) facing NORTH (validate() rejects tiles on walls).
+# Agent starts (1,2) facing EAST; goal (9,2).
+TILES = {
+    "task_id": "render3d_tiles",
+    "seed": 0,
+    "difficulty_tier": 3,
+    "maze": {"dimensions": [11, 5], "walls": [], "start": [1, 2], "goal": [9, 2]},
+    "mechanisms": {
+        "teleporters": [
+            {"id": "tp", "position_a": [3, 1], "position_b": [7, 3], "color": "purple"},
+            {"id": "tc", "position_a": [3, 3], "position_b": [7, 1], "color": "cyan"},
+        ],
+        "death_portals": [[5, 1]],
+        "frozen_tiles": [[5, 3]],
+        "rotating_tiles": [[4, 2], [6, 2]],
+        "rotating_initial_directions": [0, 3],
+    },
+    "goal": {"type": "reach_position", "target": [9, 2]},
+    "max_steps": 80,
+}
+
+
+def new_mechanism_mazes() -> list[Path]:
+    """Helen's M7-M10 mazes (ogbench PR #2) when the submodule has them."""
+    from maze_test_utils import MAZE_JSON_DIR
+
+    return sorted(p for tier in ("M7", "M8", "M9", "M10") for p in (MAZE_JSON_DIR / tier).glob("*.json"))

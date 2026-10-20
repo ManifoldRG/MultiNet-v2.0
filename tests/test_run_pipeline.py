@@ -1343,25 +1343,31 @@ def test_experiment_config_overlay_applies_under_condition_variant():
     assert cfg.context_window == "text_summary"  # variant still authoritative
 
 
-def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
+@pytest.mark.parametrize("model_cache_override", [None, False, True])
+def test_run_from_config_experiment_config_overlay_reaches_run_inputs(
+    tmp_path, model_cache_override
+):
     """The top-level experiment_config overlay in a run-config JSON must flow
     all the way into the per-run sidecar, proving run_from_config actually
     threads base_overrides down through _run_one_model/_run_one_unit."""
+    model_config = {
+        "provider": "claude",
+        "model": "stub-model",
+        "tasks": [str(default_maze_path("V01_empty_room.json"))],
+    }
+    if model_cache_override is not None:
+        model_config["enable_prompt_cache"] = model_cache_override
     run_config = {
-        "models": {
-            "stub": {
-                "provider": "claude",
-                "model": "stub-model",
-                "tasks": [str(default_maze_path("V01_empty_room.json"))],
-            }
-        },
-        "experiment_config": {"progress_stall_k": 20},
+        "models": {"stub": model_config},
+        "experiment_config": {"progress_stall_k": 20, "prompt_cache": True},
     }
     cfg_path = tmp_path / "run_config.json"
     cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
     artifacts = tmp_path / "artifacts"
+    agent_configs = []
 
     def factory(name, model_cfg):
+        agent_configs.append(model_cfg)
         return ReplayAgent(v01_empty_room_trajectory()), model_cfg["model"]
 
     run_from_config(
@@ -1379,6 +1385,10 @@ def test_run_from_config_experiment_config_overlay_reaches_run_inputs(tmp_path):
     )
     sidecar = load_json(run_dir / "run_inputs.json")
     assert sidecar["experiment_config"]["progress_stall_k"] == 20
+    assert sidecar["experiment_config"]["prompt_cache"] is True
+    assert agent_configs[0]["enable_prompt_cache"] is (
+        True if model_cache_override is None else model_cache_override
+    )
 
 
 def test_progress_stall_k_reaches_stored_resolved_config(tmp_path):
@@ -2399,6 +2409,7 @@ def test_3d_sidecar_records_the_resolved_frame_pixels_and_render_versions(tmp_pa
         "backend": "mujoco3d",
         "camera": "top_down",
         "resolution": "grid",
+        "start_map": False,
         "frame_pixels": 32 * dims,
         "render3d_version": RENDER3D_VERSION,
         "mujoco_version": mujoco.__version__,

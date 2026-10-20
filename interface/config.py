@@ -23,6 +23,7 @@ class ExperimentConfig:
         "text_summary_and_last_n",
         "full",
     ] = "last_n"
+    prompt_cache: bool = False
     context_n: int = 3
     max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"

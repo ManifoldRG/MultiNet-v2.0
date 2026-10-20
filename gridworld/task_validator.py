@@ -233,6 +233,9 @@ class TaskValidator:
         visited: dict[PlannerState, int] = {initial_state: 0}
         breaking_sequences: list[list[str]] = []
         min_steps_to_break = None
+        # Only an irreversible step can break a maze, so a state is solved only
+        # when such a step reaches it, and at most once.
+        beatable_from: dict[PlannerState, bool] = {}
 
         while queue:
             state, sequence = queue.popleft()
@@ -243,7 +246,8 @@ class TaskValidator:
 
             for transition in successors(self.ctx, state):
                 next_sequence = list(sequence)
-                if self._is_irreversible_transition(state, transition):
+                irreversible = self._is_irreversible_transition(state, transition)
+                if irreversible:
                     next_sequence = sequence + [transition.label]
                 next_irrev = len(next_sequence)
                 if next_irrev > depth_limit:
@@ -252,8 +256,11 @@ class TaskValidator:
                     continue
                 visited[transition.next_state] = next_irrev
 
-                beatable, _, _ = self._find_solution(transition.next_state)
-                if not beatable and self._is_irreversible_transition(state, transition):
+                if irreversible and transition.next_state not in beatable_from:
+                    beatable_from[transition.next_state] = self._find_solution(
+                        transition.next_state
+                    )[0]
+                if irreversible and not beatable_from[transition.next_state]:
                     min_steps_to_break = (
                         len(next_sequence)
                         if min_steps_to_break is None
