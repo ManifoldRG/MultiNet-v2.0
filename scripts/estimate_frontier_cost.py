@@ -9,9 +9,10 @@ actual spend at the tier it ran on. Then projects the Astra panel:
 
 under three queries/episode scenarios (calibration-measured, R1 Opus, R1 Kimi)
 because q/ep is the least transferable quantity from a 5-maze smoke. Per-query
-tokens come from the Astra probe when one is present in the root, otherwise
-from the proxy model (Terra) — proxy numbers are a guess about a different
-model and are labelled as such.
+query counts come from the proxy profile (Terra, normally five mazes), while
+per-query tokens come from the Astra probe when one is present in the root.
+When no Astra probe exists, the proxy profile supplies both. Scenarios label
+the source used for each quantity.
 
 Usage:
     python -m scripts.estimate_frontier_cost --artifacts-root <root> [--json out.json]
@@ -49,7 +50,7 @@ def collect(root: Path) -> Dict[str, Dict[str, Any]]:
         agg = by_model.setdefault(
             model,
             {"episodes": 0, "successes": 0, "queries": [], "in": [], "out": [], "reasoning": [],
-             "cached": [], "truncated": 0, "end_reasons": {}, "tasks": []},
+             "cached": [], "cache_creation": [], "truncated": 0, "end_reasons": {}, "tasks": []},
         )
         agg["episodes"] += 1
         agg["successes"] += int(bool(ep.get("success")))
@@ -66,6 +67,7 @@ def collect(root: Path) -> Dict[str, Dict[str, Any]]:
             agg["out"].append(int(usage.get("output_tokens", 0)))
             agg["reasoning"].append(int(usage.get("reasoning_tokens", 0)))
             agg["cached"].append(int(usage.get("cached_input_tokens", 0)))
+            agg["cache_creation"].append(int(usage.get("cache_creation_input_tokens", 0)))
             if turn.get("stop_reason") in ("length", "max_tokens"):
                 agg["truncated"] += 1
         agg["queries"].append(n)
@@ -76,6 +78,7 @@ def summarize(model: str, agg: Dict[str, Any]) -> Dict[str, Any]:
     q = sum(agg["queries"])
     eps = agg["episodes"]
     totals = {"input_tokens": sum(agg["in"]), "cached_input_tokens": sum(agg["cached"]),
+              "cache_creation_input_tokens": sum(agg["cache_creation"]),
               "output_tokens": sum(agg["out"])}
     spend = {}
     if model in OPENAI_PRICES:
@@ -104,14 +107,27 @@ def summarize(model: str, agg: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def project(profile: Dict[str, Any], panel_mazes: int) -> Dict[str, Any]:
-    """Astra panel cost under each queries/episode scenario, at both tiers."""
-    q = profile["queries"]
-    per_q = {k: v / q for k, v in profile["totals"].items()} if q else {}
-    scenarios = {f"calibration ({profile['model']})": profile["queries_per_episode_mean"],
+def project(
+    token_profile: Dict[str, Any],
+    panel_mazes: int,
+    query_profile: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Project Astra cost using separate calibration query-rate and token profiles."""
+    query_profile = query_profile or token_profile
+    q = token_profile["queries"]
+    per_q = {k: v / q for k, v in token_profile["totals"].items()} if q else {}
+    calibration_scenario = (
+        f"calibration (queries: {query_profile['model']}; "
+        f"tokens: {token_profile['model']})"
+    )
+    scenarios = {calibration_scenario: query_profile["queries_per_episode_mean"],
                  **{k: round(v, 1) for k, v in R1_QUERIES_PER_EPISODE.items()}}
-    out: Dict[str, Any] = {"token_profile_from": profile["model"],
-                           "is_astra_measured": profile["model"] == ASTRA, "scenarios": {}}
+    out: Dict[str, Any] = {
+        "query_profile_from": query_profile["model"],
+        "token_profile_from": token_profile["model"],
+        "is_astra_measured": token_profile["model"] == ASTRA,
+        "scenarios": {},
+    }
     for name, qpe in scenarios.items():
         n_queries = qpe * panel_mazes
         usage = {k: v * n_queries for k, v in per_q.items()}
@@ -139,12 +155,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"no episode.json under {args.artifacts_root}", file=sys.stderr)
         return 1
     summaries = {m: summarize(m, a) for m, a in by_model.items()}
-    source = ASTRA if ASTRA in summaries else args.proxy_model
-    if source not in summaries:
+    token_source = ASTRA if ASTRA in summaries else args.proxy_model
+    if token_source not in summaries:
         print(f"neither {ASTRA} nor proxy {args.proxy_model} found; have {sorted(summaries)}",
               file=sys.stderr)
         return 1
-    report = {"models": summaries, "projection": project(summaries[source], args.panel_mazes)}
+    query_source = args.proxy_model if args.proxy_model in summaries else token_source
+    report = {
+        "models": summaries,
+        "projection": project(
+            summaries[token_source],
+            args.panel_mazes,
+            query_profile=summaries[query_source],
+        ),
+    }
 
     for s in summaries.values():
         print(f"\n== {s['model']}: {s['episodes']} eps, {s['successes']} success, {s['queries']} queries "
@@ -156,8 +180,11 @@ def main(argv: Optional[List[str]] = None) -> int:
               f"cached share {s['cached_input_share']}")
         print(f"   actual spend by tier: {s['actual_spend_usd_by_tier']}")
     proj = report["projection"]
-    label = "MEASURED on Astra" if proj["is_astra_measured"] else f"PROXY ({source}) — not Astra"
-    print(f"\n== Astra {args.panel_mazes}-maze panel projection, token profile {label}")
+    label = "MEASURED on Astra" if proj["is_astra_measured"] else f"PROXY ({token_source}) — not Astra"
+    print(
+        f"\n== Astra {args.panel_mazes}-maze panel projection, "
+        f"query profile {proj['query_profile_from']}, token profile {label}"
+    )
     for name, sc in proj["scenarios"].items():
         print(f"   {name:28s} q/ep {sc['queries_per_episode']:6}  queries {sc['panel_queries']:6}  "
               f"out {sc['panel_output_tokens_M']:7}M  flex ${sc['usd_flex']:>7}  standard ${sc['usd_standard']:>7}")

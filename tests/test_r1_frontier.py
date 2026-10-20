@@ -101,7 +101,9 @@ def test_estimator_projects_from_proxy_profile(tmp_path, capsys):
     # Terra standard: 40k in x $2 + 80k out x $12
     assert s["actual_spend_usd_by_tier"]["default"] == pytest.approx(0.08 + 0.96)
     proj = est.project(s, 50)
-    sc = proj["scenarios"]["calibration (gpt-5.6-terra)"]
+    sc = proj["scenarios"][
+        "calibration (queries: gpt-5.6-terra; tokens: gpt-5.6-terra)"
+    ]
     # 20 q/ep x 50 = 1000 queries; flex astra = 1M in x $5 + 2M out x $25
     assert sc["panel_queries"] == 1000
     assert sc["usd_flex"] == pytest.approx(55.0)
@@ -117,3 +119,49 @@ def test_estimator_prefers_measured_astra(tmp_path):
     assert est.main(["--artifacts-root", str(tmp_path), "--json", str(tmp_path / "r.json")]) == 0
     report = json.loads((tmp_path / "r.json").read_text())
     assert report["projection"]["is_astra_measured"] is True
+
+
+def test_estimator_uses_proxy_query_rate_and_astra_probe_tokens(tmp_path):
+    proxy_usage = {"input_tokens": 10_000, "output_tokens": 20_000}
+    probe_usage = {"input_tokens": 1_000, "output_tokens": 500}
+    for index in range(5):
+        _write_episode(
+            tmp_path,
+            "gpt-5.6-terra",
+            f"terra-{index}",
+            [proxy_usage] * 40,
+        )
+    _write_episode(tmp_path, "gpt-6-astra", "astra-probe", [probe_usage] * 12)
+
+    report_path = tmp_path / "projection.json"
+    assert est.main(
+        ["--artifacts-root", str(tmp_path), "--json", str(report_path)]
+    ) == 0
+    projection = json.loads(report_path.read_text())["projection"]
+    scenario_name = (
+        "calibration (queries: gpt-5.6-terra; tokens: gpt-6-astra)"
+    )
+    scenario = projection["scenarios"][scenario_name]
+
+    assert scenario["queries_per_episode"] == 40.0
+    assert scenario["panel_queries"] == 2000
+    assert projection["query_profile_from"] == "gpt-5.6-terra"
+    assert projection["token_profile_from"] == "gpt-6-astra"
+    assert scenario["panel_output_tokens_M"] == pytest.approx(1.0)
+    assert scenario["usd_flex"] == pytest.approx(35.0)
+
+
+def test_estimator_prices_cache_writes(tmp_path):
+    usage = {
+        "input_tokens": 1_000_000_000,
+        "cached_input_tokens": 400_000_000,
+        "cache_creation_input_tokens": 200_000_000,
+        "output_tokens": 10_000_000,
+    }
+    _write_episode(tmp_path, "gpt-6-astra", "t1", [usage])
+    summary = est.summarize("gpt-6-astra", est.collect(tmp_path)["gpt-6-astra"])
+    assert summary["totals"]["cache_creation_input_tokens"] == 200_000_000
+    assert summary["actual_spend_usd_by_tier"]["default"] == pytest.approx(
+        (400_000_000 * 10 + 400_000_000 * 1
+         + 200_000_000 * 12.5 + 10_000_000 * 50) / 1_000_000
+    )
