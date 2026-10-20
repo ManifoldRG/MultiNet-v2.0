@@ -92,10 +92,11 @@ def _assign(artifacts: Path) -> tuple[CoordinatorStore, str, dict]:
 # 2D stays byte-identical
 # --------------------------------------------------------------------------- #
 # sha256 of a 2D plan's projection (unit ids, run dirs, backend, both hashes,
-# unit and plan keys), recorded on main b07e0f1 before fleet 3D support. It
-# moves only with PIPELINE_VERSION or a deliberate change to the 2D recipe; a
-# drift here re-pays every unit of a running 2D job.
-_PINNED_2D_PLAN = "1c0c332be44cfe5d4bdec668e76af07b8aad5fd3e85d12a39e4e92c9a628ad81"
+# unit and plan keys), recorded on main 01f3b10 without fleet 3D support; the
+# same plan with it. It moves only with PIPELINE_VERSION or a deliberate change
+# to the 2D recipe (#54's context-window change moved it from b07e0f1's
+# 1c0c332b...); a drift here re-pays every unit of a running 2D job.
+_PINNED_2D_PLAN = "d4dd6eab0e4ed12af558495810d410d25474c64ff93f3dd8d568eda919222f9a"
 
 
 def test_2d_plan_is_byte_identical_to_the_pre_3d_plan(tmp_path, monkeypatch):
