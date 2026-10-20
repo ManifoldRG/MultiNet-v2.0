@@ -17,6 +17,7 @@ pytest.importorskip("minigrid")
 from gridworld.backends import get_backend  # noqa: E402
 from gridworld.render3d.cameras import pose_for, project, to_pixel  # noqa: E402
 from gridworld.render3d.hud import compass_box, draw_compass  # noqa: E402
+from gridworld.render3d.scene import UnsupportedSpecError, check_supported  # noqa: E402
 from gridworld.render_settings import GRID_PIXELS_PER_CELL  # noqa: E402
 from gridworld.task_spec import TaskSpecification  # noqa: E402
 from maze_test_utils import MAZE_JSON_DIR  # noqa: E402
@@ -77,6 +78,10 @@ def test_top_down_compass_covers_no_interior_cell_anywhere_in_the_corpus(black_f
     offenders = {}
     for path in CORPUS:
         spec = TaskSpecification.from_json(str(path))
+        try:
+            check_supported(spec)
+        except UnsupportedSpecError:
+            continue  # never drawn in 3D (e.g. pushable blocks), so no compass to place
         mask = _compass_mask(spec, "top_down", GRID_PIXELS_PER_CELL * max(spec.maze.dimensions))
         assert mask.any(), f"{path.name}: top_down lost its compass"
         hits = _interior_hits(spec, mask)
