@@ -365,6 +365,9 @@ class ExperimentRunner:
             transcript,
             self.config.max_history_tokens,
             n=n,
+            cache_breakpoints=(
+                self.config.prompt_cache and self.config.context_window == "full"
+            ),
         )
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)

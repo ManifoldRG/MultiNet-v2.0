@@ -44,6 +44,26 @@ def test_normalized_usage_accepts_provider_token_keys():
     }
 
 
+def test_normalize_token_usage_is_idempotent_for_cached_usage():
+    raw_usage = {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 10,
+        "cache_creation_input_tokens": 3,
+    }
+
+    normalized = normalize_token_usage(raw_usage)
+
+    assert normalized == {
+        "input_tokens": 18,
+        "output_tokens": 2,
+        "total_tokens": 20,
+        "cache_read_input_tokens": 10,
+        "cache_creation_input_tokens": 3,
+    }
+    assert normalize_token_usage(normalized) == normalized
+
+
 def test_agent_recorder_forwards_usage_metadata():
     records = []
     recorder = _AgentRecorder(UsageReplayAgent(), records)
