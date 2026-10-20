@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from pathlib import Path
 from typing import Callable, List
@@ -26,12 +27,13 @@ from interface.prompt_strategies import (
     MinimalInteractionRulesStandPromptStrategy,
     MinimalPromptStrategy,
     PromptStrategy,
+    RenderContext,
     StandardPromptStrategy,
     VerbosePromptStrategy,
 )
 from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
-from interface.renderer import render_initial_maze_text
+from interface.renderer import render_initial_maze_text, rgb_to_image_block
 from prompting_experiments.prompt_templates import querying as querying_templates
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
@@ -53,6 +55,28 @@ def _user_message_has_image(message: dict) -> bool:
     if not isinstance(content, list):
         return False
     return any(isinstance(b, dict) and b.get("type") == "image_url" for b in content)
+
+
+def _with_start_map(messages: List[dict], map_blocks: List[dict]) -> List[dict]:
+    """The request with ``map_blocks`` opening its FIRST user message.
+
+    Applied when a request is assembled, never to the stored chat: the map
+    appears exactly once per request in every chat mode (rolling: on whichever
+    user turn is oldest in the trimmed window) and multiturn history stays
+    lean. Without a map the request object itself is returned untouched.
+    """
+    if not map_blocks:
+        return messages
+    request = list(messages)
+    for i, message in enumerate(request):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            content = [{"type": "text", "text": content}]
+        request[i] = {**message, "content": copy.deepcopy(map_blocks) + list(content)}
+        break
+    return request
 
 
 def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
@@ -119,7 +143,11 @@ def build_runner(
         backend=backend,
         task_spec=task_spec,
         config=config,
-        prompt=_PROMPT_STRATEGIES[config.prompting](action_space_mod.actions_hint(space)),
+        # The render context (3D camera, start map) is read off the backend, not
+        # the config, so 2D prompts and every config hash stay as they were.
+        prompt=_PROMPT_STRATEGIES[config.prompting](
+            action_space_mod.actions_hint(space), render=RenderContext.from_backend(backend)
+        ),
         querying=QueryingMode(
             config.querying,
             valid_actions=action_space_mod.valid_actions(space),
@@ -143,6 +171,9 @@ class ExperimentRunner:
         self.prompt = prompt
         self.querying = querying
         self.last_rgb: np.ndarray | None = None
+        # 3D render.start_map: the backend's top-down snapshot of the reset
+        # state, set by EpisodeStepper.start(); None for every other run.
+        self.start_map_rgb: np.ndarray | None = None
 
     def build_prompt_message(
         self,
@@ -232,6 +263,16 @@ class ExperimentRunner:
             result["success"] = False
         return result
 
+    def start_map_blocks(self) -> list[dict]:
+        """[map text, map image] opening each request's first user message,
+        or [] without a start map."""
+        if self.start_map_rgb is None:
+            return []
+        return [
+            {"type": "text", "text": self.prompt.start_map_text()},
+            rgb_to_image_block(self.start_map_rgb),
+        ]
+
     def _one_shot_blocks(self, obs) -> list[dict]:
         """The one-shot ICL example blocks (example image + solution), or []."""
         if self.config.in_context_learning == "one_shot":
@@ -274,6 +315,7 @@ class ExperimentRunner:
                 ctx,
                 transcript,
                 self.task_spec,
+                self.config.max_history_tokens,
                 n=n,
                 observation_text_format=self.config.observation_text_format,
                 include_facing=self.config.observation_text_includes_facing,
@@ -281,6 +323,20 @@ class ExperimentRunner:
             state,
             observation=obs,
         )
+        
+        # Step budget awareness: tell the model how many steps it has taken and
+        # how many remain. max_steps is the 3x BFS optimal cap set by the pipeline
+        # before the run; see pipeline/run_stage3.py.
+        steps_used = getattr(state, "step_count", 0)
+        max_steps = getattr(self.task_spec, "max_steps", None)
+        if max_steps is not None:
+            remaining = max(0, max_steps - steps_used)
+            step_budget_line = (
+                f"Step {steps_used + 1} of {max_steps} ({remaining} remaining)."
+            )
+            # Appended after prompt_text to preserve leading image and observation blocks
+            prompt_text = f"{prompt_text}\n\n{step_budget_line}"
+
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)
@@ -305,7 +361,16 @@ class ExperimentRunner:
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
-        hist_blocks = history_content_blocks(obs, ctx, transcript, n=n)
+        hist_blocks = history_content_blocks(
+            obs,
+            ctx,
+            transcript,
+            self.config.max_history_tokens,
+            n=n,
+            cache_breakpoints=(
+                self.config.prompt_cache and self.config.context_window == "full"
+            ),
+        )
         images = current_image_blocks(obs, self.last_rgb)
         prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []

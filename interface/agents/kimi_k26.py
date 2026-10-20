@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 from interface.agents.http_retry import call_with_retry
 from interface.agents.moonshot_batch import MoonshotBatchDeadline, run_moonshot_batch
 from interface.agents.reply import Reply, detect_token_truncated
+from interface.agents.runner_messages import strip_cache_markers
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def _to_openai_messages(messages: List[dict]) -> List[Dict[str, object]]:
         role = message.get("role")
         if role not in ("system", "user", "assistant"):
             raise ValueError(f"Unsupported message role for {_AGENT_NAME}: {role!r}")
-        content = message.get("content", "")
+        content = strip_cache_markers(message.get("content", ""))
         if role == "assistant" and isinstance(content, str):
             content = content.strip()
         out.append({"role": role, "content": content})
@@ -64,6 +65,7 @@ def _build_body(
     enable_thinking: bool,
     include_sampling: bool = True,
     reasoning_effort: Optional[str] = None,
+    cache_ttl: Optional[str] = None,
 ) -> Dict[str, object]:
     """Assemble the Moonshot chat/completions request body.
 
@@ -95,6 +97,8 @@ def _build_body(
         body["temperature"] = (
             _KIMI_TEMPERATURE_THINKING if enable_thinking else _KIMI_TEMPERATURE_NO_THINKING
         )
+    if cache_ttl:
+        body["prompt_cache_options"] = {"mode": "implicit", "ttl": cache_ttl}
     return body
 
 
@@ -132,6 +136,7 @@ def _post_chat_completions(
     messages: List[Dict[str, object]],
     timeout: Optional[float],
     enable_thinking: bool,
+    cache_ttl: Optional[str] = None,
     max_attempts: int = 5,
     reasoning_effort: Optional[str] = None,
 ) -> Reply:
@@ -143,6 +148,7 @@ def _post_chat_completions(
         max_tokens=max_tokens,
         enable_thinking=enable_thinking,
         reasoning_effort=reasoning_effort,
+        cache_ttl=cache_ttl,
     )
 
     raw = json.dumps(body).encode("utf-8")
@@ -204,6 +210,7 @@ class KimiK26Config:
     enable_thinking: bool = False
     # kimi-k3 only: "low" | "high" | "max"; None sends nothing (Moonshot default).
     reasoning_effort: Optional[str] = None
+    prompt_cache_ttl: Optional[str] = None
     max_attempts: int = 5
     # Moonshot Batch API knobs (used only by generate_batch).
     batch_poll_interval_s: float = 30.0
@@ -251,6 +258,7 @@ class KimiK26Agent:
             messages=_to_openai_messages(messages),
             timeout=self.config.timeout,
             enable_thinking=self.config.enable_thinking,
+            cache_ttl=self.config.prompt_cache_ttl,
             max_attempts=self.config.max_attempts,
             reasoning_effort=self.config.reasoning_effort,
         )

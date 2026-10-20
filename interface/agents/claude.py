@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 _AGENT_NAME = "Claude agent"
+_CACHE_TTLS = ("5m", "1h")
 
 # Model families that REJECT sampling params (temperature/top_p/top_k) with an
 # HTTP 400: Opus 4.7+ (incl. the Opus 5 line: "claude-opus-5" also matches
@@ -89,19 +90,26 @@ def _parts_to_anthropic(parts: List[ContentPart]) -> List[dict]:
     blocks: List[dict] = []
     for part in parts:
         if part.kind == "text":
-            blocks.append({"type": "text", "text": part.text})
+            block: dict = {"type": "text", "text": part.text}
         elif part.image is not None:
-            blocks.append(
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": part.image.media_type,
-                        "data": part.image.data_b64,
-                    },
-                }
-            )
+            block = {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": part.image.media_type,
+                    "data": part.image.data_b64,
+                },
+            }
+        else:
+            continue
+        if part.cache_breakpoint:
+            block[_MARKER] = True
+        blocks.append(block)
     return blocks
+
+
+_MARKER = "_cache_breakpoint"
+_MAX_BREAKPOINTS = 4
 
 
 def _anthropic_turn_content(content: object, role: str) -> object:
@@ -113,7 +121,11 @@ def _anthropic_turn_content(content: object, role: str) -> object:
     blocks = _parts_to_anthropic(parsed)
     if not blocks:
         return ""
-    if len(blocks) == 1 and blocks[0].get("type") == "text":
+    if (
+        len(blocks) == 1
+        and blocks[0].get("type") == "text"
+        and _MARKER not in blocks[0]
+    ):
         text = str(blocks[0].get("text", ""))
         return text.strip() if role == "assistant" else text
     return blocks
@@ -135,39 +147,71 @@ def _to_anthropic_turns(messages: List[dict]) -> Tuple[Optional[str], List[Dict[
     return system, turns
 
 
-_CACHE_CONTROL = {"type": "ephemeral"}
-
-
 def _as_block_list(content: object) -> List[dict]:
     if isinstance(content, list):
         return [dict(block) for block in content]
     return [{"type": "text", "text": "" if content is None else str(content)}]
 
 
-def _apply_prompt_cache(
-    system: Optional[str], turns: List[Dict[str, object]]
-) -> Tuple[object, List[Dict[str, object]]]:
-    """Add cache_control breakpoints so each turn reuses the prior prompt prefix.
+def _cache_control(ttl: str) -> Dict[str, str]:
+    if ttl not in _CACHE_TTLS:
+        raise ValueError(f"cache ttl must be one of {_CACHE_TTLS}, got {ttl!r}")
+    return {"type": "ephemeral", "ttl": "1h"} if ttl == "1h" else {"type": "ephemeral"}
 
-    Two breakpoints (well under the 4-breakpoint cap): the stable system prompt,
-    and the last content block of the most-recently-appended turn. Each next call
-    reads the prefix the previous call wrote. Anthropic returns the cache split in
-    `usage.cache_read_input_tokens`/`cache_creation_input_tokens`, which
-    `normalize_token_usage` folds back into the full input-token count.
-    """
+
+def _is_empty_text(block: dict) -> bool:
+    return block.get("type") == "text" and not block.get("text")
+
+
+def _resolve_cache_markers(
+    system: Optional[str],
+    turns: List[Dict[str, object]],
+    *,
+    ttl: str,
+    enabled: bool,
+) -> Tuple[object, List[Dict[str, object]]]:
+    """Convert private runner markers into Anthropic cache-control fields."""
+    cc = _cache_control(ttl)
+    used = 0
     system_out: object = system
-    if system:
-        system_out = [{"type": "text", "text": system, "cache_control": _CACHE_CONTROL}]
-    if turns:
-        last = dict(turns[-1])
-        blocks = _as_block_list(last["content"])
-        # Skip an empty trailing text block: Anthropic rejects a cache_control on an
-        # empty text block (and it would never be a useful cache breakpoint anyway).
-        if blocks and not (blocks[-1].get("type") == "text" and not blocks[-1].get("text")):
-            blocks[-1] = {**blocks[-1], "cache_control": _CACHE_CONTROL}
-            last["content"] = blocks
-            turns = turns[:-1] + [last]
-    return system_out, turns
+    if system and enabled:
+        system_out = [{"type": "text", "text": system, "cache_control": dict(cc)}]
+        used += 1
+
+    out: List[Dict[str, object]] = []
+    for turn in turns:
+        content = turn["content"]
+        if not isinstance(content, list):
+            out.append(turn)
+            continue
+        blocks = []
+        for block in content:
+            block = dict(block)
+            marked = block.pop(_MARKER, False)
+            if marked and enabled and not _is_empty_text(block):
+                block["cache_control"] = dict(cc)
+                used += 1
+            blocks.append(block)
+        out.append({**turn, "content": blocks})
+
+    if enabled:
+        for i in range(len(out) - 1, -1, -1):
+            if out[i]["role"] == "assistant":
+                blocks = _as_block_list(out[i]["content"])
+                if (
+                    blocks
+                    and not _is_empty_text(blocks[-1])
+                    and "cache_control" not in blocks[-1]
+                ):
+                    blocks[-1] = {**blocks[-1], "cache_control": dict(cc)}
+                    out[i] = {**out[i], "content": blocks}
+                    used += 1
+                break
+    if used > _MAX_BREAKPOINTS:
+        raise ValueError(
+            f"{used} cache breakpoints requested; Anthropic allows {_MAX_BREAKPOINTS}"
+        )
+    return system_out, out
 
 
 def _parse_response(
@@ -298,6 +342,8 @@ class ClaudeAnthropicConfig:
     enable_prompt_cache: bool = True
     enable_thinking: bool = False
     effort: Optional[str] = None
+    cache_ttl: str = "5m"
+    batch_cache_ttl: str = "1h"
     # Message Batches API polling knobs (used only by generate_batch).
     batch_poll_interval_s: float = 30.0
     batch_deadline_s: float = 7200.0
@@ -312,8 +358,25 @@ class ClaudeAnthropicAgent:
     api_key: Optional[str] = None
     last_usage: Optional[Dict[str, int]] = field(default=None, init=False)
     last_thinking: Optional[str] = field(default=None, init=False)
+    _batch_rounds: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
+        _cache_control(self.config.cache_ttl)
+        _cache_control(self.config.batch_cache_ttl)
+        batch_cache_ttl_s = 300 if self.config.batch_cache_ttl == "5m" else 3600
+        if (
+            self.config.enable_prompt_cache
+            and self.config.batch_deadline_s > batch_cache_ttl_s
+        ):
+            logger.warning(
+                "Claude batch deadline %.0fs exceeds the %s prompt-cache TTL (%ds). "
+                "Cache lifetime is measured from the start of the request that writes it, "
+                "so a batch round longer than the TTL pays the write premium without reads "
+                "(1h write 2.00x, 5m write 1.25x, versus 1.00x uncached).",
+                self.config.batch_deadline_s,
+                self.config.batch_cache_ttl,
+                batch_cache_ttl_s,
+            )
         key = (self.api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
         if not key:
             raise ValueError(
@@ -323,9 +386,7 @@ class ClaudeAnthropicAgent:
         self.api_key = key
 
     def generate(self, messages: List[dict]) -> Reply:
-        system, turns = _to_anthropic_turns(messages)
-        if self.config.enable_prompt_cache:
-            system, turns = _apply_prompt_cache(system, turns)
+        system, turns = self._prepared(messages, ttl=self.config.cache_ttl)
         return _post_messages(
             self.api_key,
             model=self.config.model,
@@ -339,15 +400,24 @@ class ClaudeAnthropicAgent:
             effort=self.config.effort,
         )
 
-    def _params_for(self, messages: List[dict]) -> Dict[str, object]:
-        """The exact request body `generate` would send for these messages.
-
-        Shared with `generate` via `_build_request_body` so batched bodies can
-        never drift from sync bodies.
-        """
+    def _prepared(
+        self, messages: List[dict], *, ttl: str
+    ) -> Tuple[object, List[Dict[str, object]]]:
         system, turns = _to_anthropic_turns(messages)
-        if self.config.enable_prompt_cache:
-            system, turns = _apply_prompt_cache(system, turns)
+        return _resolve_cache_markers(
+            system,
+            turns,
+            ttl=ttl,
+            enabled=self.config.enable_prompt_cache,
+        )
+
+    def _params_for(self, messages: List[dict]) -> Dict[str, object]:
+        """Build the batch request body with the batch cache TTL.
+
+        Request fields are shared with `generate`; only the configured cache TTL
+        differs for the longer-lived batch workload.
+        """
+        system, turns = self._prepared(messages, ttl=self.config.batch_cache_ttl)
         return _build_request_body(
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -398,7 +468,38 @@ class ClaudeAnthropicAgent:
             deadline_s=self.config.batch_deadline_s,
             cancel_grace_s=self.config.batch_cancel_grace_s,
         )
-        return [self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))]
+        replies = [
+            self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))
+        ]
+        cache_reads = sum(
+            (reply.usage or {}).get("cache_read_input_tokens", 0) or 0
+            for reply in replies
+        )
+        cache_writes = sum(
+            (reply.usage or {}).get("cache_creation_input_tokens", 0) or 0
+            for reply in replies
+        )
+        self._batch_rounds += 1
+        logger.info(
+            "Claude batch round %d cache usage: reads=%d writes=%d",
+            self._batch_rounds,
+            cache_reads,
+            cache_writes,
+        )
+        if (
+            self.config.enable_prompt_cache
+            and self._batch_rounds > 1
+            and cache_writes > 0
+            and cache_reads == 0
+        ):
+            logger.warning(
+                "Claude batch round %d wrote prompt cache but read none; cache may be "
+                "expiring before the next round (batch_cache_ttl=%s, batch_deadline_s=%s).",
+                self._batch_rounds,
+                self.config.batch_cache_ttl,
+                self.config.batch_deadline_s,
+            )
+        return replies
 
     def __call__(self, messages: List[dict]) -> str:
         reply = self.generate(messages)

@@ -97,6 +97,8 @@ def flush_episode_log(result: dict[str, Any], out_dir: Path) -> Path:
         if kind == "reset":
             if _write_rgb(frames_dir / "reset.png", copy.pop("_reset_frame_rgb", None)):
                 copy["reset_frame"] = "frames/reset.png"
+            if _write_rgb(frames_dir / "start_map.png", copy.pop("_start_map_rgb", None)):
+                copy["start_map_frame"] = "frames/start_map.png"
         elif kind == "query":
             qidx = copy["query_index"]
             qdir = queries_dir / f"query_{qidx:03d}"

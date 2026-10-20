@@ -52,6 +52,15 @@ SWITCH_RENDER_COLORS = {
 }
 
 
+# MiniGrid's tile cache keys a tile's picture on encode() for the whole process.
+# Switches and portals are both Balls and several visual colours share one
+# MiniGrid colour index (cyan draws on blue's, white on grey's), so their state
+# slot carries the visual colour: a switch 2 * colour + on, a portal
+# PORTAL_STATE_BASE + colour, above every switch state.
+TILE_COLOUR_STATE = {name: i for i, name in enumerate(sorted(SWITCH_RENDER_COLORS))}
+PORTAL_STATE_BASE = 2 * len(TILE_COLOUR_STATE)
+
+
 class Switch(Ball):
     """
     Switch object that can control gates.
@@ -114,12 +123,12 @@ class Switch(Ball):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.13), core)
 
     def encode(self):
-        obj_type, color_idx, state = super().encode()
-        # Low bit preserves the custom (non-MiniGrid) color flag; the +2 makes
-        # the encoded tuple differ on activation so the MiniGrid tile cache
-        # (keyed on encode()) refreshes when is_active flips.
-        state = (1 if self.visual_color not in MINIGRID_COLORS else 0) + (2 if self.is_active else 0)
-        return (obj_type, color_idx, state)
+        obj_type, color_idx, _state = super().encode()
+        # The low bit flips with is_active so the MiniGrid tile cache (keyed on
+        # encode()) refreshes; the colour is the one render() draws, which falls
+        # back to grey (see TILE_COLOUR_STATE).
+        colour = TILE_COLOUR_STATE.get(self.visual_color, TILE_COLOUR_STATE["grey"])
+        return (obj_type, color_idx, 2 * colour + (1 if self.is_active else 0))
 
 
 class GroundKey(Key):
@@ -179,8 +188,10 @@ class TeleporterObj(Ball):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.12), color)
 
     def encode(self):
+        # Deterministic and distinct from every switch and other portal colour
+        # (see TILE_COLOUR_STATE; a string-hash state varied with PYTHONHASHSEED).
         obj_type, color_idx, _state = super().encode()
-        return (obj_type, color_idx, abs(hash(self.visual_color)) % 6)
+        return (obj_type, color_idx, PORTAL_STATE_BASE + TILE_COLOUR_STATE[self.visual_color])
 
 
 class KillCell(Lava):
@@ -203,7 +214,7 @@ class RotatingTile(Floor):
 
     def encode(self):
         obj_type, color_idx, _state = super().encode()
-        return (obj_type, color_idx, self.direction)
+        return (obj_type, color_idx, 1 + self.direction)  # 0 is plain floor's state
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([255, 168, 64]))
@@ -717,6 +728,22 @@ class CustomMiniGridEnv(MiniGridEnv):
             )
             a, b, c = tris[self.agent_dir]
             fill_coords(tile, point_in_triangle(a, b, c), np.array([255, 0, 0]))
+        if self.freeze_remaining > 0:
+            # Iced over: the agent tile frosts on step-on and each swallowed
+            # action thins it, until the thaw frame is plain (3D: hud.draw_frost).
+            t = img.shape[0] // self.height
+            tile = img[ay * t:(ay + 1) * t, ax * t:(ax + 1) * t]
+            total = max(1, int(getattr(self.task_spec.mechanisms, "freeze_steps", 5)) if self.task_spec else 5)
+            frac = min(1.0, self.freeze_remaining / total)
+            alpha = 0.25 + 0.6 * frac
+            frost = np.array([214, 232, 246], dtype=float)
+            iced = (tile.astype(float) * (1.0 - alpha) + frost * alpha).round().astype(np.uint8)
+            n_cracks = round((1.0 - frac) * 4)
+            for k in range(n_cracks):  # diagonal cracks appear as it thaws
+                for i in range(t):
+                    j = (i + k * (t // 4)) % t
+                    iced[i, j] = (58, 82, 110)
+            tile[:] = iced
         return img
 
     def get_mission_text(self) -> str:
