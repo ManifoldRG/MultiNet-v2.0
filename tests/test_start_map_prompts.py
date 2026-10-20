@@ -139,7 +139,10 @@ def test_view_label_precedes_the_current_image_placeholder():
     labelled = _strategy("standard", "first_person", start_map=True).build_user_prompt(
         "", "", state, observation="image_only"
     )
-    assert labelled == f"{VIEW_LABELS['first_person']}\n{placeholder}\nYour inventory: empty.\nWhat is your next action?"
+    # The label leads the image; the budget lines before the question are pinned
+    # by the prompt-budget tests, not here.
+    assert labelled.startswith(f"{VIEW_LABELS['first_person']}\n{placeholder}\nYour inventory: empty.\n")
+    assert labelled.endswith("\nWhat is your next action?")
     for level in ("minimal",):
         plain = _strategy(level, "first_person", start_map=True).build_user_prompt("", "", state, observation="image_only")
         assert plain.startswith(placeholder)
