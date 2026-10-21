@@ -33,6 +33,17 @@ ONE_SHOT_EXAMPLE = (
 
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 
+# One line appended after the Valid actions line of the minimal prompt
+# (prompting="minimal_interaction_rules_stand"). In the R1-frontier harness
+# probes it turned the adjacent-cell PICKUP/TOGGLE failures into optimal solves.
+# Nothing else in the prompt changes.
+INTERACTION_RULES_STAND_HINT = (
+    "There are two interaction actions, PICKUP and TOGGLE. Keys must be picked up. "
+    "Doors and switches must be toggled. A key door will not open if you do not have a "
+    "matching color key in your inventory. A switch door will open when you TOGGLE its switch. "
+    "You must stand on a key/switch to act on it."
+)
+
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
 
 # `INITIAL_MAZE_SECTION` is used when the observation includes text.

@@ -11,7 +11,13 @@ DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
 class ExperimentConfig:
     """Selects one implementation along each experimental axis."""
 
-    prompting: Literal["minimal", "standard", "verbose", "text_initial_maze"] = "standard"
+    prompting: Literal[
+        "minimal",
+        "minimal_interaction_rules_stand",
+        "standard",
+        "verbose",
+        "text_initial_maze",
+    ] = "standard"
     observation: Literal["text_only", "image_text", "image_only"] = "image_text"
     observation_text_format: Literal["coords", "json", "ascii"] = "coords"
     include_current_observation_description: bool = True

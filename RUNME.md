@@ -70,11 +70,14 @@ python -m scripts.run_pipeline \
   --seeds 0
 ```
 
-### R1-frontier: OpenAI models on the R1 cell (paid)
+### R1-frontier: frontier models on the R1 cell (paid)
 
 A separate experimental set: GPT-6 Astra on the same 50-maze panel and the
 same fixed cell (`run_config.r1_frontier.json`, provider `openai`, xhigh
-reasoning, 64k cap, flex tier). `OPENAI_API_KEY` resolves from env, `.env`,
+reasoning, 64k cap, flex tier). Claude Opus 5.5 runs the same cell from
+`run_config.r1_frontier_opus55.json` through the Batch API lockstep worker
+(`API_WORKER_ROLE=lockstep-worker`; serve the coordinator with
+`STALE_AFTER_SECONDS` of at least 12600 so a slow batch is not reaped). `OPENAI_API_KEY` resolves from env, `.env`,
 or line 3 of `api_key.txt`; `python -m deploy.check_api_keys --provider
 openai` round-trips it and prints the key's rate limits (OpenAI reserves the
 64k `max_completion_tokens` against TPM, so the tier bounds concurrency).

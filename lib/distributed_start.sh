@@ -20,8 +20,13 @@ start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEE
   # rejects a mispaired prepare) and --prompt-variant selects one dedup variant.
   # Empty when unset -> the remote guarded appends skip both flags.
   local conditions="${CONDITIONS:-}" prompt_variant="${PROMPT_VARIANT:-}"
+  # [STALE_AFTER_SECONDS] Lockstep batch runs: a batch round sends no heartbeat
+  # while in flight, so the coordinator must serve with --stale-after-seconds >=
+  # the worst-case round (docs/batch-api-lockstep-runner-design.md). Unset ->
+  # run_pipeline's default.
+  local stale_after="${STALE_AFTER_SECONDS:-}"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -60,10 +65,13 @@ python -m scripts.run_pipeline \
   --run-set-id "$RUN_ID" \
   --difficulty-max-static-score "$DIFFICULTY_MAX" \
   ${prepare_args[@]+"${prepare_args[@]}"}
+serve_args=()
+[[ -n "${STALE_AFTER:-}" ]] && serve_args+=(--stale-after-seconds "$STALE_AFTER")
 nohup python -m scripts.run_pipeline \
   --distributed-role coordinator-serve \
   --artifacts-root "artifacts/$RUN_ID" \
   --host 0.0.0.0 --port 8765 \
+  ${serve_args[@]+"${serve_args[@]}"} \
   > "artifacts/$RUN_ID/coordinator-serve.log" 2>&1 &
 echo "$!" > "artifacts/$RUN_ID/coordinator-serve.pid"
 coord_up=0
@@ -202,15 +210,25 @@ REMOTE
   # coordinator must be serving with --stale-after-seconds >= worst-case batch
   # round (see docs/batch-api-lockstep-runner-design.md).
   # Exactly ONE lockstep worker per API model group — a second one double-pays.
-  local api_role="${API_WORKER_ROLE:-worker}"
+  # A run-config model's worker_role / worker_concurrency override both per group
+  # (e.g. lockstep Claude/Kimi next to a sync-only OpenAI model in one run).
+  local api_role api_conc
+  api_role="$(worker_field "$vm" worker_role)"
+  api_role="${api_role:-${API_WORKER_ROLE:-worker}}"
+  api_conc="$(worker_field "$vm" worker_concurrency)"
+  api_conc="${api_conc:-${API_WORKER_CONCURRENCY:-1}}"
   case "$api_role" in
     worker|lockstep-worker) ;;
     *) echo "invalid API_WORKER_ROLE '$api_role' (worker|lockstep-worker)" >&2; return 1 ;;
   esac
   gcloud compute ssh "$vm" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='${API_WORKER_CONCURRENCY:-1}' bash -s" <<REMOTE
+    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='$api_conc' bash -s" <<REMOTE
 set -euo pipefail
 export ${key_var}=${key_q}
+# Pin the hash seed: checkpoint resume replays and compares state snapshots, and
+# set-derived fields (collected_keys) serialize in hash-seed order, so a worker
+# restarted under a different random seed would fail to resume multi-key mazes.
+export PYTHONHASHSEED=0
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
 mkdir -p "\$HOME/multinet-worker-artifacts/\$RUN_ID"
