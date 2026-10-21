@@ -170,7 +170,7 @@ def test_image_only_prompt_puts_inventory_text_after_current_image():
     assert content[0]["type"] == "image_url"
     assert content[1]["type"] == "text"
     assert "Current situation (this step):" not in content[1]["text"]
-    assert content[1]["text"].startswith("Your inventory: empty.\nWhat is your next action?")
+    assert content[1]["text"].startswith("Your inventory: empty.\nMoves remaining: 100.\nWhat is your next action?")
 
 
 def test_inventory_list_omits_consumed_or_removed_keys():
@@ -568,10 +568,10 @@ def test_observation_format_image_only_differs_from_image_text_default():
     assert "You are at" in standard_text
 
 
-def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
+def test_minimal_prompt_uses_minimal_system_and_image_only_user_status():
     system_prompt = MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
     # Isolate the minimal *prompting* axis from the observation: pin image_only so
-    # the user status is inventory-only (the default is now image_text + description).
+    # the user status is inventory + moves left (the default is image_text + description).
     prompt_text = _initial_user_prompt_text(ExperimentConfig(
         prompting="minimal", observation="image_only",
         include_current_observation_description=False,
@@ -580,7 +580,7 @@ def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
 
     assert system_prompt.startswith("Task: Solve the maze by reaching the goal.")
     assert "The environment may contain:" not in system_prompt
-    assert prompt_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert prompt_text.startswith("Your inventory: empty.\nMoves remaining: 100.\nWhat is your next action?")
     assert "Observation:" not in prompt_text
     assert "Position:" not in prompt_text
     assert "Facing:" not in prompt_text
@@ -590,7 +590,7 @@ def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
 
 def test_prompting_variants_share_image_only_user_prompt():
     # Prompting only changes the SYSTEM prompt; the user prompt is identical across
-    # prompting variants. Pin image_only to keep the user status inventory-only.
+    # prompting variants. Pin image_only: the user status is inventory + moves left.
     def _cfg(p):
         return ExperimentConfig(prompting=p, observation="image_only",
                                 include_current_observation_description=False,
@@ -601,21 +601,10 @@ def test_prompting_variants_share_image_only_user_prompt():
     verbose_text = _initial_user_prompt_text(_cfg("verbose"))
 
     assert standard_text == minimal_text == verbose_text
-    assert standard_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert standard_text.startswith("Your inventory: empty.\nMoves remaining: 100.\nWhat is your next action?")
     assert "Position:" not in standard_text
     assert "Last result:" not in standard_text
     assert "Hints:" not in standard_text
-
-def test_step_budget_line_present_in_user_prompt():
-    """Step budget awareness: the user prompt should surface the remaining
-    step count so the model can plan for efficiency. The default maze has
-    max_steps=100 and the initial state is at step_count=0, so the first
-    prompt should read 'Step 1 of 100 (100 remaining).'"""
-    cfg = ExperimentConfig(observation="text_only", context_window="last_n")
-
-    prompt_text = _user_prompt_text_with_transcript(cfg, [])
-
-    assert "Step 1 of 100 (100 remaining)." in prompt_text
 
 def test_each_set_has_exactly_one_baseline_equal_to_default():
     # After the fair-default rebase the baseline arm of most sets carries an

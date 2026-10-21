@@ -17,9 +17,13 @@ LAST_N_USER_PROMPT = {
 
 FULL_HISTORY_USER_PROMPT = {"header": "Full history (oldest first):\n"}
 
+# {budget_lines}: the moves-remaining line (and the stall countdown when a
+# stall limit is set), the same lines the text modes carry in their state
+# description. Current turn only; history steps stay inventory + action.
 STANDARD_IMAGE_ONLY_USER_PROMPT = ( # the standard prompt
     f"{CURRENT_IMAGE_PLACEHOLDER}\n"
     "Your inventory: {inventory}.\n"
+    "{budget_lines}"
     f"{NEXT_ACTION_QUESTION}"
 )
 

@@ -8,6 +8,8 @@ from gridworld.backends.base import GridState
 from gridworld.render3d.cameras import EYE_PRESETS, PRESETS  # pure pose math; no mujoco
 from gridworld.render3d.hud import turns_with_agent
 from interface.coords import inventory_list
+from interface.renderer import _moves_remaining
+from prompting_experiments.prompt_templates import observation as observation_templates
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
 
@@ -81,12 +83,14 @@ class MinimalPromptStrategy:
         state: GridState,
         *,
         observation: str = "image_only",
+        stall_remaining: int | None = None,
     ) -> str:
         return _build_user_prompt(
             observation=observation,
             obs_text=obs_text,
             history_text=history_text,
             state=state,
+            stall_remaining=stall_remaining,
             view_label=self.current_view_label(),
         )
 
@@ -175,12 +179,22 @@ def _text_section(text: str) -> str:
     return f"{text.rstrip()}\n\n"
 
 
+def _budget_lines(state: GridState, stall_remaining: int | None) -> str:
+    """image_only's moves-remaining (and stall) lines; text modes carry the same
+    lines inside the state description."""
+    lines = [observation_templates.MOVES_REMAINING_LINE.format(n=_moves_remaining(state))]
+    if stall_remaining is not None:
+        lines.append(observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
+    return "".join(f"{line}\n" for line in lines)
+
+
 def _build_user_prompt(
     *,
     observation: str,
     obs_text: str,
     history_text: str,
     state: GridState,
+    stall_remaining: int | None = None,
     view_label: str | None = None,
 ) -> str:
     inventory = ", ".join(inventory_list(state)) or "empty"
@@ -191,6 +205,7 @@ def _build_user_prompt(
         "current_image": current_image,
         "inventory": inventory,
         "current_observation_text": _text_section(obs_text),
+        "budget_lines": _budget_lines(state, stall_remaining),
     }
     if observation == "text_only":
         prompt = user_templates.TEXT_ONLY_USER_PROMPT.format(**fields)

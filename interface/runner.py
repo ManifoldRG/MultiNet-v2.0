@@ -322,21 +322,8 @@ class ExperimentRunner:
             ),
             state,
             observation=obs,
+            stall_remaining=stall_remaining,
         )
-        
-        # Step budget awareness: tell the model how many steps it has taken and
-        # how many remain. max_steps is the 3x BFS optimal cap set by the pipeline
-        # before the run; see pipeline/run_stage3.py.
-        steps_used = getattr(state, "step_count", 0)
-        max_steps = getattr(self.task_spec, "max_steps", None)
-        if max_steps is not None:
-            remaining = max(0, max_steps - steps_used)
-            step_budget_line = (
-                f"Step {steps_used + 1} of {max_steps} ({remaining} remaining)."
-            )
-            # Appended after prompt_text to preserve leading image and observation blocks
-            prompt_text = f"{prompt_text}\n\n{step_budget_line}"
-
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)

@@ -42,6 +42,7 @@ from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
 from interface.feedback import format_step_feedback, is_failed_step
 from interface.progress_watchdog import ProgressStallWatchdog
+from interface.renderer import rgb_to_png_bytes
 from interface.runner import _trim_rolling_chat, _user_message_has_image, _with_start_map
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
@@ -80,6 +81,21 @@ class EpisodeStepper:
         self.querying = runner.querying
         self._finished = False
         self._stall_watchdog: ProgressStallWatchdog | None = None
+        self._png_memo: tuple | None = None
+
+    def _png(self, rgb):
+        """A frame as PNG bytes, encoded once.
+
+        Records keep PNG bytes (~10 KB), not raw arrays (~1 MB at 576 px), so a
+        long episode holds its frames in linear, small memory. A step's
+        decision frame is the previous step's result, so the last encoding is
+        reused.
+        """
+        if rgb is None:
+            return None
+        if self._png_memo is None or self._png_memo[0] is not rgb:
+            self._png_memo = (rgb, rgb_to_png_bytes(rgb))
+        return self._png_memo[1]
 
     def start(self) -> None:
         # Persist the exact seed the backend was reset with so a checkpoint can
@@ -146,7 +162,7 @@ class EpisodeStepper:
                 "kind": "reset",
                 "state": self.initial_state,
                 "backend_info": reset_info,
-                "_reset_frame_rgb": self._runner.last_rgb,
+                "_reset_frame_png": self._png(self._runner.last_rgb),
             }
         )
         if self._runner.start_map_rgb is not None:
@@ -229,7 +245,9 @@ class EpisodeStepper:
                         len(agent_messages),
                         has_image,
                     )
-                self._pending_agent_messages = agent_messages
+                # Snapshot the list: rolling chat appends the reply and trims old
+                # turns from self.messages, which must not rewrite the logged request.
+                self._pending_agent_messages = list(agent_messages)
                 self._pending_has_image = has_image
                 self._t_llm = time.perf_counter()
                 return agent_messages
@@ -295,8 +313,8 @@ class EpisodeStepper:
                         "backend_info": None,
                         "actions_remaining_after": actions_remaining_after,
                         "consecutive_failures_after": self.consecutive_failures,
-                        "_decision_frame_rgb": decision_frame_rgb,
-                        "_post_step_rgb": decision_frame_rgb,
+                        "_decision_frame_png": self._png(decision_frame_rgb),
+                        "_post_step_png": self._png(decision_frame_rgb),
                         **self.querying.step_metadata(),
                     }
                 )
@@ -353,8 +371,8 @@ class EpisodeStepper:
                     "backend_info": info,
                     "actions_remaining_after": actions_remaining_after,
                     "consecutive_failures_after": self.consecutive_failures,
-                    "_decision_frame_rgb": decision_frame_rgb,
-                    "_post_step_rgb": self._runner.last_rgb,
+                    "_decision_frame_png": self._png(decision_frame_rgb),
+                    "_post_step_png": self._png(self._runner.last_rgb),
                     **self.querying.step_metadata(),
                     **({"mechanic": mechanic} if mechanic is not None else {}),
                 }
