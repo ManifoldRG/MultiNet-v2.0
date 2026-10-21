@@ -6,15 +6,20 @@ import json
 from pathlib import Path
 
 from scripts.distributed_topology import derive_topology
-from scripts.run_pipeline import _build_agent_from_spec, _runtime_model_config
+from scripts.run_pipeline import (
+    _build_agent_from_spec,
+    _experiment_config_hash_payload,
+    _runtime_model_config,
+)
 
 _FIX = Path(__file__).resolve().parents[1] / "gridworld" / "fixtures"
 _CFG = json.loads((_FIX / "run_config.mechanics_15_2d.json").read_text())
 _R1 = json.loads((_FIX / "run_config.r1.json").read_text())
 
 
-def test_cell_is_r1_with_full_context():
-    expected = {**_R1["experiment_config"], "context_window": "full"}
+def test_cell_is_r1_with_full_context_and_prompt_cache():
+    # prompt_cache is billing only (stripped from every hash), so the cell is still R1's.
+    expected = {**_R1["experiment_config"], "context_window": "full", "prompt_cache": True}
     assert _CFG["experiment_config"] == expected
     assert "conditions" not in _CFG
     assert "render" not in _CFG, "2D run: MiniGrid backend, no render block"
@@ -72,12 +77,25 @@ def test_calibration_is_the_full_run_on_one_maze():
             "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"]
 
 
-def test_opus_prompt_cache_is_off_and_hash_invariant(monkeypatch):
-    """Opus caching stays off for full context (writes every query, never reads) and the
-    switch is a billing knob: flipping it must not re-key already-paid episodes."""
+def test_prompt_cache_is_on_and_hash_invariant(monkeypatch):
+    """Opus and Astra cache the stable history prefix (breakpoints on the newest and
+    previous-newest history steps). The flags are set on the entries because fleet
+    agents are built from the entry, and the switch is a billing knob: flipping it
+    must not re-key already-paid episodes."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "secret")
-    opus = _CFG["models"]["claude_opus55"]
-    agent, _ = _build_agent_from_spec("claude_opus55", opus)
-    assert agent.config.enable_prompt_cache is False
-    flipped = {**opus, "enable_prompt_cache": True}
-    assert _runtime_model_config(opus) == _runtime_model_config(flipped)
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    models = _CFG["models"]
+    for name in ("claude_opus55", "gpt6_astra"):
+        entry = models[name]
+        assert entry["enable_prompt_cache"] is True, name
+        agent, _ = _build_agent_from_spec(name, entry)
+        assert agent.config.enable_prompt_cache is True, name
+        flipped = {**entry, "enable_prompt_cache": False}
+        assert _runtime_model_config(entry) == _runtime_model_config(flipped)
+    # Opus runs on the lockstep batch path: the 1h batch TTL (default) outlives
+    # most rounds, where 5m would expire between them.
+    opus, _ = _build_agent_from_spec("claude_opus55", models["claude_opus55"])
+    assert opus.config.batch_cache_ttl == "1h"
+    assert _experiment_config_hash_payload(_CFG["experiment_config"]) == (
+        _experiment_config_hash_payload({**_CFG["experiment_config"], "prompt_cache": False})
+    )
