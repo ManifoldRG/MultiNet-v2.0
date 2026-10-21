@@ -298,16 +298,19 @@ def test_qwen_converters_do_not_forward_cache_markers():
     )[0]["content"] == converted
 
 
-def test_kimi_cache_ttl_is_sync_only_and_markers_are_removed():
+@pytest.mark.parametrize(
+    ("model", "enable_thinking"), [("kimi-k2.6", False), ("kimi-k3", True)]
+)
+def test_kimi_cache_ttl_is_sync_only_and_markers_are_removed(model, enable_thinking):
     messages = _to_openai_messages(
         [{"role": "user", "content": [{"type": "text", "text": "x",
                                        "cache_breakpoint": True}]}]
     )
     assert messages == [{"role": "user", "content": [{"type": "text", "text": "x"}]}]
     shared = {
-        "model": "kimi-k2.6",
+        "model": model,
         "max_tokens": 100,
-        "enable_thinking": False,
+        "enable_thinking": enable_thinking,
     }
     sync_body = _build_body(messages, **shared, cache_ttl="1h")
     batch_body = _build_body(messages, **shared, include_sampling=False)

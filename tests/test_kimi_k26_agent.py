@@ -183,6 +183,25 @@ def test_kimi_k3_request_shape(monkeypatch):
         assert absent not in body
 
 
+def test_kimi_k3_sync_sends_prompt_cache_ttl(monkeypatch):
+    """Moonshot's cache-write TTL tiers are a kimi-k3 feature: the configured
+    prompt_cache_ttl must reach the K3 sync body (it used to be dropped)."""
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(
+        KimiK26Config(model="kimi-k3", enable_thinking=True, prompt_cache_ttl="1h"),
+        api_key="secret",
+    )([{"role": "user", "content": "hi"}])
+    assert seen["body"]["prompt_cache_options"] == {"mode": "implicit", "ttl": "1h"}
+
+
+def test_kimi_k3_without_ttl_sends_no_cache_options(monkeypatch):
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(KimiK26Config(model="kimi-k3", enable_thinking=True), api_key="secret")(
+        [{"role": "user", "content": "hi"}]
+    )
+    assert "prompt_cache_options" not in seen["body"]
+
+
 def test_kimi_k3_default_effort_sends_nothing(monkeypatch):
     seen = _capture_body(monkeypatch)
     KimiK26Agent(KimiK26Config(model="kimi-k3", enable_thinking=True), api_key="secret")(
