@@ -1,10 +1,14 @@
-"""Guards for the mechanics-15 2D run config (Kimi K3 + Opus 5.5 + GPT-6 Astra)."""
+"""Guards for the mechanics-15 run configs (Kimi K3 + Opus 5.5 + GPT-6 Astra): 2D,
+and the NL and 3D runs that differ from it only in observation or render."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import pytest
+
+from gridworld.render_settings import RenderSettings
 from scripts.distributed_topology import derive_topology
 from scripts.run_pipeline import (
     _build_agent_from_spec,
@@ -65,11 +69,32 @@ def test_worker_role_fields_are_hash_invariant():
     assert _runtime_model_config(base) == _runtime_model_config(bare)
 
 
-def test_calibration_is_the_full_run_on_one_maze():
-    calib = json.loads((_FIX / "run_config.mechanics_15_2d_calib.json").read_text())
-    assert calib["experiment_config"] == _CFG["experiment_config"]
-    assert calib["manifest"] == _CFG["manifest"]
-    for name, model in _CFG["models"].items():
+def test_nl_run_is_the_2d_run_as_text():
+    nl = json.loads((_FIX / "run_config.mechanics_15_nl.json").read_text())
+    assert nl["experiment_config"] == {**_CFG["experiment_config"], "observation": "text_only"}
+    assert "render" not in nl, "text_only cannot take a 3D render block"
+    assert nl["manifest"] == _CFG["manifest"]
+    assert nl["models"] == _CFG["models"]
+
+
+def test_3d_run_is_the_2d_run_in_mujoco_with_a_start_map():
+    d3 = json.loads((_FIX / "run_config.mechanics_15_3d.json").read_text())
+    assert d3["experiment_config"] == _CFG["experiment_config"]
+    assert d3["render"] == {"backend": "mujoco3d", "camera": "first_person", "start_map": True}
+    rs = RenderSettings.from_run_config(d3)
+    assert (rs.backend, rs.camera, rs.start_map, rs.resolution) == ("mujoco3d", "first_person", True, "grid")
+    assert d3["manifest"] == _CFG["manifest"]
+    assert d3["models"] == _CFG["models"]
+
+
+@pytest.mark.parametrize("mode", ["2d", "nl", "3d"])
+def test_calibration_is_the_full_run_on_one_maze(mode):
+    full = json.loads((_FIX / f"run_config.mechanics_15_{mode}.json").read_text())
+    calib = json.loads((_FIX / f"run_config.mechanics_15_{mode}_calib.json").read_text())
+    assert calib["experiment_config"] == full["experiment_config"]
+    assert calib.get("render") == full.get("render")
+    assert calib["manifest"] == full["manifest"]
+    for name, model in full["models"].items():
         strip = ("tasks", "worker_concurrency")
         assert {k: v for k, v in calib["models"][name].items() if k not in strip} == {
             k: v for k, v in model.items() if k not in strip}
