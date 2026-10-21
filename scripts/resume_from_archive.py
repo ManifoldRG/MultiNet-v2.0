@@ -25,8 +25,9 @@ this driver:
 4. ``--mode replay-verify``: prints a verification report and exits 0 only if
    the replayed final state matches the archive's last recorded state;
 5. ``--mode continue``: keeps running the live query loop (the Kimi or OpenAI
-   agent rebuilt from ``run_inputs.json``'s model config verbatim; OpenAI also
-   needs ``--spend-cap-usd`` because its spend ledger is per process) and
+   agent rebuilt from ``run_inputs.json``'s model config verbatim, OpenAI taking
+   ``enable_prompt_cache`` from the experiment when the entry leaves it unset;
+   OpenAI also needs ``--spend-cap-usd`` because its spend ledger is per process) and
    flushes full episode artifacts to ``--out-dir`` via the old code's
    ``flush_episode_log``.
 
@@ -435,6 +436,14 @@ def main() -> int:
         agent = _ScriptedAgent(scripted_action_from_spec(args.agent), Reply)
     else:
         model_cfg = {**run_inputs["model_config"], **(run_inputs.get("runtime_model_config") or {})}
+        # The pipeline derives OpenAI's enable_prompt_cache from the experiment's
+        # prompt_cache when the entry leaves it unset (run_pipeline._agent_model_config);
+        # inlined because this module imports from the as-run worktree.
+        if str(model_cfg.get("provider") or "").lower() == "openai":
+            model_cfg.setdefault(
+                "enable_prompt_cache",
+                bool(run_inputs["experiment_config"].get("prompt_cache", False)),
+            )
         agent = build_live_agent(model_cfg, timeout=args.timeout, spend_cap_usd=args.spend_cap_usd)
 
     new_queries, stopped_early = drive_continue_loop(

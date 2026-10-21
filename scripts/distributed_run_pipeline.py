@@ -1183,7 +1183,10 @@ def run_assigned_unit(
     render = _unit_render(unit)
     row = materialize_worker_inputs(unit, artifacts_root)
     factory = agent_factory or pipeline._build_agent_from_spec
-    agent, _ = factory(unit["model_key"], unit["model_config"])
+    agent, _ = factory(
+        unit["model_key"],
+        pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
+    )
     if progress is not None:
         agent = _CountingAgent(agent, progress)
     from interface.config import ExperimentConfig
@@ -1579,7 +1582,10 @@ def run_lockstep_worker(
             return None
         if group_model_key["key"] is None:
             group_model_key["key"] = model_key
-            agent_box["agent"], _ = factory(model_key, unit["model_config"])
+            agent_box["agent"], _ = factory(
+                model_key,
+                pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
+            )
         elif model_key != group_model_key["key"]:
             # One lockstep worker serves exactly one model group/key. A unit of a
             # different key would need a different agent, so fail it back to the

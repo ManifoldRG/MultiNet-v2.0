@@ -340,6 +340,46 @@ def test_run_config_plumbs_provider_cache_options(monkeypatch):
 
 
 
+@pytest.mark.parametrize(
+    ("provider", "experiment", "entry", "expected"),
+    [
+        ("openai", {"prompt_cache": True}, {}, True),
+        ("openai", {}, {}, False),
+        ("openai", {"prompt_cache": True}, {"enable_prompt_cache": False}, False),
+        ("claude", {"prompt_cache": False}, {}, False),
+        ("kimi", {"prompt_cache": True}, {}, None),
+    ],
+)
+def test_fleet_worker_takes_prompt_cache_from_the_experiment(
+    monkeypatch, tmp_path, provider, experiment, entry, expected
+):
+    """Units ship the raw model entry; the sync worker must derive Claude/OpenAI
+    enable_prompt_cache from the unit's experiment_config like the local path
+    (an explicit entry wins), or Astra runs in OpenAI's write-only implicit mode."""
+    import scripts.distributed_run_pipeline as drp
+
+    monkeypatch.setattr(drp.pipeline, "_run_one_unit", lambda *a, **kw: ({"ok": True}, 1.0))
+    monkeypatch.setattr(drp, "materialize_worker_inputs", lambda unit, root: {})
+    monkeypatch.setattr(drp.ScorerConfig, "from_dict", staticmethod(lambda d: object()))
+    built = []
+
+    def factory(model_key, model_config):
+        built.append(model_config.get("enable_prompt_cache"))
+        return (lambda messages: "x"), "label"
+
+    unit = {
+        "unit_id": "u0", "model_key": "m", "model_id": "mid",
+        "model_config": {"provider": provider, **entry},
+        "task_id": "t", "seed": 0, "prompt_variant": "default", "scorer_config": {},
+        "difficulty_max_static_score": 1000.0,
+        "task_artifacts": {"scored_static": {}},
+        "experiment_config": experiment,
+    }
+    drp.run_assigned_unit(unit, artifacts_root=tmp_path, agent_factory=factory)
+    assert built == [expected]
+    assert unit["model_config"] == {"provider": provider, **entry}  # not mutated
+
+
 @pytest.mark.parametrize("context_window", ["last_n", "text_summary_and_last_n", "full"])
 def test_history_breakpoints_only_apply_to_full_context(context_window):
     rgb = np.zeros((2, 2, 3), dtype=np.uint8)

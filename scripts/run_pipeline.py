@@ -948,13 +948,7 @@ def run_from_config(
         if not entries:
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
-        agent_cfg = dict(model_cfg)
-        if (agent_cfg.get("provider") or "").lower() in {"claude", "openai"}:
-            agent_cfg.setdefault(
-                "enable_prompt_cache",
-                bool(exp_overlay.get("prompt_cache", False)),
-            )
-        agent, label = factory(name, agent_cfg)
+        agent, label = factory(name, _agent_model_config(model_cfg, exp_overlay))
         plans.append((_sanitize(label), agent, dict(model_cfg), rows))
         for r in rows:
             union.setdefault(r["task_id"], r)
@@ -1056,6 +1050,23 @@ def _check_equal_token_caps(run_config: dict[str, Any]) -> None:
             'Use one cap for every model, or set "allow_unequal_max_tokens": true to put '
             "the asymmetry on record."
         )
+
+
+def _agent_model_config(
+    model_cfg: dict[str, Any], experiment_config: Optional[dict[str, Any]]
+) -> dict[str, Any]:
+    """The model entry an agent is built from, on every path (local, fleet worker,
+    lockstep worker). Claude and OpenAI take ``enable_prompt_cache`` from the
+    experiment's ``prompt_cache`` unless the entry sets it; OpenAI defaults to off,
+    and off there means implicit caching, which writes the whole prompt every query.
+    The flag is a billing knob (``_NON_RUNTIME_MODEL_KEYS``), so no hash moves."""
+    agent_cfg = dict(model_cfg)
+    if (agent_cfg.get("provider") or "").lower() in {"claude", "openai"}:
+        agent_cfg.setdefault(
+            "enable_prompt_cache",
+            bool((experiment_config or {}).get("prompt_cache", False)),
+        )
+    return agent_cfg
 
 
 def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent, str]:
