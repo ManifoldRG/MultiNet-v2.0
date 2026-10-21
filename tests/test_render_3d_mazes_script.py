@@ -21,14 +21,14 @@ def test_bfs_replay_writes_frames_index_and_contact_sheet(tmp_path):
     maze.write_text(json.dumps(CORRIDOR))
     out = tmp_path / "out"
     code = main([
-        "--mazes", str(maze), "--camera", "top_down", "--camera", "chase",
+        "--mazes", str(maze), "--camera", "top_down", "--camera", "first_person",
         "--resolution", "64", "--replay", "bfs", "--contact-sheet", "--out", str(out),
     ])
     assert code == 0
     index = json.loads((out / "index.json").read_text())
     assert len(index) == 2 * len(BFS_TOKENS)
-    assert {r["camera"] for r in index} == {"top_down", "chase"}
-    assert [r["action"] for r in index if r["camera"] == "chase"] == BFS_TOKENS
+    assert {r["camera"] for r in index} == {"top_down", "first_person"}
+    assert [r["action"] for r in index if r["camera"] == "first_person"] == BFS_TOKENS
     assert all((out / r["png"]).exists() for r in index)
     assert Image.open(out / "contact_sheet.png").size == (2 * 256, 256 + 18)
 

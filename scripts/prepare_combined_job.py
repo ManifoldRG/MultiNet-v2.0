@@ -68,13 +68,21 @@ def merge_plans(part_plans: list[dict[str, Any]], job_id: str) -> tuple[dict, di
 def build(specs: list[dict[str, Any]], *, artifacts_root: Path, run_set_id: str,
           seeds: list[int], difficulty_max: float | None) -> dict:
     artifacts_root = Path(artifacts_root)
-    for spec in specs:  # fail closed on a 3D batch before preparing any part
-        dist._require_2d_render(dist.pipeline.load_run_config(spec["run_config"]), spec["run_config"])
+    for spec in specs:  # a bad render block fails before any part is prepared
+        dist.render_settings_for(
+            dist.pipeline.load_run_config(spec["run_config"]), spec["conditions"], spec["prompt_variant"]
+        )
     part_plans = []
     tasks_root = artifacts_root / "tasks"
     tasks_root.mkdir(parents=True, exist_ok=True)
     for spec in specs:
         part_root = artifacts_root / "_parts" / spec["run_id"]
+        # Seed the part with every bundle scored so far (a PRESCORED_TASKS seed or
+        # an earlier part): Stage 2 reuses a bundle only when its hash matches.
+        for td in tasks_root.iterdir():
+            dest = part_root / "tasks" / td.name
+            if td.is_dir() and not dest.exists():
+                shutil.copytree(td, dest)
         plan = dist.prepare_job(
             run_config_path=spec["run_config"], manifest_path=spec["manifest"],
             seeds=seeds, conditions=spec["conditions"], prompt_variant=spec["prompt_variant"],
@@ -82,15 +90,15 @@ def build(specs: list[dict[str, Any]], *, artifacts_root: Path, run_set_id: str,
             difficulty_max_static_score=difficulty_max,
         )
         part_plans.append(plan)
-        # shared task artifacts (same 15 mazes) -> copy once into the combined root.
-        # tasks/ holds per-task dirs AND a _suite.json file, so handle both.
+        # shared task artifacts (same 15 mazes) -> the combined root, where the
+        # coordinator serves them to workers. The part's bundles passed its Stage 2
+        # hash check, so they replace any (possibly stale) seed. tasks/ holds
+        # per-task dirs AND a _suite.json file, so handle both.
         for td in (part_root / "tasks").glob("*"):
             dest = tasks_root / td.name
-            if dest.exists():
-                continue
             if td.is_dir():
-                shutil.copytree(td, dest)
-            else:
+                shutil.copytree(td, dest, dirs_exist_ok=True)
+            elif not dest.exists():
                 shutil.copy2(td, dest)
     digest = dist.stable_hash({"run_set_id": run_set_id, "run_ids": [s["run_id"] for s in specs]})
     job_id = f"job_massive_{digest[:12]}"

@@ -3,7 +3,9 @@
 The 3D backend is a render layer: mechanics, reward and termination come from
 the same state backend either way, so only the frame differs. The settings ride
 in the artifact/hash *label* rather than in a new hashed field, so 2D runs keep
-byte-identical run hashes and every camera gets its own artifact directory.
+byte-identical run hashes and every camera gets its own artifact directory. A 3D
+label also carries RENDER3D_VERSION, so a visual change writes new episodes
+beside the old ones instead of over them.
 """
 
 from __future__ import annotations
@@ -69,11 +71,14 @@ class RenderSettings:
 
     @property
     def label(self) -> str:
-        """Artifact directory and run-hash label: one per rendered view."""
+        """Artifact directory and run-hash label: one per rendered view and
+        render version (read at call time, like provenance)."""
         if self.backend == "minigrid":
             return "minigrid"
+        from gridworld import render3d
+
         suffix = "_map" if self.start_map else ""
-        return f"{self.backend}_{self.camera}_{self.resolution}{suffix}"
+        return f"{self.backend}_{self.camera}_{self.resolution}{suffix}_r{render3d.RENDER3D_VERSION}"
 
     def backend_kwargs(self, spec: TaskSpecification) -> dict[str, Any]:
         """Backend constructor arguments for this task."""
@@ -106,11 +111,19 @@ class RenderSettings:
         }
 
     def check_observation(self, observation: str) -> None:
-        """Fail fast when a start map meets an observation with no images."""
-        if self.start_map and observation == "text_only":
+        """Fail fast when a 3D render meets an observation with no images: the
+        model would never see a frame, so the run would repeat the 2D run under
+        another label and pay for GL work."""
+        if self.backend == "minigrid" or observation != "text_only":
+            return
+        if self.start_map:
             raise ValueError(
                 "render start_map shows the model an image, but observation 'text_only' carries none"
             )
+        raise ValueError(
+            f"render {self.backend!r} draws frames, but observation 'text_only' shows the model none; "
+            "run text_only on the 2D backend"
+        )
 
 
 def _mujoco_version() -> str:

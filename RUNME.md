@@ -104,9 +104,32 @@ multinet-score-json --help
 `scripts/distributed_run_pipeline.py` provides coordinator/worker jobs;
 `sweep_run.sh` drives fleets (provision / next-batch / run-massive /
 finalize-batch / publish / teardown) with `lib/cost_safety.sh` rails.
-Batch-starting subcommands **require** `BATCH_CAP` and `MAX_RUN_DURATION` —
-they have no defaults by design. STOP VMs rather than deleting them, and
+Batch-starting subcommands **require** `BATCH_CAP`, `MAX_RUN_DURATION` and
+`DIFFICULTY_MAX` (the static-score normaliser; it must cover the panel's
+largest static score: R1 used 3000) — they have no defaults by design. STOP VMs rather than deleting them, and
 pull artifacts before spindown.
+
+**3D on the fleet.** Put the same top-level `render` block in the fleet
+run-config as for a local run (see *3D render backend* below); nothing else
+changes. `launch_distributed.sh` then runs `deploy/setup_mujoco3d.sh` on every
+VM after the code sync (OSMesa plus the `mujoco3d` extra, one test frame),
+requires the same mujoco version on every VM, and STOPs the fleet otherwise.
+Every VM draws with `MUJOCO_GL=osmesa` so frames match across workers. The
+machine that runs `coordinator-prepare` needs `mujoco` importable: its version
+goes into each 3D unit's hash, and the coordinator rejects an upload drawn by
+another version. `scripts/resume_from_archive.py` rebuilds a 3D archive's
+recorded backend and refuses one its worktree would draw differently.
+Text-only (NL) runs need nothing extra: set `"experiment_config":
+{"observation": "text_only"}` on the 2D backend.
+
+**Pre-scored Stage 2 (`PRESCORED_TASKS`).** Static scoring of the PR #57
+mechanics mazes takes minutes to tens of minutes per maze, and the coordinator
+runs it for every task before any unit exists. Score them ahead of time with a
+local `python -m scripts.run_pipeline --distributed-role coordinator-prepare`
+(Stage 2 only, no model calls) and launch with `PRESCORED_TASKS=<that
+artifacts root>`: the coordinator start ships its `tasks/` to the coordinator
+first. Stage 2 reuses a bundle only when its hash matches the current maze and
+scorer config, so a stale one is recomputed, never trusted.
 
 ## 6. Evaluate your own model
 
@@ -145,14 +168,18 @@ python play_task.py --record ogbench/ogbench/procgen/maze_jsons/S4/10x10_dense_1
 `gridworld/render3d/` + `gridworld/backends/mujoco3d_backend.py` render the
 same task-spec mazes in MuJoCo instead of MiniGrid's 2D view: identical
 actions/scoring — it is a render layer, not a new environment. What a frame
-shows depends on the camera: `top_down`, `chase` and `fixed_angled` frame the
-whole maze; `first_person` (and `first_person_narrow`) only what lies ahead
-of the agent, plus status slots along the bottom for the key it carries and
-the switch it stands on (its own cell, where PICKUP and a switch TOGGLE act,
-is out of view). A run-config selects it with a top-level `"render":
-{"backend": "mujoco3d", "camera": "chase"}` block; each camera gets its own
-artifact directory. Resolution defaults to `"grid"`: 32 px (MiniGrid's tile)
-per cell of the maze's longer side. The 3D frame is square, so it costs the
+shows depends on the camera: `top_down` frames the whole maze; `first_person`
+only what lies ahead of the agent, plus status
+slots along the bottom for the key it carries and the switch it stands on (its
+own cell, where PICKUP and a switch TOGGLE act, is out of view). A run-config
+selects it with a top-level `"render": {"backend": "mujoco3d", "camera":
+"first_person"}` block; each camera and render version gets its own artifact
+directory, labelled `mujoco3d_<camera>_<resolution>[_map]_r<RENDER3D_VERSION>`
+(e.g. `mujoco3d_first_person_grid_r4`), so a visual change never overwrites
+older episodes. A 3D render needs an image observation: `text_only` with a 3D
+render block is refused at load.
+Resolution defaults to `"grid"`: 32 px (MiniGrid's tile) per cell of the
+maze's longer side. The 3D frame is square, so it costs the
 same image tokens as the 2D frame only for a square maze; a 20x8 maze renders
 640x640 against MiniGrid's 640x256.
 Add `"start_map": true` (any camera but `top_down`, image observations only)
@@ -167,28 +194,27 @@ pip install -e ".[dev,visual,mujoco3d]"
 ```
 
 Headless rendering uses `MUJOCO_GL`, which on Linux defaults to `osmesa`
-(software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed.
+(software, CPU-safe) when unset; set `MUJOCO_GL=egl` on GPU machines for speed
+(local only: fleet runs draw with OSMesa everywhere, since EGL frames differ slightly).
 Elsewhere it is left unset so mujoco uses the native GL. Play with it via
-`--backend mujoco3d --camera <preset>` (`V` cycles `top_down` / `chase` /
-`fixed_angled` / `first_person` / `first_person_narrow` live; `first_person` is
-the wide eye, fovy 110 with 1.0 walls so portal beacons show, and
-`first_person_narrow` the 2026-09-18 ablation eye, fovy 90 with 1.4 walls).
-`,` / `.` tilt the camera one level at
-a time from top-down to first person, with the walls rising as it drops; the
-footer shows the level and wall height. `chase` and `first_person` (and every
-tilt level below top-down) turn with the agent and carry a compass; turns
-animate in the demo only.
+`--backend mujoco3d --camera <preset>` (`V` switches between `top_down` and
+`first_person` live; `first_person` is the wide eye, fovy 110 with 1.0 walls
+so portal beacons show). `,` / `.` tilt the camera one level at a time from
+top-down to first person, with the walls rising as it drops; the footer shows
+the level and wall height. The first-person view (and every tilt level below
+top-down) turns with the agent and carries a compass; turns animate in the
+demo only.
 
 ```bash
 python play_task.py --manifest gridworld/fixtures/manifest.json --experiment r1 \
-  --backend mujoco3d --camera chase
+  --backend mujoco3d --camera first_person
 ```
 
 To render static frames/contact sheets instead of playing interactively:
 
 ```bash
 python -m scripts.render_3d_mazes --manifest gridworld/fixtures/manifest.json \
-  --experiment r1 --camera top_down --camera chase --contact-sheet --out <dir>
+  --experiment r1 --camera top_down --camera first_person --contact-sheet --out <dir>
 ```
 
 ## Appendix: legacy local/VLM demo harness

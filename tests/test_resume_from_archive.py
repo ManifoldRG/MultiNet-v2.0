@@ -273,15 +273,16 @@ def test_continue_loop_stops_when_a_scripted_agent_reports_exhausted():
 
 
 # --------------------------------------------------------------------------
-# 3D archives: the driver rebuilds a 2D MiniGrid backend, so a 3D episode
-# would continue with 2D frames. It must refuse instead.
+# 3D archives: the driver rebuilds the backend the archive recorded, and
+# refuses one this worktree cannot draw identically (other render version,
+# other mujoco, or a render block the two files disagree on).
 # --------------------------------------------------------------------------
 
 _RENDER_3D = {"backend": "mujoco3d", "camera": "top_down", "resolution": "grid"}
 
 
-def _parse_failed_archive(tmp_path: Path) -> Path:
-    """A real infra-killed (parse_failed) 2D episode archive."""
+def _parse_failed_archive(tmp_path: Path, render: dict | None = None) -> Path:
+    """A real infra-killed (parse_failed) episode archive, 2D unless ``render``."""
     import itertools
     import json
 
@@ -298,9 +299,12 @@ def _parse_failed_archive(tmp_path: Path) -> Path:
             return next(replies)
 
     cfg = tmp_path / "run_config.json"
-    cfg.write_text(json.dumps({"models": {"stub": {
-        "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path("V01_empty_room.json"))],
-    }}}))
+    cfg.write_text(json.dumps({
+        **({} if render is None else {"render": render}),
+        "models": {"stub": {
+            "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path("V01_empty_room.json"))],
+        }},
+    }))
     artifacts = tmp_path / "artifacts"
     run_from_config(
         run_config_path=cfg, manifest_path=Path(__file__).resolve().parents[1] / "gridworld/fixtures/manifest.json",
@@ -312,14 +316,12 @@ def _parse_failed_archive(tmp_path: Path) -> Path:
     return archive
 
 
-def _mark_3d(archive: Path) -> None:
+def _edit_render(archive: Path, **changes) -> None:
     import json
 
     for name in ("episode.json", "run_inputs.json"):
         payload = json.loads((archive / name).read_text())
-        payload["render"] = dict(_RENDER_3D)
-        if name == "run_inputs.json":
-            payload["backend"] = "mujoco3d_top_down_grid"
+        payload["render"] = {**payload.get("render", {}), **changes}
         (archive / name).write_text(json.dumps(payload))
 
 
@@ -339,38 +341,59 @@ def test_resume_replays_a_2d_archive(tmp_path: Path):
     result = _resume(_parse_failed_archive(tmp_path), tmp_path / "out")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "replay-verify: PASS" in result.stdout
+    assert "backend: minigrid" in result.stdout
 
 
-def test_resume_refuses_a_3d_archive_instead_of_continuing_in_2d(tmp_path: Path):
-    archive = _parse_failed_archive(tmp_path)
-    _mark_3d(archive)
+def test_resume_replays_a_3d_archive_on_the_3d_backend(tmp_path: Path):
+    pytest.importorskip("mujoco")
+    from gridworld.render3d import RENDER3D_VERSION
+
+    result = _resume(_parse_failed_archive(tmp_path, _RENDER_3D), tmp_path / "out")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "replay-verify: PASS" in result.stdout
+    assert f"backend: mujoco3d_top_down_grid_r{RENDER3D_VERSION}" in result.stdout
+
+
+@pytest.mark.parametrize("changes", [{"render3d_version": "0"}, {"mujoco_version": "0.0.0"}, {"camera": "first_person"}])
+def test_resume_refuses_a_3d_archive_this_worktree_would_draw_differently(tmp_path: Path, changes):
+    pytest.importorskip("mujoco")
+    archive = _parse_failed_archive(tmp_path, _RENDER_3D)
+    _edit_render(archive, **changes)
     result = _resume(archive, tmp_path / "out")
     assert result.returncode != 0
     assert "replay-verify: PASS" not in result.stdout
-    assert "3D" in result.stderr and "mujoco3d" in result.stderr
+    assert "refusing to resume" in result.stderr and "render" in result.stderr
     assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.parametrize(
     "episode, run_inputs",
     [
-        ({"render": _RENDER_3D}, {}),
+        ({"render": _RENDER_3D}, {}),                        # the two files disagree
         ({}, {"render": _RENDER_3D}),
-        ({}, {"backend": "mujoco3d_chase_grid"}),
+        ({"render": _RENDER_3D}, {"render": {**_RENDER_3D, "camera": "first_person"}}),
+        ({}, {"backend": "mujoco3d_top_down_grid"}),          # a 3D label with no render block
     ],
 )
-def test_refuse_non_2d_render_names_the_recorded_render(episode, run_inputs):
-    from scripts.resume_from_archive import refuse_non_2d_render
+def test_recorded_render_refuses_an_inconsistent_archive(episode, run_inputs):
+    from scripts.resume_from_archive import recorded_render
 
     with pytest.raises(SystemExit, match="mujoco3d"):
-        refuse_non_2d_render(episode, run_inputs)
+        recorded_render(episode, run_inputs)
 
 
 @pytest.mark.parametrize(
     "episode, run_inputs",
     [({}, {}), ({}, {"backend": "minigrid"}), ({"render": {"backend": "minigrid"}}, {"backend": "minigrid"})],
 )
-def test_refuse_non_2d_render_accepts_2d_archives(episode, run_inputs):
-    from scripts.resume_from_archive import refuse_non_2d_render
+def test_recorded_render_is_none_for_2d_archives(episode, run_inputs):
+    from scripts.resume_from_archive import recorded_render
 
-    assert refuse_non_2d_render(episode, run_inputs) is None
+    assert recorded_render(episode, run_inputs) is None
+
+
+def test_recorded_render_returns_the_shared_3d_block():
+    from scripts.resume_from_archive import recorded_render
+
+    block = {**_RENDER_3D, "frame_pixels": 160}
+    assert recorded_render({"render": block}, {"render": dict(block), "backend": "x"}) == block

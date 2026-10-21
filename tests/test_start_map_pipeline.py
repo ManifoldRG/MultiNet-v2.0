@@ -8,6 +8,7 @@ import json
 
 import pytest
 
+from gridworld.render3d import RENDER3D_VERSION
 from interface.loader import default_maze_path
 from interface.smoke_tests.plans import v01_empty_room_trajectory
 from prompting_experiments.prompt_templates import user as user_templates
@@ -49,12 +50,13 @@ def test_start_map_run_writes_its_own_artifacts(tmp_path):
     )
     _run(tmp_path, cfg_path, lambda name, cfg: (ReplayAgent(v01_empty_room_trajectory()), cfg["model"]))
 
+    label = f"mujoco3d_first_person_grid_map_r{RENDER3D_VERSION}"
     run_dir = (
-        tmp_path / "artifacts" / "runs" / "validation_10_v01_empty_room" / "mujoco3d_first_person_grid_map"
+        tmp_path / "artifacts" / "runs" / "validation_10_v01_empty_room" / label
         / "stub-model" / "seed_0" / "default"
     )
     sidecar = load_json(run_dir / "run_inputs.json")
-    assert sidecar["backend"] == "mujoco3d_first_person_grid_map"
+    assert sidecar["backend"] == label
     # the settings, plus the render-layer provenance every 3D sidecar carries
     assert {**render, "resolution": "grid"}.items() <= sidecar["render"].items()
     assert {"frame_pixels", "render3d_version", "mujoco_version"} <= sidecar["render"].keys()
@@ -82,7 +84,7 @@ def _never(name, cfg):
         ),
         ({"backend": "mujoco3d", "camera": "top_down", "start_map": True}, {}, "top_down"),
         ({"backend": "minigrid", "start_map": True}, {}, "start_map"),
-        ({"backend": "mujoco3d", "camera": "chase", "start_map": "true"}, {}, "bool"),
+        ({"backend": "mujoco3d", "camera": "first_person", "start_map": "true"}, {}, "bool"),
     ],
 )
 def test_bad_start_map_configs_fail_before_any_agent(tmp_path, render, extra, message):

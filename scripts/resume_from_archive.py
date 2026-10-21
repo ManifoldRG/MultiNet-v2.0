@@ -180,20 +180,32 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
     return new_queries, stopped_early
 
 
-def refuse_non_2d_render(episode: dict, run_inputs: dict) -> None:
-    """This driver rebuilds a 2D MiniGrid backend, so an episode recorded with
-    a 3D render (run_inputs.json / episode.json ``render``, or a non-minigrid
-    backend label) would continue on 2D frames. Refuse it."""
-    for source, payload in (("run_inputs.json", run_inputs), ("episode.json", episode)):
-        render = payload.get("render") or {}
-        backend = render.get("backend", "minigrid") if isinstance(render, dict) else render
-        label = payload.get("backend", "minigrid")
-        if backend != "minigrid" or label != "minigrid":
-            raise SystemExit(
-                f"refusing to resume: {source} records a 3D render "
-                f"(render={render!r}, backend={label!r}); this driver replays and "
-                "continues on the 2D MiniGrid backend only"
-            )
+def _render_block(payload: dict) -> dict | None:
+    render = payload.get("render")
+    if render is None or (isinstance(render, dict) and render.get("backend", "minigrid") == "minigrid"):
+        return None
+    return render
+
+
+def recorded_render(episode: dict, run_inputs: dict) -> dict | None:
+    """The 3D render block an archive recorded, or None for a 2D archive.
+
+    run_inputs.json and episode.json must record the same block, and a 3D
+    backend label needs one: otherwise the driver cannot tell how the frames
+    were drawn, so it refuses rather than continue on a guessed backend."""
+    from_inputs, from_episode = _render_block(run_inputs), _render_block(episode)
+    if from_inputs != from_episode:
+        raise SystemExit(
+            f"refusing to resume: run_inputs.json render={from_inputs!r} and "
+            f"episode.json render={from_episode!r} disagree"
+        )
+    label = run_inputs.get("backend", "minigrid")
+    if from_inputs is None and label != "minigrid":
+        raise SystemExit(
+            f"refusing to resume: run_inputs.json backend {label!r} names a 3D render, "
+            "but no render block records how its frames were drawn"
+        )
+    return from_inputs
 
 
 def scripted_action_from_spec(spec: str) -> str:
@@ -323,14 +335,32 @@ def main() -> int:
 
     episode = json.loads((archive_dir / "episode.json").read_text(encoding="utf-8"))
     run_inputs = json.loads((archive_dir / "run_inputs.json").read_text(encoding="utf-8"))
-    refuse_non_2d_render(episode, run_inputs)
+    render = recorded_render(episode, run_inputs)
 
     # Everything derives from the archive: experiment config (incl. stall K and
     # parse-retry caps) from run_inputs, the task (incl. the runtime-capped
     # max_steps) from the embedded task_spec.
     config = ExperimentConfig.from_dict(run_inputs["experiment_config"])
     task_spec = TaskSpecification.from_dict(episode["task_spec"])
-    backend = MiniGridBackend(render_mode="rgb_array")
+    if render is None:
+        backend, label = MiniGridBackend(render_mode="rgb_array"), "minigrid"
+    else:
+        # Rebuild the recorded 3D backend, only if this worktree draws the same
+        # frames (render version, mujoco, settings, frame size).
+        from gridworld.backends import get_backend
+        from gridworld.render_settings import RenderSettings
+
+        keys = ("backend", "camera", "resolution", "start_map")
+        settings = RenderSettings.from_run_config({"render": {k: render[k] for k in keys if k in render}})
+        current = settings.provenance(task_spec)
+        if current != render or run_inputs.get("backend") != settings.label:
+            raise SystemExit(
+                f"refusing to resume: the archive's frames were drawn with render={render!r} "
+                f"(backend {run_inputs.get('backend')!r}), but this worktree draws "
+                f"render={current!r} (backend {settings.label!r})"
+            )
+        backend, label = get_backend(settings.backend, **settings.backend_kwargs(task_spec)), settings.label
+    print(f"backend: {label}")
     backend.configure(task_spec)
     runner = build_runner(config, backend, task_spec)
 
