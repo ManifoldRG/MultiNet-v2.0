@@ -143,6 +143,7 @@ def _translate_markers(content: object, enabled: bool) -> object:
             out.append(block)
             continue
         block = dict(block)
+        block.pop("text_continues", None)
         marked = block.pop("cache_breakpoint", False)
         if marked and enabled and _is_text(block):
             block["prompt_cache_breakpoint"] = dict(_BREAKPOINT)
