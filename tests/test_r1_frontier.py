@@ -151,6 +151,23 @@ def test_estimator_uses_proxy_query_rate_and_astra_probe_tokens(tmp_path):
     assert scenario["usd_flex"] == pytest.approx(35.0)
 
 
+def test_estimator_counts_claude_and_kimi_cache_reads(tmp_path):
+    # Claude and Kimi usage records reads only as cache_read_input_tokens; OpenAI
+    # records the same count under both names, which must not double-count.
+    claude = {"input_tokens": 1000, "cache_read_input_tokens": 900,
+              "cache_creation_input_tokens": 50, "output_tokens": 10}
+    openai = {"input_tokens": 1000, "cached_input_tokens": 600,
+              "cache_read_input_tokens": 600, "output_tokens": 10}
+    _write_episode(tmp_path, "claude-opus-5-5", "t1", [claude] * 2)
+    _write_episode(tmp_path, "gpt-6-astra", "t1", [openai] * 2)
+    agg = est.collect(tmp_path)
+    opus = est.summarize("claude-opus-5-5", agg["claude-opus-5-5"])
+    assert opus["totals"]["cached_input_tokens"] == 1800
+    assert opus["cached_input_share"] == 0.9
+    astra = est.summarize("gpt-6-astra", agg["gpt-6-astra"])
+    assert astra["totals"]["cached_input_tokens"] == 1200
+
+
 def test_estimator_prices_cache_writes(tmp_path):
     usage = {
         "input_tokens": 1_000_000_000,

@@ -66,7 +66,10 @@ def collect(root: Path) -> Dict[str, Dict[str, Any]]:
             agg["in"].append(int(usage.get("input_tokens", 0)))
             agg["out"].append(int(usage.get("output_tokens", 0)))
             agg["reasoning"].append(int(usage.get("reasoning_tokens", 0)))
-            agg["cached"].append(int(usage.get("cached_input_tokens", 0)))
+            # OpenAI records cached_input_tokens (and the same count as
+            # cache_read_input_tokens); Claude and Kimi record only cache_read_input_tokens.
+            agg["cached"].append(int(usage.get(
+                "cached_input_tokens", usage.get("cache_read_input_tokens", 0))))
             agg["cache_creation"].append(int(usage.get("cache_creation_input_tokens", 0)))
             if turn.get("stop_reason") in ("length", "max_tokens"):
                 agg["truncated"] += 1

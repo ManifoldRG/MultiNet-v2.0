@@ -65,7 +65,7 @@ def test_claude_agent_rejects_unsupported_cache_ttl_at_construction(ttl_key):
 
 def test_claude_agent_warns_when_batch_deadline_exceeds_cache_ttl(caplog):
     with caplog.at_level(logging.WARNING, logger="interface.agents.claude"):
-        ClaudeAnthropicAgent(api_key="x")
+        ClaudeAnthropicAgent(config=ClaudeAnthropicConfig(batch_cache_ttl="5m"), api_key="x")
 
     assert "write premium without reads" in caplog.text
     assert "2.00x" in caplog.text and "1.25x" in caplog.text
@@ -74,8 +74,11 @@ def test_claude_agent_warns_when_batch_deadline_exceeds_cache_ttl(caplog):
 @pytest.mark.parametrize(
     "config",
     [
-        ClaudeAnthropicConfig(batch_deadline_s=3600),
-        ClaudeAnthropicConfig(enable_prompt_cache=False),
+        # The defaults (1h TTL, 2h deadline cap) are the recommended batch setting;
+        # generate_batch warns if a round actually reads nothing back.
+        ClaudeAnthropicConfig(),
+        ClaudeAnthropicConfig(batch_cache_ttl="5m", batch_deadline_s=300),
+        ClaudeAnthropicConfig(batch_cache_ttl="5m", enable_prompt_cache=False),
     ],
 )
 def test_claude_agent_does_not_warn_when_cache_lifetime_is_adequate_or_disabled(

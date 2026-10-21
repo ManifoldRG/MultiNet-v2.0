@@ -30,15 +30,19 @@ _CACHE_TTLS = ("5m", "1h")
 
 # Model families that REJECT sampling params (temperature/top_p/top_k) with an
 # HTTP 400: Opus 4.7+ (incl. the Opus 5 line: "claude-opus-5" also matches
-# "claude-opus-5-5"), Fable, Mythos. Sonnet 4.6 and Opus <=4.6 still accept
-# `temperature`, so we only drop it for these. Depth on the thinking families is
-# controlled by adaptive thinking + `output_config.effort`, never `temperature`.
+# "claude-opus-5-5"), Fable, Mythos, Sonnet 5 / 5.5 ("claude-sonnet-5") and
+# Haiku 5.5 (both checked live 2026-10-21: "`temperature` is deprecated for this
+# model"). Sonnet 4.6 and Opus <=4.6 still accept `temperature`, so we only drop
+# it for these. Depth on the thinking families is controlled by adaptive
+# thinking + `output_config.effort`, never `temperature`.
 _SAMPLING_UNSUPPORTED_PREFIXES = (
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-5",
     "claude-fable",
     "claude-mythos",
+    "claude-sonnet-5",
+    "claude-haiku-5-5",
 )
 
 
@@ -60,15 +64,17 @@ def _build_request_body(
     """Assemble the Anthropic Messages request body.
 
     `temperature` is omitted for model families that reject it (see
-    `_omits_sampling_params`); sending it there would 400. Thinking is opt-in:
-    when enabled we send adaptive thinking, and `effort` (low..max) tunes depth.
+    `_omits_sampling_params`) and whenever thinking is on, where the API accepts
+    only its default of 1 (Sonnet 4.6 400s on 0.0); sending it there would 400.
+    Thinking is opt-in: when enabled we send adaptive thinking, and `effort`
+    (low..max) tunes depth.
     """
     body: Dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": messages,
     }
-    if not _omits_sampling_params(model):
+    if not enable_thinking and not _omits_sampling_params(model):
         body["temperature"] = temperature
     if enable_thinking:
         # display="summarized" makes thinking text loggable — Opus 4.8 defaults
@@ -363,9 +369,14 @@ class ClaudeAnthropicAgent:
     def __post_init__(self) -> None:
         _cache_control(self.config.cache_ttl)
         _cache_control(self.config.batch_cache_ttl)
+        # Only the 5m TTL is worth a construction-time warning: the fix is to switch
+        # to 1h. The default 1h TTL sits under the default 2h deadline, but the
+        # deadline is a cap, not a round length; generate_batch warns when a round
+        # actually reads nothing back.
         batch_cache_ttl_s = 300 if self.config.batch_cache_ttl == "5m" else 3600
         if (
             self.config.enable_prompt_cache
+            and self.config.batch_cache_ttl == "5m"
             and self.config.batch_deadline_s > batch_cache_ttl_s
         ):
             logger.warning(
