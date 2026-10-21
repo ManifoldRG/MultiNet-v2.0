@@ -96,6 +96,12 @@ def test_prompt_cache_is_on_and_hash_invariant(monkeypatch):
     # most rounds, where 5m would expire between them.
     opus, _ = _build_agent_from_spec("claude_opus55", models["claude_opus55"])
     assert opus.config.batch_cache_ttl == "1h"
+    # Kimi K3's latency is erratic, so its implicit cache is written on the 1h tier.
+    monkeypatch.setenv("MOONSHOT_API_KEY", "secret")
+    kimi, _ = _build_agent_from_spec("kimi_k3", models["kimi_k3"])
+    assert kimi.config.prompt_cache_ttl == "1h"
+    no_ttl = {k: v for k, v in models["kimi_k3"].items() if k != "prompt_cache_ttl"}
+    assert _runtime_model_config(models["kimi_k3"]) == _runtime_model_config(no_ttl)
     assert _experiment_config_hash_payload(_CFG["experiment_config"]) == (
         _experiment_config_hash_payload({**_CFG["experiment_config"], "prompt_cache": False})
     )
