@@ -21,6 +21,7 @@ from interface.observation import (
     current_observation_text,
     history_content_blocks,
     history_text,
+    history_text_blocks,
     leading_summary_blocks,
 )
 from interface.prompt_strategies import (
@@ -131,6 +132,15 @@ def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> l
         if idx < len(parts) - 1:
             blocks.extend(images)
     return blocks
+
+
+def _split_off_history(prompt_text: str, history_blocks: list[dict]) -> list[dict] | None:
+    """``prompt_text`` as the history blocks plus one block with the rest, or
+    None when it does not open with that history (it is then sent whole)."""
+    history = "".join(block["text"] for block in history_blocks)
+    if not history_blocks or not prompt_text.startswith(history):
+        return None
+    return history_blocks + [{"type": "text", "text": prompt_text[len(history):]}]
 
 
 def build_runner(
@@ -299,6 +309,17 @@ class ExperimentRunner:
         # the history and embedding it again duplicates every observation.
         ctx = self.config.context_window if with_context_history else "current"
         n = self.config.context_n
+        cache_breakpoints = self.config.prompt_cache and self.config.context_window == "full"
+        text_hist_blocks = history_text_blocks(
+            obs,
+            ctx,
+            transcript,
+            self.task_spec,
+            self.config.max_history_tokens,
+            observation_text_format=self.config.observation_text_format,
+            include_facing=self.config.observation_text_includes_facing,
+            cache_breakpoints=cache_breakpoints,
+        )
         obs_text = current_observation_text(
             obs,
             self.task_spec,
@@ -310,7 +331,9 @@ class ExperimentRunner:
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(
+            "".join(block["text"] for block in text_hist_blocks)
+            if text_hist_blocks
+            else history_text(
                 obs,
                 ctx,
                 transcript,
@@ -354,14 +377,15 @@ class ExperimentRunner:
             transcript,
             self.config.max_history_tokens,
             n=n,
-            cache_breakpoints=(
-                self.config.prompt_cache and self.config.context_window == "full"
-            ),
+            cache_breakpoints=cache_breakpoints,
         )
         images = current_image_blocks(obs, self.last_rgb)
-        prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
+        # text_only full history: the history steps as their own blocks, then the
+        # current turn, so cache breakpoints can sit on the newest steps.
+        split_blocks = _split_off_history(prompt_text, text_hist_blocks)
+        prompt_blocks = split_blocks or _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []
-        if one_shot_blocks or summary_blocks or hist_blocks or images:
+        if one_shot_blocks or summary_blocks or hist_blocks or images or split_blocks:
             return {
                 "role": "user",
                 "content": one_shot_blocks + summary_blocks + hist_blocks + prompt_blocks,

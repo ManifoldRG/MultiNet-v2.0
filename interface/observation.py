@@ -11,7 +11,8 @@ History when ``context_window`` is ``last_n`` / ``text_summary_and_last_n``
 History is derived from enriched ``transcript`` step records.
 Explicit cache breakpoints are emitted only for ``full`` history. They mark
 the newest included step and, when available, the newest step included by the
-previous request.
+previous request. text_only full history goes out as one text block per step
+(``history_text_blocks``) so the breakpoints have a step to sit on.
 """
 
 from __future__ import annotations
@@ -539,38 +540,92 @@ def history_content_blocks(
     )
     out = [{"type": "text", "text": header}] + blocks
     if cache_breakpoints and context_window == "full":
-        transcript_positions = {id(rec): index for index, rec in enumerate(transcript)}
-        last_query_index = next(
-            (
-                index
-                for index in range(len(transcript) - 1, -1, -1)
-                if transcript[index].get("kind") == "query"
-            ),
-            None,
-        )
-        previous_step_text_index = None
-        if last_query_index is not None:
-            previous_step_text_index = next(
-                (
-                    text_block_indices[id(rec)]
-                    for rec in reversed(recs)
-                    if id(rec) in text_block_indices
-                    and transcript_positions[id(rec)] < last_query_index
-                ),
-                None,
-            )
-        current_step_text_index = next(
-            (
-                text_block_indices[id(rec)]
-                for rec in reversed(recs)
-                if id(rec) in text_block_indices
-            ),
-            None,
-        )
-        for index in (previous_step_text_index, current_step_text_index):
-            if index is not None:
-                out[index] = {**out[index], "cache_breakpoint": True}
+        _mark_history_breakpoints(out, recs, transcript, text_block_indices)
     return out
+
+
+def history_text_blocks(
+    observation: ObservationMode,
+    context_window: ContextWindow,
+    transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS,
+    *,
+    observation_text_format: str = "coords",
+    include_facing: bool = False,
+    cache_breakpoints: bool = False,
+) -> list[dict]:
+    """text_only full history as text blocks: the header, then one per step.
+
+    The blocks join to exactly ``history_text`` for the same arguments, so the
+    model reads the same prompt; the split only lets cache breakpoints sit on
+    the newest steps, as they do in the image history. Every block carries
+    ``text_continues``: agents without block-level breakpoints rejoin it with
+    the block after it (``runner_messages.join_split_text``).
+    """
+    if observation != "text_only" or context_window != "full":
+        return []
+    recs = recent_history_steps(
+        transcript,
+        context_window,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
+    if not recs:
+        return []
+
+    header = user_templates.FULL_HISTORY_USER_PROMPT["header"].removesuffix("\n")
+    out = [{"type": "text", "text": header, "text_continues": True}]
+    step_block_indices: dict[int, int] = {}
+    for rec in recs:
+        step_block_indices[id(rec)] = len(out)
+        text = _history_step_text(
+            rec,
+            task_spec=task_spec,
+            observation_text_format=observation_text_format,
+            include_facing=include_facing,
+        )
+        out.append({"type": "text", "text": f"\n{text}", "text_continues": True})
+    if cache_breakpoints:
+        _mark_history_breakpoints(out, recs, transcript, step_block_indices)
+    return out
+
+
+def _mark_history_breakpoints(
+    blocks: list[dict],
+    recs: list[dict[str, Any]],
+    transcript: list[dict[str, Any]],
+    block_indices: dict[int, int],
+) -> None:
+    """Mark the newest included step and the newest step the previous request
+    included, so a request reads the prefix the previous one wrote."""
+    transcript_positions = {id(rec): index for index, rec in enumerate(transcript)}
+    last_query_index = next(
+        (
+            index
+            for index in range(len(transcript) - 1, -1, -1)
+            if transcript[index].get("kind") == "query"
+        ),
+        None,
+    )
+    previous_step_index = None
+    if last_query_index is not None:
+        previous_step_index = next(
+            (
+                block_indices[id(rec)]
+                for rec in reversed(recs)
+                if id(rec) in block_indices
+                and transcript_positions[id(rec)] < last_query_index
+            ),
+            None,
+        )
+    current_step_index = next(
+        (block_indices[id(rec)] for rec in reversed(recs) if id(rec) in block_indices),
+        None,
+    )
+    for index in (previous_step_index, current_step_index):
+        if index is not None:
+            blocks[index] = {**blocks[index], "cache_breakpoint": True}
 
 
 def _has_decision_frame(rec: dict[str, Any]) -> bool:

@@ -78,8 +78,42 @@ def parse_runner_content(content: object) -> Union[str, List[ContentPart]]:
     return parts
 
 
+def join_split_text(content: object) -> object:
+    """Rejoin text the runner split into blocks only to place cache breakpoints.
+
+    A text block flagged ``text_continues`` continues into the next block (the
+    text_only full history, one block per step). Agents without block-level
+    breakpoints send the text as the runner would have unsplit: one string when
+    nothing else is in the message.
+    """
+    if not isinstance(content, list) or not any(
+        isinstance(block, dict) and block.get("text_continues") for block in content
+    ):
+        return content
+    out: List[object] = []
+    pending = ""
+    for block in content:
+        is_text = isinstance(block, dict) and block.get("type") == "text"
+        if is_text and block.get("text_continues"):
+            pending += str(block.get("text", ""))
+            continue
+        if pending:
+            if is_text:
+                block = {**block, "text": pending + str(block.get("text", ""))}
+            else:
+                out.append({"type": "text", "text": pending})
+            pending = ""
+        out.append(block)
+    if pending:
+        out.append({"type": "text", "text": pending})
+    if len(out) == 1 and isinstance(out[0], dict) and out[0].get("type") == "text":
+        return str(out[0].get("text", ""))
+    return out
+
+
 def strip_cache_markers(content: object) -> object:
     """Remove runner-only cache metadata before forwarding raw content blocks."""
+    content = join_split_text(content)
     if not isinstance(content, list):
         return content
     return [

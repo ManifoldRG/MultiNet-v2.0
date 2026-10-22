@@ -19,6 +19,10 @@ _ONE_SHOT_SOLUTION_PATH = _ONE_SHOT_EXAMPLE_DIR / "one_shot_example_solution.jso
 
 
 def _content_to_text(content: Any) -> str:
+    from interface.agents.runner_messages import join_split_text
+
+    # text_only full history arrives one block per step; preview the text as sent.
+    content = join_split_text(content)
     if isinstance(content, str):
         return content
     if not isinstance(content, list):

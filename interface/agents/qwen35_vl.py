@@ -11,7 +11,7 @@ from typing import Any, List, Union
 
 from PIL import Image
 
-from interface.agents.runner_messages import ContentPart, parse_runner_content
+from interface.agents.runner_messages import ContentPart, join_split_text, parse_runner_content
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def _parts_to_qwen_blocks(parts: List[ContentPart]) -> Union[str, List[dict]]:
 
 
 def _to_qwen_content(content: object) -> Union[str, List[dict]]:
-    parsed = parse_runner_content(content)
+    parsed = parse_runner_content(join_split_text(content))
     if isinstance(parsed, str):
         return parsed
     return _parts_to_qwen_blocks(parsed)
