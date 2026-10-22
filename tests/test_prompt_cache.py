@@ -65,7 +65,7 @@ def test_claude_agent_rejects_unsupported_cache_ttl_at_construction(ttl_key):
 
 def test_claude_agent_warns_when_batch_deadline_exceeds_cache_ttl(caplog):
     with caplog.at_level(logging.WARNING, logger="interface.agents.claude"):
-        ClaudeAnthropicAgent(api_key="x")
+        ClaudeAnthropicAgent(config=ClaudeAnthropicConfig(batch_cache_ttl="5m"), api_key="x")
 
     assert "write premium without reads" in caplog.text
     assert "2.00x" in caplog.text and "1.25x" in caplog.text
@@ -74,8 +74,11 @@ def test_claude_agent_warns_when_batch_deadline_exceeds_cache_ttl(caplog):
 @pytest.mark.parametrize(
     "config",
     [
-        ClaudeAnthropicConfig(batch_deadline_s=3600),
-        ClaudeAnthropicConfig(enable_prompt_cache=False),
+        # The defaults (1h TTL, 2h deadline cap) are the recommended batch setting;
+        # generate_batch warns if a round actually reads nothing back.
+        ClaudeAnthropicConfig(),
+        ClaudeAnthropicConfig(batch_cache_ttl="5m", batch_deadline_s=300),
+        ClaudeAnthropicConfig(batch_cache_ttl="5m", enable_prompt_cache=False),
     ],
 )
 def test_claude_agent_does_not_warn_when_cache_lifetime_is_adequate_or_disabled(
@@ -298,16 +301,19 @@ def test_qwen_converters_do_not_forward_cache_markers():
     )[0]["content"] == converted
 
 
-def test_kimi_cache_ttl_is_sync_only_and_markers_are_removed():
+@pytest.mark.parametrize(
+    ("model", "enable_thinking"), [("kimi-k2.6", False), ("kimi-k3", True)]
+)
+def test_kimi_cache_ttl_is_sync_only_and_markers_are_removed(model, enable_thinking):
     messages = _to_openai_messages(
         [{"role": "user", "content": [{"type": "text", "text": "x",
                                        "cache_breakpoint": True}]}]
     )
     assert messages == [{"role": "user", "content": [{"type": "text", "text": "x"}]}]
     shared = {
-        "model": "kimi-k2.6",
+        "model": model,
         "max_tokens": 100,
-        "enable_thinking": False,
+        "enable_thinking": enable_thinking,
     }
     sync_body = _build_body(messages, **shared, cache_ttl="1h")
     batch_body = _build_body(messages, **shared, include_sampling=False)
@@ -338,6 +344,46 @@ def test_run_config_plumbs_provider_cache_options(monkeypatch):
     assert claude.config.batch_cache_ttl == "5m"
     assert kimi.config.prompt_cache_ttl == "1h"
 
+
+
+@pytest.mark.parametrize(
+    ("provider", "experiment", "entry", "expected"),
+    [
+        ("openai", {"prompt_cache": True}, {}, True),
+        ("openai", {}, {}, False),
+        ("openai", {"prompt_cache": True}, {"enable_prompt_cache": False}, False),
+        ("claude", {"prompt_cache": False}, {}, False),
+        ("kimi", {"prompt_cache": True}, {}, None),
+    ],
+)
+def test_fleet_worker_takes_prompt_cache_from_the_experiment(
+    monkeypatch, tmp_path, provider, experiment, entry, expected
+):
+    """Units ship the raw model entry; the sync worker must derive Claude/OpenAI
+    enable_prompt_cache from the unit's experiment_config like the local path
+    (an explicit entry wins), or Astra runs in OpenAI's write-only implicit mode."""
+    import scripts.distributed_run_pipeline as drp
+
+    monkeypatch.setattr(drp.pipeline, "_run_one_unit", lambda *a, **kw: ({"ok": True}, 1.0))
+    monkeypatch.setattr(drp, "materialize_worker_inputs", lambda unit, root: {})
+    monkeypatch.setattr(drp.ScorerConfig, "from_dict", staticmethod(lambda d: object()))
+    built = []
+
+    def factory(model_key, model_config):
+        built.append(model_config.get("enable_prompt_cache"))
+        return (lambda messages: "x"), "label"
+
+    unit = {
+        "unit_id": "u0", "model_key": "m", "model_id": "mid",
+        "model_config": {"provider": provider, **entry},
+        "task_id": "t", "seed": 0, "prompt_variant": "default", "scorer_config": {},
+        "difficulty_max_static_score": 1000.0,
+        "task_artifacts": {"scored_static": {}},
+        "experiment_config": experiment,
+    }
+    drp.run_assigned_unit(unit, artifacts_root=tmp_path, agent_factory=factory)
+    assert built == [expected]
+    assert unit["model_config"] == {"provider": provider, **entry}  # not mutated
 
 
 @pytest.mark.parametrize("context_window", ["last_n", "text_summary_and_last_n", "full"])

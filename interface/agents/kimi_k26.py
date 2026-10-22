@@ -73,7 +73,9 @@ def _build_body(
     handling can never drift. `include_sampling` is the ONE deliberate
     difference: the sync path sends the mode-forced temperature (Moonshot 400s
     on any other value), while the batch path omits sampling params entirely per
-    the batch spec. kimi-k3 never gets `thinking` or sampling params.
+    the batch spec. kimi-k3 never gets `thinking` or sampling params. Only the
+    sync path passes `cache_ttl` (`prompt_cache_options`): Moonshot's cache-write
+    TTL tiers are a kimi-k3 feature, and its batch support for kimi-k3 is unverified.
     """
     if _is_k3(model):
         body: Dict[str, object] = {
@@ -83,6 +85,8 @@ def _build_body(
         }
         if reasoning_effort:
             body["reasoning_effort"] = reasoning_effort
+        if cache_ttl:
+            body["prompt_cache_options"] = {"mode": "implicit", "ttl": cache_ttl}
         return body
     body = {
         "model": model,

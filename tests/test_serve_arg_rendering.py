@@ -14,9 +14,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 # Today's hard-coded phase-1 arg string (lib/distributed_start.sh gpu branch,
-# verbatim, modulo ordering which is irrelevant to vllm).
+# verbatim, modulo ordering which is irrelevant to vllm), plus the usage-only
+# --enable-prompt-tokens-details so prefix-cache hits reach telemetry.
 PHASE1 = ("--port 8000 --gpu-memory-utilization 0.9 --max-model-len 16384 "
-          "--max-num-seqs 64 --dtype bfloat16 --trust-remote-code")
+          "--max-num-seqs 64 --dtype bfloat16 --trust-remote-code "
+          "--enable-prompt-tokens-details")
 
 # Every shell script this task touches — must stay syntactically valid.
 TOUCHED = [

@@ -18,9 +18,13 @@
 # The served model name is site-specific (--served-model-name "$MODEL") and stays
 # at each call site; --port/--dtype/--trust-remote-code are NOT phase-dependent
 # and live here so the phase-1 string is reproduced verbatim.
+#
+# --enable-prompt-tokens-details only adds usage.prompt_tokens_details.cached_tokens
+# (prefix-cache hits) to responses, which telemetry records as
+# cache_read_input_tokens; it does not change generation (vLLM >= 0.19.0).
 vllm_serve_args() {
   local mml="${QWEN_MAX_MODEL_LEN:-16384}"
   local seqs="${QWEN_MAX_NUM_SEQS:-64}"
   local gmu="${QWEN_GPU_MEMORY_UTILIZATION:-0.9}"
-  echo "--port 8000 --gpu-memory-utilization ${gmu} --max-model-len ${mml} --max-num-seqs ${seqs} --dtype bfloat16 --trust-remote-code"
+  echo "--port 8000 --gpu-memory-utilization ${gmu} --max-model-len ${mml} --max-num-seqs ${seqs} --dtype bfloat16 --trust-remote-code --enable-prompt-tokens-details"
 }

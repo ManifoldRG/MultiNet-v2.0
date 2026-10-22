@@ -333,16 +333,20 @@ def _run_model(
     # live on the UNIT's model_config — NOT plan["models"][model_key], which
     # prepare_job reduces to a routing/topology view (model_group, worker_count,
     # hardware_profile) with the runtime params stripped. The real lockstep
-    # worker builds its agent from unit["model_config"]
-    # (distributed_run_pipeline.py::run_lockstep_worker), so the smoke must too;
-    # otherwise the batch leg silently runs thinking-OFF (enable_thinking=False)
-    # while the sync control (also unit["model_config"]) runs thinking-ON.
-    # Copy so the round-deadline injection never mutates shared state. The batch
-    # clients read their round deadline from the CONFIG (batch_deadline_s), not a
-    # generate_batch kwarg, so --round-deadline-s only reaches the real
-    # Claude/Kimi agents through this field (it stays out of the unit hash — see
-    # _NON_RUNTIME_MODEL_KEYS).
-    model_cfg = dict(store._unit_payload(plan, unit_rows[0])["model_config"])
+    # worker builds its agent from unit["model_config"] plus the experiment's
+    # prompt_cache flag (distributed_run_pipeline.py::run_lockstep_worker), so the
+    # smoke must too; otherwise the batch leg silently runs thinking-OFF
+    # (enable_thinking=False) while the sync control (also unit["model_config"])
+    # runs thinking-ON.
+    # _agent_model_config returns a copy, so the round-deadline injection never
+    # mutates shared state. The batch clients read their round deadline from the
+    # CONFIG (batch_deadline_s), not a generate_batch kwarg, so --round-deadline-s
+    # only reaches the real Claude/Kimi agents through this field (it stays out of
+    # the unit hash — see _NON_RUNTIME_MODEL_KEYS).
+    first = store._unit_payload(plan, unit_rows[0])
+    model_cfg = drp.pipeline._agent_model_config(
+        first["model_config"], first.get("experiment_config")
+    )
     model_cfg["batch_deadline_s"] = round_deadline_s
     provider = _provider_of(model_cfg)
 
