@@ -1102,6 +1102,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:
             cfg.batch_cancel_grace_s = float(model_cfg["batch_cancel_grace_s"])
+        if model_cfg.get("spend_cap_usd") is not None:
+            cfg.spend_cap_usd = float(model_cfg["spend_cap_usd"])
         return ClaudeAnthropicAgent(config=cfg), model or cfg.model
     if provider == "kimi":
         from interface.agents import KimiK26Agent, KimiK26Config
@@ -1125,6 +1127,8 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:
             cfg.batch_cancel_grace_s = float(model_cfg["batch_cancel_grace_s"])
+        if model_cfg.get("spend_cap_usd") is not None:
+            cfg.spend_cap_usd = float(model_cfg["spend_cap_usd"])
         return KimiK26Agent(config=cfg), model or cfg.model
     if provider == "qwen":
         from interface.agents import Qwen35VLAgent, Qwen35VLConfig
