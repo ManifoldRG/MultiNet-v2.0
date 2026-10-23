@@ -38,9 +38,23 @@ def save_task_png(backend: MiniGridBackend, task: TaskSpecification, path: Path)
     Image.fromarray(frame).save(path)
 
 
+def clear_previous_output() -> None:
+    """Drop the last run so a new dataset does not sit beside old mazes."""
+    for folder in (TASK_DIR, PNG_DIR):
+        if not folder.exists():
+            continue
+        for path in folder.iterdir():
+            if path.is_file():
+                path.unlink()
+    manifest = OUTPUT_DIR / "manifest.json"
+    if manifest.is_file():
+        manifest.unlink()
+
+
 def main() -> None:
     TASK_DIR.mkdir(parents=True, exist_ok=True)
     PNG_DIR.mkdir(parents=True, exist_ok=True)
+    clear_previous_output()
     backend = MiniGridBackend(render_mode="rgb_array")
 
     target_n = 200
@@ -72,6 +86,7 @@ def main() -> None:
 
         stem = (
             f"maze_{accepted:03d}_"
+            f"{final_spec.grid_width}x{final_spec.grid_height}_"
             f"{final_spec.backbone.value}_"
             f"{final_spec.logic_chain.value}_"
             f"{distractor_tag}_"

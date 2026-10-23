@@ -17,7 +17,7 @@ from gridworld.task_spec import (
     TaskSpecification,
 )
 
-from .generators import in_bounds, neighbors4
+from .generators import neighbors4
 from .models import Coord
 
 
@@ -29,17 +29,8 @@ def _walls(task: TaskSpecification) -> set[Coord]:
     return {wall.to_tuple() for wall in task.maze.walls}
 
 
-def _set_walls(task: TaskSpecification, walls: set[Coord]) -> None:
-    task.maze.walls = [Position(x, y) for x, y in sorted(walls)]
-
-
 def _dims(task: TaskSpecification) -> tuple[int, int]:
     return task.maze.dimensions
-
-
-def _interior(cell: Coord, width: int, height: int) -> bool:
-    x, y = cell
-    return 0 < x < width - 1 and 0 < y < height - 1
 
 
 def _slot(slots: dict, name: str) -> Coord:
@@ -141,6 +132,33 @@ def place_sequential_chain(task: TaskSpecification, slots: dict, chain_type: str
             "kk",
             [("key-door", first_key, first_door), ("key-door", second_key, second_door)],
         )
+    elif chain_type == "ksk":
+        colors = palette.get("keys", ["red", "blue"])
+        c1, c2 = colors[0], colors[1]
+        switch_id = palette.get("switches", ["1"])[0]
+        first_key, first_door = f"k{c1[0].upper()}", f"D{c1[0].upper()}"
+        second_key, second_door = f"k{c2[0].upper()}", f"D{c2[0].upper()}"
+        switch_name = f"s{switch_id}"
+        gate_name = f"g{switch_id}"
+        p3 = _slot(slots, "pickup_3_candidates")
+        b3 = _slot(slots, "blocker_3_candidates")
+        task.mechanisms.keys.append(KeySpec(id=first_key, position=_pos(p1), color=c1))
+        task.mechanisms.doors.append(DoorSpec(id=first_door, position=_pos(b1), requires_key=c1))
+        task.mechanisms.switches.append(
+            SwitchSpec(id=switch_name, position=_pos(p2), controls=[gate_name], color="yellow")
+        )
+        task.mechanisms.gates.append(GateSpec(id=gate_name, position=_pos(b2)))
+        task.mechanisms.keys.append(KeySpec(id=second_key, position=_pos(p3), color=c2))
+        task.mechanisms.doors.append(DoorSpec(id=second_door, position=_pos(b3), requires_key=c2))
+        _set_chain(
+            task,
+            "ksk",
+            [
+                ("key-door", first_key, first_door),
+                ("switch-gate", switch_name, gate_name),
+                ("key-door", second_key, second_door),
+            ],
+        )
     else:
         raise ValueError(f"Unsupported chain_type: {chain_type}")
 
@@ -168,82 +186,65 @@ def _find_free_open_cells(task: TaskSpecification) -> list[Coord]:
     return [cell for cell in _open_cells(task) if cell not in occupied]
 
 
-def _find_dead_end_attachment_candidates(task: TaskSpecification) -> list[Coord]:
-    open_cells = _open_cells(task)
+def _path_cells(task: TaskSpecification) -> list[Coord]:
+    planned = plan_bfs_path(task)
+    if not planned.success:
+        return []
+    cells: list[Coord] = []
+    for pos in planned.positions:
+        if not cells or cells[-1] != pos:
+            cells.append(pos)
+    return cells
+
+
+def add_inactive_switch_distractor(task: TaskSpecification) -> None:
+    """Place a blue switch that controls no gate, further along the path than the real switch.
+
+    This is the benchmark D2 switch. A wrong-color key is added separately.
+    """
+    real = [switch for switch in task.mechanisms.switches if switch.controls]
+    if not real:
+        return
+    real_pos = real[0].position.to_tuple()
     occupied = _occupied_cells(task)
-    width, height = _dims(task)
-    walls = _walls(task)
-    candidates = []
-    for cell in open_cells:
-        if cell in occupied:
-            continue
-        open_nbs = [nb for nb in neighbors4(cell) if nb in open_cells]
-        wall_nbs = [
-            nb
-            for nb in neighbors4(cell)
-            if in_bounds(nb, width, height) and nb in walls and _interior(nb, width, height)
-        ]
-        if len(open_nbs) >= 1 and len(wall_nbs) >= 1:
-            candidates.append(cell)
-    return candidates
+    path = _path_cells(task)
+    later: list[Coord] = []
+    if real_pos in path:
+        later = [cell for cell in path[path.index(real_pos) + 1 :] if cell not in occupied]
+    if not later:
+        later = [cell for cell in _find_free_open_cells(task)]
+    if not later:
+        return
 
-
-def _carve_dead_end_branch(task: TaskSpecification, attach: Coord, length: int = 2) -> bool:
-    """Carve a straight interior dead-end off an open cell. The border stays walled."""
-    walls = _walls(task)
-    open_cells = _open_cells(task)
-    width, height = _dims(task)
-    x, y = attach
-
-    for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-        branch = []
-        cx, cy = x, y
-        ok = True
-        for _ in range(length):
-            cx += dx
-            cy += dy
-            cell = (cx, cy)
-            if not _interior(cell, width, height) or cell not in walls or cell in open_cells:
-                ok = False
-                break
-            branch.append(cell)
-        if ok:
-            for cell in branch:
-                walls.discard(cell)
-            _set_walls(task, walls)
-            return True
-    return False
-
-
-def add_dead_end_distractors(
-    task: TaskSpecification,
-    count: int = 1,
-    branch_length: int = 2,
-) -> None:
-    rng = random.Random(task.seed + 101)
-    candidates = _find_dead_end_attachment_candidates(task)
-    rng.shuffle(candidates)
-
-    added = 0
-    for attach in candidates:
-        if added >= count:
-            break
-        if _carve_dead_end_branch(task, attach, length=branch_length):
-            added += 1
-
-    task.metadata["dead_end_distractors"] = {
-        "count": added,
-        "branch_length": branch_length,
+    rng = random.Random(task.seed + 151)
+    cell = rng.choice(later)
+    task.mechanisms.switches.append(
+        SwitchSpec(id="inactive_sb", position=_pos(cell), controls=[], color="blue")
+    )
+    if task.distractors is None:
+        task.distractors = []
+    task.distractors.append(
+        Distractor(
+            type="inactive_switch",
+            element_id="inactive_sb",
+            description="inactive blue switch that does not control any gate",
+        )
+    )
+    task.metadata["inactive_switch"] = {
+        "id": "inactive_sb",
+        "position": list(cell),
+        "position_rule": "after_real_switch",
     }
 
 
 def add_wrong_key_distractors(task: TaskSpecification, colors: List[str]) -> None:
-    """Place keys whose colors match no door, off the current gridworld plan."""
-    rng = random.Random(task.seed + 117)
-    planned = plan_bfs_path(task)
-    optimal_path = set(planned.positions) if planned.success else set()
+    """Place keys whose colors match no door, on open cells in the maze.
 
-    candidates = [cell for cell in _find_free_open_cells(task) if cell not in optimal_path]
+    The benchmark puts these on the corridor itself. Picking one up is safe
+    because it opens no required door.
+    """
+    rng = random.Random(task.seed + 117)
+    candidates = _find_free_open_cells(task)
     rng.shuffle(candidates)
 
     real_required_colors = {door.requires_key for door in task.mechanisms.doors}
@@ -270,54 +271,56 @@ def add_wrong_key_distractors(task: TaskSpecification, colors: List[str]) -> Non
 def add_distractor_chain(
     task: TaskSpecification,
     chain_type: str = "kd",
-    color: str = "green",
+    color: str = "yellow",
 ) -> None:
-    """Add a side key-door branch that is not part of the required chain."""
+    """Put a key and door on an existing dead-end leaf. The walls stay put.
+
+    Matches the benchmark D3 maps: the door sits on the leaf, and the key sits
+    on the one open cell that leads into it. The pair is not on the required chain.
+    """
     if chain_type != "kd":
         raise ValueError("V1 distractor_chain only supports chain_type='kd'")
-
-    rng = random.Random(task.seed + 129)
-    candidates = _find_dead_end_attachment_candidates(task)
-    rng.shuffle(candidates)
 
     real_colors = {door.requires_key for door in task.mechanisms.doors}
     if color in real_colors:
         return
 
-    width, height = _dims(task)
-    walls = _walls(task)
-    for attach in candidates:
-        x, y = attach
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            c1 = (x + dx, y + dy)
-            c2 = (x + 2 * dx, y + 2 * dy)
-            c3 = (x + 3 * dx, y + 3 * dy)
-            branch = [c1, c2, c3]
-            if not all(_interior(cell, width, height) and cell in walls for cell in branch):
-                continue
+    open_cells = _open_cells(task)
+    occupied = _occupied_cells(task)
+    leaves: list[tuple[Coord, Coord]] = []
+    for cell in open_cells:
+        if cell in occupied:
+            continue
+        neighbors = [nb for nb in neighbors4(cell) if nb in open_cells]
+        if len(neighbors) != 1:
+            continue
+        approach = neighbors[0]
+        if approach in occupied:
+            continue
+        leaves.append((cell, approach))
+    if not leaves:
+        return
 
-            for cell in branch:
-                walls.discard(cell)
-            _set_walls(task, walls)
-
-            key_id = f"k{color[0].upper()}"
-            door_id = f"D{color[0].upper()}"
-            task.mechanisms.keys.append(KeySpec(id=key_id, position=_pos(c1), color=color))
-            task.mechanisms.doors.append(
-                DoorSpec(id=door_id, position=_pos(c2), requires_key=color)
-            )
-            if task.distractors is None:
-                task.distractors = []
-            task.distractors.append(
-                Distractor(
-                    type="distractor_chain",
-                    element_id="distractor_kd",
-                    description=f"unused {color} key-door branch",
-                )
-            )
-            task.metadata["distractor_chain"] = {
-                "type": "kd",
-                "color": color,
-                "cells": [list(c1), list(c2), list(c3)],
-            }
-            return
+    rng = random.Random(task.seed + 129)
+    leaf, approach = rng.choice(leaves)
+    key_id = f"k{color[0].upper()}"
+    door_id = f"D{color[0].upper()}"
+    task.mechanisms.keys.append(KeySpec(id=key_id, position=_pos(approach), color=color))
+    task.mechanisms.doors.append(
+        DoorSpec(id=door_id, position=_pos(leaf), requires_key=color)
+    )
+    if task.distractors is None:
+        task.distractors = []
+    task.distractors.append(
+        Distractor(
+            type="distractor_chain",
+            element_id="distractor_kd",
+            description=f"unused {color} key-door in a dead end",
+        )
+    )
+    task.metadata["distractor_chain"] = {
+        "type": "kd",
+        "color": color,
+        "deadend_branch_leaf": list(leaf),
+        "key": list(approach),
+    }
