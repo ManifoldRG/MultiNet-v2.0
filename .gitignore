@@ -94,3 +94,6 @@ analysis/candidate_mazes/sets/*/candidate_curve.png
 
 # Unpublished M7–M10 mechanism examples — never commit
 /M7-10 New Mechanisms/
+
+# Local maze-generator output (task JSON, PNGs, manifest)
+mazegen/generated_mazes/
