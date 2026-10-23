@@ -12,6 +12,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 def bash(snippet: str, env: dict | None = None) -> subprocess.CompletedProcess:
     e = os.environ.copy()
+    e["DIFFICULTY_MAX"] = "3000"  # required, no default
     if env:
         e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, cwd=REPO, env=e)
@@ -56,6 +57,40 @@ def test_coordinator_prepares_serves_healthchecks(tmp_path):
     # coordinator-serve.log path is load-bearing (Spec-2 supervisor snapshot_logs expects it)
     assert "coordinator-serve.log" in log
     assert "127.0.0.1:8765/status" in log
+    # 3D frames draw with OSMesa on every VM: EGL rasterises differently
+    assert "export MUJOCO_GL=osmesa" in log
+
+
+def test_coordinator_passes_stale_after_seconds_when_set(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; DIFFICULTY_MAX=1000.0; STALE_AFTER_SECONDS=12600; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "STALE_AFTER='12600'" in log
+    assert '--stale-after-seconds "$STALE_AFTER"' in log
+
+
+def test_coordinator_stale_after_empty_when_unset(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; DIFFICULTY_MAX=1000.0; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    assert "STALE_AFTER=''" in glog.read_text()
 
 
 _CLAUDE_TOPO = ('{"workers":[{"name":"r1-claude-api-0","kind":"api",'
@@ -86,9 +121,12 @@ def test_api_worker_claude_exports_anthropic_key(tmp_path):
     log = glog.read_text()
     assert "--hardware-profile api-client" in log
     assert "--model-group" in log and "claude-api" in log
+    # hash seed pinned so a restarted worker can replay-resume its checkpoints
+    assert "export PYTHONHASHSEED=0" in log
     # the unquoted heredoc keeps \$COORD_IP literal; the IP arrives via the injected env
     assert "COORD_IP='10.0.0.2'" in log and "coordinator-url" in log
     assert ".venv-multinet" in log
+    assert "export MUJOCO_GL=osmesa" in log
     # SECURITY (load-bearing): the key is delivered ONLY via the remote heredoc stdin —
     # never on the --command argv (which leaks to `ps`/gcloud logs) or the launcher stdout.
     args_line = next(line for line in log.splitlines() if line.startswith("ARGS:"))
@@ -118,6 +156,7 @@ def test_gpu_worker_uses_vllm_venv_and_offline(tmp_path):
     assert r.returncode == 0, r.stderr
     log = glog.read_text()
     assert ".venv-qwen-vllm" in log
+    assert "export MUJOCO_GL=osmesa" in log
     assert "HF_HUB_OFFLINE=1" in log
     assert "--hardware-profile local-gpu" in log
     assert "--local-model-cache" in log and "Qwen/Qwen3.6-27B" in log

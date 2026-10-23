@@ -30,8 +30,6 @@ _repo_root_str = str(_REPO_ROOT)
 if _repo_root_str not in sys.path:
     sys.path.insert(0, _repo_root_str)
 
-import numpy as np
-
 try:
     import pygame
 except ImportError:
@@ -43,9 +41,10 @@ except ImportError:
     sys.exit(1)
 
 from demo.session import MiniGridPlaySession, ProgressEvent, SETTINGS_AXES
-from demo.sounds import DemoSounds
-from demo.fx import DemoFx
+from demo.sounds import DemoSounds, sfx_for_dispatch
+from demo.fx import DemoFx, TurnAnimation
 from demo.compare import R1ResultCatalog, r1_task_id
+from demo.r1_tasks import restrict_to_r1_tasks
 from demo import icons
 from demo import overlays
 from demo.theme import (
@@ -100,13 +99,12 @@ from demo.theme import (
     STATUS_MOVES_OK,
     STATUS_MOVES_WARN,
     TOP_BAR_H,
-    WALL_GRAY_DST,
-    WALL_GRAY_SRC,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     control_accent,
     load_font,
     mech_color,
+    recolor_walls,
 )
 
 
@@ -131,8 +129,7 @@ class MiniGridPlayerUI:
         self.show_start_screen = True
         self.show_settings_overlay = False
         self.show_model_view_overlay = False
-        self.settings_editable = False
-        self.show_moves_bar = False
+        self.settings_editable = True
         self.model_view_scroll = 0
         self.text_only_scroll = 0
 
@@ -172,31 +169,21 @@ class MiniGridPlayerUI:
         self.font_splash_title = self._load_font(64, bold=True)
         self.font_splash_sub = self._load_font(22)
         self.font_splash_prompt = self._load_font(16, bold=True)
+        # Model-view body uses a mono face so prompt text reads like the web overlay.
+        try:
+            self.font_mono = pygame.font.SysFont("consolas", 15)
+        except Exception:
+            self.font_mono = self._load_font(15)
 
         # Quiet interaction SFX + display-only motion feedback. Both are
         # cosmetic -- never touch env state or observations.
         self.sounds = DemoSounds()
         self.fx = DemoFx()
+        self.turn_anim = TurnAnimation()  # 3D views that turn with the agent
         self.r1_catalog = R1ResultCatalog()
-        self._restrict_to_r1_tasks()
+        restrict_to_r1_tasks(self.session, self.r1_catalog)
 
         self._sync_caption()
-
-    def _restrict_to_r1_tasks(self) -> None:
-        """Keep only mazes present in the R1 results table."""
-        session = self.session
-        r1_tasks = [p for p in session.task_list if r1_task_id(p) in self.r1_catalog]
-        if not r1_tasks:
-            raise ValueError(
-                "No tasks in the current selection appear in the R1 results table. "
-                "Point at an R1 maze folder (e.g. mazes/exp_maze_jsons/M1)."
-            )
-        session.task_list = r1_tasks
-        session.task_list_locked = True
-        if session.task_path not in r1_tasks:
-            session._load_task(str(r1_tasks[0]))
-        else:
-            session.task_index = r1_tasks.index(session.task_path)
 
     def _load_font(self, size: int, bold: bool = False) -> pygame.font.Font:
         return load_font(size, bold=bold)
@@ -212,6 +199,7 @@ class MiniGridPlayerUI:
     def _reset(self) -> None:
         self.sounds.play("restart")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._checkpoint_trajectory()
         self.session._reset_env()
         self.model_view_scroll = 0
@@ -221,6 +209,7 @@ class MiniGridPlayerUI:
     def _switch_task(self, delta: int) -> None:
         self.sounds.play("navigate")
         self.fx.clear()
+        self.turn_anim.clear()
         self.session._load_adjacent_task(delta)
         self.model_view_scroll = 0
         self.text_only_scroll = 0
@@ -237,90 +226,24 @@ class MiniGridPlayerUI:
         events_before = len(session.event_log)
         prev_state = session.state
         prev_rgb = None
-        if session.backend.env is not None and session.config.observation != "text_only":
-            try:
-                prev_rgb = session.backend.render()
-            except Exception:
-                prev_rgb = None
+        if session.backend.is_configured and session.config.observation != "text_only":
+            prev_rgb = session.backend.render()
 
         session._dispatch_token(token)
-        self.sounds.play(self._sfx_for_dispatch(events_before))
+        self.sounds.play(sfx_for_dispatch(session, events_before, prev_state))
 
-        env = session.backend.env
-        if env is None or prev_state is None:
+        if not session.backend.is_configured or prev_state is None:
             return
-        last = next(
-            (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
-            None,
-        )
-        event_type = last.get("event_type") if last else None
+        self.turn_anim.maybe_start(session.backend, prev_state, session.state, now_ms=pygame.time.get_ticks())
         self.fx.trigger(
             now_ms=pygame.time.get_ticks(),
+            session=session,
             token=token,
-            event_type=event_type,
             events_before=events_before,
-            event_log=session.event_log,
             prev_state=prev_state,
-            new_state=session.state,
             prev_rgb=prev_rgb,
-            task_spec=session.task_spec,
-            grid_w=env.width,
-            grid_h=env.height,
             display_size=GRID_DISPLAY_SIZE,
-            episode_success=bool(session.episode_done and session.episode_success),
         )
-
-    def _sfx_for_dispatch(self, events_before: int) -> str:
-        """Pick one short UI clip for the action that just ran.
-
-        Prefers semantic Progress milestones (pickup / door / switch) when
-        they fired this step, then falls back to the transcript's
-        ``event_type`` (move / turn / wall bump / invalid). Success always
-        wins so completing a task gets the ascending chime even if the last
-        primitive was a plain move onto the goal."""
-        session = self.session
-        if session.episode_done and session.episode_success:
-            return "success"
-
-        for event in reversed(session.event_log[events_before:]):
-            if event.icon == "key":
-                return "pickup"
-            if event.icon == "door":
-                return "door"
-            if event.icon in ("switch", "gate"):
-                # Gate state changes are switch-driven; prefer the distinct
-                # switch click over the door latch so the two mechanisms
-                # stay audibly different.
-                return "switch"
-            if event.icon == "goal":
-                return "success"
-
-        last = next(
-            (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
-            None,
-        )
-        event_type = last.get("event_type") if last else None
-        if event_type == "MOVED":
-            return "step"
-        if event_type == "TURNED":
-            return "turn"
-        if event_type == "BLOCKED":
-            return "wall"
-        if event_type in ("PICKUP",):
-            return "pickup"
-        if event_type == "OPENED":
-            return "door"
-        if event_type == "TOGGLED":
-            return "switch"
-        if event_type == "DONE":
-            return "success"
-        if event_type == "DROPPED":
-            # Successful drops already returned "pickup" via the Progress
-            # event above; reaching here means X with an empty inventory.
-            return "invalid"
-        if event_type in ("NOTHING", "INVALID", "WRONG_DONE"):
-            return "invalid"
-        return "invalid"
 
     # ------------------------------------------------------------------
     # Input: physical key -> action token
@@ -384,19 +307,26 @@ class MiniGridPlayerUI:
         flat-colored wrapped block rather than trying to color-wrap segments
         (this only happens for unusually long entries)."""
         font = self.font_small_bold
-        segments = [(event.prefix, COLOR_TEXT), (event.object_phrase, object_color), (event.suffix, COLOR_TEXT)]
-        total_w = sum(font.size(text)[0] for text, _ in segments if text)
-        if total_w <= max_width:
-            cx = x
-            for text, color in segments:
-                if not text:
-                    continue
-                surf = font.render(text, True, color)
-                self.screen.blit(surf, (cx, y))
-                cx += surf.get_width()
-            return y + self._line_height(font)
-        combined = f"{event.prefix}{event.object_phrase}{event.suffix}"
-        return self._draw_wrapped_text(combined, x, y, font, COLOR_TEXT, max_width)
+        words: list[tuple[str, tuple]] = []
+        for text, color in (
+            (event.prefix, COLOR_TEXT),
+            (event.object_phrase, object_color),
+            (event.suffix, COLOR_TEXT),
+        ):
+            words.extend((word, color) for word in text.split(" ") if word)
+        cx = x
+        line_h = self._line_height(font)
+        for word, color in words:
+            gap = 0 if cx == x else font.size(" ")[0]
+            word_w = font.size(word)[0]
+            if cx != x and cx + gap + word_w > x + max_width:
+                cx = x
+                y += line_h
+                gap = 0
+            surf = font.render(word, True, color)
+            self.screen.blit(surf, (cx + gap, y))
+            cx += gap + word_w
+        return y + line_h
 
     def _draw_section_label(
         self, text: str, x: int, y: int, color: tuple,
@@ -624,31 +554,23 @@ class MiniGridPlayerUI:
             self.screen.blit(rec_surf, (bx, cy - rec_surf.get_height() // 2))
             pygame.draw.circle(self.screen, (225, 70, 70), (bx - 9, cy), 4)
 
-    @staticmethod
-    def _recolor_walls(rgb_array: np.ndarray) -> np.ndarray:
-        """Swap MiniGrid's flat, harsh wall gray for a softer slate tone on
-        this display-only copy of the frame (see WALL_GRAY_SRC/DST). Never
-        touches the array the session hands to scoring/model code."""
-        mask = np.all(np.abs(rgb_array.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
-        if mask.any():
-            rgb_array = rgb_array.copy()
-            rgb_array[mask] = WALL_GRAY_DST
-        return rgb_array
-
     def _render_grid(self) -> None:
         """Render the MiniGrid environment as the hero panel: a softened,
         enlarged copy of the raw frame framed with a strong border so it
         reads as the centerpiece rather than a flat inset image. Display-only
         FX (nudge / cell flash / fade) are composited here and never touch
         the env's own render buffer."""
-        rgb_array = self._recolor_walls(self.session.backend.render())
+        turn = self.turn_anim.frame_request(pygame.time.get_ticks())
+        backend = self.session.backend
+        rgb_array = backend.render_turn(*turn) if turn else backend.render()
+        if backend.frame_is_grid_aligned:
+            rgb_array = recolor_walls(rgb_array)
         h, w, _c = rgb_array.shape
         surf = pygame.image.frombuffer(rgb_array.tobytes(), (w, h), "RGB")
         scaled = pygame.transform.smoothscale(surf, (GRID_DISPLAY_SIZE, GRID_DISPLAY_SIZE))
 
-        env = self.session.backend.env
-        grid_w = env.width if env is not None else 1
-        grid_h = env.height if env is not None else 1
+        spec = self.session.task_spec
+        grid_w, grid_h = spec.maze.dimensions if spec is not None else (1, 1)
         framed, (ox, oy) = self.fx.apply(
             scaled, now_ms=pygame.time.get_ticks(), grid_w=grid_w, grid_h=grid_h,
         )
@@ -703,7 +625,11 @@ class MiniGridPlayerUI:
         # Built from segments and truncated at a whole-segment boundary
         # (rather than a hard character clip) so it degrades gracefully at
         # narrower window widths.
-        segments = ["[ / ] switch task", "Tab settings", "M model view", "Q quit"]
+        segments = ["[ / ] switch task", "Tab settings", "M model view"]
+        if self.session.camera_names:
+            tilt = self.session.tilt_status()
+            segments += ([tilt] if tilt else []) + ["V camera", ", . tilt"]
+        segments.append("Q quit")
         max_width = WINDOW_WIDTH - 28
         text = ""
         for seg in segments:
@@ -715,7 +641,7 @@ class MiniGridPlayerUI:
         self.screen.blit(surf, surf.get_rect(center=(WINDOW_WIDTH // 2, rect.top + 36)))
 
     def _render_main_pane(self) -> None:
-        if self.session.backend.env is None:
+        if not self.session.backend.is_configured:
             placeholder_surf = self.font_main.render(
                 "No environment loaded.", True, COLOR_TEXT_DIM
             )
@@ -733,6 +659,26 @@ class MiniGridPlayerUI:
     # values, and the occasional divider line, to match the flatter, quieter
     # reference layout. Debug-only info that isn't needed to actually play
     # (raw config axes, manifest metadata) lives in the Tab overlay instead.
+
+    def _draw_budget_bar(
+        self, x: int, y: int, width: int, label: str, remaining: int, total: int,
+        color: tuple | None = None,
+    ) -> int:
+        y = self._draw_status_label(x, y, label)
+        fraction = remaining / total if total else 0.0
+        if color is None:
+            if fraction < 0.3:
+                color = STATUS_MOVES_CRIT
+            elif fraction < 0.5:
+                color = STATUS_MOVES_WARN
+            else:
+                color = STATUS_MOVES_OK
+        count = self.font_main_bold.render(str(remaining), True, color)
+        self.screen.blit(count, (x, y))
+        bar_x = x + count.get_width() + 8
+        bar_w = max(20, width - count.get_width() - 8)
+        self._draw_progress_bar(bar_x, y + (count.get_height() - 10) // 2, bar_w, 10, fraction, color)
+        return y + count.get_height() + 8
 
     def _draw_status_label(self, x: int, y: int, label: str) -> int:
         label_surf = self.font_small_bold.render(" ".join(label.upper()), True, COLOR_TEXT_LABEL)
@@ -887,18 +833,13 @@ class MiniGridPlayerUI:
 
         state = session.state
         if state:
-            if self.show_moves_bar:
-                y = self._draw_status_label(x, y, "Moves")
-                remaining = max(0, state.max_steps - state.step_count)
-                fraction = remaining / state.max_steps if state.max_steps else 0.0
-                if fraction < 0.3:
-                    moves_color = STATUS_MOVES_CRIT
-                elif fraction < 0.5:
-                    moves_color = STATUS_MOVES_WARN
-                else:
-                    moves_color = STATUS_MOVES_OK
-                self._draw_progress_bar(x, y, width, 10, fraction, moves_color)
-                y += 10 + 8
+            remaining = state.max_steps - state.step_count
+            y = self._draw_budget_bar(x, y, width, "Moves", remaining, state.max_steps)
+            stall = session._stall
+            if stall:
+                y = self._draw_budget_bar(
+                    x, y, width, "Until stall", stall.remaining, stall.k, STATUS_MOVES_WARN
+                )
 
             direction = state.agent_direction
             dir_name = DIRECTION_NAMES.get(direction, "?").split(" (")[0]
@@ -968,68 +909,149 @@ class MiniGridPlayerUI:
     def _render_episode_overlay(self) -> None:
         overlays.render_episode_overlay(self)
 
-    def _content_settings(self, surface: pygame.Surface, x: int, y: int, width: int) -> int:
-        session = self.session
-        y = self._draw_text("SETTINGS", x, y, self.font_title, COLOR_TEXT_TITLE, surface=surface)
-        if self.settings_editable:
-            settings_help = (
-                "These change what a human sees/controls, mirroring interface.config.ExperimentConfig. "
-                "Press a number to cycle a value."
-            )
-        else:
-            settings_help = (
-                "Frozen for R1 parity (matches interface.config.ExperimentConfig). "
-                "Tab / Esc to close."
-            )
-        y = self._draw_wrapped_text(
-            settings_help,
-            x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
-        )
-        y += 10
-        for key_char, attr, choices in SETTINGS_AXES:
-            value = getattr(session.config, attr)
-            _cw, ch = self._draw_chip(f"[{key_char}]", x, y, self.font_small, (20, 20, 24), (*ACCENT_BLUE, 255), surface=surface)
-            self._draw_text(f"{attr} = {value}", x + _cw + 10, y + 2, self.font_main, COLOR_TEXT, surface=surface)
-            y += ch + 4
-        if self.settings_editable:
-            y += 8
-            y = self._draw_wrapped_text(
-                "These only change what is displayed/hinted -- the running episode and its step "
-                "count are unaffected. Tab / Esc to close.",
-                x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
-            )
-
-        manifest_row = session.manifest_row_by_path.get(session.task_path) if session.manifest_mode else None
-        if manifest_row:
-            y += 14
-            y = self._draw_section_label("Manifest row", x, y, ACCENT_PURPLE, surface=surface)
-            y += 6
-            y = self._draw_wrapped_text(
-                f"experiment: {manifest_row.get('experiment', '?')}   condition: {manifest_row.get('condition', '?')}",
-                x, y, self.font_small, COLOR_TEXT, width, surface=surface,
-            )
-            if manifest_row.get("variant"):
-                y = self._draw_text(f"variant: {manifest_row['variant']}", x, y, self.font_small, COLOR_TEXT, surface=surface)
-            mechanisms = manifest_row.get("expected_mechanisms") or []
-            if mechanisms:
-                y = self._draw_wrapped_text(
-                    f"expected mechanisms: {', '.join(mechanisms)}", x, y, self.font_small, ACCENT_AMBER, width,
-                    surface=surface,
-                )
-            if manifest_row.get("notes"):
-                y = self._draw_wrapped_text(manifest_row["notes"], x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface)
-        return y
-
     def _render_settings_overlay(self) -> None:
         if not self.show_settings_overlay:
             return
+        session = self.session
         scrim = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
         scrim.fill((10, 10, 14, 215))
         self.screen.blit(scrim, (0, 0))
 
+        # Centered card matching the web settings overlay.
         card_w = min(560, WINDOW_WIDTH - 80)
+        pad = CARD_PAD + 6
+        inner_w = card_w - 2 * pad
+
+        # Measure content height on a scratch surface first.
+        scratch = pygame.Surface((card_w, 900), pygame.SRCALPHA)
+        y = self._draw_settings_card_body(scratch, pad, pad, inner_w)
+        card_h = y + pad
+
         card_x = (WINDOW_WIDTH - card_w) // 2
-        self._render_card(card_x, 60, card_w, self._content_settings, accent_color=ACCENT_BLUE)
+        card_y = max(40, (WINDOW_HEIGHT - card_h) // 2)
+
+        shadow = pygame.Surface((card_w + 6, card_h + 6), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, COLOR_SHADOW, shadow.get_rect(), border_radius=CARD_RADIUS + 2)
+        self.screen.blit(shadow, (card_x - 1, card_y + 3))
+
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+        pygame.draw.rect(self.screen, COLOR_CARD_BG, card_rect, border_radius=CARD_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_CARD_BORDER, card_rect, 1, border_radius=CARD_RADIUS)
+        stripe = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(
+            stripe,
+            ACCENT_BLUE,
+            pygame.Rect(0, 0, 5, card_h),
+            border_top_left_radius=CARD_RADIUS,
+            border_bottom_left_radius=CARD_RADIUS,
+        )
+        self.screen.blit(stripe, (card_x, card_y))
+        self._draw_settings_card_body(self.screen, card_x + pad, card_y + pad, inner_w)
+
+    def _draw_settings_card_body(
+        self, surface: pygame.Surface, x: int, y: int, width: int
+    ) -> int:
+        """Web-matching settings body: title + Esc, help, numbered axes, manifest."""
+        session = self.session
+
+        title_surf = self.font_title.render("SETTINGS", True, COLOR_TEXT_TITLE)
+        surface.blit(title_surf, (x, y))
+        esc_probe = self.font_small_bold.render("Esc", True, COLOR_TEXT)
+        esc_w = esc_probe.get_width() + CHIP_PAD_X * 2
+        esc_h = esc_probe.get_height() + 6
+        esc_x = x + width - esc_w
+        self._draw_chip(
+            "Esc",
+            esc_x,
+            y + 2,
+            self.font_small_bold,
+            COLOR_TEXT,
+            (*COLOR_BUTTON_BG, 255),
+            surface=surface,
+        )
+        pygame.draw.rect(
+            surface,
+            COLOR_BUTTON_BORDER,
+            pygame.Rect(esc_x, y + 2, esc_w, esc_h),
+            1,
+            border_radius=CHIP_RADIUS,
+        )
+        y += max(title_surf.get_height(), esc_h) + 8
+
+        if self.settings_editable:
+            help_text = "Press a number to cycle a value. Tab / Esc to close."
+        else:
+            help_text = (
+                "Frozen for R1 parity (matches interface.config.ExperimentConfig). "
+                "Tab / Esc to close."
+            )
+        y = self._draw_wrapped_text(
+            help_text, x, y, self.font_small_bold, COLOR_TEXT, width, surface=surface
+        )
+        y += 12
+
+        key_bg = (28, 32, 48)
+        key_fg = (180, 200, 255)
+        key_border = (70, 90, 140)
+        for key_char, attr, _choices in SETTINGS_AXES:
+            value = getattr(session.config, attr)
+            # Number key badge (web settings-key look).
+            key_surf = self.font_small_bold.render(str(key_char), True, key_fg)
+            badge_w = max(26, key_surf.get_width() + 12)
+            badge_h = key_surf.get_height() + 6
+            badge = pygame.Rect(x, y, badge_w, badge_h)
+            pygame.draw.rect(surface, key_bg, badge, border_radius=5)
+            pygame.draw.rect(surface, key_border, badge, 1, border_radius=5)
+            surface.blit(
+                key_surf,
+                (badge.x + (badge_w - key_surf.get_width()) // 2, badge.y + 3),
+            )
+
+            tx = x + badge_w + 10
+            ty = y + 2
+            name_surf = self.font_main.render(f"{attr} = ", True, COLOR_TEXT)
+            surface.blit(name_surf, (tx, ty))
+            val_surf = self.font_main_bold.render(str(value), True, COLOR_TEXT_TITLE)
+            surface.blit(val_surf, (tx + name_surf.get_width(), ty))
+            y += badge_h + 8
+
+        manifest_row = (
+            session.manifest_row_by_path.get(session.task_path)
+            if session.manifest_mode
+            else None
+        )
+        if manifest_row:
+            y += 6
+            pygame.draw.line(
+                surface, COLOR_SEPARATOR, (x, y), (x + width, y), 1
+            )
+            y += 12
+            label = self.font_label.render("MANIFEST ROW", True, ACCENT_PURPLE)
+            surface.blit(label, (x, y))
+            y += label.get_height() + 6
+
+            bits = [
+                f"experiment: {manifest_row.get('experiment', '?')}",
+                f"condition: {manifest_row.get('condition', '?')}",
+            ]
+            if manifest_row.get("variant"):
+                bits.append(f"variant: {manifest_row['variant']}")
+            y = self._draw_wrapped_text(
+                " · ".join(bits),
+                x, y, self.font_small_bold, COLOR_TEXT, width, surface=surface,
+            )
+            mechanisms = manifest_row.get("expected_mechanisms") or []
+            if mechanisms:
+                y = self._draw_wrapped_text(
+                    f"expected mechanisms: {', '.join(mechanisms)}",
+                    x, y, self.font_small, ACCENT_AMBER, width, surface=surface,
+                )
+            if manifest_row.get("notes"):
+                y = self._draw_wrapped_text(
+                    manifest_row["notes"],
+                    x, y, self.font_small_bold, COLOR_TEXT, width, surface=surface,
+                )
+        return y
 
     def _render_model_view_overlay(self) -> None:
         if not self.show_model_view_overlay:
@@ -1039,35 +1061,145 @@ class MiniGridPlayerUI:
         scrim.fill((10, 10, 14, 225))
         self.screen.blit(scrim, (0, 0))
 
-        title = (
-            f"MODEL VIEW  (observation={session.config.observation}, "
-            f"context_window={session.config.context_window})"
+        # Centered card matching the web model-view overlay.
+        card_w = min(640, WINDOW_WIDTH - 80)
+        card_h = min(520, WINDOW_HEIGHT - 80)
+        card_x = (WINDOW_WIDTH - card_w) // 2
+        card_y = max(40, (WINDOW_HEIGHT - card_h) // 2)
+
+        shadow = pygame.Surface((card_w + 6, card_h + 6), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, COLOR_SHADOW, shadow.get_rect(), border_radius=CARD_RADIUS + 2)
+        self.screen.blit(shadow, (card_x - 1, card_y + 3))
+
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+        pygame.draw.rect(self.screen, COLOR_CARD_BG, card_rect, border_radius=CARD_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_CARD_BORDER, card_rect, 1, border_radius=CARD_RADIUS)
+        stripe = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(
+            stripe,
+            ACCENT_PURPLE,
+            pygame.Rect(0, 0, 5, card_h),
+            border_top_left_radius=CARD_RADIUS,
+            border_bottom_left_radius=CARD_RADIUS,
+        )
+        self.screen.blit(stripe, (card_x, card_y))
+
+        pad = CARD_PAD + 6
+        x = card_x + pad
+        y = card_y + pad
+        inner_w = card_w - 2 * pad
+
+        # Header: title + Esc chip (flush right)
+        title_surf = self.font_title.render("MODEL VIEW", True, COLOR_TEXT_TITLE)
+        self.screen.blit(title_surf, (x, y))
+        esc_probe = self.font_small_bold.render("Esc", True, COLOR_TEXT)
+        esc_w = esc_probe.get_width() + CHIP_PAD_X * 2
+        esc_h = esc_probe.get_height() + 6
+        esc_x = x + inner_w - esc_w
+        self._draw_chip(
+            "Esc",
+            esc_x,
+            y + 2,
+            self.font_small_bold,
+            COLOR_TEXT,
+            (*COLOR_BUTTON_BG, 255),
+        )
+        pygame.draw.rect(
+            self.screen,
+            COLOR_BUTTON_BORDER,
+            pygame.Rect(esc_x, y + 2, esc_w, esc_h),
+            1,
+            border_radius=CHIP_RADIUS,
+        )
+        y += max(title_surf.get_height(), esc_h) + 8
+
+        y = self._draw_wrapped_text(
+            f"observation={session.config.observation} · "
+            f"observation_text_format={session.config.observation_text_format} · "
+            f"context_window={session.config.context_window}",
+            x, y, self.font_small_bold, COLOR_TEXT, inner_w,
+        )
+        y += 8
+        pygame.draw.line(self.screen, COLOR_SEPARATOR, (x, y), (x + inner_w, y), 1)
+        y += 12
+
+        sections = session._build_model_view_sections()
+        if not sections:
+            sections = [("Empty", "No model-view sections yet.")]
+
+        body = pygame.Rect(x, y, inner_w, card_y + card_h - pad - y)
+        self.model_view_scroll = self._draw_model_view_sections(
+            sections, body, self.model_view_scroll
         )
 
-        def header_content(surface: pygame.Surface, x: int, y: int, width: int) -> int:
-            y = self._draw_text(title, x, y, self.font_main, COLOR_TEXT_TITLE, surface=surface)
-            y = self._draw_wrapped_text(
-                "This is exactly the text interface/ would build for the model right now. "
-                "M / Esc to close -- mouse wheel or Page Up/Down to scroll.",
-                x, y, self.font_small, COLOR_TEXT_DIM, width, surface=surface,
+    def _draw_model_view_sections(
+        self,
+        sections: list[tuple[str, str]],
+        rect: pygame.Rect,
+        scroll: int,
+    ) -> int:
+        """Scrollable section labels + inset monospace boxes (web model-view look)."""
+        mono = self.font_mono
+        box_pad_x = 12
+        box_pad_y = 10
+        box_radius = 8
+        section_gap = 14
+        inset_bg = (12, 14, 20)
+        inset_border = (55, 60, 78)
+        text_width = max(40, rect.width - 2 * box_pad_x)
+
+        blocks: list[dict] = []
+        for title, text in sections:
+            lines = self._wrap_lines((text or "").split("\n"), mono, text_width)
+            if not lines:
+                lines = [""]
+            lh = self._line_height(mono)
+            label_h = self.font_label.get_height() + 6
+            box_h = 2 * box_pad_y + lh * len(lines)
+            blocks.append(
+                {
+                    "title": title,
+                    "lines": lines,
+                    "label_h": label_h,
+                    "box_h": box_h,
+                    "height": label_h + box_h + section_gap,
+                }
             )
-            return y
 
-        y = self._render_card(16, 12, WINDOW_WIDTH - 32, header_content, accent_color=ACCENT_BLUE)
+        total_h = sum(b["height"] for b in blocks)
+        max_scroll = max(0, total_h - rect.height)
+        scroll = max(0, min(scroll, max_scroll))
 
-        lines: list[str] = []
-        for section_title, text in session._build_model_view_sections():
-            lines.append(f"== {section_title} ==")
-            lines.extend(text.split("\n"))
-            lines.append("")
+        self.screen.set_clip(rect)
+        y = rect.top - scroll
+        for block in blocks:
+            bottom = y + block["height"]
+            if bottom >= rect.top and y <= rect.bottom:
+                # Section header (uppercase purple, matches web overlay).
+                label_surf = self.font_label.render(
+                    block["title"].upper(), True, ACCENT_PURPLE
+                )
+                self.screen.blit(label_surf, (rect.left, y))
 
-        rect = pygame.Rect(16, y, WINDOW_WIDTH - 32, WINDOW_HEIGHT - y - 12)
-        pygame.draw.rect(self.screen, COLOR_CARD_BG, rect, border_radius=CARD_RADIUS)
-        inner = rect.inflate(-28, -20)
-        wrapped = self._wrap_lines(lines, self.font_small, inner.width)
-        self.model_view_scroll = self._draw_scrollable_text(
-            wrapped, inner, self.font_small, COLOR_TEXT, self.model_view_scroll
-        )
+                box = pygame.Rect(
+                    rect.left,
+                    y + block["label_h"],
+                    rect.width,
+                    block["box_h"],
+                )
+                pygame.draw.rect(self.screen, inset_bg, box, border_radius=box_radius)
+                pygame.draw.rect(
+                    self.screen, inset_border, box, 1, border_radius=box_radius
+                )
+
+                ty = box.top + box_pad_y
+                for line in block["lines"]:
+                    line_surf = mono.render(line, True, COLOR_TEXT_TITLE)
+                    self.screen.blit(line_surf, (box.left + box_pad_x, ty))
+                    ty += self._line_height(mono)
+            y += block["height"]
+        self.screen.set_clip(None)
+        return scroll
 
     # ------------------------------------------------------------------
     # Main loop
@@ -1221,6 +1353,18 @@ class MiniGridPlayerUI:
             return None
         if key == pygame.K_RIGHTBRACKET:
             self._switch_task(1)
+            return None
+
+        if key == pygame.K_v and session.camera_names:
+            session.cycle_camera()
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
+            return None
+
+        if key in (pygame.K_COMMA, pygame.K_PERIOD) and session.camera_names:
+            session.step_tilt(-1 if key == pygame.K_COMMA else 1)
+            self.turn_anim.clear()
+            self.sounds.play("navigate")
             return None
 
         if session.episode_done:

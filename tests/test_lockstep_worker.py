@@ -120,15 +120,22 @@ def _corridor_task(task_id: str, w: int, goal_x: int) -> dict:
     }
 
 
-# (task_id, width, goal_x, marker, forwards-to-solve)
+# (task_id, width, goal_x, marker — the rendered interior size, forwards-to-solve)
 _CORRIDORS = [
-    ("corr_a", 4, 2, "3 by 4", 1),
-    ("corr_b", 5, 3, "3 by 5", 2),
-    ("corr_c", 6, 4, "3 by 6", 3),
+    ("corr_a", 4, 2, "1 by 2", 1),
+    ("corr_b", 5, 3, "1 by 3", 2),
+    ("corr_c", 6, 4, "1 by 4", 3),
 ]
 
 
-def _write_job(tmp_path: Path, group: str = "claude-batch") -> tuple[Path, dict]:
+def _write_job(
+    tmp_path: Path,
+    group: str = "claude-batch",
+    *,
+    experiment_config: dict | None = None,
+    model_extra: dict | None = None,
+    artifacts_name: str = "artifacts",
+) -> tuple[Path, dict]:
     tasks_dir = tmp_path / "tasks_src"
     tasks_dir.mkdir(parents=True, exist_ok=True)
     manifest_rows = []
@@ -157,13 +164,16 @@ def _write_job(tmp_path: Path, group: str = "claude-batch") -> tuple[Path, dict]
                 "model": "stub-batch-model",
                 "group": group,
                 "tasks": sources,
+                **(model_extra or {}),
             }
         }
     }
+    if experiment_config is not None:
+        run_config["experiment_config"] = experiment_config
     cfg_path = tmp_path / "run_config.json"
     cfg_path.write_text(json.dumps(run_config), encoding="utf-8")
 
-    artifacts = tmp_path / "artifacts"
+    artifacts = tmp_path / artifacts_name
     plan = prepare_job(
         run_config_path=cfg_path,
         manifest_path=manifest_path,
@@ -246,7 +256,7 @@ def test_lockstep_worker_failing_unit_does_not_kill_loop(tmp_path):
     artifacts, plan = _write_job(tmp_path)
     # One attempt only, so the exploding unit fails once and is not retried.
     store = CoordinatorStore(artifacts, max_unit_attempts=1)
-    agent = ScriptedBatchAgent(_scripts_for(), explode_markers={"3 by 5"})
+    agent = ScriptedBatchAgent(_scripts_for(), explode_markers={"1 by 3"})
     caps = {"model_group": "claude-batch", "worker_concurrency": 2}
 
     result = run_lockstep_worker(
@@ -261,7 +271,7 @@ def test_lockstep_worker_failing_unit_does_not_kill_loop(tmp_path):
     by_task = {u["unit_id"]: u["task_id"] for u in plan["units"]}
     statuses = {by_task[uid]: st["status"] for uid, st in state["units"].items()}
 
-    # The exploding corridor (corr_b / "3 by 5") failed; the siblings verified.
+    # The exploding corridor (corr_b / "1 by 3") failed; the siblings verified.
     assert statuses["corr_b"] == "failed"
     assert statuses["corr_a"] == "verified"
     assert statuses["corr_c"] == "verified"
@@ -340,3 +350,54 @@ def test_lockstep_worker_resumes_from_checkpoint(tmp_path, monkeypatch):
     assert not (run_dir / "checkpoint.json").exists()
     state = json.loads(state_path(artifacts).read_text(encoding="utf-8"))
     assert Counter(u["status"] for u in state["units"].values())["verified"] == 3
+
+
+# --------------------------------------------------------------------------- #
+# 5. The lockstep worker builds its agent with the experiment's cache flag.
+# --------------------------------------------------------------------------- #
+def _built_cache_flag(tmp_path, **job_kwargs):
+    artifacts, _plan = _write_job(tmp_path, **job_kwargs)
+    agent = ScriptedBatchAgent(_scripts_for())
+    built = []
+
+    def factory(model_key, model_config):
+        built.append(model_config.get("enable_prompt_cache"))
+        return agent, "stub-batch-model"
+
+    run_lockstep_worker(
+        artifacts_root=artifacts,
+        capabilities={"model_group": "claude-batch", "worker_concurrency": 2},
+        max_batches=2,
+        client=CoordinatorStore(artifacts),
+        agent_factory=factory,
+    )
+    return built
+
+
+def test_lockstep_worker_takes_prompt_cache_from_the_experiment(tmp_path):
+    """Units ship the raw model entry, so the worker must derive the Claude/OpenAI
+    enable_prompt_cache from experiment_config.prompt_cache the way the local
+    path does; an explicit per-model value still wins."""
+    assert _built_cache_flag(tmp_path / "on", experiment_config={"prompt_cache": True}) == [True]
+    assert _built_cache_flag(tmp_path / "off") == [False]
+    assert _built_cache_flag(
+        tmp_path / "explicit",
+        experiment_config={"prompt_cache": True},
+        model_extra={"enable_prompt_cache": False},
+    ) == [False]
+
+
+def test_prompt_cache_does_not_move_unit_hashes(tmp_path):
+    """Caching is billing only: turning it on must not re-key already-paid units."""
+    _a, off = _write_job(tmp_path, artifacts_name="off")
+    _b, on = _write_job(
+        tmp_path,
+        experiment_config={"prompt_cache": True},
+        model_extra={"enable_prompt_cache": True},
+        artifacts_name="on",
+    )
+
+    def keys(plan):
+        return sorted((u["task_id"], u["episode_inputs_hash"], u["inputs_hash"]) for u in plan["units"])
+
+    assert keys(on) == keys(off)

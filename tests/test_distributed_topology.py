@@ -183,3 +183,26 @@ def test_api_only_split_config_has_no_gpu_workers():
     assert all(w["kind"] == "api" for w in topo["workers"])
     assert len(topo["workers"]) == 2
     assert set(topo["required_credentials"]) == {"ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"}
+
+
+def test_per_model_worker_role_and_concurrency():
+    """A mixed run sets the API driver per model: lockstep Batch-API groups next
+    to a sync-only OpenAI group; unset leaves the launch-time env default."""
+    cfg = _cfg({
+        "claude": {"provider": "claude", "group": "claude-api",
+                   "worker_role": "lockstep-worker", "worker_concurrency": 15},
+        "openai": {"provider": "openai", "group": "openai-api", "worker_role": "worker"},
+        "kimi": {"provider": "kimi", "group": "kimi-api"},
+    })
+    by_group = {w["model_group"]: w for w in derive_topology(cfg, "mix")["workers"]}
+    assert (by_group["claude-api"]["worker_role"], by_group["claude-api"]["worker_concurrency"]) == (
+        "lockstep-worker", "15")
+    assert (by_group["openai-api"]["worker_role"], by_group["openai-api"]["worker_concurrency"]) == (
+        "worker", "")
+    assert (by_group["kimi-api"]["worker_role"], by_group["kimi-api"]["worker_concurrency"]) == ("", "")
+
+
+def test_unknown_worker_role_fails_closed():
+    cfg = _cfg({"claude": {"provider": "claude", "group": "claude-api", "worker_role": "batch"}})
+    with pytest.raises(ValueError, match="worker_role"):
+        derive_topology(cfg, "bad")

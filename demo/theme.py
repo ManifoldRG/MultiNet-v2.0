@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
-import pygame
-from minigrid.core.constants import COLORS as _MINIGRID_COLORS
+# MiniGrid's COLORS (minigrid.core.constants), inlined so the demo theme does not
+# import minigrid. Must stay identical (tests/test_demo_theme_palette.py): the
+# wall recolour and mechanism colours match MiniGrid's rendered pixels.
+_MINIGRID_COLORS = {
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "purple": (112, 39, 195),
+    "yellow": (255, 255, 0),
+    "grey": (100, 100, 100),
+}
 
 
 APP_TITLE = "MultiNet v2.0 Benchmark"
@@ -98,6 +107,12 @@ MECH_COLOR_RGB["gray"] = MECH_COLOR_RGB["grey"]
 # Extended maze palette (switches/keys) beyond MiniGrid's built-in COLORS.
 MECH_COLOR_RGB["black"] = (40, 42, 50)
 MECH_COLOR_RGB["white"] = (255, 255, 255)
+# Death and freeze must not reuse key red (255, 0, 0) or key blue (0, 0, 255).
+MECH_COLOR_RGB["dark_red"] = (153, 36, 44)
+MECH_COLOR_RGB["light_blue"] = (170, 210, 255)
+# Rotating tiles are orange in the maze, distinct from yellow keys.
+MECH_COLOR_RGB["orange"] = (255, 168, 64)
+MECH_COLOR_RGB["cyan"] = (0, 220, 220)
 
 DIRECTION_NAMES = {
     0: "East (right)",
@@ -112,7 +127,9 @@ MAX_DIFFICULTY_TIER = 6
 FPS = 30
 
 
-def load_font(size: int, bold: bool = False) -> pygame.font.Font:
+def load_font(size: int, bold: bool = False):
+    import pygame
+
     path = pygame.font.match_font("Segoe UI", bold=bold)
     if path:
         return pygame.font.Font(path, size)
@@ -121,6 +138,21 @@ def load_font(size: int, bold: bool = False) -> pygame.font.Font:
 
 def mech_color(name: str) -> tuple:
     return MECH_COLOR_RGB[name.lower()]
+
+
+def recolor_walls(rgb_array):
+    """Swap MiniGrid's flat wall gray for the softer slate (display-only).
+
+    Never mutates the env render buffer used for scoring/models.
+    """
+    import numpy as np
+
+    arr = np.asarray(rgb_array, dtype=np.uint8)
+    mask = np.all(np.abs(arr.astype(np.int16) - WALL_GRAY_SRC) <= 2, axis=-1)
+    if mask.any():
+        arr = arr.copy()
+        arr[mask] = WALL_GRAY_DST
+    return arr
 
 
 def control_accent(token: str | None) -> tuple:

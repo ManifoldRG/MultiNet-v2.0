@@ -36,7 +36,30 @@ def agent_row_col(state: GridState) -> tuple[int, int]:
 
 
 def agent_facing(state: GridState) -> str:
-    return _DIR_TO_FACING.get(state.agent_direction, "NORTH")
+    return direction_name(state.agent_direction)
+
+
+def direction_name(direction: int) -> str:
+    return _DIR_TO_FACING.get(int(direction) % 4, "NORTH")
+
+
+def rotating_dirs(task_spec: TaskSpecification, state: GridState | None) -> tuple[int, ...]:
+    if state is None:
+        return tuple(int(d) for d in task_spec.mechanisms.rotating_initial_directions)
+    return tuple(int(d) for d in state.rotator_dirs)
+
+
+def rotating_pointing(
+    task_spec: TaskSpecification,
+    state: GridState | None,
+    row: int,
+    col: int,
+) -> str | None:
+    dirs = rotating_dirs(task_spec, state)
+    for i, cell in enumerate(task_spec.mechanisms.rotating_tiles):
+        if to_row_col(cell) == (row, col):
+            return direction_name(dirs[i])
+    return None
 
 
 def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:
@@ -44,8 +67,10 @@ def goal_row_col(task_spec: TaskSpecification) -> tuple[int, int]:
 
 
 def maze_rows_cols(task_spec: TaskSpecification) -> tuple[int, int]:
+    # ``dimensions`` counts the border wall both backends ring the grid with, so
+    # the playable interior is two smaller on each axis.
     width, height = task_spec.maze.dimensions
-    return height, width
+    return height - 2, width - 2
 
 
 def wall_cells(task_spec: TaskSpecification) -> set[tuple[int, int]]:
@@ -108,6 +133,22 @@ def switch_at_cell(
     return None
 
 
+def door_at_cell(
+    task_spec: TaskSpecification,
+    state: GridState,
+    row: int,
+    col: int,
+) -> dict[str, str | bool] | None:
+    for door in task_spec.mechanisms.doors:
+        if to_row_col(door.position) == (row, col):
+            return {
+                "id": door.id,
+                "open": door.id in state.open_doors,
+                "requires_key": door.requires_key,
+            }
+    return None
+
+
 def gate_at_cell(
     task_spec: TaskSpecification,
     state: GridState,
@@ -121,6 +162,12 @@ def gate_at_cell(
                 "open": gate.id in state.open_gates,
             }
     return None
+
+
+def compact_ids(task_spec: TaskSpecification) -> tuple[dict[str, str], dict[str, str]]:
+    gates = {g.id: f"g{i}" for i, g in enumerate(task_spec.mechanisms.gates, start=1)}
+    switches = {s.id: f"s{i}" for i, s in enumerate(task_spec.mechanisms.switches, start=1)}
+    return gates, switches
 
 
 def switches_controlling_gate(task_spec: TaskSpecification, gate_id: str) -> list[str]:
@@ -179,6 +226,30 @@ def describe_cell(
                 state=on_off,
                 row=row,
                 col=col,
+            )
+
+    for cell in task_spec.mechanisms.kill_cells:
+        if to_row_col(cell) == (row, col):
+            return observation_templates.CELL_DEATH_PORTAL.format(row=row, col=col)
+
+    for cell in task_spec.mechanisms.frozen_tiles:
+        if to_row_col(cell) == (row, col):
+            return observation_templates.CELL_FROZEN_TILE.format(row=row, col=col)
+
+    pointing = rotating_pointing(task_spec, state, row, col)
+    if pointing:
+        return observation_templates.CELL_ROTATING_TILE.format(
+            direction=pointing, row=row, col=col
+        )
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        ends = (
+            to_row_col(teleporter.position_a),
+            to_row_col(teleporter.position_b),
+        )
+        if (row, col) in ends:
+            return observation_templates.CELL_TELEPORTER.format(
+                color=teleporter.color, row=row, col=col
             )
 
     return observation_templates.CELL_OPEN.format(row=row, col=col)

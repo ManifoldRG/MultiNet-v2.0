@@ -7,6 +7,9 @@ scoring path are never touched -- so benchmark parity is preserved.
 Effects are short and restrained (eval-terminal feedback, not game juice):
 camera wall-bounce, one-shot key flash, door/gate fade, switch
 press, goal pulse before the success overlay.
+
+``plan_effects`` is the shared decision path for desktop ``DemoFx`` and the
+web API serializer.
 """
 
 from __future__ import annotations
@@ -16,6 +19,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+from demo.theme import recolor_walls
 
 try:
     import pygame
@@ -29,6 +34,8 @@ DOOR_FADE_MS = 150
 GATE_FADE_MS = 110
 SWITCH_PRESS_MS = 80
 GOAL_PULSE_MS = 320
+KILL_MS = 480
+WARP_MS = 300
 
 BOUNCE_PX = 2
 
@@ -42,9 +49,369 @@ _CARDINAL_DELTA = {
 }
 
 
+def travel_delta(token: str, prev_state) -> tuple[int, int]:
+    if token in _CARDINAL_DELTA:
+        return _CARDINAL_DELTA[token]
+    if token == "MOVE_FORWARD" and prev_state is not None:
+        return _DIR_DELTA.get(prev_state.agent_direction, (0, 0))
+    return (0, 0)
+
+
+def _dispatch_steps(session, prev_state) -> list[dict]:
+    """Step records the last dispatch appended (oldest first).
+
+    One dispatch can run several primitives (a cardinal move is turns plus
+    MOVE_FORWARD); a dispatch after the episode ended runs none. Records are
+    matched on the env step counter, which every step advances.
+    """
+    if prev_state is None:
+        return []
+    steps: list[dict] = []
+    for rec in reversed(session.transcript):
+        if rec.get("kind") != "step":
+            break
+        before = rec.get("state_before") or {}
+        if before.get("step_count", -1) < prev_state.step_count:
+            break
+        steps.append(rec)
+    steps.reverse()
+    return steps
+
+
+def _xy(value) -> tuple[int, int]:
+    return int(value[0]), int(value[1])
+
+
+def bounce_offset(travel: tuple[int, int], heading: int, *, turns_with_agent: bool) -> tuple[int, int]:
+    """Wall-bounce offset (screen px): recoil opposite the travel direction as
+    drawn. North-up views draw world axes; views that turn with the agent draw
+    its ``heading`` at screen-up, so the travel is first expressed in view axes
+    (forward = screen-up, the agent's right = screen-right)."""
+    dx, dy = travel
+    if turns_with_agent:
+        hx, hy = _DIR_DELTA.get(int(heading), (0, -1))
+        forward = dx * hx + dy * hy
+        right = dx * -hy + dy * hx
+        dx, dy = right, -forward
+    return int(-dx * BOUNCE_PX), int(-dy * BOUNCE_PX)
+
+
+def portal_transition(
+    session, prev_state
+) -> Optional[tuple[str, tuple[int, int], tuple[int, int]]]:
+    """Return ``(kind, src, dest)`` for a kill reset or portal warp, else None.
+
+    Read from the world model's ``mechanic`` tag on this dispatch's step
+    records (``info["mechanic"]`` from the backend step), so turntable rides
+    and moves swallowed by ice animate what actually happened.
+    """
+    for rec in reversed(_dispatch_steps(session, prev_state)):
+        mechanic = rec.get("mechanic") or {}
+        if mechanic.get("kind") == "died":
+            return ("kill", _xy(mechanic["cell_xy"]), _xy(mechanic["start_xy"]))
+        if mechanic.get("kind") == "teleported":
+            return ("warp", _xy(mechanic["from_xy"]), _xy(mechanic["to_xy"]))
+    return None
+
+
+def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
+    color = (event.color or "").lower()
+    for door in mech.doors:
+        if door.requires_key.lower() == color:
+            return (door.position.x, door.position.y)
+    if len(mech.doors) == 1:
+        d = mech.doors[0]
+        return (d.position.x, d.position.y)
+    return None
+
+
+def _first_changed_cell(specs, prev_ids, new_ids) -> Optional[tuple[int, int]]:
+    changed = set(prev_ids) ^ set(new_ids)
+    for spec in specs:
+        if spec.id in changed:
+            return (spec.position.x, spec.position.y)
+    return None
+
+
+def plan_effects(session, token: str, prev_state, events_before: int) -> list[dict]:
+    """Decide display-only effects for one dispatch (no RGB / tile payloads).
+
+    Each item has ``kind`` plus geometry/timing fields. Callers attach platform
+    tiles (web PNG / pygame Surface) as needed.
+    """
+    plan: list[dict] = []
+
+    last = next(
+        (rec for rec in reversed(session.transcript) if rec.get("kind") == "step"),
+        None,
+    )
+    event_type = last.get("event_type") if last else None
+
+    hit = portal_transition(session, prev_state)
+    if hit is not None:
+        kind, src, dst = hit
+        plan.append(
+            {
+                "kind": kind,
+                "cell": [int(src[0]), int(src[1])],
+                "dest": [int(dst[0]), int(dst[1])],
+                "durationMs": KILL_MS if kind == "kill" else WARP_MS,
+            }
+        )
+
+    travel = travel_delta(token, prev_state)
+    if hit is None and event_type == "BLOCKED" and travel != (0, 0):
+        # The frame shows the heading after the step (a cardinal move turns first).
+        shown = session.state if session.state is not None else prev_state
+        dx, dy = bounce_offset(
+            travel,
+            shown.agent_direction,
+            turns_with_agent=bool(getattr(session.backend, "view_turns_with_agent", False)),
+        )
+        plan.append({"kind": "bounce", "dx": dx, "dy": dy, "durationMs": BOUNCE_MS})
+
+    mech = session.task_spec.mechanisms if session.task_spec is not None else None
+    new_state = session.state
+
+    for event in session.event_log[events_before:]:
+        if event.icon == "key" and event.prefix.startswith("Picked") and prev_state is not None:
+            plan.append(
+                {
+                    "kind": "flash",
+                    "cell": [
+                        int(prev_state.agent_position[0]),
+                        int(prev_state.agent_position[1]),
+                    ],
+                    "durationMs": KEY_FLASH_MS,
+                }
+            )
+        elif event.icon == "door" and mech is not None:
+            cell = _door_cell_for_event(mech, event)
+            if cell is not None:
+                plan.append(
+                    {
+                        "kind": "fade",
+                        "cell": [int(cell[0]), int(cell[1])],
+                        "durationMs": DOOR_FADE_MS,
+                    }
+                )
+        elif (
+            event.icon == "gate"
+            and mech is not None
+            and prev_state is not None
+            and new_state is not None
+        ):
+            cell = _first_changed_cell(mech.gates, prev_state.open_gates, new_state.open_gates)
+            if cell is not None:
+                plan.append(
+                    {
+                        "kind": "fade",
+                        "cell": [int(cell[0]), int(cell[1])],
+                        "durationMs": GATE_FADE_MS,
+                    }
+                )
+        elif (
+            event.icon == "switch"
+            and mech is not None
+            and prev_state is not None
+            and new_state is not None
+        ):
+            cell = _first_changed_cell(
+                mech.switches, prev_state.active_switches, new_state.active_switches
+            )
+            if cell is not None:
+                plan.append(
+                    {
+                        "kind": "press",
+                        "cell": [int(cell[0]), int(cell[1])],
+                        "durationMs": SWITCH_PRESS_MS,
+                    }
+                )
+
+    if session.episode_done and session.episode_success and new_state is not None:
+        pos = new_state.agent_position
+        plan.append(
+            {
+                "kind": "pulse",
+                "cell": [int(pos[0]), int(pos[1])],
+                "durationMs": GOAL_PULSE_MS,
+            }
+        )
+
+    if not session.backend.frame_is_grid_aligned:
+        # Per-cell effects slice the frame into equal tiles -- meaningless on a
+        # perspective (3D) frame. Keep only the camera bounce.
+        plan = [item for item in plan if item["kind"] == "bounce"]
+    return plan
+
+
+def _grid_size(session) -> tuple[int, int]:
+    width, height = session.task_spec.maze.dimensions
+    return int(width), int(height)
+
+
+def _tile_image_b64(
+    rgb: Optional[np.ndarray],
+    cell: tuple[int, int],
+    grid_w: int,
+    grid_h: int,
+) -> Optional[str]:
+    """PNG data-URL of one grid cell (caller should wall-recolor ``rgb``)."""
+    if rgb is None:
+        return None
+    cx, cy = cell
+    if not (0 <= cx < grid_w and 0 <= cy < grid_h):
+        return None
+    arr = np.asarray(rgb, dtype=np.uint8)
+    h, w, _ = arr.shape
+    tile_h = h // grid_h
+    tile_w = w // grid_w
+    if tile_h < 1 or tile_w < 1:
+        return None
+    tile = np.ascontiguousarray(
+        arr[cy * tile_h : (cy + 1) * tile_h, cx * tile_w : (cx + 1) * tile_w, :3]
+    )
+    if tile.size == 0:
+        return None
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.fromarray(tile, mode="RGB").save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _cell_effect(
+    kind: str,
+    cell: list[int],
+    grid_w: int,
+    grid_h: int,
+    duration_ms: int,
+    *,
+    tile_image: Optional[str] = None,
+) -> dict:
+    out = {
+        "kind": kind,
+        "cell": cell,
+        "gridW": grid_w,
+        "gridH": grid_h,
+        "durationMs": duration_ms,
+    }
+    if tile_image:
+        out["tileImage"] = tile_image
+    return out
+
+
+def effects_for_dispatch(
+    session,
+    token: str,
+    prev_state,
+    events_before: int,
+    *,
+    prev_rgb: Optional[np.ndarray] = None,
+) -> list[dict]:
+    """Serialize ``plan_effects`` for the web player (adds tile PNGs)."""
+    plan = plan_effects(session, token, prev_state, events_before)
+    grid_w, grid_h = _grid_size(session)
+    grid_aligned = session.backend.frame_is_grid_aligned
+    prev_frame = recolor_walls(prev_rgb) if (prev_rgb is not None and grid_aligned) else prev_rgb
+    post_frame = None
+    effects: list[dict] = []
+
+    for item in plan:
+        kind = item["kind"]
+        if kind == "bounce":
+            effects.append(item)
+            continue
+
+        cell = item["cell"]
+        duration = item["durationMs"]
+
+        if kind in ("pulse", "kill", "warp"):
+            item_out = {
+                "kind": kind,
+                "cell": cell,
+                "gridW": grid_w,
+                "gridH": grid_h,
+                "durationMs": duration,
+            }
+            if "dest" in item:
+                item_out["dest"] = item["dest"]
+            effects.append(item_out)
+            continue
+
+        if kind == "press":
+            if post_frame is None:
+                post_frame = recolor_walls(
+                    np.asarray(session.backend.render(), dtype=np.uint8)
+                )
+            tile = _tile_image_b64(post_frame, tuple(cell), grid_w, grid_h)
+            effects.append(
+                _cell_effect("press", cell, grid_w, grid_h, duration, tile_image=tile)
+            )
+            continue
+
+        # flash / fade use the pre-step tile
+        tile = _tile_image_b64(prev_frame, tuple(cell), grid_w, grid_h)
+        if tile is not None:
+            effects.append(
+                _cell_effect(kind, cell, grid_w, grid_h, duration, tile_image=tile)
+            )
+
+    return effects
+
+
 def _sin_pulse(t: float) -> float:
     """0→1→0 over t in [0, 1]."""
     return math.sin(max(0.0, min(1.0, t)) * math.pi)
+
+
+TURN_ANIM_MS = 250
+
+
+@dataclass
+class TurnAnimation:
+    """Timing for the 3D demo's turn animation: while it runs, the UI draws
+    ``backend.render_turn(direction, fraction)`` instead of the final frame.
+    Display-only: in-between frames are never recorded or sent to a model."""
+
+    _from_direction: Optional[int] = None
+    _start_ms: int = 0
+
+    def maybe_start(self, backend, prev_state, new_state, *, now_ms: int) -> bool:
+        """Start when a 3D view that turns with the agent sees a new heading."""
+        if not getattr(backend, "view_turns_with_agent", False):
+            return False
+        if prev_state is None or new_state is None:
+            return False
+        if int(prev_state.agent_direction) == int(new_state.agent_direction):
+            return False
+        self._from_direction = int(prev_state.agent_direction)
+        self._start_ms = now_ms
+        return True
+
+    def frame_request(self, now_ms: int) -> Optional[tuple[int, float]]:
+        """(from_direction, fraction) while running, else None."""
+        if self._from_direction is None:
+            return None
+        elapsed = now_ms - self._start_ms
+        if elapsed >= TURN_ANIM_MS:
+            self._from_direction = None
+            return None
+        return self._from_direction, max(0, elapsed) / TURN_ANIM_MS
+
+    def clear(self) -> None:
+        self._from_direction = None
+
+
+def _add_glow(out: "pygame.Surface", rect: "pygame.Rect", rgb: tuple[int, int, int], alpha: int) -> None:
+    if alpha <= 0 or pygame is None:
+        return
+    glow = pygame.Surface(rect.size, pygame.SRCALPHA)
+    glow.fill((*rgb, min(255, alpha)))
+    out.blit(glow, rect.topleft, special_flags=pygame.BLEND_RGBA_ADD)
 
 
 @dataclass
@@ -54,6 +421,7 @@ class _Clip:
     duration_ms: int
     offset: tuple[int, int] = (0, 0)
     cell: Optional[tuple[int, int]] = None
+    dest: Optional[tuple[int, int]] = None
     tile_surf: Optional["pygame.Surface"] = None
 
 
@@ -83,86 +451,57 @@ class DemoFx:
         self,
         *,
         now_ms: int,
+        session,
         token: str,
-        event_type: Optional[str],
         events_before: int,
-        event_log: list,
         prev_state,
-        new_state,
         prev_rgb: Optional[np.ndarray],
-        task_spec,
-        grid_w: int,
-        grid_h: int,
         display_size: int,
-        episode_success: bool = False,
     ) -> None:
         if not self.enabled or pygame is None:
+            return
+        if not session.backend.is_configured or prev_state is None:
             return
 
         # Rapid key-repeat shouldn't stack camera offsets.
         self._clips = [c for c in self._clips if c.kind != "bounce"]
 
-        travel = self._travel_delta(token, prev_state)
-        new_events = event_log[events_before:]
-        mech = task_spec.mechanisms if task_spec is not None else None
+        grid_w, grid_h = _grid_size(session)
+        for item in plan_effects(session, token, prev_state, events_before):
+            kind = item["kind"]
+            duration = item["durationMs"]
 
-        if episode_success and new_state is not None:
-            # Only arm the delayed SUCCESS dialog when we can actually show a
-            # goal pulse on the grid; text-only mode skips straight to overlay.
-            pos = new_state.agent_position
-            self._clips.append(
-                _Clip(
-                    kind="pulse",
-                    start_ms=now_ms,
-                    duration_ms=GOAL_PULSE_MS,
-                    cell=(int(pos[0]), int(pos[1])),
-                )
-            )
-            if prev_rgb is not None:
-                self._success_pulse_pending = True
-
-        for event in new_events:
-            if event.icon == "key" and event.prefix.startswith("Picked") and prev_state is not None:
-                # Same-cell pickup: key was under the agent.
-                cell = (int(prev_state.agent_position[0]), int(prev_state.agent_position[1]))
-                tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
-                if tile is not None:
-                    self._clips.append(
-                        _Clip("flash", now_ms, KEY_FLASH_MS, cell=cell, tile_surf=tile)
+            if kind == "bounce":
+                self._clips.append(
+                    _Clip(
+                        "bounce",
+                        now_ms,
+                        duration,
+                        offset=(item["dx"], item["dy"]),
                     )
-
-            elif event.icon == "door" and mech is not None:
-                cell = self._door_cell_for_event(mech, event)
-                tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
-                if cell and tile is not None:
-                    self._clips.append(
-                        _Clip("fade", now_ms, DOOR_FADE_MS, cell=cell, tile_surf=tile)
-                    )
-
-            elif event.icon == "gate" and mech is not None and prev_state is not None and new_state is not None:
-                cell = self._first_changed_cell(
-                    mech.gates, prev_state.open_gates, new_state.open_gates
                 )
-                tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
-                if cell and tile is not None:
-                    self._clips.append(
-                        _Clip("fade", now_ms, GATE_FADE_MS, cell=cell, tile_surf=tile)
-                    )
+                continue
 
-            elif event.icon == "switch" and mech is not None and prev_state is not None and new_state is not None:
-                cell = self._first_changed_cell(
-                    mech.switches, prev_state.active_switches, new_state.active_switches
+            cell = (int(item["cell"][0]), int(item["cell"][1]))
+
+            if kind in ("pulse", "kill", "warp"):
+                dest = tuple(item["dest"]) if "dest" in item else None
+                self._clips.append(
+                    _Clip(kind, now_ms, duration, cell=cell, dest=dest)
                 )
-                if cell is not None:
-                    self._clips.append(_Clip("press", now_ms, SWITCH_PRESS_MS, cell=cell))
+                if kind == "pulse" and prev_rgb is not None:
+                    self._success_pulse_pending = True
+                continue
 
-        # Wall bump only -- successful moves stay visually still (a per-step
-        # camera nudge read as screen shake under key-repeat).
-        if event_type == "BLOCKED" and travel != (0, 0):
-            dx, dy = travel
-            self._clips.append(
-                _Clip("bounce", now_ms, BOUNCE_MS, offset=(-dx * BOUNCE_PX, -dy * BOUNCE_PX))
-            )
+            if kind == "press":
+                self._clips.append(_Clip("press", now_ms, duration, cell=cell))
+                continue
+
+            tile = self._extract_tile(prev_rgb, cell, grid_w, grid_h, display_size)
+            if tile is not None:
+                self._clips.append(
+                    _Clip(kind, now_ms, duration, cell=cell, tile_surf=tile)
+                )
 
     def apply(
         self,
@@ -241,49 +580,65 @@ class DemoFx:
                 glow.fill((90, 220, 140, int(110 * _sin_pulse(t))))
                 out.blit(glow, dest.topleft, special_flags=pygame.BLEND_RGBA_ADD)
 
+            elif clip.kind == "kill":
+                veil_a = int(90 * max(0.0, 1.0 - t / 0.45)) if t < 0.45 else 0
+                if veil_a:
+                    veil = pygame.Surface(out.get_size(), pygame.SRCALPHA)
+                    veil.fill((160, 16, 16, veil_a))
+                    out.blit(veil, (0, 0))
+                _add_glow(out, dest, (220, 40, 40), int(200 * _sin_pulse(min(1.0, t / 0.5))))
+                if t < 0.55:
+                    mark = pygame.Surface(dest.size, pygame.SRCALPHA)
+                    pad = max(3, dest.width // 5)
+                    alpha = int(230 * (1.0 - t / 0.55))
+                    pygame.draw.line(
+                        mark, (255, 90, 90, alpha),
+                        (pad, pad), (dest.width - pad, dest.height - pad), 3,
+                    )
+                    pygame.draw.line(
+                        mark, (255, 90, 90, alpha),
+                        (dest.width - pad, pad), (pad, dest.height - pad), 3,
+                    )
+                    out.blit(mark, dest.topleft)
+                if clip.dest is not None and t > 0.35:
+                    rx, ry = clip.dest
+                    spawn = pygame.Rect(
+                        int(rx * cell_w), int(ry * cell_h),
+                        max(1, int(cell_w)), max(1, int(cell_h)),
+                    )
+                    _add_glow(out, spawn, (255, 210, 180), int(160 * _sin_pulse((t - 0.35) / 0.65)))
+
+            elif clip.kind == "warp":
+                _add_glow(out, dest, (170, 120, 255), int(170 * _sin_pulse(min(1.0, t / 0.65))))
+                if clip.dest is not None:
+                    rx, ry = clip.dest
+                    land = pygame.Rect(
+                        int(rx * cell_w), int(ry * cell_h),
+                        max(1, int(cell_w)), max(1, int(cell_h)),
+                    )
+                    _add_glow(
+                        out, land, (80, 210, 255),
+                        int(170 * _sin_pulse(max(0.0, (t - 0.2) / 0.8))),
+                    )
+                    if t < 0.85:
+                        beam = pygame.Surface(out.get_size(), pygame.SRCALPHA)
+                        pygame.draw.line(
+                            beam, (160, 200, 255, int(180 * (1.0 - t))),
+                            dest.center, land.center, 2,
+                        )
+                        out.blit(beam, (0, 0))
+
         return out, offset
-
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _travel_delta(token: str, prev_state) -> tuple[int, int]:
-        if token in _CARDINAL_DELTA:
-            return _CARDINAL_DELTA[token]
-        if token == "MOVE_FORWARD" and prev_state is not None:
-            return _DIR_DELTA.get(prev_state.agent_direction, (0, 0))
-        return (0, 0)
-
-    @staticmethod
-    def _door_cell_for_event(mech, event) -> Optional[tuple[int, int]]:
-        # Progress text is "red door" etc. -- match requires_key color.
-        color = (event.color or "").lower()
-        for door in mech.doors:
-            if door.requires_key.lower() == color:
-                return (door.position.x, door.position.y)
-        if len(mech.doors) == 1:
-            d = mech.doors[0]
-            return (d.position.x, d.position.y)
-        return None
-
-    @staticmethod
-    def _first_changed_cell(specs, prev_ids, new_ids) -> Optional[tuple[int, int]]:
-        changed = set(prev_ids) ^ set(new_ids)
-        for spec in specs:
-            if spec.id in changed:
-                return (spec.position.x, spec.position.y)
-        return None
 
     @staticmethod
     def _extract_tile(
         prev_rgb: Optional[np.ndarray],
-        cell: Optional[tuple[int, int]],
+        cell: tuple[int, int],
         grid_w: int,
         grid_h: int,
         display_size: int,
     ) -> Optional["pygame.Surface"]:
-        if prev_rgb is None or cell is None or pygame is None:
+        if prev_rgb is None or pygame is None:
             return None
         cx, cy = cell
         if not (0 <= cx < grid_w and 0 <= cy < grid_h):

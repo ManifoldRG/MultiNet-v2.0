@@ -1,5 +1,5 @@
 {
-  "description": "Smoke-eval manifest (3 mazes) for distributed-orchestration validation only: 2 Qwen runners + 1 Kimi runner with coordinator work-stealing. Not for measurement. See docs/conditional_experiments_launch_checklist.md §6.",
+  "description": "Smoke-eval manifest (3 mazes) for distributed-orchestration validation only: 2 Qwen runners + 1 Kimi runner with coordinator work-stealing. Not for measurement.",
   "selection": {
     "policy": "Three small validation_10 mazes spanning navigation, key-door, and switch-gate so the smoke exercises the scorer path without a heavy solver/runtime cost.",
     "counts": {"navigation": 1, "key_door": 1, "switch_gate": 1}

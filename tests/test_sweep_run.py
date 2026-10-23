@@ -16,6 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 def bash(snippet: str, env: dict | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
+    e["DIFFICULTY_MAX"] = "3000"  # required, no default
     if env:
         e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True,
@@ -239,7 +240,7 @@ def test_publish_excludes_png_and_runs_git_only_in_results_repo(tmp_path):
 
 def test_results_repo_is_gitignored():
     # The results repo is a SEPARATE git repo; the code repo must never track it.
-    assert bash("git check-ignore Multinet-v2-results").returncode == 0
+    assert bash("git check-ignore Multinet-v2-results/").returncode == 0
 
 
 def test_status_renders_table(tmp_path):

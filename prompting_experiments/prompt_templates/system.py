@@ -4,7 +4,7 @@ TASK_PREFIX = "Task: You are the triangular agent trying to navigate this maze. 
 
 MECHANISM_LIST = (
     "The environment may contain:\n"
-    "Keys, doors, switches, and gates."
+    "Keys, doors, switches, gates, death portals, frozen tiles, rotating tiles, and teleporters."
 )
 
 MECHANISM_RULES = (
@@ -17,6 +17,10 @@ MECHANISM_RULES = (
     "  - Switches: TOGGLE while standing on them. "
     "    Linked gates are open if its linked switch is on, and closed if it is off.\n"
     "  - Gates: CLOSED gates block movement; OPEN gates do not. TOGGLE linked switches to control them.\n"
+    "  - Death portals: stepping on one returns you to the start and resets your progress.\n"
+    "  - Frozen tiles: stepping on one freezes you. While frozen, actions do nothing until the freeze ends.\n"
+    "  - Rotating tiles: every action turns their arrows. While you stand on one, MOVE_FORWARD carries you one cell in the arrow's current direction. If that cell is blocked, you stay on the tile.\n"
+    "  - Teleporters: stepping onto one end lands you on the other. A one-way teleporter only sends you from its first end to its second. You must leave the arrival end before using it again.\n"
     "  - Closed doors you lack a key for block movement like walls until resolved.\n"
     "  - Use DONE only when you are standing on the goal cell."
 )
@@ -29,6 +33,31 @@ ONE_SHOT_EXAMPLE = (
 
 VALID_ACTIONS_TEMPLATE = "Valid actions: {actions_hint}."
 
+# One line appended after the Valid actions line of the minimal prompt
+# (prompting="minimal_interaction_rules_stand"). In the R1-frontier harness
+# probes it turned the adjacent-cell PICKUP/TOGGLE failures into optimal solves.
+# Nothing else in the prompt changes.
+INTERACTION_RULES_STAND_HINT = (
+    "There are two interaction actions, PICKUP and TOGGLE. Keys must be picked up. "
+    "Doors and switches must be toggled. A key door will not open if you do not have a "
+    "matching color key in your inventory. A switch door will open when you TOGGLE its switch. "
+    "You must stand on a key/switch to act on it."
+)
+
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
 
 # `INITIAL_MAZE_SECTION` is used when the observation includes text.
+
+# 3D task prefixes: TASK_PREFIX's "triangular agent ... pointy end" only fits
+# the 2D top-down frame. Standard/verbose (and text_initial_maze) use these
+# for 3D runs, by camera family; MIN_TASK_PREFIX is already camera-neutral.
+# NOTE: the 3D visuals are about to be redesigned; like the start-map texts in
+# user.py, these name how the agent and goal look.
+TASK_PREFIX_3D_THIRD_PERSON = (  # top_down
+    "Task: You are the red wedge-shaped agent trying to navigate this maze. "
+    "The wedge points the way you face. Move to the green goal tile."
+)
+TASK_PREFIX_3D_FIRST_PERSON = (  # first_person
+    "Task: You are navigating this maze and see it through your own eyes; "
+    "the view looks the way you face. Move to the green goal tile."
+)

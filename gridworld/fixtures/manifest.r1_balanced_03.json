@@ -1,7 +1,7 @@
 {
   "description": "R1 balanced: general-purpose 50-maze panel.",
   "selection": {
-    "source_set": "analysis/candidate_mazes/sets/balanced_03",
+    "source_set": "balanced_03",
     "candidate": "balanced_03",
     "maze_count": 50,
     "order": "ascending BFS optimal_steps (rank)",

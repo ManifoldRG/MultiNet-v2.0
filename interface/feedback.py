@@ -2,20 +2,117 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
 from interface.coords import (
     agent_facing,
     agent_row_col,
+    compact_ids,
     forward_cell,
     gate_at_cell,
+    direction_name,
     goal_row_col,
-    key_at_cell,
     switch_at_cell,
     switches_controlling_gate,
+    door_at_cell,
+    to_row_col,
 )
 from prompting_experiments.prompt_templates import feedback as feedback_templates
+
+# Mechanic-blind event types that count as failures; ``is_failed_step`` adds the
+# death and freeze exceptions from the world-model label.
+FAILURE_EVENT_TYPES = frozenset({"BLOCKED", "WRONG_DONE", "INVALID"})
+
+
+def is_failed_step(
+    action: str,
+    prev: GridState,
+    curr: GridState,
+    reward: float,
+    terminated: bool,
+    task_spec: TaskSpecification,
+    mechanic: dict | None = None,
+) -> bool:
+    """Whether a step counts as a failure: it bumps ``consecutive_failures`` and
+    clears the queued actions, so the model is asked again.
+
+    Mechanic-blind (as on main), with two exceptions from the world-model label:
+    a death always fails, because the queued plan started from a cell the maze
+    just reset away from; while frozen, only a DONE fails (a wrong DONE), since
+    a swallowed move is the ice's doing, not the model's.
+    """
+    kind = (mechanic or {}).get("kind")
+    if kind == "died":
+        return True
+    if kind == "frozen":
+        return action == "DONE"
+    event_type, _ = infer_step_outcome(action, prev, curr, reward, terminated, task_spec)
+    return event_type in FAILURE_EVENT_TYPES
+
+
+def _xy_row_col(xy) -> tuple[int, int]:
+    # Mechanic positions are (x, y); a JSON round trip turns them into lists.
+    return to_row_col((int(xy[0]), int(xy[1])))
+
+
+def _mechanic_outcome(
+    action: str,
+    base_type: str,
+    level: Literal["minimal", "standard", "causal"],
+    mechanic: dict,
+) -> tuple[str, str, str] | None:
+    """(event_type, message, minimal text) for a step the world model labelled, else None.
+
+    ``base_type`` is the mechanic-blind event type of the same step.
+    """
+    if base_type == "DONE":
+        # Reaching the goal outranks the tile that delivered you there.
+        return None
+    kind = mechanic.get("kind")
+    if kind == "frozen":
+        if action == "DONE":
+            # Calling DONE while frozen is still a wrong DONE.
+            return None
+        remaining = int(mechanic["remaining"])
+        if remaining <= 0:
+            return "FROZEN", feedback_templates.FROZEN_ENDED, "FROZEN"
+        if level == "causal":
+            return "FROZEN", feedback_templates.FROZEN_STILL_CAUSAL.format(n=remaining), "FROZEN"
+        return "FROZEN", feedback_templates.FROZEN_STILL, "FROZEN"
+    if kind == "froze":
+        if level == "causal":
+            message = feedback_templates.FROZEN_LANDED_CAUSAL.format(n=int(mechanic["steps"]))
+        else:
+            message = feedback_templates.FROZEN_LANDED
+        return "FROZEN", message, "FROZEN"
+    if kind == "died":
+        return "DEATH RESET", feedback_templates.DEATH_PORTAL_RESET, "DEATH RESET"
+    if kind == "teleported":
+        row, col = _xy_row_col(mechanic["to_xy"])
+        return (
+            "TELEPORTED",
+            feedback_templates.TELEPORTED.format(row=row, col=col),
+            f"TELEPORTED ({row},{col})",
+        )
+    if kind == "carried":
+        direction = direction_name(int(mechanic["direction"]))
+        return (
+            "CARRIED",
+            feedback_templates.ROTATING_CARRIED.format(direction=direction),
+            f"CARRIED {direction}",
+        )
+    if kind == "rotating":
+        direction = direction_name(int(mechanic["pointing"]))
+        template = (
+            feedback_templates.ROTATING_STAYED
+            if mechanic["stayed"]
+            else feedback_templates.ROTATING_LANDED
+        )
+        return "ROTATING", template.format(direction=direction), f"ROTATING {direction}"
+    return None
 
 
 def infer_step_outcome(
@@ -25,6 +122,7 @@ def infer_step_outcome(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    level: Literal["minimal", "standard", "causal"] = "minimal",
 ) -> tuple[str, str]:
     goal = goal_row_col(task_spec)
     prev_pos = agent_row_col(prev)
@@ -39,7 +137,6 @@ def infer_step_outcome(
             return "OPENED", feedback_templates.OPENED_AND_MOVED.format(
                 color=color,
                 door_id=door_id,
-                position=curr_pos,
             )
         return "OPENED", feedback_templates.OPENED_DOOR.format(color=color, door_id=door_id)
 
@@ -51,39 +148,44 @@ def infer_step_outcome(
     if action == "MOVE_FORWARD":
         if prev_pos == curr_pos:
             fwd = forward_cell(prev)
-            key_color = key_at_cell(task_spec, prev, fwd[0], fwd[1])
-            if key_color:
-                return (
-                    "BLOCKED",
-                    feedback_templates.MOVE_BLOCKED_BY_KEY.format(
-                        key_color=key_color,
-                        position=fwd,
-                    ),
-                )
             gate = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
             if gate and not gate["open"]:
-                controllers = switches_controlling_gate(task_spec, str(gate["id"]))
-                if controllers:
-                    switch_list = ", ".join(controllers)
+                gates, switches = compact_ids(task_spec)
+                gate_id = gates[str(gate["id"])]
+                controllers = [
+                    switches[sid]
+                    for sid in switches_controlling_gate(task_spec, str(gate["id"]))
+                ]
+                if controllers and level == "causal":
                     return (
                         "BLOCKED",
                         feedback_templates.MOVE_BLOCKED_BY_GATE_WITH_SWITCHES.format(
-                            gate_id=gate["id"],
-                            position=fwd,
-                            switches=switch_list,
+                            gate_id=gate_id,
+                            switches=", ".join(controllers),
                         ),
                     )
                 return (
                     "BLOCKED",
                     feedback_templates.MOVE_BLOCKED_BY_GATE.format(
-                        gate_id=gate["id"],
-                        position=fwd,
+                        gate_id=gate_id,
                     ),
                 )
+            door = door_at_cell(task_spec, prev, fwd[0], fwd[1])
+            if door and not door["open"]:
+                color = door["requires_key"]
+                msg = feedback_templates.MOVE_BLOCKED_BY_DOOR.format(color=color)
+                if level == "causal":
+                    hint = (
+                        feedback_templates.DOOR_USE_TOGGLE
+                        if prev.agent_carrying == color
+                        else feedback_templates.DOOR_NEEDS_KEY
+                    )
+                    msg += " " + hint.format(color=color)
+                return "BLOCKED", msg
             return "BLOCKED", feedback_templates.MOVE_BLOCKED_GENERIC
         if terminated and reward > 0 and curr_pos == goal:
-            return "DONE", feedback_templates.REACHED_GOAL.format(goal=goal)
-        return "MOVED", feedback_templates.MOVED_TO.format(position=curr_pos)
+            return "DONE", feedback_templates.REACHED_GOAL
+        return "MOVED", feedback_templates.MOVED_TO
 
     if action == "PICKUP":
         if (
@@ -98,11 +200,15 @@ def infer_step_outcome(
         if prev.agent_carrying and not curr.agent_carrying:
             return "DROP", feedback_templates.DROPPED_KEY.format(
                 key_color=prev.agent_carrying,
-                position=curr_pos,
             )
         if not prev.agent_carrying:
             return "NOTHING", feedback_templates.NOTHING_TO_DROP
-        return "NOTHING", feedback_templates.DROP_BLOCKED
+        tmpl = (
+            feedback_templates.DROP_BLOCKED
+            if level == "causal"
+            else feedback_templates.DROP_BLOCKED_STANDARD
+        )
+        return "NOTHING", tmpl
 
     if action == "TOGGLE":
         if (
@@ -114,36 +220,39 @@ def infer_step_outcome(
         switch_ahead = switch_at_cell(task_spec, fwd[0], fwd[1])
         switch_here = switch_at_cell(task_spec, prev_pos[0], prev_pos[1])
         gate_ahead = gate_at_cell(task_spec, prev, fwd[0], fwd[1])
+        door_ahead = door_at_cell(task_spec, prev, fwd[0], fwd[1])
         if switch_ahead and not switch_here:
+            if level != "causal":
+                return "NOTHING", feedback_templates.TOGGLE_NO_EFFECT_STANDARD
             if switch_ahead["switch_type"] == "hold":
                 return (
                     "NOTHING",
-                    feedback_templates.TOGGLE_HOLD_SWITCH_HINT.format(position=fwd),
+                    feedback_templates.TOGGLE_HOLD_SWITCH_HINT,
                 )
             return (
                 "NOTHING",
-                feedback_templates.TOGGLE_SWITCH_HINT.format(position=fwd),
+                feedback_templates.TOGGLE_SWITCH_HINT,
             )
         if gate_ahead and not gate_ahead["open"]:
-            controllers = switches_controlling_gate(task_spec, str(gate_ahead["id"]))
-            if controllers:
-                switch_list = ", ".join(controllers)
-                return (
-                    "NOTHING",
-                    feedback_templates.GATE_TOGGLE_WITH_SWITCHES.format(
-                        switches=switch_list,
-                    ),
-                )
-            return "NOTHING", feedback_templates.GATE_TOGGLE_GENERIC
+            msg = feedback_templates.GATE_TOGGLE_STANDARD
+            if level == "causal":
+                msg += " " + feedback_templates.GATE_TOGGLE_HINT
+            return "NOTHING", msg
+        if door_ahead and not door_ahead["open"]:
+            msg = feedback_templates.DOOR_TOGGLE_STANDARD
+            if level == "causal":
+                msg += " " + feedback_templates.DOOR_TOGGLE_HINT
+            return "NOTHING", msg
         return (
             "NOTHING",
-            feedback_templates.TOGGLE_NO_EFFECT,
+            feedback_templates.TOGGLE_NO_EFFECT if level == "causal"
+            else feedback_templates.TOGGLE_NO_EFFECT_STANDARD,
         )
 
     if action == "DONE":
         if terminated and reward > 0 and curr_pos == goal:
-            return "DONE", feedback_templates.TASK_COMPLETE.format(goal=goal)
-        return "WRONG_DONE", feedback_templates.WRONG_DONE.format(goal=goal)
+            return "DONE", feedback_templates.TASK_COMPLETE
+        return "WRONG_DONE", feedback_templates.WRONG_DONE
 
     return "INVALID", feedback_templates.UNKNOWN_ACTION.format(action=action)
 
@@ -155,13 +264,21 @@ def format_step_feedback(
     reward: float,
     terminated: bool,
     task_spec: TaskSpecification,
+    level: Literal["minimal", "standard", "causal"] = "minimal",
+    mechanic: dict | None = None,
 ) -> tuple[str, str]:
     event_type, event_message = infer_step_outcome(
-        action, prev, curr, reward, terminated, task_spec
+        action, prev, curr, reward, terminated, task_spec, level=level
     )
-    prev_pos = agent_row_col(prev)
+    minimal_text = event_type
+    if mechanic is not None:
+        relabelled = _mechanic_outcome(action, event_type, level, mechanic)
+        if relabelled is not None:
+            event_type, event_message, minimal_text = relabelled
+    if level == "minimal":
+        return minimal_text, event_type
     if event_type == "BLOCKED":
-        return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
+        return feedback_templates.BLOCKED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "TURNED":
         return feedback_templates.TURNED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "MOVED":
@@ -173,15 +290,15 @@ def format_step_feedback(
     if event_type == "DROP":
         return feedback_templates.DROP_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "NOTHING":
-        return feedback_templates.NOTHING_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
+        return feedback_templates.NOTHING_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "OPENED":
         return feedback_templates.OPENED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "TOGGLED":
         return feedback_templates.TOGGLED_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "WRONG_DONE":
-        return feedback_templates.WRONG_DONE_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
+        return feedback_templates.WRONG_DONE_FEEDBACK.format(action=action, message=event_message), event_type
     if event_type == "INVALID":
-        return feedback_templates.INVALID_FEEDBACK.format(action=action, message=event_message, position=prev_pos), event_type
+        return feedback_templates.INVALID_FEEDBACK.format(action=action, message=event_message), event_type
     return feedback_templates.DEFAULT_FEEDBACK.format(
         event_type=event_type,
         action=action,

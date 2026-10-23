@@ -30,7 +30,7 @@ def format_verdict(tok_per_s: float, target: float = TARGET_TOK_S) -> str:
     status = "MEETS" if tok_per_s >= target else "BELOW"
     return (
         f"[{status} target] {tok_per_s:.1f} tok/s vs {target:.0f} "
-        f"(single-stream HF generate; see docs/future_directions.md for the vLLM path)"
+        f"(single-stream HF generate; the served-vLLM pipeline is the production path)"
     )
 
 

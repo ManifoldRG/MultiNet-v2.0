@@ -40,9 +40,10 @@ from interface import action_space as action_space_mod
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
-from interface.feedback import format_step_feedback
+from interface.feedback import format_step_feedback, is_failed_step
 from interface.progress_watchdog import ProgressStallWatchdog
-from interface.runner import _user_message_has_image, _trim_rolling_chat
+from interface.renderer import rgb_to_png_bytes
+from interface.runner import _trim_rolling_chat, _user_message_has_image, _with_start_map
 from prompting_experiments.prompt_templates import feedback as feedback_templates
 
 logger = logging.getLogger(__name__)
@@ -80,12 +81,28 @@ class EpisodeStepper:
         self.querying = runner.querying
         self._finished = False
         self._stall_watchdog: ProgressStallWatchdog | None = None
+        self._png_memo: tuple | None = None
+
+    def _png(self, rgb):
+        """A frame as PNG bytes, encoded once.
+
+        Records keep PNG bytes (~10 KB), not raw arrays (~1 MB at 576 px), so a
+        long episode holds its frames in linear, small memory. A step's
+        decision frame is the previous step's result, so the last encoding is
+        reused.
+        """
+        if rgb is None:
+            return None
+        if self._png_memo is None or self._png_memo[0] is not rgb:
+            self._png_memo = (rgb, rgb_to_png_bytes(rgb))
+        return self._png_memo[1]
 
     def start(self) -> None:
         # Persist the exact seed the backend was reset with so a checkpoint can
         # replay the episode deterministically from the same starting maze.
         self.seed = self.task_spec.seed
         self._runner.last_rgb, state, reset_info = self.backend.reset(seed=self.seed)
+        self._capture_start_map()
         self.querying.reset()
 
         # Build the initial system prompt (may include the initial maze for
@@ -116,7 +133,7 @@ class EpisodeStepper:
         self.step_index = 0
         self.current_query_index = 0
         self.action_queue_index = 0
-        self.end_reason = "max_steps"
+        self.end_reason = "in_progress"
         self.initial_state = state_snapshot(state)
 
         k = self.config.progress_stall_k
@@ -145,10 +162,29 @@ class EpisodeStepper:
                 "kind": "reset",
                 "state": self.initial_state,
                 "backend_info": reset_info,
-                "_reset_frame_rgb": self._runner.last_rgb,
+                "_reset_frame_png": self._png(self._runner.last_rgb),
             }
         )
+        if self._runner.start_map_rgb is not None:
+            self.transcript[-1]["_start_map_rgb"] = self._runner.start_map_rgb
         self._finished = False
+
+    def _capture_start_map(self) -> None:
+        """Snapshot the start map (3D render.start_map) right after reset.
+
+        Fail-closed: the map and its prompt text come together or not at all,
+        and a text_only run (no images) never gets one."""
+        frame_for = getattr(self.backend, "start_map_frame", None)
+        self._runner.start_map_rgb = frame_for() if frame_for is not None else None
+        has_map = self._runner.start_map_rgb is not None
+        if has_map != (self.prompt.start_map_text() is not None):
+            raise ValueError(
+                "start map and prompt disagree: build the runner with build_runner so the "
+                "prompt's render context comes from the backend"
+            )
+        if has_map and self.config.observation == "text_only":
+            raise ValueError("render start_map shows the model an image; observation 'text_only' carries none")
+        self._start_map_blocks = self._runner.start_map_blocks()
 
     def next_query(self) -> Optional[List[dict]]:
         # ``apply_reply`` can end the episode (e.g. ``parse_failed`` at the retry
@@ -179,6 +215,9 @@ class EpisodeStepper:
                     self.transcript,
                     with_one_shot=(self.chat_history == "stateless"),
                     with_context_history=(self.chat_history == "stateless"),
+                    stall_remaining=(
+                        self._stall_watchdog.remaining if self._stall_watchdog else None
+                    ),
                 )
                 has_image = _user_message_has_image(user_message)
                 if self.chat_history == "stateless":
@@ -194,6 +233,9 @@ class EpisodeStepper:
                         agent_messages = self.messages[:-1] + [current_turn]
                     else:
                         agent_messages = self.messages
+                # The start map opens the request's first user message; the
+                # stored chat (self.messages) never carries it.
+                agent_messages = _with_start_map(agent_messages, self._start_map_blocks)
                 if logger.isEnabledFor(logging.INFO):
                     logger.info(
                         "LLM query #%d: task_id=%s observation=%s messages_in_context=%d current_turn_has_image=%s",
@@ -203,7 +245,9 @@ class EpisodeStepper:
                         len(agent_messages),
                         has_image,
                     )
-                self._pending_agent_messages = agent_messages
+                # Snapshot the list: rolling chat appends the reply and trims old
+                # turns from self.messages, which must not rewrite the logged request.
+                self._pending_agent_messages = list(agent_messages)
                 self._pending_has_image = has_image
                 self._t_llm = time.perf_counter()
                 return agent_messages
@@ -238,7 +282,8 @@ class EpisodeStepper:
                 action_int = nlu_action_to_int(action)
             except ValueError:
                 step_detail, event_type = format_step_feedback(
-                    action, prev_state, prev_state, 0.0, False, self.task_spec
+                    action, prev_state, prev_state, 0.0, False, self.task_spec,
+                    level=self.config.feedback,
                 )
                 self.last_feedback = step_detail
                 self.consecutive_failures += 1
@@ -268,8 +313,8 @@ class EpisodeStepper:
                         "backend_info": None,
                         "actions_remaining_after": actions_remaining_after,
                         "consecutive_failures_after": self.consecutive_failures,
-                        "_decision_frame_rgb": decision_frame_rgb,
-                        "_post_step_rgb": decision_frame_rgb,
+                        "_decision_frame_png": self._png(decision_frame_rgb),
+                        "_post_step_png": self._png(decision_frame_rgb),
                         **self.querying.step_metadata(),
                     }
                 )
@@ -280,17 +325,27 @@ class EpisodeStepper:
                 action_int
             )
             self.state = state
+            # Tile mechanic named by the world model (absent when none fired).
+            mechanic = info.get("mechanic") if isinstance(info, dict) else None
             step_detail, event_type = format_step_feedback(
-                action, prev_state, state, reward, terminated, self.task_spec
+                action, prev_state, state, reward, terminated, self.task_spec,
+                level=self.config.feedback, mechanic=mechanic,
             )
             self.last_feedback = step_detail
 
-            if event_type in {"BLOCKED", "WRONG_DONE", "INVALID"}:
+            if is_failed_step(
+                action, prev_state, state, reward, terminated, self.task_spec,
+                mechanic=mechanic,
+            ):
                 self.consecutive_failures += 1
                 self.action_queue.clear()
                 self.primitive_buffer.clear()
             else:
                 self.consecutive_failures = 0
+                if mechanic is not None and mechanic.get("kind") == "frozen":
+                    # The freeze swallowed this primitive: drop the rest of its
+                    # cardinal move too, so a thaw never runs it on the old heading.
+                    self.primitive_buffer.clear()
 
             self.transcript.append(
                 {
@@ -316,9 +371,10 @@ class EpisodeStepper:
                     "backend_info": info,
                     "actions_remaining_after": actions_remaining_after,
                     "consecutive_failures_after": self.consecutive_failures,
-                    "_decision_frame_rgb": decision_frame_rgb,
-                    "_post_step_rgb": self._runner.last_rgb,
+                    "_decision_frame_png": self._png(decision_frame_rgb),
+                    "_post_step_png": self._png(self._runner.last_rgb),
                     **self.querying.step_metadata(),
+                    **({"mechanic": mechanic} if mechanic is not None else {}),
                 }
             )
             self.action_queue_index += 1
@@ -353,6 +409,7 @@ class EpisodeStepper:
                 self._finished = True
                 return None
 
+        self.end_reason = "max_steps"
         self._finished = True
         return None
 

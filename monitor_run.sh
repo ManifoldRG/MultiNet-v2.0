@@ -13,8 +13,6 @@ set -euo pipefail
 #
 # All automatic actions preserve data: finalize -> egress (scp) -> STOP.
 # Egress MUST succeed before any spin-down; nothing here ever deletes.
-#
-# See docs/superpowers/specs/2026-06-29-distributed-run-cost-safety-net-design.md
 
 ZONE=""
 COORD=""

@@ -7,7 +7,7 @@ def test_format_verdict_below_target():
     msg = format_verdict(42.0)
     assert "BELOW" in msg
     assert "42.0" in msg
-    assert "future_directions" in msg
+    assert "single-stream HF generate" in msg
 
 
 def test_format_verdict_meets_target():

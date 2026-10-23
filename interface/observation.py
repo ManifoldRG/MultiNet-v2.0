@@ -1,12 +1,18 @@
 """Observation formatting for the NLU interface.
 
-History when ``context_window == "last3"`` (last 3 executed steps, oldest first):
+History when ``context_window`` is ``last_n`` / ``text_summary_and_last_n``
+(last ``context_n`` executed steps, oldest first; default n=3):
 
-* **text_only** — full text history only (position, facing, action, feedback).
+* **text_only** — last-n in the observation text format (coords recap, or
+  ASCII/JSON snapshots) plus action and feedback.
 * **image_only** — prior decision-frame PNGs + inventory/action labels (no text history).
-* **image_text** — full text history **and** prior decision-frame PNGs.
+* **image_text** — that text history **and** prior decision-frame PNGs.
 
 History is derived from enriched ``transcript`` step records.
+Explicit cache breakpoints are emitted only for ``full`` history. They mark
+the newest included step and, when available, the newest step included by the
+previous request. text_only full history goes out as one text block per step
+(``history_text_blocks``) so the breakpoints have a step to sit on.
 """
 
 from __future__ import annotations
@@ -18,15 +24,33 @@ import numpy as np
 from gridworld.backends.base import GridState
 from gridworld.task_spec import TaskSpecification
 
+from interface.coords import direction_name, to_row_col
+from interface.config import DEFAULT_MAX_HISTORY_TOKENS
 from interface.renderer import (
+    image_url_block,
+    png_data_url,
     render_user_observation_text,
     rgb_to_image_block,
+    rgb_to_png_data_url,
 )
 from prompting_experiments.prompt_templates import observation as observation_templates
 from prompting_experiments.prompt_templates import user as user_templates
 
 ObservationMode = Literal["text_only", "image_text", "image_only"]
-ContextWindow = Literal["current", "last3", "text_summary", "text_summary_and_last3"]
+ContextWindow = Literal[
+    "current",
+    "last_n",
+    "text_summary",
+    "text_summary_and_last_n",
+    "full",
+]
+_LAST_N = ("last_n", "text_summary_and_last_n")
+
+# Approximate history budget: Anthropic's exact tokenizer is not available in
+# this package. Four characters per text token plus 256 tokens per image keeps
+# growth bounded; revisit these estimates when exact multimodal tokenization is
+# available.
+_IMAGE_HISTORY_TOKEN_ESTIMATE = 256
 
 
 def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -38,11 +62,29 @@ def history_steps(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def recent_history_steps(
-    transcript: list[dict[str, Any]], context_window: ContextWindow
+    transcript: list[dict[str, Any]],
+    context_window: ContextWindow,
+    n: int = 3,
+    *,
+    observation: ObservationMode = "text_only",
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS,
 ) -> list[dict[str, Any]]:
-    if context_window not in ("last3", "text_summary_and_last3"):
+    if context_window == "full":
+        steps = history_steps(transcript)
+        if not steps:
+            return []
+        selected: list[dict[str, Any]] = []
+        used_tokens = 0
+        for step in reversed(steps):
+            step_tokens = _history_step_token_estimate(step, observation)
+            if used_tokens + step_tokens > max_history_tokens:
+                break
+            selected.append(step)
+            used_tokens += step_tokens
+        return list(reversed(selected))
+    if context_window not in _LAST_N or n <= 0:
         return []
-    return history_steps(transcript)[-3:]
+    return history_steps(transcript)[-n:]
 
 
 def history_text(
@@ -50,19 +92,28 @@ def history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS,
+    *,
+    n: int = 3,
+    observation_text_format: str = "coords",
+    include_facing: bool = False,
 ) -> str:
     if context_window == "text_summary":
         return text_summary_history(transcript, task_spec)
-    if context_window == "text_summary_and_last3":
+    if context_window == "text_summary_and_last_n":
         if observation not in ("text_only", "image_text"):
-            # image_only: the summary is emitted separately (see
-            # leading_summary_blocks) so it can precede the last3 image
-            # blocks in the message content list.
             return ""
-        recent_text = _last3_history_text(context_window, transcript)
+        recent_text = _last_n_history_text(
+            context_window,
+            transcript,
+            n,
+            task_spec=task_spec,
+            observation_text_format=observation_text_format,
+            include_facing=include_facing,
+            observation=observation,
+            max_history_tokens=max_history_tokens,
+        )
         if observation == "image_text":
-            # Same reason: the summary precedes the last3 image blocks, so
-            # it is supplied by leading_summary_blocks instead of here.
             return recent_text
         summary = text_summary_history(transcript, task_spec)
         if not recent_text:
@@ -70,7 +121,16 @@ def history_text(
         return f"{summary}\n\n{recent_text}"
     if observation not in ("text_only", "image_text"):
         return ""
-    return _last3_history_text(context_window, transcript)
+    return _last_n_history_text(
+        context_window,
+        transcript,
+        n,
+        task_spec=task_spec,
+        observation_text_format=observation_text_format,
+        include_facing=include_facing,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
 
 
 def leading_summary_blocks(
@@ -79,15 +139,8 @@ def leading_summary_blocks(
     transcript: list[dict[str, Any]],
     task_spec: TaskSpecification | None = None,
 ) -> list[dict]:
-    """Text-summary content block that must precede the last3 image blocks.
-
-    For ``text_summary_and_last3`` with an image-bearing observation mode,
-    the last3 steps are rendered as separate image blocks (see
-    ``history_content_blocks``) rather than folded into the main prompt
-    text, so the summary has to be surfaced here to keep summary-then-last3
-    ordering in the final message content list.
-    """
-    if context_window != "text_summary_and_last3" or observation not in (
+    """Text-summary content block that must precede the last-n image blocks."""
+    if context_window != "text_summary_and_last_n" or observation not in (
         "image_only",
         "image_text",
     ):
@@ -110,27 +163,84 @@ def _history_record_action(rec: dict[str, Any]) -> str:
     return rec.get("cardinal_action") or rec["action"]
 
 
-def _last3_history_text(
+def _last_n_history_text(
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    n: int = 3,
+    *,
+    task_spec: TaskSpecification | None = None,
+    observation_text_format: str = "coords",
+    include_facing: bool = False,
+    observation: ObservationMode = "text_only",
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS,
 ) -> str:
-    recs = recent_history_steps(transcript, context_window)
+    recs = recent_history_steps(
+        transcript,
+        context_window,
+        n,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
     if not recs:
         return ""
 
-    lines = [observation_templates.RECENT_HISTORY_HEADER]
+    header = (
+        user_templates.FULL_HISTORY_USER_PROMPT["header"].removesuffix("\n")
+        if context_window == "full"
+        else observation_templates.RECENT_HISTORY_HEADER.format(n=len(recs))
+    )
+    lines = (
+        []
+        if context_window == "full" and observation == "image_text"
+        else [header]
+    )
     for rec in recs:
-        row, col = rec["position_after_row_col"]
         lines.append(
-            observation_templates.RECENT_HISTORY_STEP.format(
-                row=int(row),
-                col=int(col),
-                facing=rec["facing_after"],
-                action=_history_record_action(rec),
-                feedback=rec["prompt_feedback"],
+            _history_step_text(
+                rec,
+                task_spec=task_spec,
+                observation_text_format=observation_text_format,
+                include_facing=include_facing,
             )
         )
     return "\n".join(lines)
+
+
+def _history_step_text(
+    rec: dict[str, Any],
+    *,
+    task_spec: TaskSpecification | None,
+    observation_text_format: str,
+    include_facing: bool,
+) -> str:
+    action = _history_record_action(rec)
+    feedback = rec.get("prompt_feedback", "")
+    if observation_text_format in ("ascii", "json") and task_spec is not None:
+        snap = rec.get("state_before")
+        if isinstance(snap, dict) and "agent_position" in snap:
+            snapshot = render_user_observation_text(
+                task_spec,
+                GridState.from_dict(snap),
+                include_facing=include_facing,
+                observation_text_format=observation_text_format,
+            )
+            return observation_templates.RECENT_HISTORY_SNAPSHOT_STEP.format(
+                snapshot=snapshot,
+                action=action,
+                feedback=feedback,
+            )
+        return f"FINAL_OUTPUT: {action}\nFeedback: {feedback}"
+    row, col = rec.get(
+        "position_before_row_col",
+        rec.get("position_after_row_col", (0, 0)),
+    )
+    return observation_templates.RECENT_HISTORY_STEP.format(
+        row=int(row),
+        col=int(col),
+        facing=rec.get("facing_before", rec.get("facing_after", "")),
+        action=action,
+        feedback=feedback,
+    )
 
 
 def _agent_start_pose(
@@ -229,6 +339,11 @@ def _extract_mechanism_events(
         gate.id: getattr(gate, "color", "grey") for gate in task_spec.mechanisms.gates
     } if task_spec else {}
     for index, rec in enumerate(steps):
+        mechanic_event = _mechanic_summary_event(rec.get("mechanic"))
+        if mechanic_event is not None:
+            events.append((index, mechanic_event))
+            continue
+
         event_type = rec.get("event_type", "")
         sb = rec.get("state_before") or {}
         sa = rec.get("state_after") or {}
@@ -313,6 +428,37 @@ def _extract_mechanism_events(
     return events
 
 
+def _mechanic_summary_event(mechanic: dict[str, Any] | None) -> str | None:
+    """Summary text for a step the world model labelled, else None.
+
+    Swallowed ``frozen`` steps and ``rotating`` landings add nothing: the
+    ``froze`` step already names the frozen tile, and a ride names its tile.
+    """
+    if not mechanic:
+        return None
+
+    def row_col(xy) -> tuple[int, int]:
+        # (x, y) on the record; lists after a JSON round trip.
+        return to_row_col((int(xy[0]), int(xy[1])))
+
+    kind = mechanic.get("kind")
+    if kind == "died":
+        row, col = row_col(mechanic["cell_xy"])
+        return observation_templates.TEXT_SUMMARY_DEATH_PORTAL.format(row=row, col=col)
+    if kind == "froze":
+        row, col = row_col(mechanic["cell_xy"])
+        return observation_templates.TEXT_SUMMARY_FROZEN.format(row=row, col=col)
+    if kind == "teleported":
+        row, col = row_col(mechanic["to_xy"])
+        return observation_templates.TEXT_SUMMARY_TELEPORTED.format(row=row, col=col)
+    if kind == "carried":
+        row, col = row_col(mechanic["from_xy"])
+        return observation_templates.TEXT_SUMMARY_CARRIED.format(
+            row=row, col=col, direction=direction_name(int(mechanic["direction"]))
+        )
+    return None
+
+
 def _format_summary_chain(events: list[str]) -> str:
     if not events:
         return ""
@@ -346,37 +492,180 @@ def history_content_blocks(
     observation: ObservationMode,
     context_window: ContextWindow,
     transcript: list[dict[str, Any]],
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS,
+    *,
+    n: int = 3,
+    cache_breakpoints: bool = False,
 ) -> list[dict]:
     if observation not in ("image_only", "image_text"):
         return []
-    recs = recent_history_steps(transcript, context_window)
+    recs = recent_history_steps(
+        transcript,
+        context_window,
+        n,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
     if not recs:
         return []
 
     blocks: list[dict] = []
+    text_block_indices: dict[int, int] = {}
     for rec in recs:
-        rgb = rec.get("_decision_frame_rgb")
-        if rgb is None:
+        if not _has_decision_frame(rec):
             continue
-        blocks.append(rgb_to_image_block(rgb))
+        blocks.append(_decision_frame_block(rec))
         inventory = _history_record_inventory(rec)
         text = (
-            user_templates.LAST3_USER_PROMPT["image_only_step"].format(
+            user_templates.LAST_N_USER_PROMPT["image_only_step"].format(
                 inventory=inventory,
                 action=_history_record_action(rec),
             )
             if observation == "image_only"
-            else user_templates.LAST3_USER_PROMPT["image_text_step"].format(
+            else user_templates.LAST_N_USER_PROMPT["image_text_step"].format(
                 inventory=inventory,
                 action=_history_record_action(rec),
             )
         )
+        text_block_indices[id(rec)] = len(blocks) + 1
         blocks.append({"type": "text", "text": text})
 
     if not blocks:
         return []
 
-    return [{"type": "text", "text": user_templates.LAST3_USER_PROMPT["header"]}] + blocks
+    header = (
+        user_templates.FULL_HISTORY_USER_PROMPT["header"]
+        if context_window == "full"
+        else user_templates.LAST_N_USER_PROMPT["header"]
+    )
+    out = [{"type": "text", "text": header}] + blocks
+    if cache_breakpoints and context_window == "full":
+        _mark_history_breakpoints(out, recs, transcript, text_block_indices)
+    return out
+
+
+def history_text_blocks(
+    observation: ObservationMode,
+    context_window: ContextWindow,
+    transcript: list[dict[str, Any]],
+    task_spec: TaskSpecification | None = None,
+    max_history_tokens: int = DEFAULT_MAX_HISTORY_TOKENS,
+    *,
+    observation_text_format: str = "coords",
+    include_facing: bool = False,
+    cache_breakpoints: bool = False,
+) -> list[dict]:
+    """text_only full history as text blocks: the header, then one per step.
+
+    The blocks join to exactly ``history_text`` for the same arguments, so the
+    model reads the same prompt; the split only lets cache breakpoints sit on
+    the newest steps, as they do in the image history. Every block carries
+    ``text_continues``: agents without block-level breakpoints rejoin it with
+    the block after it (``runner_messages.join_split_text``).
+    """
+    if observation != "text_only" or context_window != "full":
+        return []
+    recs = recent_history_steps(
+        transcript,
+        context_window,
+        observation=observation,
+        max_history_tokens=max_history_tokens,
+    )
+    if not recs:
+        return []
+
+    header = user_templates.FULL_HISTORY_USER_PROMPT["header"].removesuffix("\n")
+    out = [{"type": "text", "text": header, "text_continues": True}]
+    step_block_indices: dict[int, int] = {}
+    for rec in recs:
+        step_block_indices[id(rec)] = len(out)
+        text = _history_step_text(
+            rec,
+            task_spec=task_spec,
+            observation_text_format=observation_text_format,
+            include_facing=include_facing,
+        )
+        out.append({"type": "text", "text": f"\n{text}", "text_continues": True})
+    if cache_breakpoints:
+        _mark_history_breakpoints(out, recs, transcript, step_block_indices)
+    return out
+
+
+def _mark_history_breakpoints(
+    blocks: list[dict],
+    recs: list[dict[str, Any]],
+    transcript: list[dict[str, Any]],
+    block_indices: dict[int, int],
+) -> None:
+    """Mark the newest included step and the newest step the previous request
+    included, so a request reads the prefix the previous one wrote."""
+    transcript_positions = {id(rec): index for index, rec in enumerate(transcript)}
+    last_query_index = next(
+        (
+            index
+            for index in range(len(transcript) - 1, -1, -1)
+            if transcript[index].get("kind") == "query"
+        ),
+        None,
+    )
+    previous_step_index = None
+    if last_query_index is not None:
+        previous_step_index = next(
+            (
+                block_indices[id(rec)]
+                for rec in reversed(recs)
+                if id(rec) in block_indices
+                and transcript_positions[id(rec)] < last_query_index
+            ),
+            None,
+        )
+    current_step_index = next(
+        (block_indices[id(rec)] for rec in reversed(recs) if id(rec) in block_indices),
+        None,
+    )
+    for index in (previous_step_index, current_step_index):
+        if index is not None:
+            blocks[index] = {**blocks[index], "cache_breakpoint": True}
+
+
+def _has_decision_frame(rec: dict[str, Any]) -> bool:
+    return rec.get("_decision_frame_png") is not None or rec.get("_decision_frame_rgb") is not None
+
+
+def _decision_frame_block(rec: dict[str, Any]) -> dict:
+    """The step's decision frame as an image block, encoded once per step.
+
+    Full history resends every prior frame on each query. Caching the data URL
+    on the record (an "_" key, so never serialized) keeps encoding linear in
+    steps, and every query's block shares the same string object, so stored
+    query records hold references rather than copies of the image. The stepper
+    stores PNG bytes; records built elsewhere may carry the raw array.
+    """
+    frame = rec.get("_decision_frame_png")
+    if frame is None:
+        frame = rec["_decision_frame_rgb"]
+    cached = rec.get("_decision_frame_url")
+    if cached is None or cached[0] is not frame:
+        url = png_data_url(frame) if isinstance(frame, bytes) else rgb_to_png_data_url(frame)
+        cached = rec["_decision_frame_url"] = (frame, url)
+    return image_url_block(cached[1])
+
+
+def _history_step_token_estimate(
+    step: dict[str, Any], observation: ObservationMode
+) -> int:
+    position = step.get("position_after_row_col", (0, 0))
+    text = observation_templates.RECENT_HISTORY_STEP.format(
+        row=int(position[0]),
+        col=int(position[1]),
+        facing=step.get("facing_after", ""),
+        action=_history_record_action(step),
+        feedback=step.get("prompt_feedback", ""),
+    )
+    estimate = max(1, (len(text) + 3) // 4)
+    if observation in ("image_only", "image_text") and _has_decision_frame(step):
+        estimate += _IMAGE_HISTORY_TOKEN_ESTIMATE
+    return estimate
 
 
 def current_observation_text(
@@ -386,12 +675,18 @@ def current_observation_text(
     *,
     include_description: bool = False,
     include_facing: bool = False,
+    observation_text_format: str = "coords",
+    stall_remaining: int | None = None,
 ) -> str:
     if observation == "image_only":
         return ""
     if not include_description:
         return ""
-    return render_user_observation_text(task_spec, state, include_facing=include_facing)
+    return render_user_observation_text(
+        task_spec, state, include_facing=include_facing,
+        observation_text_format=observation_text_format,
+        stall_remaining=stall_remaining,
+    )
 
 
 def current_image_blocks(observation: ObservationMode, rgb: np.ndarray | None) -> list[dict]:

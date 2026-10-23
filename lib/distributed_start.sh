@@ -3,7 +3,6 @@
 # Provides start_coordinator + start_worker, generalized from launch_qwen_smoke.sh
 # (coordinator prepare/serve; GPU worker) and launch_smoke_4vm.sh (API worker + key
 # delivery). Consumed by launch_distributed.sh (replaces its stub start hooks).
-# See docs/superpowers/specs/2026-07-01-distributed-start-hooks-design.md
 
 worker_field() {  # $1 vm-name  $2 field  -> value from TOPO_JSON on stdout
   printf '%s' "$TOPO_JSON" | python3 -c '
@@ -15,17 +14,41 @@ for w in json.load(sys.stdin).get("workers", []):
 ' "$1" "$2"
 }
 
-start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST [SEEDS] [DIFFICULTY_MAX] [CONDITIONS] [PROMPT_VARIANT]
-  local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}"
+# Optional PRESCORED_TASKS=<local artifacts root with tasks/>: ship Stage 2 task
+# bundles scored elsewhere (e.g. a local coordinator-prepare, which makes no model
+# calls) into the coordinator's artifacts root before it prepares. Static scoring
+# of the PR #57 mechanics mazes takes minutes to tens of minutes per maze. Stage 2
+# reuses a bundle only when its inputs_hash matches the current spec and scorer
+# config, so a stale bundle is recomputed, never trusted.
+seed_prescored_tasks() {  # uses globals COORD ZONE RUN_ID [PRESCORED_TASKS]
+  [[ -n "${PRESCORED_TASKS:-}" ]] || return 0
+  if [[ ! -d "$PRESCORED_TASKS/tasks" ]]; then
+    echo "PRESCORED_TASKS=$PRESCORED_TASKS has no tasks/ directory" >&2; return 1
+  fi
+  tar -C "$PRESCORED_TASKS" -cf - tasks \
+    | gcloud compute ssh "$COORD" --zone "$ZONE" --command \
+        "mkdir -p ~/MultiNet-v2.0/artifacts/$RUN_ID && tar -x -C ~/MultiNet-v2.0/artifacts/$RUN_ID"
+}
+
+start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST DIFFICULTY_MAX [SEEDS] [CONDITIONS] [PROMPT_VARIANT] [PRESCORED_TASKS]
+  [[ -n "${DIFFICULTY_MAX:-}" ]] || { echo "DIFFICULTY_MAX is required (no default; see require_difficulty_max)" >&2; return 1; }
+  seed_prescored_tasks || return 1
+  local seeds="${SEEDS:-0}" diff="$DIFFICULTY_MAX"
   # Conditional sweeps: --conditions is required (run_pipeline's H1/H2 guard
   # rejects a mispaired prepare) and --prompt-variant selects one dedup variant.
   # Empty when unset -> the remote guarded appends skip both flags.
   local conditions="${CONDITIONS:-}" prompt_variant="${PROMPT_VARIANT:-}"
+  # [STALE_AFTER_SECONDS] Lockstep batch runs: a batch round sends no heartbeat
+  # while in flight, so the coordinator must serve with --stale-after-seconds >=
+  # the worst-case round (docs/batch-api-lockstep-runner-design.md). Unset ->
+  # run_pipeline's default.
+  local stale_after="${STALE_AFTER_SECONDS:-}"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 if python - <<'PY'
 import socket, time
 # Wait for a just-killed prior coordinator-serve to release :8765 rather than
@@ -61,10 +84,13 @@ python -m scripts.run_pipeline \
   --run-set-id "$RUN_ID" \
   --difficulty-max-static-score "$DIFFICULTY_MAX" \
   ${prepare_args[@]+"${prepare_args[@]}"}
+serve_args=()
+[[ -n "${STALE_AFTER:-}" ]] && serve_args+=(--stale-after-seconds "$STALE_AFTER")
 nohup python -m scripts.run_pipeline \
   --distributed-role coordinator-serve \
   --artifacts-root "artifacts/$RUN_ID" \
   --host 0.0.0.0 --port 8765 \
+  ${serve_args[@]+"${serve_args[@]}"} \
   > "artifacts/$RUN_ID/coordinator-serve.log" 2>&1 &
 echo "$!" > "artifacts/$RUN_ID/coordinator-serve.pid"
 coord_up=0
@@ -80,15 +106,18 @@ REMOTE
 # several batches (MASSIVE_BATCHES = space-separated batch indices) via
 # scripts.prepare_combined_job, so the fleet stays saturated instead of idling through
 # each batch's hard-maze tail. Globals: COORD ZONE RUN_ID MANIFEST [SEEDS]
-# [DIFFICULTY_MAX] MASSIVE_BATCHES [SWEEP_TOPO].
+# DIFFICULTY_MAX MASSIVE_BATCHES [SWEEP_TOPO].
 start_coordinator_combined() {
-  local seeds="${SEEDS:-0}" diff="${DIFFICULTY_MAX:-1000.0}" batch_args="" n
+  [[ -n "${DIFFICULTY_MAX:-}" ]] || { echo "DIFFICULTY_MAX is required (no default; see require_difficulty_max)" >&2; return 1; }
+  seed_prescored_tasks || return 1
+  local seeds="${SEEDS:-0}" diff="$DIFFICULTY_MAX" batch_args="" n
   for n in $MASSIVE_BATCHES; do batch_args="$batch_args --batch $n"; done
   gcloud compute ssh "$COORD" --zone "$ZONE" \
     --command "RUN_ID='$RUN_ID' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' BATCH_ARGS='$batch_args' SWEEP_TOPO='${SWEEP_TOPO:-}' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 if python - <<'PY'
 import socket, time
 deadline = time.time() + 90
@@ -144,6 +173,7 @@ start_worker() {  # $1 vm  $2 coord_ip  — metadata from TOPO_JSON
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-qwen-vllm/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 source lib/vllm_serve_args.sh   # vllm_serve_args(): two-tier phase-dependent serve args
 mkdir -p "$HOME/multinet-worker-artifacts/$RUN_ID"
 
@@ -193,6 +223,7 @@ REMOTE
   case "$provider" in
     claude) key_var=ANTHROPIC_API_KEY ;;
     kimi)   key_var=MOONSHOT_API_KEY ;;
+    openai) key_var=OPENAI_API_KEY ;;
     *) echo "no credential mapping for provider '$provider' (worker $vm)" >&2; return 1 ;;
   esac
   printf -v key_q '%q' "${!key_var:-}"
@@ -200,19 +231,30 @@ REMOTE
   # or "lockstep-worker" (batch-API lockstep runner; R1 uses this). For lockstep,
   # API_WORKER_CONCURRENCY is MAX_BATCHES (working-set size; R1: 50) and the
   # coordinator must be serving with --stale-after-seconds >= worst-case batch
-  # round (see docs/batch-api-lockstep-runner-design.md, docs/r1-run-preparation.md).
+  # round (see docs/batch-api-lockstep-runner-design.md).
   # Exactly ONE lockstep worker per API model group — a second one double-pays.
-  local api_role="${API_WORKER_ROLE:-worker}"
+  # A run-config model's worker_role / worker_concurrency override both per group
+  # (e.g. lockstep Claude/Kimi next to a sync-only OpenAI model in one run).
+  local api_role api_conc
+  api_role="$(worker_field "$vm" worker_role)"
+  api_role="${api_role:-${API_WORKER_ROLE:-worker}}"
+  api_conc="$(worker_field "$vm" worker_concurrency)"
+  api_conc="${api_conc:-${API_WORKER_CONCURRENCY:-1}}"
   case "$api_role" in
     worker|lockstep-worker) ;;
     *) echo "invalid API_WORKER_ROLE '$api_role' (worker|lockstep-worker)" >&2; return 1 ;;
   esac
   gcloud compute ssh "$vm" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='${API_WORKER_CONCURRENCY:-1}' bash -s" <<REMOTE
+    --command "RUN_ID='$RUN_ID' COORD_IP='$coord_ip' GROUP='$group' API_ROLE='$api_role' API_CONC='$api_conc' bash -s" <<REMOTE
 set -euo pipefail
 export ${key_var}=${key_q}
+# Pin the hash seed: checkpoint resume replays and compares state snapshots, and
+# set-derived fields (collected_keys) serialize in hash-seed order, so a worker
+# restarted under a different random seed would fail to resume multi-key mazes.
+export PYTHONHASHSEED=0
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
+export MUJOCO_GL=osmesa   # 3D frames: OSMesa on every VM (EGL rasterises differently)
 mkdir -p "\$HOME/multinet-worker-artifacts/\$RUN_ID"
 nohup python -m scripts.run_pipeline \\
   --distributed-role "\$API_ROLE" \\

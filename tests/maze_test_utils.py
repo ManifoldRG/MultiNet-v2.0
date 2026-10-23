@@ -4,7 +4,18 @@ from pathlib import Path
 from BFS_solver import solve
 
 
-MAZE_JSON_DIR = Path(__file__).resolve().parent.parent / 'mazes' / 'exp_maze_jsons'
+# The experiment corpus lives in the ogbench submodule — the same files every
+# R1 manifest resolves. (mazes/exp_maze_jsons/ was a stale duplicate, removed
+# 2026-08: it had drifted on 9 files and carried a goal-invariant violation.)
+MAZE_JSON_DIR = (
+	Path(__file__).resolve().parent.parent
+	/ 'ogbench' / 'ogbench' / 'procgen' / 'maze_jsons'
+)
+if not MAZE_JSON_DIR.exists():
+	raise RuntimeError(
+		f'Maze corpus missing at {MAZE_JSON_DIR} — the ogbench submodule is '
+		'not initialized. Run: git submodule update --init'
+	)
 MECHANISM_KEYS = ('keys', 'doors', 'switches', 'gates')
 
 

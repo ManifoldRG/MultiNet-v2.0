@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import urllib.request
 
+import pytest
+
 from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
 from scripts.run_pipeline import _build_agent_from_spec
 
@@ -148,3 +150,115 @@ def test_run_config_wires_kimi_enable_thinking(monkeypatch):
     )
     assert on.config.enable_thinking is True
     assert off.config.enable_thinking is False
+
+
+def _capture_body(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _FakeResponse({"choices": [{"message": {"content": "ok"}}], "usage": {}})
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    return seen
+
+
+def test_kimi_k3_request_shape(monkeypatch):
+    """kimi-k3 errors on the K2-era thinking object and on any sampling param;
+    its cap is max_completion_tokens and its depth is top-level reasoning_effort."""
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(
+        KimiK26Config(
+            model="kimi-k3", max_tokens=64000, temperature=1.0, enable_thinking=True,
+            reasoning_effort="high",
+        ),
+        api_key="secret",
+    )([{"role": "user", "content": "hi"}])
+
+    body = seen["body"]
+    assert body["model"] == "kimi-k3"
+    assert body["max_completion_tokens"] == 64000
+    assert body["reasoning_effort"] == "high"
+    for absent in ("thinking", "temperature", "top_p", "max_tokens"):
+        assert absent not in body
+
+
+def test_kimi_k3_sync_sends_prompt_cache_ttl(monkeypatch):
+    """Moonshot's cache-write TTL tiers are a kimi-k3 feature: the configured
+    prompt_cache_ttl must reach the K3 sync body (it used to be dropped)."""
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(
+        KimiK26Config(model="kimi-k3", enable_thinking=True, prompt_cache_ttl="1h"),
+        api_key="secret",
+    )([{"role": "user", "content": "hi"}])
+    assert seen["body"]["prompt_cache_options"] == {"mode": "implicit", "ttl": "1h"}
+
+
+def test_kimi_k3_without_ttl_sends_no_cache_options(monkeypatch):
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(KimiK26Config(model="kimi-k3", enable_thinking=True), api_key="secret")(
+        [{"role": "user", "content": "hi"}]
+    )
+    assert "prompt_cache_options" not in seen["body"]
+
+
+def test_kimi_k3_default_effort_sends_nothing(monkeypatch):
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(KimiK26Config(model="kimi-k3", enable_thinking=True), api_key="secret")(
+        [{"role": "user", "content": "hi"}]
+    )
+    assert "reasoning_effort" not in seen["body"]
+
+
+def test_kimi_k3_batch_body_matches_sync(monkeypatch):
+    from interface.agents.kimi_k26 import _build_body
+
+    body = _build_body(
+        [{"role": "user", "content": "hi"}], model="kimi-k3", max_tokens=64000,
+        enable_thinking=True, include_sampling=False, reasoning_effort="max",
+    )
+    assert body == {
+        "model": "kimi-k3",
+        "max_completion_tokens": 64000,
+        "messages": [{"role": "user", "content": "hi"}],
+        "reasoning_effort": "max",
+    }
+
+
+def test_kimi_k3_config_fails_closed():
+    with pytest.raises(ValueError, match="always thinks"):
+        KimiK26Agent(KimiK26Config(model="kimi-k3", enable_thinking=False), api_key="secret")
+    with pytest.raises(ValueError, match="reasoning_effort must be one of"):
+        KimiK26Agent(
+            KimiK26Config(model="kimi-k3", enable_thinking=True, reasoning_effort="xhigh"),
+            api_key="secret",
+        )
+    with pytest.raises(ValueError, match="kimi-k3 only"):
+        KimiK26Agent(
+            KimiK26Config(model="kimi-k2.6", enable_thinking=True, reasoning_effort="high"),
+            api_key="secret",
+        )
+
+
+def test_kimi_k26_request_shape_unchanged(monkeypatch):
+    seen = _capture_body(monkeypatch)
+    KimiK26Agent(
+        KimiK26Config(model="kimi-k2.6", max_tokens=64, enable_thinking=True), api_key="secret"
+    )([{"role": "user", "content": "hi"}])
+    assert seen["body"] == {
+        "model": "kimi-k2.6",
+        "max_tokens": 64,
+        "messages": [{"role": "user", "content": "hi"}],
+        "thinking": {"type": "enabled"},
+        "temperature": 1.0,
+    }
+
+
+def test_run_config_wires_kimi_reasoning_effort(monkeypatch):
+    monkeypatch.setenv("MOONSHOT_API_KEY", "secret")
+    agent, label = _build_agent_from_spec(
+        "kimi",
+        {"provider": "kimi", "model": "kimi-k3", "enable_thinking": True, "reasoning_effort": "max"},
+    )
+    assert label == "kimi-k3"
+    assert agent.config.reasoning_effort == "max"

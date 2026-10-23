@@ -164,6 +164,7 @@ def _prep_and_stepper(store, plan, unit_raw, artifacts_root):
     from scripts import distributed_run_pipeline as drp
 
     unit = store._unit_payload(plan, unit_raw)
+    render = drp._unit_render(unit)
     row = drp.materialize_worker_inputs(unit, artifacts_root)
     prep = drp.pipeline._prepare_unit_run(
         row,
@@ -178,6 +179,7 @@ def _prep_and_stepper(store, plan, unit_raw, artifacts_root):
         prompt_variant=str(unit["prompt_variant"]),
         experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
         conditions=unit.get("condition_set"),
+        render=render,
     )
     prep.run_dir.mkdir(parents=True, exist_ok=True)
     runner = build_episode_runner(
@@ -185,6 +187,7 @@ def _prep_and_stepper(store, plan, unit_raw, artifacts_root):
         prep.experiment_config,
         int(unit["seed"]),
         max_steps=prep.runtime_spec.max_steps,
+        render=render,
     )
     stepper = EpisodeStepper(runner, maze_path=str(prep.source))
     return unit, prep, stepper
@@ -330,25 +333,32 @@ def _run_model(
     # live on the UNIT's model_config — NOT plan["models"][model_key], which
     # prepare_job reduces to a routing/topology view (model_group, worker_count,
     # hardware_profile) with the runtime params stripped. The real lockstep
-    # worker builds its agent from unit["model_config"]
-    # (distributed_run_pipeline.py::run_lockstep_worker), so the smoke must too;
-    # otherwise the batch leg silently runs thinking-OFF (enable_thinking=False)
-    # while the sync control (also unit["model_config"]) runs thinking-ON.
-    # Copy so the round-deadline injection never mutates shared state. The batch
-    # clients read their round deadline from the CONFIG (batch_deadline_s), not a
-    # generate_batch kwarg, so --round-deadline-s only reaches the real
-    # Claude/Kimi agents through this field (it stays out of the unit hash — see
-    # _NON_RUNTIME_MODEL_KEYS).
-    model_cfg = dict(store._unit_payload(plan, unit_rows[0])["model_config"])
+    # worker builds its agent from unit["model_config"] plus the experiment's
+    # prompt_cache flag (distributed_run_pipeline.py::run_lockstep_worker), so the
+    # smoke must too; otherwise the batch leg silently runs thinking-OFF
+    # (enable_thinking=False) while the sync control (also unit["model_config"])
+    # runs thinking-ON.
+    # _agent_model_config returns a copy, so the round-deadline injection never
+    # mutates shared state. The batch clients read their round deadline from the
+    # CONFIG (batch_deadline_s), not a generate_batch kwarg, so --round-deadline-s
+    # only reaches the real Claude/Kimi agents through this field (it stays out of
+    # the unit hash — see _NON_RUNTIME_MODEL_KEYS).
+    first = store._unit_payload(plan, unit_rows[0])
+    model_cfg = drp.pipeline._agent_model_config(
+        first["model_config"], first.get("experiment_config")
+    )
     model_cfg["batch_deadline_s"] = round_deadline_s
     provider = _provider_of(model_cfg)
 
-    # Build a stepper per maze; keep prep so we can flush episode.json.
+    # Build a stepper per maze; keep prep (and a 3D unit's render provenance)
+    # so we can flush episode.json.
     preps: dict[str, Any] = {}
+    renders: dict[str, Any] = {}
     lockstep_units: list[LockstepUnit] = []
     for unit_raw in unit_rows:
-        _unit, prep, stepper = _prep_and_stepper(store, plan, unit_raw, artifacts_root)
+        unit, prep, stepper = _prep_and_stepper(store, plan, unit_raw, artifacts_root)
         preps[unit_raw["unit_id"]] = prep
+        renders[unit_raw["unit_id"]] = drp._unit_render(unit).provenance(prep.runtime_spec)  # None for 2D
         lockstep_units.append(LockstepUnit(unit_raw["unit_id"], stepper))
 
     inner_agent, _ = agent_factory(model_key, model_cfg)
@@ -375,6 +385,8 @@ def _run_model(
             print(f"  [{model_key}] unit {unit_id} errored: {result['error']}",
                   file=sys.stderr)
             continue
+        if renders[unit_id] is not None:
+            result["render"] = renders[unit_id]
         flush_episode_log(result, preps[unit_id].run_dir)
         preps[unit_id].write_run_inputs(extras={"pricing_tier": "batch"})
         episodes.append(result)

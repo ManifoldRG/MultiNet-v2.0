@@ -1,4 +1,4 @@
-"""Kimi K2.6 agent via the Moonshot OpenAI-compatible API."""
+"""Kimi K2.6 / K3 agent via the Moonshot OpenAI-compatible API."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 from interface.agents.http_retry import call_with_retry
 from interface.agents.moonshot_batch import MoonshotBatchDeadline, run_moonshot_batch
 from interface.agents.reply import Reply, detect_token_truncated
+from interface.agents.runner_messages import strip_cache_markers
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,16 @@ _AGENT_NAME = "Kimi agent"
 # thinking-off requires 0.6. Confirmed live via the M6 smoke (2026-07-02).
 _KIMI_TEMPERATURE_THINKING = 1.0
 _KIMI_TEMPERATURE_NO_THINKING = 0.6
+# kimi-k3 always thinks and takes a different request shape: no `thinking`
+# object (the request errors), no sampling params (temperature/top_p are fixed
+# and any other value errors), the cap as `max_completion_tokens`, and depth as
+# top-level `reasoning_effort` ("low" | "high" | "max"; Moonshot default "max").
+_KIMI_K3_PREFIX = "kimi-k3"
+_KIMI_K3_REASONING_EFFORTS = ("low", "high", "max")
+
+
+def _is_k3(model: str) -> bool:
+    return model.startswith(_KIMI_K3_PREFIX)
 
 
 # Moonshot caches identical request prefixes automatically and bills the reused
@@ -39,7 +50,7 @@ def _to_openai_messages(messages: List[dict]) -> List[Dict[str, object]]:
         role = message.get("role")
         if role not in ("system", "user", "assistant"):
             raise ValueError(f"Unsupported message role for {_AGENT_NAME}: {role!r}")
-        content = message.get("content", "")
+        content = strip_cache_markers(message.get("content", ""))
         if role == "assistant" and isinstance(content, str):
             content = content.strip()
         out.append({"role": role, "content": content})
@@ -53,6 +64,8 @@ def _build_body(
     max_tokens: int,
     enable_thinking: bool,
     include_sampling: bool = True,
+    reasoning_effort: Optional[str] = None,
+    cache_ttl: Optional[str] = None,
 ) -> Dict[str, object]:
     """Assemble the Moonshot chat/completions request body.
 
@@ -60,9 +73,22 @@ def _build_body(
     handling can never drift. `include_sampling` is the ONE deliberate
     difference: the sync path sends the mode-forced temperature (Moonshot 400s
     on any other value), while the batch path omits sampling params entirely per
-    the batch spec.
+    the batch spec. kimi-k3 never gets `thinking` or sampling params. Only the
+    sync path passes `cache_ttl` (`prompt_cache_options`): Moonshot's cache-write
+    TTL tiers are a kimi-k3 feature, and its batch support for kimi-k3 is unverified.
     """
-    body: Dict[str, object] = {
+    if _is_k3(model):
+        body: Dict[str, object] = {
+            "model": model,
+            "max_completion_tokens": max_tokens,
+            "messages": messages,
+        }
+        if reasoning_effort:
+            body["reasoning_effort"] = reasoning_effort
+        if cache_ttl:
+            body["prompt_cache_options"] = {"mode": "implicit", "ttl": cache_ttl}
+        return body
+    body = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": messages,
@@ -75,6 +101,8 @@ def _build_body(
         body["temperature"] = (
             _KIMI_TEMPERATURE_THINKING if enable_thinking else _KIMI_TEMPERATURE_NO_THINKING
         )
+    if cache_ttl:
+        body["prompt_cache_options"] = {"mode": "implicit", "ttl": cache_ttl}
     return body
 
 
@@ -112,12 +140,19 @@ def _post_chat_completions(
     messages: List[Dict[str, object]],
     timeout: Optional[float],
     enable_thinking: bool,
+    cache_ttl: Optional[str] = None,
     max_attempts: int = 5,
+    reasoning_effort: Optional[str] = None,
 ) -> Reply:
     # `temperature` stays in the signature for provenance/cache-hash parity but
     # the mode-forced value is what actually ships (see `_build_body`).
     body = _build_body(
-        messages, model=model, max_tokens=max_tokens, enable_thinking=enable_thinking
+        messages,
+        model=model,
+        max_tokens=max_tokens,
+        enable_thinking=enable_thinking,
+        reasoning_effort=reasoning_effort,
+        cache_ttl=cache_ttl,
     )
 
     raw = json.dumps(body).encode("utf-8")
@@ -177,6 +212,9 @@ class KimiK26Config:
     max_tokens: int = 4096
     timeout: Optional[float] = 180.0
     enable_thinking: bool = False
+    # kimi-k3 only: "low" | "high" | "max"; None sends nothing (Moonshot default).
+    reasoning_effort: Optional[str] = None
+    prompt_cache_ttl: Optional[str] = None
     max_attempts: int = 5
     # Moonshot Batch API knobs (used only by generate_batch).
     batch_poll_interval_s: float = 30.0
@@ -187,7 +225,7 @@ class KimiK26Config:
 
 @dataclass
 class KimiK26Agent:
-    """Kimi K2.6 via Moonshot API (`MOONSHOT_API_KEY`). Supports vision user turns."""
+    """Kimi K2.6 / K3 via Moonshot API (`MOONSHOT_API_KEY`). Supports vision user turns."""
 
     config: KimiK26Config = field(default_factory=KimiK26Config)
     api_key: Optional[str] = None
@@ -202,6 +240,18 @@ class KimiK26Agent:
                 "to KimiK26Agent."
             )
         self.api_key = key
+        if _is_k3(self.config.model):
+            # K3 cannot disable thinking; a thinking-off config would mislabel the run.
+            if not self.config.enable_thinking:
+                raise ValueError(f"{self.config.model} always thinks; set enable_thinking: true.")
+            effort = self.config.reasoning_effort
+            if effort is not None and effort not in _KIMI_K3_REASONING_EFFORTS:
+                raise ValueError(
+                    f"{self.config.model} reasoning_effort must be one of "
+                    f"{_KIMI_K3_REASONING_EFFORTS}, got {effort!r}."
+                )
+        elif self.config.reasoning_effort is not None:
+            raise ValueError(f"{self.config.model} does not take reasoning_effort (kimi-k3 only).")
 
     def generate(self, messages: List[dict]) -> Reply:
         return _post_chat_completions(
@@ -212,7 +262,9 @@ class KimiK26Agent:
             messages=_to_openai_messages(messages),
             timeout=self.config.timeout,
             enable_thinking=self.config.enable_thinking,
+            cache_ttl=self.config.prompt_cache_ttl,
             max_attempts=self.config.max_attempts,
+            reasoning_effort=self.config.reasoning_effort,
         )
 
     def generate_batch(self, batch: List[List[dict]]) -> List[Reply]:
@@ -259,6 +311,7 @@ class KimiK26Agent:
                     max_tokens=self.config.max_tokens,
                     enable_thinking=self.config.enable_thinking,
                     include_sampling=False,
+                    reasoning_effort=self.config.reasoning_effort,
                 ),
             }
             for i, messages in enumerate(batch)

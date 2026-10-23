@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, List
 
-from interface.agents.runner_messages import ContentPart, parse_runner_content
+from interface.agents.runner_messages import ContentPart, join_split_text, parse_runner_content
 
 DEFAULT_QWEN_VLLM_MODEL = "Qwen/Qwen3.6-27B"
 _AGENT_NAME = "Qwen vLLM agent"
@@ -22,7 +22,7 @@ def _part_to_openai_block(part: ContentPart) -> dict[str, object]:
 
 
 def _to_openai_content(content: object) -> object:
-    parsed = parse_runner_content(content)
+    parsed = parse_runner_content(join_split_text(content))
     if isinstance(parsed, str):
         return parsed
     blocks = [_part_to_openai_block(part) for part in parsed]

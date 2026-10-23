@@ -1,4 +1,4 @@
-"""Bare-bones run-pipeline orchestrator for MultiNet v2.0 (tests 1-3).
+"""Run-pipeline orchestrator for MultiNet v2.0: manifest + run-config driven evaluation runs.
 
 Sequential, inspectable Stage 1->5 driver. No DAG runner. Writes the
 ``artifacts/`` tree:
@@ -31,6 +31,7 @@ from typing import Any, Callable, Iterable, Optional
 from prompting_experiments import CONDITION_SETS, iter_condition_configs
 from scorer import compute_runtime_score, load_scorer_config, score_task_file
 from scorer.config import SCORER_VERSION, ScorerConfig
+from gridworld.render_settings import RenderSettings
 from scorer.io import stable_hash, task_spec_from_payload
 
 from pipeline import episode_metrics, reports
@@ -191,7 +192,10 @@ def _condition_configs(
 ) -> list[tuple[str, ExperimentConfig]]:
     from interface.config import ExperimentConfig
 
-    base = ExperimentConfig(**(base_overrides or {}))
+    # from_dict, not the raw constructor: it resolves renamed values (last3 ->
+    # last_n), as the run-config validation does, so a legacy overlay that
+    # validates also runs.
+    base = ExperimentConfig.from_dict(base_overrides or {})
     if not conditions:
         if prompt_variant not in (None, "default"):
             raise ValueError("The default condition set only supports prompt_variant='default'.")
@@ -235,6 +239,10 @@ _NON_RUNTIME_MODEL_KEYS = {
     "hardware_profile",
     "worker_tags",
     "max_in_flight",
+    "worker_role",
+    "worker_concurrency",
+    # billing: cache breakpoints change what a call costs, never what the model emits
+    "enable_prompt_cache",
     # transport / model-loading (do not affect outputs)
     "timeout",
     "max_attempts",
@@ -244,6 +252,9 @@ _NON_RUNTIME_MODEL_KEYS = {
     "batch_deadline_s",
     "batch_cancel_grace_s",
     "batch_poll_interval_s",
+    "cache_ttl",
+    "batch_cache_ttl",
+    "prompt_cache_ttl",
     "device_map",
     "local_files_only",
     "max_memory",
@@ -258,6 +269,17 @@ _NON_RUNTIME_MODEL_KEYS = {
     "use_tqdm",
     "engine_kwargs",
 }
+
+_VALID_CACHE_TTLS = ("5m", "1h")
+
+
+def _validate_cache_ttls(model_cfg: dict[str, Any]) -> None:
+    for key in ("cache_ttl", "batch_cache_ttl", "prompt_cache_ttl"):
+        value = model_cfg.get(key)
+        if value is not None and value not in _VALID_CACHE_TTLS:
+            raise ValueError(
+                f"{key} must be None or one of {_VALID_CACHE_TTLS}, got {value!r}"
+            )
 
 
 def _jsonable(value: Any) -> Any:
@@ -305,6 +327,12 @@ def _experiment_config_payload(experiment_config: Any | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"value": payload}
 
 
+def _experiment_config_hash_payload(experiment_config: Any | None) -> dict[str, Any]:
+    payload = _experiment_config_payload(experiment_config)
+    payload.pop("prompt_cache", None)
+    return payload
+
+
 def _expected_run_hash(
     spec,
     model_name: str,
@@ -315,26 +343,31 @@ def _expected_run_hash(
     prompt_variant: str = "default",
     experiment_config: Any | None = None,
     model_config: Optional[dict[str, Any]] = None,
+    render: Optional[dict[str, Any]] = None,
 ) -> str:
     """Hash the inputs that determine a Stage-3 episode.
 
     Excludes scorer config: that invalidates run_score, not the model call.
-    TODO(release): fold in backend_version + adapter/model code version so code
+    ``render`` is ``RenderSettings.provenance`` (3D only: render-layer and
+    mujoco versions + resolved frame size); it is omitted for 2D so 2D hashes
+    stay byte-identical.
+    TODO(post-release): fold in backend_version + adapter/model code version so code
     changes invalidate cached episodes at v1.
     """
-    return stable_hash(
-        {
-            "task": spec.to_dict(),
-            "model_id": model_name,
-            "model_config": _runtime_model_config(model_config),
-            "seed": seed,
-            "backend": backend,
-            "condition_set": condition_set,
-            "prompt_variant": prompt_variant,
-            "experiment_config": _experiment_config_payload(experiment_config),
-            "pipeline_version": PIPELINE_VERSION,
-        }
-    )
+    payload = {
+        "task": spec.to_dict(),
+        "model_id": model_name,
+        "model_config": _runtime_model_config(model_config),
+        "seed": seed,
+        "backend": backend,
+        "condition_set": condition_set,
+        "prompt_variant": prompt_variant,
+        "experiment_config": _experiment_config_hash_payload(experiment_config),
+        "pipeline_version": PIPELINE_VERSION,
+    }
+    if render is not None:
+        payload["render"] = render
+    return stable_hash(payload)
 
 
 def _phase_episode_provenance(
@@ -466,8 +499,10 @@ def _score_suite(
 # --------------------------------------------------------------------------- #
 # Stages 3-4 — runs + runtime score (per model)
 # --------------------------------------------------------------------------- #
-def _run_dir(artifacts_root: Path, task_id: str, model: str, seed: int, condition: str) -> Path:
-    return artifacts_root / "runs" / task_id / "minigrid" / model / f"seed_{seed}" / condition
+def _run_dir(
+    artifacts_root: Path, task_id: str, model: str, seed: int, condition: str, backend: str = "minigrid"
+) -> Path:
+    return artifacts_root / "runs" / task_id / backend / model / f"seed_{seed}" / condition
 
 
 def _run_one_model(
@@ -486,6 +521,7 @@ def _run_one_model(
     prompt_variant: Optional[str] = None,
     base_overrides: Optional[dict] = None,
     phase: Optional[dict[str, Any]] = None,
+    render: Optional["RenderSettings"] = None,
     force: bool,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
     condition_configs = _condition_configs(
@@ -520,6 +556,7 @@ def _run_one_model(
                     base_overrides=base_overrides,
                     model_config=model_config,
                     phase=phase,
+                    render=render,
                     force=force,
                 )
                 if result is None:
@@ -573,6 +610,7 @@ def _prepare_unit_run(
     prompt_variant: str,
     experiment_config: Any,
     conditions: Optional[str] = None,
+    render: Optional["RenderSettings"] = None,
 ) -> _PreparedUnitRun:
     """Resolve the run dir, inputs hash, and the run_inputs/run_score writers for
     one unit. Pure setup — no model call, no scoring happens here.
@@ -588,7 +626,8 @@ def _prepare_unit_run(
         (artifacts_root / "tasks" / task_id / "canonical_paths.json").read_text(encoding="utf-8")
     )
     runtime_spec = _runtime_capped_spec(spec, canonical)
-    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant)
+    render = render or RenderSettings()
+    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant, render.label)
     episode_path = run_dir / "episode.json"
     sidecar_path = run_dir / "run_inputs.json"
     run_score_path = run_dir / "run_score.json"
@@ -598,15 +637,17 @@ def _prepare_unit_run(
     # --conditions.
     manifest_row = dict(row)
 
+    render_provenance = render.provenance(runtime_spec)  # None for 2D
     expected_hash = _expected_run_hash(
         runtime_spec,
         model_name,
         seed,
-        "minigrid",
+        render.label,
         condition_set=conditions,
         prompt_variant=prompt_variant,
         experiment_config=experiment_config,
         model_config=model_config,
+        render=render_provenance,
     )
 
     def write_run_inputs(extras: Optional[dict[str, Any]] = None) -> None:
@@ -618,11 +659,12 @@ def _prepare_unit_run(
             "model_config": _jsonable(model_config or {}),
             "runtime_model_config": _runtime_model_config(model_config),
             "seed": seed,
-            "backend": "minigrid",
+            "backend": render.label,
             "condition": prompt_variant,
             "condition_set": conditions,
             "prompt_variant": prompt_variant,
             "experiment_config": _experiment_config_payload(experiment_config),
+            **({} if render_provenance is None else {"render": render_provenance}),
             "runtime_max_steps_cap": {
                 "multiplier": RUNTIME_MAX_STEPS_OPTIMAL_MULTIPLIER,
                 "optimal_steps": _canonical_optimal_steps(canonical),
@@ -642,7 +684,8 @@ def _prepare_unit_run(
     ) -> tuple[dict[str, Any], Optional[float]]:
         metrics = episode_metrics.build_metrics(episode, canonical, manifest_row)
         enriched = episode_metrics.enrich_run_for_scoring(
-            episode, manifest_row, agent_or_model=model_name, seed=seed, metrics=metrics
+            episode, manifest_row, agent_or_model=model_name, seed=seed,
+            backend=render.label, metrics=metrics,
         )
         run_score = compute_runtime_score(
             enriched,
@@ -659,6 +702,7 @@ def _prepare_unit_run(
             manifest_row,
             agent_or_model=model_name,
             seed=seed,
+            backend=render.label,
             raw_output_ref=str(episode_path.relative_to(artifacts_root)),
             metrics=metrics,
             prompt_variant=prompt_variant,
@@ -695,6 +739,7 @@ def _run_one_unit(
     conditions: Optional[str] = None,
     base_overrides: Optional[dict] = None,
     phase: Optional[dict[str, Any]] = None,
+    render: Optional["RenderSettings"] = None,
     force: bool = False,
 ) -> Optional[tuple[dict[str, Any], Optional[float]]]:
     """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
@@ -726,8 +771,10 @@ def _run_one_unit(
         prompt_variant=prompt_variant,
         experiment_config=experiment_config,
         conditions=conditions,
+        render=render,
     )
 
+    render = render or RenderSettings()
     episode = None
     if not force and prep.episode_path.exists() and prep.sidecar_path.exists():
         sidecar = _load_json_object_if_valid(prep.sidecar_path)
@@ -742,7 +789,11 @@ def _run_one_unit(
             seed,
             prep.run_dir,
             max_steps=prep.runtime_spec.max_steps,
-            provenance=_phase_episode_provenance(phase, model_config),
+            provenance={
+                **_phase_episode_provenance(phase, model_config),
+                **({} if render.backend == "minigrid" else {"render": render.provenance(prep.runtime_spec)}),
+            },
+            render=render,
         )
         # ``phase`` rides in the run_inputs extras (additive; written AFTER the
         # inputs_hash is computed, so it is recorded but excluded from the hash).
@@ -878,6 +929,17 @@ def run_from_config(
     # ``job_digest`` phase-strip).
     phase = run_config.get("phase")
 
+    # Optional top-level render block: which backend/camera/resolution draws the
+    # frames. Parsed here so a bad block fails before any paid model call; the
+    # 2D default leaves artifact paths and run hashes exactly as they were.
+    render = RenderSettings.from_run_config(run_config)
+    if render.backend != "minigrid":
+        # 3D frames (and a start map) are images: every experiment cell must carry them.
+        for _variant, cell in _condition_configs(
+            conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay
+        ):
+            render.check_observation(cell.observation)
+
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
     union: dict[str, dict[str, Any]] = {}
@@ -886,7 +948,7 @@ def run_from_config(
         if not entries:
             raise ValueError(f"Model {name!r} lists no tasks/runs.")
         rows = resolve_task_rows(entries, catalog, manifest_path)
-        agent, label = factory(name, model_cfg)
+        agent, label = factory(name, _agent_model_config(model_cfg, exp_overlay))
         plans.append((_sanitize(label), agent, dict(model_cfg), rows))
         for r in rows:
             union.setdefault(r["task_id"], r)
@@ -919,6 +981,7 @@ def run_from_config(
             prompt_variant=prompt_variant,
             base_overrides=exp_overlay,
             phase=phase,
+            render=render,
             force=force,
         )
         all_run_rows.extend(rr)
@@ -962,6 +1025,8 @@ def check_run_config_expectations(
             f"Run-config expects --conditions {run_config['conditions']!r} but got {conditions!r}. "
             "Pass the matching --conditions."
         )
+    for model_cfg in (run_config.get("models") or {}).values():
+        _validate_cache_ttls(model_cfg)
     _check_equal_token_caps(run_config)
 
 
@@ -987,6 +1052,23 @@ def _check_equal_token_caps(run_config: dict[str, Any]) -> None:
         )
 
 
+def _agent_model_config(
+    model_cfg: dict[str, Any], experiment_config: Optional[dict[str, Any]]
+) -> dict[str, Any]:
+    """The model entry an agent is built from, on every path (local, fleet worker,
+    lockstep worker). Claude and OpenAI take ``enable_prompt_cache`` from the
+    experiment's ``prompt_cache`` unless the entry sets it; OpenAI defaults to off,
+    and off there means implicit caching, which writes the whole prompt every query.
+    The flag is a billing knob (``_NON_RUNTIME_MODEL_KEYS``), so no hash moves."""
+    agent_cfg = dict(model_cfg)
+    if (agent_cfg.get("provider") or "").lower() in {"claude", "openai"}:
+        agent_cfg.setdefault(
+            "enable_prompt_cache",
+            bool((experiment_config or {}).get("prompt_cache", False)),
+        )
+    return agent_cfg
+
+
 def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent, str]:
     """Construct a live agent from a run-config model entry."""
     provider = (model_cfg.get("provider") or "").lower()
@@ -1008,6 +1090,12 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
+        if "cache_ttl" in model_cfg:
+            cfg.cache_ttl = str(model_cfg["cache_ttl"])
+        if "batch_cache_ttl" in model_cfg:
+            cfg.batch_cache_ttl = str(model_cfg["batch_cache_ttl"])
         if "effort" in model_cfg:
             cfg.effort = str(model_cfg["effort"])
         if "batch_deadline_s" in model_cfg:
@@ -1029,6 +1117,10 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             cfg.max_attempts = int(model_cfg["max_attempts"])
         if "enable_thinking" in model_cfg:
             cfg.enable_thinking = bool(model_cfg["enable_thinking"])
+        if "reasoning_effort" in model_cfg:
+            cfg.reasoning_effort = str(model_cfg["reasoning_effort"])
+        if "prompt_cache_ttl" in model_cfg:
+            cfg.prompt_cache_ttl = str(model_cfg["prompt_cache_ttl"])
         if "batch_deadline_s" in model_cfg:
             cfg.batch_deadline_s = float(model_cfg["batch_deadline_s"])
         if "batch_cancel_grace_s" in model_cfg:
@@ -1103,14 +1195,34 @@ def _build_agent_from_spec(name: str, model_cfg: dict[str, Any]) -> tuple[Agent,
             if key in model_cfg:
                 setattr(cfg, key, model_cfg[key])
         return QwenVLLMAPIAgent(config=cfg), model or cfg.model
+    if provider == "openai":
+        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
+
+        cfg = OpenAIConfig(temperature=temperature)
+        if model:
+            cfg.model = model
+        if max_tokens:
+            cfg.max_tokens = int(max_tokens)
+        if "timeout" in model_cfg:
+            cfg.timeout = float(model_cfg["timeout"])
+        if "max_attempts" in model_cfg:
+            cfg.max_attempts = int(model_cfg["max_attempts"])
+        if "enable_prompt_cache" in model_cfg:
+            cfg.enable_prompt_cache = bool(model_cfg["enable_prompt_cache"])
+        if model_cfg.get("spend_cap_usd") is not None:
+            cfg.spend_cap_usd = float(model_cfg["spend_cap_usd"])
+        for key in ("reasoning_effort", "service_tier", "image_detail", "base_url"):
+            if key in model_cfg:
+                setattr(cfg, key, model_cfg[key])
+        return OpenAIAgent(config=cfg), model or cfg.model
     raise ValueError(
         f"Model {name!r}: unknown provider {provider!r} "
-        "(expected 'claude', 'kimi', 'qwen', or 'qwen_vllm')."
+        "(expected 'claude', 'kimi', 'openai', 'qwen', or 'qwen_vllm')."
     )
 
 
 def main(argv: Optional[list[str]] = None) -> None:
-    parser = argparse.ArgumentParser(description="MultiNet v2.0 bare-bones run pipeline (tests 1-3).")
+    parser = argparse.ArgumentParser(description="MultiNet v2.0 run pipeline: manifest + run-config driven evaluation runs.")
     parser.add_argument("--run-config", help="JSON run-config mapping models to task files (preferred).")
     parser.add_argument("--manifest", default=str(_DEFAULT_MANIFEST), help="Task catalog (metadata).")
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
@@ -1169,7 +1281,11 @@ def main(argv: Optional[list[str]] = None) -> None:
     )
     # Single-model fallback (when --run-config is not supplied):
     parser.add_argument("--experiment", choices=["test1", "test2", "test3", "r1", "all"], default="all")
-    parser.add_argument("--agent", choices=["claude", "kimi", "qwen"], help="Single-model provider.")
+    parser.add_argument(
+        "--agent",
+        choices=["claude", "kimi", "openai", "qwen"],
+        help="Single-model provider (claude, kimi, openai, or qwen).",
+    )
     args = parser.parse_args(argv)
 
     if args.distributed_role:

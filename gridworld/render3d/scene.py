@@ -1,0 +1,496 @@
+"""Task spec -> MuJoCo scene (MJCF string) + an index of state-dependent geoms.
+
+Built once per configure(); per-frame state changes only move geoms and mocap
+bodies (sync.py), never rebuild the model. The wall set mirrors MiniGrid's
+grid construction: border ring + spec walls, minus any cell an object is
+placed on (objects overwrite walls there).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from xml.sax.saxutils import quoteattr
+
+from gridworld.task_spec import TaskSpecification
+
+from . import palette
+from .cameras import EYE_HEIGHT, cell_center
+
+KEY_HEIGHT = 0.10
+CARRIED_KEY_HEIGHT = 0.62
+AGENT_GROUP = 3  # agent geoms; hidden in first_person via MjvOption.geomgroup
+HIDDEN_GROUP = 5  # geoms of the inactive state; the renderer never draws this group
+KEY_PARTS = ("bow", "shaft", "tooth1", "tooth2")
+
+# PR #57 tiles as objects, not floor decals (Sean, 2026-09-23): each keeps the
+# 2D glyph's colours and top-down motif (custom_env.py) but means something
+# at eye level -- a floating skull, a snow bank you wade through, a pool of
+# light with a beacon, a turntable. Heights are in wall units (first-person
+# walls are 1.0; the eye sits at 0.55).
+PORTAL_RING_TOP = 0.14
+PORTAL_BEACON_TOP = 10.0  # sweep 2026-09-23: with 1.0 walls, 10 reaches diagonals to ten cells
+PORTAL_BEACON_ALPHA = 0.45
+SKULL_RADIUS = 0.20
+SKULL_TILT = 25.0  # degrees the face looks up, so top-down still sees the sockets
+# Portal coordinate sign: the partner cell as prompt "row,col" (interface/coords.py
+# convention: 1-based, row southward), on four faces of the beacon so every
+# cardinal approach reads it. Seven-segment digits from thin boxes.
+SIGN_Z = 1.05
+SIGN_MARGIN = 0.03  # the four boards form a closed box around the beacon: each
+SIGN_CHAR_W = 0.13  # face sits half a label's width (plus margin) from the axis
+SIGN_CHAR_H = 0.18
+SNOW_BANK_HEIGHT = 0.18  # a drift, well under the eye; not a wall
+ROTATOR_TABLE_TOP = 0.06
+ROTATOR_ARROW_BASE = ROTATOR_TABLE_TOP
+ROTATOR_ARROW_TOP = 0.14
+# While the agent stands on a rotator its arrow rises this far, clear of the
+# wedge (top 0.28): top-down draws it over the agent, the eye sees its tip.
+ROTATOR_ARROW_LIFT = 0.30
+# Arrow outline per direction (0=E 1=S 2=W 3=N) in cell-relative world units,
+# from the 2D triangles: image (u, v) -> (u - 0.5, 0.5 - v).
+ROTATOR_ARROWS: tuple[tuple[tuple[float, float], ...], ...] = (
+    ((-0.28, 0.28), (-0.28, -0.28), (0.32, 0.0)),
+    ((-0.28, 0.28), (0.28, 0.28), (0.0, -0.32)),
+    ((0.28, 0.28), (0.28, -0.28), (-0.32, 0.0)),
+    ((-0.28, -0.28), (0.28, -0.28), (0.0, 0.32)),
+)
+
+
+class UnsupportedSpecError(ValueError):
+    """The spec uses a feature the 3D renderer cannot draw faithfully."""
+
+
+def check_supported(spec: TaskSpecification) -> None:
+    problems = []
+    mech = spec.mechanisms
+    if mech.blocks:
+        problems.append("blocks")
+    if mech.hazards:
+        problems.append("hazards")
+    if spec.goal.goal_type != "reach_position":
+        problems.append(f"goal_type={spec.goal.goal_type!r}")
+    if spec.rules.observability != "full":
+        problems.append(f"observability={spec.rules.observability!r}")
+
+    # Colours are pure-Python (no mujoco) and checked here too, so a bad
+    # colour is rejected before configure() touches the state backend or
+    # closes the current renderer -- the same completeness the other checks
+    # give (build_scene would otherwise raise mid-build via palette.rgba).
+    colour_names = (
+        [key.color for key in mech.keys]
+        + [door.requires_key for door in mech.doors]
+        + [switch.color for switch in mech.switches]
+        + [gate.color for gate in mech.gates]
+        + [tp.color for tp in mech.teleporters]
+    )
+    bad_colours: list[str] = []
+    for name in colour_names:
+        try:
+            palette.rgba(name)
+        except ValueError:
+            if name not in bad_colours:
+                bad_colours.append(name)
+    problems.extend(f"colour {name!r}" for name in bad_colours)
+
+    if problems:
+        raise UnsupportedSpecError(
+            f"3D renderer does not support {', '.join(problems)} (task {spec.task_id!r})"
+        )
+
+
+# wall_cells() and _across_is_x() below encode MiniGrid-derived placement
+# assumptions: objects overwrite the wall at their cell, and doors/gates/
+# switches sit in 1-wide passages (so "the wall on one side" determines the
+# barrier's orientation). A future non-MiniGrid state engine must preserve
+# these assumptions -- or these two functions must be revisited alongside it.
+def wall_cells(spec: TaskSpecification) -> frozenset[tuple[int, int]]:
+    width, height = spec.maze.dimensions
+    border = {
+        (x, y)
+        for x in range(width)
+        for y in range(height)
+        if x in (0, width - 1) or y in (0, height - 1)
+    }
+    walls = border | {(p.x, p.y) for p in spec.maze.walls}
+    mech = spec.mechanisms
+    occupied = {tuple(spec.resolved_goal())}
+    for group in (mech.keys, mech.doors, mech.gates, mech.switches):
+        occupied |= {(m.position.x, m.position.y) for m in group}
+    for tp in mech.teleporters:
+        occupied |= {(tp.position_a.x, tp.position_a.y), (tp.position_b.x, tp.position_b.y)}
+    for group in (mech.kill_cells, mech.frozen_tiles, mech.rotating_tiles):
+        occupied |= {(p.x, p.y) for p in group}
+    return frozenset(walls - occupied)
+
+
+@dataclass(frozen=True)
+class SceneIndex:
+    width: int
+    height: int
+    wall_height: float
+    wall_cells: frozenset
+    door_closed: dict[str, tuple[str, ...]]
+    door_open: dict[str, tuple[str, ...]]
+    switch_off: dict[str, tuple[str, ...]]
+    switch_on: dict[str, tuple[str, ...]]
+    gate_closed: dict[str, tuple[str, ...]]
+    gate_open: dict[str, tuple[str, ...]]
+    key_bodies: dict[str, str]
+    carried: dict[str, tuple[str, ...]]
+    agent_body: str = "agent"
+    kill_bodies: dict[int, str] = field(default_factory=dict)  # kill cell index -> skull mocap body
+    kill_cells: tuple[tuple[int, int], ...] = ()
+    # rotating tile index (spec order) -> geom names of its arrow, per direction
+    rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
+    rotator_initial: tuple[int, ...] = ()
+    rotator_cells: tuple[tuple[int, int], ...] = ()
+
+
+def _fmt(values) -> str:
+    return " ".join(f"{float(v):.5g}" for v in values)
+
+
+def _geom(name, kind, pos, size, rgba, *, group: int = 0) -> str:
+    # contype/conaffinity 0: purely visual; physics is never stepped.
+    return (
+        f'<geom name={quoteattr(name)} type="{kind}" pos="{_fmt(pos)}" size="{_fmt(size)}" '
+        f'rgba="{_fmt(rgba)}" group="{group}" contype="0" conaffinity="0"/>'
+    )
+
+
+def _key_parts(prefix, rgba, *, scale: float = 1.0, z: float = 0.0, group: int = 0) -> list[str]:
+    s = scale
+    return [
+        _geom(f"{prefix}:bow", "cylinder", (-0.14 * s, 0, z), (0.11 * s, 0.02 * s), rgba, group=group),
+        _geom(f"{prefix}:shaft", "box", (0.05 * s, 0, z), (0.15 * s, 0.03 * s, 0.02 * s), rgba, group=group),
+        _geom(f"{prefix}:tooth1", "box", (0.16 * s, -0.06 * s, z), (0.025 * s, 0.04 * s, 0.02 * s), rgba, group=group),
+        _geom(f"{prefix}:tooth2", "box", (0.08 * s, -0.06 * s, z), (0.025 * s, 0.04 * s, 0.02 * s), rgba, group=group),
+    ]
+
+
+# See the MiniGrid-derived placement note above wall_cells(): this also
+# assumes a 1-wide passage (exactly one axis has walls on both sides).
+def _across_is_x(cell, walls) -> bool:
+    """True when the passage through ``cell`` runs north-south (walls east and
+    west), so a barrier spans the x axis; otherwise it spans y."""
+    x, y = cell
+    return (x - 1, y) in walls and (x + 1, y) in walls
+
+
+def _size(across_x: bool, across: float, along: float, half_z: float) -> tuple[float, float, float]:
+    return (across, along, half_z) if across_x else (along, across, half_z)
+
+
+def _offset(across_x: bool, d: float) -> tuple[float, float]:
+    return (d, 0.0) if across_x else (0.0, d)
+
+
+def _disc(name, cx, cy, radius, z_bottom, z_top, rgba) -> str:
+    half = (z_top - z_bottom) / 2.0
+    return _geom(name, "cylinder", (cx, cy, z_bottom + half), (radius, half), rgba)
+
+
+def _portal_end(prefix, cx, cy, colour) -> list[str]:
+    # A pool of light: the 2D concentric glyph (colour ring, dark core, colour
+    # dot) as a thick floor ring, and a translucent column no wider than the
+    # dot rising from it, so top-down still shows the core and first person
+    # sees a beacon over the walls -- the partner's beacon is the same colour.
+    r, g, b, _ = colour
+    return [
+        _disc(f"{prefix}:ring", cx, cy, 0.42, 0.0, PORTAL_RING_TOP, colour),
+        _disc(f"{prefix}:core", cx, cy, 0.26, 0.0, PORTAL_RING_TOP + 0.01, palette.PORTAL_CORE),
+        _disc(f"{prefix}:dot", cx, cy, 0.12, 0.0, PORTAL_RING_TOP + 0.02, colour),
+        _disc(f"{prefix}:beacon", cx, cy, 0.12, PORTAL_RING_TOP + 0.02, PORTAL_BEACON_TOP, (r, g, b, PORTAL_BEACON_ALPHA)),
+    ]
+
+
+def _kill_cell(prefix, cx, cy) -> tuple[str, str]:
+    """(floor disc geom, skull mocap body). The skull floats at eye level over
+    the 2D dark-red disc and turns to face the agent each frame (sync.py):
+    two sockets, a nasal cavity and a toothed jaw on its +x face."""
+    disc = _disc(f"{prefix}:disc", cx, cy, 0.48, 0.0, 0.02, palette.KILL_DISC)
+    r = SKULL_RADIUS
+    parts = [
+        _geom(f"{prefix}:cranium", "sphere", (0, 0, 0), (r,), palette.SKULL),
+        _geom(f"{prefix}:socket0", "sphere", (0.145, 0.085, 0.04), (0.075,), palette.SKULL_DARK),
+        _geom(f"{prefix}:socket1", "sphere", (0.145, -0.085, 0.04), (0.075,), palette.SKULL_DARK),
+        _geom(f"{prefix}:nasal", "box", (0.19, 0, -0.05), (0.02, 0.025, 0.035), palette.SKULL_DARK),
+        _geom(f"{prefix}:jaw", "box", (0.06, 0, -0.20), (0.13, 0.12, 0.045), palette.SKULL),
+    ]
+    for i, y in enumerate((-0.075, -0.025, 0.025, 0.075)):
+        parts.append(_geom(f"{prefix}:tooth{i}", "box", (0.19, y, -0.155), (0.005, 0.012, 0.03), palette.SKULL_DARK))
+    body = (
+        f'<body name={quoteattr(prefix)} mocap="true" pos="{_fmt((cx, cy, EYE_HEIGHT))}">'
+        + "".join(parts)
+        + "</body>"
+    )
+    return disc, body
+
+
+# Seven-segment layout: (u0, v0, u1, v1) per segment in a unit char box (u right, v up).
+_SEGMENTS = {
+    "a": (0.1, 0.95, 0.9, 0.95), "b": (0.9, 0.5, 0.9, 0.95), "c": (0.9, 0.05, 0.9, 0.5),
+    "d": (0.1, 0.05, 0.9, 0.05), "e": (0.1, 0.05, 0.1, 0.5), "f": (0.1, 0.5, 0.1, 0.95),
+    "g": (0.1, 0.5, 0.9, 0.5),
+}
+_DIGIT_SEGMENTS = {
+    "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg",
+    "5": "acdfg", "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg",
+}
+# Non-digit glyphs as (u0, v0, u1, v1) strokes: ',' and the destination arrow '>'
+# (a shaft and a stepped head, axis-aligned boxes only).
+_GLYPH_STROKES = {
+    ",": [(0.35, 0.0, 0.45, 0.18)],
+    ">": [(0.05, 0.47, 0.6, 0.53), (0.55, 0.25, 0.65, 0.75), (0.65, 0.35, 0.75, 0.65), (0.75, 0.45, 0.85, 0.55)],
+}
+# Face -> (outward normal, viewer's right vector) for a viewer looking at that face.
+_SIGN_FACES = {"n": ((0, 1), (-1, 0)), "e": ((1, 0), (0, 1)), "s": ((0, -1), (1, 0)), "w": ((-1, 0), (0, -1))}
+
+
+def to_row_col(pos) -> tuple[int, int]:
+    """Prompt coordinates (interface/coords.py): (row, col) = (y, x); the border
+    wall is row/col 0, so interior cells count from 1."""
+    return int(pos.y), int(pos.x)
+
+
+def portal_sign_label(spec: TaskSpecification, tp, end: str) -> str | None:
+    """'>row,col' of where stepping on this end lands you; None for a one-way exit."""
+    if end == "a":
+        partner = tp.position_b
+    elif tp.bidirectional:
+        partner = tp.position_a
+    else:
+        return None
+    return ">" + ",".join(str(v) for v in to_row_col(partner))
+
+
+def _sign(prefix, cx, cy, label: str) -> list[str]:
+    n = len(label)
+    width = n * SIGN_CHAR_W
+    thick = 0.006
+    dist = width / 2 + SIGN_MARGIN  # face distance from the beacon axis
+    half_w = dist - 0.01  # boards meet at the corners without crossing
+    out = []
+    for face, ((nx, ny), (ux, uy)) in _SIGN_FACES.items():
+        px, py = cx + nx * dist, cy + ny * dist
+        plate_size = (half_w, 0.01, SIGN_CHAR_H / 2 + 0.02) if ny else (0.01, half_w, SIGN_CHAR_H / 2 + 0.02)
+        out.append(_geom(f"{prefix}:sign:{face}:plate", "box", (px, py, SIGN_Z), plate_size, palette.SIGN_PLATE))
+        px, py = px + nx * 0.012, py + ny * 0.012  # strokes sit just in front of the plate
+        k = 0
+        for i, ch in enumerate(label):
+            u_left = -width / 2 + i * SIGN_CHAR_W
+            strokes = _GLYPH_STROKES[ch] if ch in _GLYPH_STROKES else [_SEGMENTS[seg] for seg in _DIGIT_SEGMENTS[ch]]
+            for u0, v0, u1, v1 in strokes:
+                cu = u_left + (u0 + u1) / 2 * SIGN_CHAR_W
+                cv = SIGN_Z + ((v0 + v1) / 2 - 0.5) * SIGN_CHAR_H
+                hu = max(abs(u1 - u0) / 2 * SIGN_CHAR_W, thick)
+                hv = max(abs(v1 - v0) / 2 * SIGN_CHAR_H, thick)
+                size = (hu, thick, hv) if ny else (thick, hu, hv)
+                out.append(_geom(f"{prefix}:sign:{face}:{k}", "box", (px + ux * cu, py + uy * cu, cv), size, palette.SIGN_TEXT))
+                k += 1
+    return out
+
+
+def _frozen_tile(prefix, cx, cy) -> list[str]:
+    # A snow bank: a low drift filling the cell with two smaller lumps, so it
+    # reads as something to wade through rather than a block to walk around.
+    h = SNOW_BANK_HEIGHT
+    return [
+        _geom(f"{prefix}:bank", "ellipsoid", (cx, cy, 0.02), (0.46, 0.44, h - 0.02), palette.FROZEN_TILE),
+        _geom(f"{prefix}:lump0", "ellipsoid", (cx + 0.12, cy - 0.10, 0.08), (0.24, 0.20, 0.12), palette.FROZEN_SPOT),
+        _geom(f"{prefix}:lump1", "ellipsoid", (cx - 0.18, cy + 0.14, 0.06), (0.16, 0.14, 0.09), palette.FROZEN_FLECK),
+    ]
+
+
+def _arrow_mesh(direction: int) -> str:
+    """Vertices of the arrow prism for ``direction`` (convex hull of 6 points)."""
+    return "  ".join(
+        f"{x} {y} {z}"
+        for z in (ROTATOR_ARROW_BASE, ROTATOR_ARROW_TOP)
+        for x, y in ROTATOR_ARROWS[direction]
+    )
+
+
+def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int) -> tuple[str, SceneIndex]:
+    check_supported(spec)
+    width, height = spec.maze.dimensions
+    walls = wall_cells(spec)
+    mech = spec.mechanisms
+    hz = wall_height / 2.0
+    world: list[str] = []
+
+    # Floor: a grid-line base under one inset tile per non-wall cell.
+    world.append(_geom("floor:base", "box", (width / 2, -height / 2, -0.01), (width / 2, height / 2, 0.01), palette.GRID_LINE))
+    for x in range(width):
+        for y in range(height):
+            cx, cy, _ = cell_center(x, y)
+            if (x, y) in walls:
+                world.append(_geom(f"wall:{x}:{y}", "box", (cx, cy, hz), (0.5, 0.5, hz), palette.WALL))
+            else:
+                world.append(_geom(f"floor:{x}:{y}", "box", (cx, cy, 0.0), (0.46, 0.46, 0.005), palette.FLOOR))
+    gx, gy, _ = cell_center(*spec.resolved_goal())
+    world.append(_geom("goal", "box", (gx, gy, 0.012), (0.40, 0.40, 0.012), palette.GOAL))
+
+    door_closed: dict[str, tuple[str, ...]] = {}
+    door_open: dict[str, tuple[str, ...]] = {}
+    for door in mech.doors:
+        cell = (door.position.x, door.position.y)
+        cx, cy, _ = cell_center(*cell)
+        across_x = _across_is_x(cell, walls)
+        colour = palette.rgba(door.requires_key)
+        slab = f"door:{door.id}:slab"
+        world.append(_geom(slab, "box", (cx, cy, hz * 0.9), _size(across_x, 0.47, 0.06, hz * 0.9), colour))
+        posts = []
+        for i, d in enumerate((-0.41, 0.41)):
+            name = f"door:{door.id}:post{i}"
+            ox, oy = _offset(across_x, d)
+            world.append(_geom(name, "box", (cx + ox, cy + oy, hz * 0.9), _size(across_x, 0.06, 0.06, hz * 0.9), colour))
+            posts.append(name)
+        door_closed[door.id] = (slab,)
+        door_open[door.id] = tuple(posts)
+
+    gate_closed: dict[str, tuple[str, ...]] = {}
+    gate_open: dict[str, tuple[str, ...]] = {}
+    for gate in mech.gates:
+        cell = (gate.position.x, gate.position.y)
+        cx, cy, _ = cell_center(*cell)
+        across_x = _across_is_x(cell, walls)
+        colour = palette.rgba(gate.color)
+        closed, opened = [], []
+        for i, d in enumerate((-0.3, 0.0, 0.3)):
+            ox, oy = _offset(across_x, d)
+            bar, stub = f"gate:{gate.id}:bar{i}", f"gate:{gate.id}:stub{i}"
+            world.append(_geom(bar, "cylinder", (cx + ox, cy + oy, hz * 0.9), (0.045, hz * 0.9), colour))
+            world.append(_geom(stub, "cylinder", (cx + ox, cy + oy, 0.02), (0.045, 0.02), colour))
+            closed.append(bar)
+            opened.append(stub)
+        for i, z in enumerate((hz * 0.5, hz * 1.6)):
+            rail = f"gate:{gate.id}:rail{i}"
+            world.append(_geom(rail, "box", (cx, cy, z), _size(across_x, 0.40, 0.03, 0.03), colour))
+            closed.append(rail)
+        gate_closed[gate.id] = tuple(closed)
+        gate_open[gate.id] = tuple(opened)
+
+    switch_off: dict[str, tuple[str, ...]] = {}
+    switch_on: dict[str, tuple[str, ...]] = {}
+    for sw in mech.switches:
+        cx, cy, _ = cell_center(sw.position.x, sw.position.y)
+        colour = palette.rgba(sw.color)
+        off, on, halo = f"switch:{sw.id}:button_off", f"switch:{sw.id}:button_on", f"switch:{sw.id}:halo"
+        world.append(_geom(f"switch:{sw.id}:plate", "box", (cx, cy, 0.008), (0.3, 0.3, 0.008), palette.SWITCH_PLATE))
+        world.append(_geom(off, "cylinder", (cx, cy, 0.078), (0.17, 0.07), palette.dim(colour, 0.35)))
+        world.append(_geom(on, "cylinder", (cx, cy, 0.031), (0.17, 0.015), colour))
+        world.append(_geom(halo, "cylinder", (cx, cy, 0.018), (0.27, 0.004), colour))
+        switch_off[sw.id] = (off,)
+        switch_on[sw.id] = (on, halo)
+
+    for tp in mech.teleporters:
+        colour = palette.rgba(tp.color)
+        for end, pos in (("a", tp.position_a), ("b", tp.position_b)):
+            cx, cy, _ = cell_center(pos.x, pos.y)
+            world += _portal_end(f"portal:{tp.id}:{end}", cx, cy, colour)
+            label = portal_sign_label(spec, tp, end)
+            if label is not None:
+                world += _sign(f"portal:{tp.id}:{end}", cx, cy, label)
+    kill_bodies: dict[int, str] = {}
+    skull_bodies: list[str] = []
+    for i, cell in enumerate(mech.kill_cells):
+        cx, cy, _ = cell_center(cell.x, cell.y)
+        disc, body = _kill_cell(f"kill:{i}", cx, cy)
+        world.append(disc)
+        skull_bodies.append(body)
+        kill_bodies[i] = f"kill:{i}"
+    for i, cell in enumerate(mech.frozen_tiles):
+        cx, cy, _ = cell_center(cell.x, cell.y)
+        world += _frozen_tile(f"frozen:{i}", cx, cy)
+
+    rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = {}
+    for i, cell in enumerate(mech.rotating_tiles):
+        cx, cy, _ = cell_center(cell.x, cell.y)
+        # A turntable: raised orange disc on a slightly wider, darker rim.
+        world.append(_disc(f"rotator:{i}:rim", cx, cy, 0.48, 0.0, ROTATOR_TABLE_TOP * 0.5, palette.dim(palette.ROTATOR_TILE, 0.6)))
+        world.append(_disc(f"rotator:{i}:table", cx, cy, 0.44, 0.0, ROTATOR_TABLE_TOP, palette.ROTATOR_TILE))
+        arrows = []
+        for d in range(len(ROTATOR_ARROWS)):
+            name = f"rotator:{i}:arrow{d}"
+            world.append(
+                f'<geom name={quoteattr(name)} type="mesh" mesh="rotator_arrow_{d}" pos="{_fmt((cx, cy, 0.0))}" '
+                f'rgba="{_fmt(palette.ROTATOR_ARROW)}" group="0" contype="0" conaffinity="0"/>'
+            )
+            arrows.append((name,))
+        rotator_arrows[i] = tuple(arrows)
+    arrow_meshes = "".join(
+        f'<mesh name="rotator_arrow_{d}" vertex="{_arrow_mesh(d)}"/>' for d in range(len(ROTATOR_ARROWS))
+    )
+
+    bodies: list[str] = []
+    key_bodies: dict[str, str] = {}
+    for key in mech.keys:
+        cx, cy, _ = cell_center(key.position.x, key.position.y)
+        body = f"key:{key.id}"
+        parts = "".join(_key_parts(body, palette.rgba(key.color)))
+        bodies.append(f'<body name={quoteattr(body)} mocap="true" pos="{_fmt((cx, cy, KEY_HEIGHT))}">{parts}</body>')
+        key_bodies[key.id] = body
+
+    carried: dict[str, tuple[str, ...]] = {}
+    carried_parts: list[str] = []
+    for colour_name in sorted({palette.normalize(k.color) for k in mech.keys}):
+        prefix = f"carried:{colour_name}"
+        carried_parts += _key_parts(
+            prefix, palette.rgba(colour_name), scale=0.7, z=CARRIED_KEY_HEIGHT, group=AGENT_GROUP
+        )
+        carried[colour_name] = tuple(f"{prefix}:{p}" for p in KEY_PARTS)
+
+    sx, sy, _ = cell_center(spec.maze.start.x, spec.maze.start.y)
+    # A wedge pointing along the body's +x (its facing), like MiniGrid's triangle.
+    agent = (
+        f'<body name="agent" mocap="true" pos="{_fmt((sx, sy, 0.0))}">'
+        + f'<geom name="agent:body" type="mesh" mesh="agent_wedge" rgba="{_fmt(palette.AGENT)}" '
+        f'group="{AGENT_GROUP}" contype="0" conaffinity="0"/>'
+        + "".join(carried_parts)
+        + "</body>"
+    )
+    wedge = "  ".join(
+        f"{x} {y} {z}" for z in (0.02, 0.28) for x, y in ((0.42, 0), (-0.26, 0.3), (-0.26, -0.3))
+    )
+
+    newline = "\n    "
+    xml = f"""<mujoco model={quoteattr("maze_" + spec.task_id)}>
+  <visual>
+    <global offwidth="{resolution}" offheight="{resolution}"/>
+    <quality shadowsize="0"/>
+    <headlight ambient="0.45 0.45 0.45" diffuse="0.35 0.35 0.35" specular="0 0 0"/>
+  </visual>
+  <asset>
+    <mesh name="agent_wedge" vertex="{wedge}"/>
+    {arrow_meshes}
+  </asset>
+  <worldbody>
+    <light directional="true" pos="0 0 10" dir="0.3 0.4 -1" diffuse="0.5 0.5 0.5" specular="0 0 0" castshadow="false"/>
+    {newline.join(world)}
+    {newline.join(bodies)}
+    {newline.join(skull_bodies)}
+    {agent}
+  </worldbody>
+</mujoco>"""
+
+    index = SceneIndex(
+        width=width,
+        height=height,
+        wall_height=wall_height,
+        wall_cells=walls,
+        door_closed=door_closed,
+        door_open=door_open,
+        switch_off=switch_off,
+        switch_on=switch_on,
+        gate_closed=gate_closed,
+        gate_open=gate_open,
+        key_bodies=key_bodies,
+        carried=carried,
+        rotator_arrows=rotator_arrows,
+        rotator_initial=tuple(int(d) for d in mech.rotating_initial_directions),
+        rotator_cells=tuple((p.x, p.y) for p in mech.rotating_tiles),
+        kill_bodies=kill_bodies,
+        kill_cells=tuple((p.x, p.y) for p in mech.kill_cells),
+    )
+    return xml, index

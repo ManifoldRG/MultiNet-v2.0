@@ -8,8 +8,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
+# Per-model API worker driver; absent -> launch-time API_WORKER_ROLE (default "worker").
+_API_WORKER_ROLES = ("worker", "lockstep-worker")
+
 # provider -> required credential env var (only API providers need one).
-_CREDENTIAL_BY_PROVIDER = {"kimi": "MOONSHOT_API_KEY", "claude": "ANTHROPIC_API_KEY"}
+_CREDENTIAL_BY_PROVIDER = {
+    "kimi": "MOONSHOT_API_KEY",
+    "claude": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+}
 
 
 def sanitize_vm_name(raw: str) -> str:
@@ -23,7 +30,7 @@ def sanitize_vm_name(raw: str) -> str:
 def _classify(model: dict[str, Any]) -> str:
     if model.get("hardware_profile") == "local-gpu":
         return "gpu"
-    if str(model.get("provider")) in {"kimi", "claude"}:
+    if str(model.get("provider")) in _CREDENTIAL_BY_PROVIDER:
         return "api"
     # Fall through: any other hardware_profile is treated as an API worker.
     return "api"
@@ -49,6 +56,15 @@ def derive_topology(run_config: dict[str, Any], run_id: str,
         cred = _CREDENTIAL_BY_PROVIDER.get(provider)
         if cred:
             creds.add(cred)
+        # A run mixing Batch-API models (lockstep) with sync-only ones (openai)
+        # sets the driver per model; "" leaves the launch-time env default.
+        role = str(model.get("worker_role", ""))
+        if role and (kind != "api" or role not in _API_WORKER_ROLES):
+            raise ValueError(
+                f"model {key!r}: worker_role {role!r} must be one of {_API_WORKER_ROLES} "
+                "on an API model"
+            )
+        concurrency = model.get("worker_concurrency")
         for i in range(count):
             workers.append({
                 "name": sanitize_vm_name(f"{run_id}-{group}-{i}"),
@@ -56,6 +72,8 @@ def derive_topology(run_config: dict[str, Any], run_id: str,
                 "model_group": group,
                 "provider": provider,
                 "model": str(model.get("model", "")),
+                "worker_role": role,
+                "worker_concurrency": "" if concurrency is None else str(int(concurrency)),
             })
     return {
         "coordinator": {"name": sanitize_vm_name(f"{run_id}-coord")},

@@ -3,7 +3,7 @@
 # SINGLE reused fleet (3 Qwen + 1 Kimi + 1 Claude + coordinator). It composes the
 # already-tested primitives (launch_distributed.sh + lib/cost_safety.sh +
 # lib/distributed_start.sh) and holds NO cost-safety logic of its own. It STOPs,
-# never deletes. See docs/superpowers/specs/2026-07-03-sequential-supervised-sweep-design.md
+# never deletes.
 #
 # NOTE: -e is intentionally OFF — a tick must survive a nonzero sub-step so the
 # fail-closed egress guard can run and the fleet is never left in a half-known state.
@@ -18,7 +18,9 @@ RUNS_DIR="${RUNS_DIR:-.runs}"
 SWEEP_ID="${SWEEP_ID:-sweep-$(date +%Y%m%d-%H%M%S)}"
 RESULTS_REPO="${RESULTS_REPO:-Multinet-v2-results}"
 QWEN_WORKER_COUNT="${QWEN_WORKER_COUNT:-3}"     # GPU fan-out (Task 1 topology override)
-DIFFICULTY_MAX="${DIFFICULTY_MAX:-1000}"
+# DIFFICULTY_MAX has no default either (require_difficulty_max, lib/cost_safety.sh):
+# a 1000 default once scored runs against another scale than R1's 3000.
+DIFFICULTY_MAX="${DIFFICULTY_MAX:-}"
 # Per-batch on-VM watchdog (fail-closed). No default: the old 6h default
 # silently killed a legitimate ~7h run-massive tail before its data was pulled
 # (the 134/135 recovery). Batch-starting subcommands require it via
@@ -119,6 +121,7 @@ PY
 # then initialise sweep tracking. Does NOT start any conditional batch.
 cmd_provision() {
   : "${MAX_RUN_DURATION:?MAX_RUN_DURATION is required (GCP provision ceiling, e.g. 120h)}"
+  require_difficulty_max || return 1
   # Export the knobs the launcher (and its start hooks) read from the env, so the
   # multi-zone hunt order (ZONES, NE-Asia first) and difficulty are not silently lost.
   export QWEN_WORKER_COUNT DIFFICULTY_MAX
@@ -157,6 +160,7 @@ cmd_next_batch() {
   _require_manifest || return 1
   require_gcloud || return 1
   require_batch_cap || return 1
+  require_difficulty_max || return 1
   local name run_id art_id run_config manifest conditions prompt_variant zone coord
   name="$(batch_field "$n" name)"; run_id="$(batch_field "$n" run_id)"
   art_id="$(_artifacts_run_id "$n")"   # artifacts namespace (batch 0 -> $SWEEP_ID)
@@ -233,6 +237,7 @@ cmd_run_massive() {
   _require_manifest || return 1
   require_gcloud || return 1
   require_batch_cap || return 1
+  require_difficulty_max || return 1
   [[ "$#" -ge 1 ]] || { echo "usage: sweep_run.sh run-massive N [N ...]" >&2; return 2; }
   local run_id="cond_massive" first="$1" run_config manifest zone coord vm
   run_config="$(batch_field "$first" run_config)"   # topo identical across qwen batches

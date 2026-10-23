@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gridworld.backends.base import GridState
 from interface.config import ExperimentConfig
 from interface.coords import inventory_list
 from interface.loader import default_maze_path, load_task
-from interface.observation import current_observation_text, history_content_blocks
+from interface.observation import (
+    current_observation_text,
+    history_content_blocks,
+    history_text,
+    recent_history_steps,
+)
 from interface.parser import ACTIONS_HINT
 from interface.prompt_strategies import (
     MinimalPromptStrategy,
@@ -129,6 +135,22 @@ def test_observation_format_image_only_has_no_current_observation_text():
     assert text == ""
     assert "Current situation (this step):" not in text
     assert "You are at" not in text
+    assert "Moves remaining" not in text
+
+
+def test_text_modes_report_move_and_stall_budget():
+    spec, state = _initial_spec_and_state()
+    remaining = state.max_steps - state.step_count
+    text = current_observation_text(
+        "text_only", spec, state, include_description=True, stall_remaining=30
+    )
+    assert f"Moves remaining: {remaining}." in text
+    assert "Moves remaining until stall: 30." in text
+    assert "the episode will be terminated due to a stall" in text
+    image_only = current_observation_text(
+        "image_only", spec, state, include_description=True, stall_remaining=30
+    )
+    assert image_only == ""
 
 
 def test_image_only_prompt_puts_inventory_text_after_current_image():
@@ -148,7 +170,7 @@ def test_image_only_prompt_puts_inventory_text_after_current_image():
     assert content[0]["type"] == "image_url"
     assert content[1]["type"] == "text"
     assert "Current situation (this step):" not in content[1]["text"]
-    assert content[1]["text"].startswith("Your inventory: empty.\nWhat is your next action?")
+    assert content[1]["text"].startswith("Your inventory: empty.\nMoves remaining: 100.\nWhat is your next action?")
 
 
 def test_inventory_list_omits_consumed_or_removed_keys():
@@ -181,7 +203,7 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
         },
     ]
 
-    blocks = history_content_blocks("image_only", "last3", transcript)
+    blocks = history_content_blocks("image_only", "last_n", transcript)
 
     assert blocks[0]["type"] == "text"
     assert blocks[1]["type"] == "image_url"
@@ -194,6 +216,41 @@ def test_image_only_last3_history_puts_inventory_before_action_under_images():
         "type": "text",
         "text": "Your inventory: red.\nFINAL_OUTPUT: PICKUP\n",
     }
+
+
+def _full_history_transcript():
+    return [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_after_row_col": (1, index + 1),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+        }
+        for index in range(4)
+    ]
+
+
+def test_full_history_returns_all_steps_under_token_budget():
+    transcript = _full_history_transcript()
+
+    selected = recent_history_steps(transcript, "full", max_history_tokens=10_000)
+
+    assert selected == transcript
+    text = history_text("text_only", "full", transcript, max_history_tokens=10_000)
+    assert "FINAL_OUTPUT: MOVE_0" in text
+    assert "FINAL_OUTPUT: MOVE_3" in text
+
+
+def test_full_history_omits_newest_step_when_it_exceeds_budget():
+    transcript = _full_history_transcript()
+
+    selected = recent_history_steps(transcript, "full", max_history_tokens=1)
+
+    assert selected == []
+    text = history_text("text_only", "full", transcript, max_history_tokens=1)
+    assert text == ""
 
 
 def test_non_observation_format_conditions_omit_current_description_from_prompt():
@@ -289,26 +346,54 @@ def test_text_last3_prompt_includes_recent_history_text():
         {
             "kind": "step",
             "event_type": "VALID",
+            "position_before_row_col": (1, 2),
+            "facing_before": "EAST",
             "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
             "prompt_feedback": "MOVED",
         }
     ]
-    cfg = ExperimentConfig(observation="text_only", context_window="last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="last_n")
 
     prompt_text = _user_prompt_text_with_transcript(
         cfg,
         transcript,
     )
 
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
-    assert "Position after: (1, 2), facing EAST" in prompt_text
+    assert "Recent history (last 1 steps, oldest first):" in prompt_text
+    assert "Position before: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
-    assert "What is your next action?" in prompt_text
-    assert "Position: (1, 1)  |  Facing: EAST  |  Goal: (6, 6)" not in prompt_text
-    assert "Last result: Episode start." not in prompt_text
+    assert "Last feedback:" not in prompt_text
+
+
+def test_configurable_last_n_limits_prompt_history():
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "VALID",
+            "position_before_row_col": (1, index + 1),
+            "facing_before": "EAST",
+            "position_after_row_col": (1, index + 1),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+        }
+        for index in range(4)
+    ]
+    cfg = ExperimentConfig(
+        observation="text_only",
+        context_window="last_n",
+        context_n=2,
+    )
+
+    prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
+
+    assert "feedback-2" in prompt_text
+    assert "feedback-3" in prompt_text
+    assert "feedback-0" not in prompt_text
+    assert "feedback-1" not in prompt_text
 
 
 def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
@@ -319,6 +404,8 @@ def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
         {
             "kind": "step",
             "event_type": "TURNED",
+            "position_before_row_col": (1, 2),
+            "facing_before": "WEST",
             "position_after_row_col": (1, 2),
             "facing_after": "WEST",
             "action": "TURN_RIGHT",
@@ -327,7 +414,7 @@ def test_cardinal_last3_history_shows_cardinal_action_not_primitive():
         }
     ]
     cfg = ExperimentConfig(
-        observation="text_only", context_window="last3", action_space="cardinal"
+        observation="text_only", context_window="last_n", action_space="cardinal"
     )
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
@@ -341,22 +428,25 @@ def test_text_summary_and_last3_prompt_includes_summary_and_recent_history_text(
         {
             "kind": "step",
             "event_type": "MOVED",
+            "position_before_row_col": (1, 2),
+            "facing_before": "EAST",
             "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
             "prompt_feedback": "MOVED",
         }
     ]
-    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="text_only", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
     assert "Activity summary:" in prompt_text
     assert "first you passed (1, 2)" in prompt_text
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
-    assert "Position after: (1, 2), facing EAST" in prompt_text
+    assert "Recent history (last 1 steps, oldest first):" in prompt_text
+    assert "Position before: (1, 2), facing EAST" in prompt_text
     assert "FINAL_OUTPUT: MOVE_FORWARD" in prompt_text
     assert "Feedback: MOVED" in prompt_text
+    assert "Last feedback:" not in prompt_text
     assert "What is your next action?" in prompt_text
 
 
@@ -372,7 +462,7 @@ def test_image_only_text_summary_and_last3_includes_summary_text_and_last3_image
             "_decision_frame_rgb": frame,
         },
     ]
-    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="image_only", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
@@ -394,6 +484,8 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
         {
             "kind": "step",
             "event_type": "MOVED",
+            "position_before_row_col": (1, 2),
+            "facing_before": "EAST",
             "position_after_row_col": (1, 2),
             "facing_after": "EAST",
             "action": "MOVE_FORWARD",
@@ -402,14 +494,14 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
             "_decision_frame_rgb": frame,
         },
     ]
-    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last3")
+    cfg = ExperimentConfig(observation="image_text", context_window="text_summary_and_last_n")
 
     prompt_text = _user_prompt_text_with_transcript(cfg, transcript)
 
     assert "Activity summary:" in prompt_text
     assert "first you passed (1, 2)" in prompt_text
     assert "Recent steps (oldest first):" in prompt_text
-    assert "Recent history (last 3 steps, oldest first):" in prompt_text
+    assert "Recent history (last 1 steps, oldest first):" in prompt_text
     # Both the image label and text recap represent the prior model action
     # using exactly the same delimiter required for the next action.
     assert prompt_text.count("FINAL_OUTPUT: MOVE_FORWARD") == 2
@@ -417,7 +509,48 @@ def test_image_text_summary_and_last3_orders_summary_before_last3():
     # text recap) in the message content.
     summary_idx = prompt_text.index("Activity summary:")
     assert summary_idx < prompt_text.index("Recent steps (oldest first):")
-    assert summary_idx < prompt_text.index("Recent history (last 3 steps, oldest first):")
+    assert summary_idx < prompt_text.index("Recent history (last 1 steps, oldest first):")
+
+
+@pytest.mark.parametrize("observation", ["image_only", "image_text", "text_only"])
+def test_full_history_header_is_rendered_once(observation):
+    frame = np.zeros((2, 2, 3), dtype=np.uint8)
+    transcript = [
+        {
+            "kind": "step",
+            "event_type": "MOVED",
+            "position_before_row_col": (1, index + 1),
+            "facing_before": "EAST",
+            "position_after_row_col": (1, index + 2),
+            "facing_after": "EAST",
+            "action": f"MOVE_{index}",
+            "prompt_feedback": f"feedback-{index}",
+            "state_before": {"inventory": []},
+            "_decision_frame_rgb": frame,
+        }
+        for index in range(3)
+    ]
+    backend, spec = load_task(default_maze_path())
+    cfg = ExperimentConfig(
+        observation=observation,
+        context_window="full",
+        in_context_learning="zero_shot",
+    )
+    runner = build_runner(cfg, backend, spec)
+    runner.last_rgb, state, _info = backend.reset(seed=spec.seed)
+
+    message = runner._build_message(
+        state, feedback_templates.INITIAL_FEEDBACK, transcript
+    )
+
+    content = message["content"]
+    blocks = content if isinstance(content, list) else [{"type": "text", "text": content}]
+    text = "\n".join(
+        block["text"]
+        for block in blocks
+        if isinstance(block, dict) and block.get("type") == "text"
+    )
+    assert text.count("Full history (oldest first):") == 1
 
 
 def test_observation_format_image_only_differs_from_image_text_default():
@@ -435,10 +568,10 @@ def test_observation_format_image_only_differs_from_image_text_default():
     assert "You are at" in standard_text
 
 
-def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
+def test_minimal_prompt_uses_minimal_system_and_image_only_user_status():
     system_prompt = MinimalPromptStrategy(ACTIONS_HINT).build_system_prompt()
     # Isolate the minimal *prompting* axis from the observation: pin image_only so
-    # the user status is inventory-only (the default is now image_text + description).
+    # the user status is inventory + moves left (the default is image_text + description).
     prompt_text = _initial_user_prompt_text(ExperimentConfig(
         prompting="minimal", observation="image_only",
         include_current_observation_description=False,
@@ -447,7 +580,7 @@ def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
 
     assert system_prompt.startswith("Task: Solve the maze by reaching the goal.")
     assert "The environment may contain:" not in system_prompt
-    assert prompt_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert prompt_text.startswith("Your inventory: empty.\nMoves remaining: 100.\nWhat is your next action?")
     assert "Observation:" not in prompt_text
     assert "Position:" not in prompt_text
     assert "Facing:" not in prompt_text
@@ -457,7 +590,7 @@ def test_minimal_prompt_uses_minimal_system_and_inventory_only_user_status():
 
 def test_prompting_variants_share_image_only_user_prompt():
     # Prompting only changes the SYSTEM prompt; the user prompt is identical across
-    # prompting variants. Pin image_only to keep the user status inventory-only.
+    # prompting variants. Pin image_only: the user status is inventory + moves left.
     def _cfg(p):
         return ExperimentConfig(prompting=p, observation="image_only",
                                 include_current_observation_description=False,
@@ -468,11 +601,10 @@ def test_prompting_variants_share_image_only_user_prompt():
     verbose_text = _initial_user_prompt_text(_cfg("verbose"))
 
     assert standard_text == minimal_text == verbose_text
-    assert standard_text.startswith("Your inventory: empty.\nWhat is your next action?")
+    assert standard_text.startswith("Your inventory: empty.\nMoves remaining: 100.\nWhat is your next action?")
     assert "Position:" not in standard_text
     assert "Last result:" not in standard_text
     assert "Hints:" not in standard_text
-
 
 def test_each_set_has_exactly_one_baseline_equal_to_default():
     # After the fair-default rebase the baseline arm of most sets carries an

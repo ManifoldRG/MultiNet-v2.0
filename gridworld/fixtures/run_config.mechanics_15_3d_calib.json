@@ -1,0 +1,81 @@
+{
+  "description": "Mechanics-15 3D calibration: the full run's cell and model settings on ONE maze (M10, all four mechanics) to measure per-query input/output tokens and cost before launching run_config.mechanics_15_3d.json.",
+  "manifest": "gridworld/fixtures/manifest.mechanics_15.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_requires": "context_window=full comes from PR #54 (R2 full context). Launching before it is on the launched SHA fails at config load.",
+  "_note_model_params": "Equal 64k output caps (max_tokens; max_completion_tokens for OpenAI and Kimi K3). Thinking on for all three. Opus 5.5: effort=xhigh, no sampling params, Message Batches API via the lockstep worker (worker_role=lockstep-worker; coordinator STALE_AFTER_SECONDS >= 12600). Kimi K3: always thinks, reasoning_effort=max (Moonshot's default, set explicitly for provenance), no thinking object or sampling params; plain worker on the sync API (Moonshot Batch support for kimi-k3 unverified). GPT-6 Astra: reasoning_effort=xhigh, flex tier, image_detail=high, plain worker (the OpenAI agent has no batch path), spend_cap_usd=300 is a per-process hard stop on the Astra worker's running total (see _note_cost for where it stops the run; pair it with an OpenAI project budget). context_window=full resends every prior decision frame each query (history capped by max_history_tokens), so per-episode input grows quadratically with steps: estimate cost before launch.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30,
+    "prompt_cache": true
+  },
+  "render": {
+    "backend": "mujoco3d",
+    "camera": "first_person",
+    "start_map": true
+  },
+  "models": {
+    "kimi_k3": {
+      "provider": "kimi",
+      "model": "kimi-k3",
+      "max_tokens": 64000,
+      "timeout": 2400,
+      "enable_thinking": true,
+      "reasoning_effort": "max",
+      "prompt_cache_ttl": "1h",
+      "group": "kimi-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 15,
+      "tasks": [
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"
+      ]
+    },
+    "claude_opus55": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "max_tokens": 64000,
+      "timeout": 600,
+      "enable_thinking": true,
+      "effort": "xhigh",
+      "enable_prompt_cache": true,
+      "group": "claude-api",
+      "worker_count": 1,
+      "worker_role": "lockstep-worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 64,
+      "tasks": [
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"
+      ]
+    },
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "enable_prompt_cache": true,
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 300,
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 15,
+      "tasks": [
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0"
+      ]
+    }
+  },
+  "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: the calibration scores only its own maze. Run it locally (python -m scripts.run_pipeline); the Claude client then uses the synchronous API at standard price. The render block names mujoco3d, so launch_distributed.sh runs deploy/setup_mujoco3d.sh (OSMesa plus the mujoco3d extra) on every VM; a local run needs MUJOCO_GL=osmesa or egl.",
+  "_note_cache": "Prompt caching on, as in 2D: the start map and every earlier frame, inventory and action sit in the cached prefix; the current frame, budget/stall lines and question come after the last breakpoint. Measured 2026-10-21 on r1_S4_10x10_dense_1 in 3D (first_person + start_map, 31 queries, solved): Opus 5.5 sync read 86% of its input from cache (93% by the last query), each query reading exactly what the previous one wrote; Kimi K3's two-query check read the 5,206-token prefix. Opus: Message Batches with batch_cache_ttl=1h on the fleet. GPT-6 Astra: enable_prompt_cache=true (explicit breakpoints). Kimi K3: prompt_cache_ttl=1h. See run_config.mechanics_15_2d.json's _note_cache."
+}

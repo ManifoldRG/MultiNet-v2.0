@@ -41,8 +41,6 @@ This document is the single canonical source of truth for how the MultiNet v2.0 
 
 ### 1.2 Two-axis backend / inference decomposition
 
-![Backend × Adapter axes](diagrams/02_backend_adapter_axes.svg)
-
 ```
 Spatial+Modality Backend             Inference Adapter
 (implements AbstractGridBackend)     (talks to a model)
@@ -59,8 +57,6 @@ Each evaluation run is a 2-tuple `(backend, adapter)` plus a task. Same task acr
 ---
 
 ## 2. Pipeline DAG: stages, artifacts, invalidation
-
-![Pipeline stage flow](diagrams/01_pipeline_stage_flow.svg)
 
 The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and is keyed by a content hash so re-runs only touch stages whose inputs actually changed.
 
@@ -97,9 +93,6 @@ The pipeline is a five-stage DAG. Each stage has declared inputs and outputs and
 Stages 1–2 are per-task and produce the **task artifact bundle**. Stage 3 is per `(task × backend × adapter × seed)`. Stage 4 is 1:1 with stage 3. Stage 5 fans in.
 
 ### 2.2 Artifact layout
-
-![DAG artifacts and invalidation](diagrams/03_dag_artifacts_and_invalidation.svg)
-
 
 ```
 artifacts/
@@ -142,7 +135,7 @@ Deferred to implementation. FOSS preferred; **Snakemake** is the leading candida
 ```
 TaskSpecification
 ├── task_id : str               # unique identifier
-├── version : str               # schema version (currently "1.0")
+├── version : str               # schema version (currently "1.1")
 ├── seed : int                  # deterministic-replay seed
 ├── difficulty_tier : int       # positive integer; coarse organizing label only
 ├── description : str           # optional human-readable text
@@ -204,7 +197,7 @@ Enforced by `TaskSpecification.validate()`:
 
 ### 3.4 Versioning
 
-- `version` field on every JSON file; current value `"1.0"`.
+- `version` field on every JSON file; current value `"1.1"` (new mechanism keys: `death_portals`, freeze, rotate). Existing maze files keep the version they already declare.
 - Bumps follow semver: minor bump for backwards-compatible field additions, major bump for breaking changes.
 - The pipeline's `producer_version` headers on artifacts record both schema version and code version.
 

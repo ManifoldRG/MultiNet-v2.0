@@ -1,0 +1,41 @@
+# The image only needs demo/, gridworld/, interface/, scripts/, and
+# ogbench/ogbench/procgen/maze_jsons/ (see Dockerfile). Everything below is
+# either excluded by that or is build noise that would bloat the layer and
+# bust the cache on every commit.
+
+.git
+.gitignore
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.egg-info
+build/
+dist/
+.venv
+venv/
+.pytest_cache
+.mypy_cache
+.DS_Store
+
+# Not reached by the API surface. Verified by importing demo.api.app and
+# reading sys.modules - do not add to this list from intuition, the import
+# chain is deeper than the directory names suggest (interface.coords reaches
+# prompting_experiments, which is why it is NOT excluded here).
+tests/
+docs/
+analysis/
+adapters/
+cross_domain/
+multigrid/
+# ogbench Python code is not imported; only procgen/maze_jsons/ is copied into
+# the image. Exclude the rest of the submodule to keep the build context small.
+ogbench/*
+!ogbench/ogbench/
+ogbench/ogbench/*
+!ogbench/ogbench/procgen/
+ogbench/ogbench/procgen/*
+!ogbench/ogbench/procgen/maze_jsons/
+deploy/
+lib/
+*.sh

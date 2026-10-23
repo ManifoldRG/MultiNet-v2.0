@@ -13,16 +13,17 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Today's hard-coded phase-1 arg string (lib/distributed_start.sh gpu branch +
-# run_qwen_backfill.sh, verbatim, modulo ordering which is irrelevant to vllm).
+# Today's hard-coded phase-1 arg string (lib/distributed_start.sh gpu branch,
+# verbatim, modulo ordering which is irrelevant to vllm), plus the usage-only
+# --enable-prompt-tokens-details so prefix-cache hits reach telemetry.
 PHASE1 = ("--port 8000 --gpu-memory-utilization 0.9 --max-model-len 16384 "
-          "--max-num-seqs 64 --dtype bfloat16 --trust-remote-code")
+          "--max-num-seqs 64 --dtype bfloat16 --trust-remote-code "
+          "--enable-prompt-tokens-details")
 
 # Every shell script this task touches — must stay syntactically valid.
 TOUCHED = [
     "lib/vllm_serve_args.sh",
     "lib/distributed_start.sh",
-    "run_qwen_backfill.sh",
     "launch_qwen_smoke.sh",
     "sweep_run.sh",
 ]
@@ -111,3 +112,7 @@ def test_api_worker_role_override_wiring():
     # role (the \$ is the heredoc escape as stored in the function body).
     assert '--distributed-role "\\$API_ROLE"' in body
     assert '--worker-concurrency "\\$API_CONC"' in body
+    # A run-config model's worker_role / worker_concurrency (via the topology)
+    # override the env defaults per group.
+    assert 'worker_field "$vm" worker_role' in body
+    assert 'worker_field "$vm" worker_concurrency' in body

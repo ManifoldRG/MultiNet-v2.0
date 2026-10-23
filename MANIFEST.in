@@ -1,3 +1,1 @@
 recursive-include gridworld/tasks *.json
-recursive-include mazes/validation_10 *.json
-prune mazes/ogbench_procgen_mazes

@@ -7,6 +7,17 @@ from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[1]
 _ONE_SHOT_DIR = _REPO / "mazes" / "one_shot_example"
+_OGBENCH_MAZE_DIR = _REPO / "ogbench" / "ogbench" / "procgen" / "maze_jsons"
+
+
+def _eval_maze_paths():
+    paths = [
+        p for p in (_REPO / "mazes").rglob("*.json")
+        if _ONE_SHOT_DIR not in p.parents
+    ]
+    if _OGBENCH_MAZE_DIR.exists():
+        paths.extend(_OGBENCH_MAZE_DIR.rglob("*.json"))
+    return paths
 
 
 def _action_to_enum(a: str) -> Action:
@@ -55,8 +66,8 @@ def test_one_shot_example_is_disjoint_from_evaluation_mazes():
     """The ICL one-shot example must never double as an evaluation maze: it must
     not share a task_id or maze content with any eval maze, and no manifest may
     reference it. Evaluation mazes are every maze under mazes/ outside the
-    dedicated one_shot_example/ directory (covers validation_10 today and the
-    conditional S/M/B/D mazes once they land)."""
+    dedicated one_shot_example/ directory, plus the ogbench procgen corpus
+    that the R1 manifests resolve."""
     one_shot_mazes = {
         path: payload
         for path in sorted(_ONE_SHOT_DIR.glob("*.json"))
@@ -66,9 +77,8 @@ def test_one_shot_example_is_disjoint_from_evaluation_mazes():
 
     eval_payloads = [
         payload
-        for path in (_REPO / "mazes").rglob("*.json")
-        if _ONE_SHOT_DIR not in path.parents
-        and "maze" in (payload := json.loads(path.read_text()))
+        for path in _eval_maze_paths()
+        if "maze" in (payload := json.loads(path.read_text()))
     ]
     assert eval_payloads, "expected to find evaluation mazes under mazes/"
 

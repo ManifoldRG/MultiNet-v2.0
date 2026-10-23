@@ -1,14 +1,15 @@
-"""ExperimentRunner — LLM episode loop using gridworld MiniGridBackend."""
+"""ExperimentRunner — LLM episode loop over any gridworld backend."""
 
 from __future__ import annotations
 
+import copy
 import logging
 from pathlib import Path
 from typing import Callable, List
 
 import numpy as np
 
-from gridworld.backends.minigrid_backend import MiniGridBackend
+from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
 from interface import action_space as action_space_mod
@@ -20,17 +21,20 @@ from interface.observation import (
     current_observation_text,
     history_content_blocks,
     history_text,
+    history_text_blocks,
     leading_summary_blocks,
 )
 from interface.prompt_strategies import (
+    MinimalInteractionRulesStandPromptStrategy,
     MinimalPromptStrategy,
     PromptStrategy,
+    RenderContext,
     StandardPromptStrategy,
     VerbosePromptStrategy,
 )
 from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
-from interface.renderer import render_initial_maze_text
+from interface.renderer import render_initial_maze_text, rgb_to_image_block
 from prompting_experiments.prompt_templates import querying as querying_templates
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
@@ -40,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
+    "minimal_interaction_rules_stand": MinimalInteractionRulesStandPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
     "text_initial_maze": TextInitialMazePromptStrategy,
@@ -51,6 +56,28 @@ def _user_message_has_image(message: dict) -> bool:
     if not isinstance(content, list):
         return False
     return any(isinstance(b, dict) and b.get("type") == "image_url" for b in content)
+
+
+def _with_start_map(messages: List[dict], map_blocks: List[dict]) -> List[dict]:
+    """The request with ``map_blocks`` opening its FIRST user message.
+
+    Applied when a request is assembled, never to the stored chat: the map
+    appears exactly once per request in every chat mode (rolling: on whichever
+    user turn is oldest in the trimmed window) and multiturn history stays
+    lean. Without a map the request object itself is returned untouched.
+    """
+    if not map_blocks:
+        return messages
+    request = list(messages)
+    for i, message in enumerate(request):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            content = [{"type": "text", "text": content}]
+        request[i] = {**message, "content": copy.deepcopy(map_blocks) + list(content)}
+        break
+    return request
 
 
 def _trim_rolling_chat(messages: List[dict], max_pairs: int) -> None:
@@ -107,9 +134,18 @@ def _expand_current_image_placeholder(prompt_text: str, images: list[dict]) -> l
     return blocks
 
 
+def _split_off_history(prompt_text: str, history_blocks: list[dict]) -> list[dict] | None:
+    """``prompt_text`` as the history blocks plus one block with the rest, or
+    None when it does not open with that history (it is then sent whole)."""
+    history = "".join(block["text"] for block in history_blocks)
+    if not history_blocks or not prompt_text.startswith(history):
+        return None
+    return history_blocks + [{"type": "text", "text": prompt_text[len(history):]}]
+
+
 def build_runner(
     config: ExperimentConfig,
-    backend: MiniGridBackend,
+    backend: AbstractGridBackend,
     task_spec: TaskSpecification,
 ) -> ExperimentRunner:
     space = config.action_space
@@ -117,7 +153,11 @@ def build_runner(
         backend=backend,
         task_spec=task_spec,
         config=config,
-        prompt=_PROMPT_STRATEGIES[config.prompting](action_space_mod.actions_hint(space)),
+        # The render context (3D camera, start map) is read off the backend, not
+        # the config, so 2D prompts and every config hash stay as they were.
+        prompt=_PROMPT_STRATEGIES[config.prompting](
+            action_space_mod.actions_hint(space), render=RenderContext.from_backend(backend)
+        ),
         querying=QueryingMode(
             config.querying,
             valid_actions=action_space_mod.valid_actions(space),
@@ -129,7 +169,7 @@ def build_runner(
 class ExperimentRunner:
     def __init__(
         self,
-        backend: MiniGridBackend,
+        backend: AbstractGridBackend,
         task_spec: TaskSpecification,
         config: ExperimentConfig,
         prompt: PromptStrategy,
@@ -141,22 +181,32 @@ class ExperimentRunner:
         self.prompt = prompt
         self.querying = querying
         self.last_rgb: np.ndarray | None = None
+        # 3D render.start_map: the backend's top-down snapshot of the reset
+        # state, set by EpisodeStepper.start(); None for every other run.
+        self.start_map_rgb: np.ndarray | None = None
 
     def build_prompt_message(
         self,
         state,
         last_feedback: str,
         transcript: List[dict],
+        stall_remaining: int | None = None,
     ) -> tuple[str, dict]:
         system_prompt = self.prompt.build_system_prompt()
         # If the system prompt includes the `{maze_text}` placeholder, format
         # it with the rendered maze. Otherwise, for text observations append
         # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
         # context for text-only or image+text modes.
+        maze = dict(
+            observation_text_format=self.config.observation_text_format,
+            include_facing=self.config.observation_text_includes_facing,
+        )
         if "{maze_text}" in system_prompt:
-            system_prompt = system_prompt.format(maze_text=render_initial_maze_text(self.task_spec))
+            system_prompt = system_prompt.format(
+                maze_text=render_initial_maze_text(self.task_spec, **maze)
+            )
         elif self.config.observation in ("text_only", "image_text"):
-            maze_text = render_initial_maze_text(self.task_spec)
+            maze_text = render_initial_maze_text(self.task_spec, **maze)
             system_prompt = (
                 system_prompt
                 + "\n\n"
@@ -166,6 +216,11 @@ class ExperimentRunner:
             state,
             last_feedback,
             transcript,
+            stall_remaining=(
+                stall_remaining
+                if stall_remaining is not None
+                else self.config.progress_stall_k
+            ),
         )
 
     def run(
@@ -218,11 +273,25 @@ class ExperimentRunner:
             result["success"] = False
         return result
 
+    def start_map_blocks(self) -> list[dict]:
+        """[map text, map image] opening each request's first user message,
+        or [] without a start map."""
+        if self.start_map_rgb is None:
+            return []
+        return [
+            {"type": "text", "text": self.prompt.start_map_text()},
+            rgb_to_image_block(self.start_map_rgb),
+        ]
+
     def _one_shot_blocks(self, obs) -> list[dict]:
         """The one-shot ICL example blocks (example image + solution), or []."""
         if self.config.in_context_learning == "one_shot":
             from interface.one_shot import one_shot_content_blocks
-            return one_shot_content_blocks(obs)
+            return one_shot_content_blocks(
+                obs,
+                observation_text_format=self.config.observation_text_format,
+                include_facing=self.config.observation_text_includes_facing,
+            )
         return []
 
     def _build_message(
@@ -232,28 +301,62 @@ class ExperimentRunner:
         transcript: List[dict],
         with_one_shot: bool = True,
         with_context_history: bool = True,
+        stall_remaining: int | None = None,
     ) -> dict:
         obs = self.config.observation
         # "current" disables the in-prompt history sections; multiturn chat
         # passes with_context_history=False because its turns already carry
         # the history and embedding it again duplicates every observation.
         ctx = self.config.context_window if with_context_history else "current"
+        n = self.config.context_n
+        cache_breakpoints = self.config.prompt_cache and self.config.context_window == "full"
+        text_hist_blocks = history_text_blocks(
+            obs,
+            ctx,
+            transcript,
+            self.task_spec,
+            self.config.max_history_tokens,
+            observation_text_format=self.config.observation_text_format,
+            include_facing=self.config.observation_text_includes_facing,
+            cache_breakpoints=cache_breakpoints,
+        )
         obs_text = current_observation_text(
             obs,
             self.task_spec,
             state,
             include_description=self.config.include_current_observation_description,
             include_facing=self.config.observation_text_includes_facing,
+            observation_text_format=self.config.observation_text_format,
+            stall_remaining=stall_remaining,
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
-            history_text(obs, ctx, transcript, self.task_spec),
+            "".join(block["text"] for block in text_hist_blocks)
+            if text_hist_blocks
+            else history_text(
+                obs,
+                ctx,
+                transcript,
+                self.task_spec,
+                self.config.max_history_tokens,
+                n=n,
+                observation_text_format=self.config.observation_text_format,
+                include_facing=self.config.observation_text_includes_facing,
+            ),
             state,
             observation=obs,
+            stall_remaining=stall_remaining,
         )
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)
+        if last_feedback.startswith("Could not parse"):
+            question = prompt_question or user_templates.NEXT_ACTION_QUESTION
+            before, match, after = prompt_text.rpartition(question)
+            prompt_text = (
+                f"{before}{last_feedback}\n\n{match}{after}"
+                if match else f"{prompt_text}\n\n{last_feedback}"
+            )
         prompt_text = _append_after_current_question(
             prompt_text,
             self.querying.final_output_instruction(),
@@ -268,11 +371,21 @@ class ExperimentRunner:
             sections.append(user_templates.IMAGE_TEXT_ACTION_FORMAT_REMINDER)
         prompt_text = "\n\n".join(sections)
         summary_blocks = leading_summary_blocks(obs, ctx, transcript, self.task_spec)
-        hist_blocks = history_content_blocks(obs, ctx, transcript)
+        hist_blocks = history_content_blocks(
+            obs,
+            ctx,
+            transcript,
+            self.config.max_history_tokens,
+            n=n,
+            cache_breakpoints=cache_breakpoints,
+        )
         images = current_image_blocks(obs, self.last_rgb)
-        prompt_blocks = _expand_current_image_placeholder(prompt_text, images)
+        # text_only full history: the history steps as their own blocks, then the
+        # current turn, so cache breakpoints can sit on the newest steps.
+        split_blocks = _split_off_history(prompt_text, text_hist_blocks)
+        prompt_blocks = split_blocks or _expand_current_image_placeholder(prompt_text, images)
         one_shot_blocks = self._one_shot_blocks(obs) if with_one_shot else []
-        if one_shot_blocks or summary_blocks or hist_blocks or images:
+        if one_shot_blocks or summary_blocks or hist_blocks or images or split_blocks:
             return {
                 "role": "user",
                 "content": one_shot_blocks + summary_blocks + hist_blocks + prompt_blocks,
