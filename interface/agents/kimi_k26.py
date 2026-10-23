@@ -10,12 +10,13 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from interface.agents.http_retry import call_with_retry
 from interface.agents.moonshot_batch import MoonshotBatchDeadline, run_moonshot_batch
 from interface.agents.reply import Reply, detect_token_truncated
 from interface.agents.runner_messages import strip_cache_markers
+from interface.agents.spend_cap import SPEND, check_spend_cap
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,40 @@ _KIMI_K3_REASONING_EFFORTS = ("low", "high", "max")
 
 def _is_k3(model: str) -> bool:
     return model.startswith(_KIMI_K3_PREFIX)
+
+
+# USD per 1M tokens: (input, cache hit, output, 1h cache write), the Moonshot K3
+# rates the mechanics-15 cost projections use (2026-10-21). A 5m cache write
+# costs the input rate. Moonshot reports how many tokens a request wrote but not
+# their TTL tier (only the Msh-Usage-Cache-Write-Tokens-* response headers carry
+# that), so writes are priced at the configured prompt_cache_ttl. Batch requests
+# are priced at these sync rates. Only models a run config caps need an entry: a
+# cap on an unpriced model fails at construction.
+KIMI_PRICES: Dict[str, Tuple[float, float, float, float]] = {
+    "kimi-k3": (3.00, 0.30, 15.00, 6.00),
+}
+
+
+def kimi_usage_cost_usd(
+    usage: Optional[Dict[str, int]],
+    prices: Tuple[float, float, float, float],
+    *,
+    cache_ttl: Optional[str],
+) -> float:
+    """Price one normalized Moonshot usage dict (``input_tokens`` is the whole prompt)."""
+    if not usage:
+        return 0.0
+    p_in, p_hit, p_out, p_write_1h = prices
+    total_in = int(usage.get("input_tokens", 0))
+    hit = min(int(usage.get("cache_read_input_tokens", 0) or 0), total_in)
+    written = min(int(usage.get("cache_creation_input_tokens", 0) or 0), total_in - hit)
+    p_write = p_write_1h if cache_ttl == "1h" else p_in
+    return (
+        (total_in - hit - written) * p_in
+        + hit * p_hit
+        + written * p_write
+        + int(usage.get("output_tokens", 0)) * p_out
+    ) / 1_000_000
 
 
 # Moonshot caches identical request prefixes automatically and bills the reused
@@ -221,6 +256,8 @@ class KimiK26Config:
     batch_deadline_s: float = 7200.0
     batch_cancel_grace_s: float = 300.0
     batch_completion_window: str = "24h"
+    # Hard stop on this model's priced usage in this process (interface.agents.spend_cap).
+    spend_cap_usd: Optional[float] = None
 
 
 @dataclass
@@ -252,9 +289,26 @@ class KimiK26Agent:
                 )
         elif self.config.reasoning_effort is not None:
             raise ValueError(f"{self.config.model} does not take reasoning_effort (kimi-k3 only).")
+        # Fail closed at construction: a spend cap we cannot price is no cap at all.
+        self._prices = None
+        if self.config.spend_cap_usd is not None:
+            try:
+                self._prices = KIMI_PRICES[self.config.model]
+            except KeyError:
+                raise ValueError(
+                    f"No Kimi price on record for model {self.config.model!r}"
+                ) from None
+
+    def _record_spend(self, reply: Reply, *, cache_ttl: Optional[str]) -> None:
+        if self._prices is not None:
+            SPEND.add(
+                self.config.model,
+                kimi_usage_cost_usd(reply.usage, self._prices, cache_ttl=cache_ttl),
+            )
 
     def generate(self, messages: List[dict]) -> Reply:
-        return _post_chat_completions(
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
+        reply = _post_chat_completions(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -266,6 +320,8 @@ class KimiK26Agent:
             max_attempts=self.config.max_attempts,
             reasoning_effort=self.config.reasoning_effort,
         )
+        self._record_spend(reply, cache_ttl=self.config.prompt_cache_ttl)
+        return reply
 
     def generate_batch(self, batch: List[List[dict]]) -> List[Reply]:
         """Run every message list through the Moonshot Batch API, in input order.
@@ -283,7 +339,11 @@ class KimiK26Agent:
         be in flight at once. Ids absent from a completed batch (errors landed in
         the untouched error_file) become ``batch_errored`` stubs; ids missing
         after a poll-deadline cancel become ``batch_expired``.
+
+        The spend cap is checked once per round, before it is submitted (the sync
+        transport checks and records per item through ``generate``).
         """
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
         if os.environ.get("KIMI_BATCH_TRANSPORT", "batch") == "sync":
             from concurrent.futures import ThreadPoolExecutor
 
@@ -337,6 +397,9 @@ class KimiK26Agent:
                 replies.append(Reply(text="", stop_reason=missing_stop_reason))
             else:
                 replies.append(_reply_from_completion(body, max_tokens=self.config.max_tokens))
+        for reply in replies:
+            # Batch bodies carry no prompt_cache_options, so writes are on the 5m tier.
+            self._record_spend(reply, cache_ttl=None)
         return replies
 
     def __call__(self, messages: List[dict]) -> str:

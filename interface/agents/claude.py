@@ -20,6 +20,7 @@ from interface.agents.runner_messages import (
     parse_runner_content,
     split_system_prompt,
 )
+from interface.agents.spend_cap import SPEND, check_spend_cap
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,53 @@ logger = logging.getLogger(__name__)
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 _AGENT_NAME = "Claude agent"
 _CACHE_TTLS = ("5m", "1h")
+
+# USD per 1M tokens: (input, cache read, output). Source:
+# https://platform.claude.com/docs/en/build-with-claude/prompt-caching (fetched
+# 2026-10-22). Cache writes are 1.25x input (5m TTL) or 2x input (1h TTL); the
+# Message Batches API halves every rate, cache reads and writes included (the
+# caching multipliers stack with the batch discount). Only models a run config
+# caps need an entry: a cap on an unpriced model fails at construction.
+CLAUDE_PRICES: Dict[str, Tuple[float, float, float]] = {
+    "claude-opus-5-5": (4.00, 0.20, 20.00),
+}
+_CACHE_WRITE_MULTIPLIERS = {"5m": 1.25, "1h": 2.0}
+_BATCH_DISCOUNT = 0.5
+
+
+def claude_usage_cost_usd(
+    usage: Optional[Dict[str, int]],
+    prices: Tuple[float, float, float],
+    *,
+    cache_ttl: str,
+    batch: bool,
+) -> float:
+    """Price one normalized Claude usage dict.
+
+    ``input_tokens`` is the whole prompt (``normalize_token_usage`` folds the cache
+    reads and writes back in). Writes without a TTL split are priced at
+    ``cache_ttl``, the TTL the request asked for.
+    """
+    if not usage:
+        return 0.0
+    p_in, p_read, p_out = prices
+    total_in = int(usage.get("input_tokens", 0))
+    read = int(usage.get("cache_read_input_tokens", 0) or 0)
+    w5 = usage.get("cache_creation_5m_input_tokens")
+    w1 = usage.get("cache_creation_1h_input_tokens")
+    if w5 is None and w1 is None:
+        written = int(usage.get("cache_creation_input_tokens", 0) or 0)
+        w5, w1 = (0, written) if cache_ttl == "1h" else (written, 0)
+    w5, w1 = int(w5 or 0), int(w1 or 0)
+    uncached = max(0, total_in - read - w5 - w1)
+    usd = (
+        uncached * p_in
+        + read * p_read
+        + w5 * p_in * _CACHE_WRITE_MULTIPLIERS["5m"]
+        + w1 * p_in * _CACHE_WRITE_MULTIPLIERS["1h"]
+        + int(usage.get("output_tokens", 0)) * p_out
+    ) / 1_000_000
+    return usd * _BATCH_DISCOUNT if batch else usd
 
 # Model families that REJECT sampling params (temperature/top_p/top_k) with an
 # HTTP 400: Opus 4.7+ (incl. the Opus 5 line: "claude-opus-5" also matches
@@ -354,6 +402,8 @@ class ClaudeAnthropicConfig:
     batch_poll_interval_s: float = 30.0
     batch_deadline_s: float = 7200.0
     batch_cancel_grace_s: float = 300.0
+    # Hard stop on this model's priced usage in this process (interface.agents.spend_cap).
+    spend_cap_usd: Optional[float] = None
 
 
 @dataclass
@@ -395,10 +445,27 @@ class ClaudeAnthropicAgent:
                 "to ClaudeAnthropicAgent."
             )
         self.api_key = key
+        # Fail closed at construction: a spend cap we cannot price is no cap at all.
+        self._prices = None
+        if self.config.spend_cap_usd is not None:
+            try:
+                self._prices = CLAUDE_PRICES[self.config.model]
+            except KeyError:
+                raise ValueError(
+                    f"No Claude price on record for model {self.config.model!r}"
+                ) from None
+
+    def _record_spend(self, reply: Reply, *, cache_ttl: str, batch: bool) -> None:
+        if self._prices is not None:
+            SPEND.add(
+                self.config.model,
+                claude_usage_cost_usd(reply.usage, self._prices, cache_ttl=cache_ttl, batch=batch),
+            )
 
     def generate(self, messages: List[dict]) -> Reply:
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
         system, turns = self._prepared(messages, ttl=self.config.cache_ttl)
-        return _post_messages(
+        reply = _post_messages(
             self.api_key,
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -410,6 +477,8 @@ class ClaudeAnthropicAgent:
             enable_thinking=self.config.enable_thinking,
             effort=self.config.effort,
         )
+        self._record_spend(reply, cache_ttl=self.config.cache_ttl, batch=False)
+        return reply
 
     def _prepared(
         self, messages: List[dict], *, ttl: str
@@ -467,7 +536,9 @@ class ClaudeAnthropicAgent:
 
         Does not touch ``last_usage``/``last_thinking`` — batch calls carry their
         result in the returned ``Reply`` so N calls can be in flight at once.
+        The spend cap is checked once per round, before it is submitted.
         """
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
         requests = [
             {"custom_id": f"i{i}", "params": self._params_for(messages)}
             for i, messages in enumerate(batch)
@@ -482,6 +553,8 @@ class ClaudeAnthropicAgent:
         replies = [
             self._reply_from_result(results.get(f"i{i}")) for i in range(len(batch))
         ]
+        for reply in replies:
+            self._record_spend(reply, cache_ttl=self.config.batch_cache_ttl, batch=True)
         cache_reads = sum(
             (reply.usage or {}).get("cache_read_input_tokens", 0) or 0
             for reply in replies

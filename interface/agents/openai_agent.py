@@ -13,9 +13,9 @@ capacity is short OpenAI answers ``429 Resource Unavailable`` (not charged), whi
 the shared retry helper backs off on like any other 429.
 
 Optional hard spend cap (``spend_cap_usd``): a per-process running total of
-priced usage across every agent instance; once reached, further requests raise
-instead of spending. Restarting the process resets it, so pair it with an
-OpenAI project budget limit.
+the model's priced usage across every agent instance (``interface.agents.spend_cap``); once
+reached, further requests raise instead of spending. Restarting the process
+resets it, so pair it with an OpenAI project budget limit.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ import json
 import logging
 import os
 import socket
-import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -32,6 +31,7 @@ from typing import Dict, List, Mapping, Optional, Tuple
 
 from interface.agents.http_retry import call_with_retry
 from interface.agents.reply import Reply, detect_token_truncated
+from interface.agents.spend_cap import SPEND, SpendCapReached, check_spend_cap
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -95,28 +95,8 @@ def usage_cost_usd(usage: Optional[Mapping[str, int]], prices: Tuple[float, floa
     ) / 1_000_000
 
 
-class _SpendLedger:
-    """Process-wide priced-usage total, shared by every agent instance."""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self.usd = 0.0
-
-    def add(self, usd: float) -> float:
-        with self._lock:
-            self.usd += usd
-            return self.usd
-
-    def reset(self) -> None:
-        with self._lock:
-            self.usd = 0.0
-
-
-SPEND = _SpendLedger()
-
-
-class OpenAISpendCapReached(RuntimeError):
-    """Raised before a request once the process-wide spend cap is reached."""
+class OpenAISpendCapReached(SpendCapReached):
+    """Raised before a request once the model's spend cap is reached."""
 
 
 def _as_parts(content: object) -> List[object]:
@@ -358,11 +338,9 @@ class OpenAIAgent:
             raise RuntimeError(f"OpenAI API timed out after {timeout:.0f}s.") from exc
 
     def generate(self, messages: List[dict]) -> Reply:
-        cap = self.config.spend_cap_usd
-        if cap is not None and SPEND.usd >= cap:
-            raise OpenAISpendCapReached(
-                f"OpenAI spend cap ${cap:.2f} reached (running total ${SPEND.usd:.2f}); refusing request."
-            )
+        check_spend_cap(
+            _AGENT_NAME, self.config.model, self.config.spend_cap_usd, OpenAISpendCapReached
+        )
         body = _build_body(
             _to_openai_messages(
                 messages,
@@ -380,7 +358,7 @@ class OpenAIAgent:
             self.last_rate_limits = headers
         reply = _reply_from_completion(payload, max_tokens=self.config.max_tokens)
         if self._prices is not None:
-            SPEND.add(usage_cost_usd(reply.usage, self._prices))
+            SPEND.add(self.config.model, usage_cost_usd(reply.usage, self._prices))
         return reply
 
     def __call__(self, messages: List[dict]) -> str:
