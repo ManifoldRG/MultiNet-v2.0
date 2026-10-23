@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from typing import Iterable, List, Set, Tuple
-from collections import deque
+
+from gridworld.baselines import plan_bfs_path
+from gridworld.task_spec import (
+    GoalSpec,
+    MazeLayout,
+    MechanismSet,
+    Position,
+    Rules,
+    TaskSpecification,
+)
 
 from .models import (
     Backbone,
     Coord,
     MazeGenSpec,
-    MazeLayout,
     DenseMazeParams,
     MultiRouteParams,
     SequentialChainParams,
@@ -43,6 +51,54 @@ def build_walls_from_open(width: int, height: int, open_cells: Set[Coord]) -> Se
     return {(x, y) for x in range(width) for y in range(height) if (x, y) not in open_cells}
 
 
+def _task_from_geometry(
+    spec: MazeGenSpec,
+    width: int,
+    height: int,
+    walls: Set[Coord],
+    start: Coord,
+    goal: Coord,
+    metadata: dict | None = None,
+) -> TaskSpecification:
+    info = {
+        "backbone": spec.backbone.value,
+        "logic_chain": spec.logic_chain.value,
+    }
+    if metadata:
+        info.update(metadata)
+    goal_pos = Position(goal[0], goal[1])
+    return TaskSpecification(
+        task_id=f"{spec.backbone.value}_{spec.logic_chain.value}_{spec.seed}",
+        seed=spec.seed,
+        difficulty_tier=spec.difficulty_tier,
+        maze=MazeLayout(
+            dimensions=(width, height),
+            walls=[Position(x, y) for x, y in sorted(walls)],
+            start=Position(start[0], start[1]),
+            goal=goal_pos,
+        ),
+        mechanisms=MechanismSet(),
+        rules=Rules(),
+        goal=GoalSpec(goal_type="reach_position", target=goal_pos),
+        max_steps=1000,
+        metadata=info,
+        version="2.0",
+        description=f"{spec.backbone.value} {spec.logic_chain.value}",
+    )
+
+
+def _navigation_cells(task: TaskSpecification) -> list[Coord]:
+    """Cell sequence of the gridworld plan, with in-place turns collapsed."""
+    planned = plan_bfs_path(task)
+    if not planned.success:
+        return []
+    cells: list[Coord] = []
+    for pos in planned.positions:
+        if not cells or cells[-1] != pos:
+            cells.append(pos)
+    return cells
+
+
 def path_from_points(points: List[Coord]) -> List[Coord]:
     out: List[Coord] = []
     for i in range(len(points) - 1):
@@ -69,7 +125,7 @@ def path_from_points(points: List[Coord]) -> List[Coord]:
         seen.add(p)
     return dedup
 
-def generate_winding_corridor(spec: MazeGenSpec) -> MazeLayout:
+def generate_winding_corridor(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
     assert spec.backbone == Backbone.WINDING_CORRIDOR
     rng = spec.rng()
     p: WindingCorridorParams = spec.backbone_params
@@ -123,35 +179,20 @@ def generate_winding_corridor(spec: MazeGenSpec) -> MazeLayout:
     goal = path[-1]
     walls = build_walls_from_open(width, height, open_cells)
 
-    # --- new: expose mechanism slots on the forced path ---
     pickup_idx = max(1, len(path) // 3)
     blocker_idx = min(len(path) - 2, (2 * len(path)) // 3)
-
-    # keep them away from start/goal and distinct
     if blocker_idx <= pickup_idx:
         blocker_idx = min(len(path) - 2, pickup_idx + 2)
 
-    pickup_cell = path[pickup_idx]
-    blocker_cell = path[blocker_idx]
-
-    return MazeLayout(
-        width=width,
-        height=height,
-        walls=walls,
-        start=start,
-        goal=goal,
-        slots={
-            "pickup_1_candidates": [pickup_cell],
-            "blocker_1_candidates": [blocker_cell],
-            "distractor_branch_candidates": [],
-        },
-        route_cells=[set(path)],
-        metadata={
-            "backbone": spec.backbone.value,
-            "logic_chain": spec.logic_chain.value,
-            "turn_count": p.turn_count,
-        },
+    slots = {
+        "pickup_1_candidates": [path[pickup_idx]],
+        "blocker_1_candidates": [path[blocker_idx]],
+        "distractor_branch_candidates": [],
+    }
+    task = _task_from_geometry(
+        spec, width, height, walls, start, goal, {"turn_count": p.turn_count}
     )
+    return task, slots
 
 def _route_template_cells(width: int, height: int, num_routes: int) -> Tuple[Coord, Coord, List[List[Coord]]]:
     start = (1, height // 2)
@@ -172,39 +213,28 @@ def _route_template_cells(width: int, height: int, num_routes: int) -> Tuple[Coo
     return start, goal, routes
 
 
-def generate_multi_route(spec: MazeGenSpec) -> MazeLayout:
+def generate_multi_route(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
     assert spec.backbone == Backbone.MULTI_ROUTE
     p: MultiRouteParams = spec.backbone_params
     width, height = spec.grid_width, spec.grid_height
     start, goal, routes = _route_template_cells(width, height, p.num_routes)
     open_cells: Set[Coord] = set()
-    route_sets: List[Set[Coord]] = []
     for route in routes:
         carve_cells(route, open_cells, width, height, corridor_width=p.main_corridor_width)
-        route_sets.append(set(route))
 
     walls = build_walls_from_open(width, height, open_cells)
-    return MazeLayout(
-        width=width,
-        height=height,
-        walls=walls,
-        start=start,
-        goal=goal,
-        route_cells=route_sets,
-        slots={
-            "pickup_1_candidates": [c for c in routes[0][2:-2]] if routes else [],
-            "blocker_1_candidates": [goal],
-            "distractor_branch_candidates": [],
-        },
-        metadata={
-            "backbone": spec.backbone.value,
-            "logic_chain": spec.logic_chain.value,
-            "num_routes": len(routes),
-        },
+    slots = {
+        "pickup_1_candidates": [c for c in routes[0][2:-2]] if routes else [],
+        "blocker_1_candidates": [goal],
+        "distractor_branch_candidates": [],
+    }
+    task = _task_from_geometry(
+        spec, width, height, walls, start, goal, {"num_routes": len(routes)}
     )
+    return task, slots
 
 
-def generate_side_vault(spec: MazeGenSpec) -> MazeLayout:
+def generate_side_vault(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
     assert spec.backbone == Backbone.SIDE_VAULT
     p: SideVaultParams = spec.backbone_params
     width, height = spec.grid_width, spec.grid_height
@@ -226,23 +256,16 @@ def generate_side_vault(spec: MazeGenSpec) -> MazeLayout:
 
     blocker_x = min(width - 3, max(foyer_x + 2, width - 3 - p.blocker_distance_from_goal))
     walls = build_walls_from_open(width, height, open_cells)
-    return MazeLayout(
-        width=width,
-        height=height,
-        walls=walls,
-        start=start,
-        goal=goal,
-        slots={
-            "pickup_1_candidates": [vault_path[-1]],
-            "blocker_1_candidates": [(blocker_x, main_y)],
-            "distractor_branch_candidates": [],
-        },
-        route_cells=[set(main_path), set(vault_path)],
-        metadata={"backbone": spec.backbone.value, "logic_chain": spec.logic_chain.value},
-    )
+    slots = {
+        "pickup_1_candidates": [vault_path[-1]],
+        "blocker_1_candidates": [(blocker_x, main_y)],
+        "distractor_branch_candidates": [],
+    }
+    task = _task_from_geometry(spec, width, height, walls, start, goal)
+    return task, slots
 
 
-def generate_sequential_chain(spec: MazeGenSpec) -> MazeLayout:
+def generate_sequential_chain(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
     assert spec.backbone == Backbone.SEQUENTIAL_CHAIN
     p: SequentialChainParams = spec.backbone_params
     width, height = spec.grid_width, spec.grid_height
@@ -267,22 +290,15 @@ def generate_sequential_chain(spec: MazeGenSpec) -> MazeLayout:
     carve_cells(pickup2_path, open_cells, width, height)
 
     walls = build_walls_from_open(width, height, open_cells)
-    return MazeLayout(
-        width=width,
-        height=height,
-        walls=walls,
-        start=start,
-        goal=goal,
-        slots={
-            "pickup_1_candidates": [pickup1_path[-1]],
-            "blocker_1_candidates": [choke1],
-            "pickup_2_candidates": [pickup2_path[-1]],
-            "blocker_2_candidates": [choke2],
-            "distractor_branch_candidates": [],
-        },
-        route_cells=[set(main_path), set(pickup1_path), set(pickup2_path)],
-        metadata={"backbone": spec.backbone.value, "logic_chain": spec.logic_chain.value},
-    )
+    slots = {
+        "pickup_1_candidates": [pickup1_path[-1]],
+        "blocker_1_candidates": [choke1],
+        "pickup_2_candidates": [pickup2_path[-1]],
+        "blocker_2_candidates": [choke2],
+        "distractor_branch_candidates": [],
+    }
+    task = _task_from_geometry(spec, width, height, walls, start, goal)
+    return task, slots
 
 
 
@@ -346,35 +362,6 @@ def _add_dense_maze_loops(open_cells: set[Coord], width: int, height: int, rng, 
         open_cells.add(c)
 
 
-def _shortest_path_on_open_cells(start: Coord, goal: Coord, open_cells: set[Coord], width: int, height: int) -> list[Coord]:
-    q = deque([start])
-    parent = {start: None}
-
-    while q:
-        cur = q.popleft()
-        if cur == goal:
-            break
-        for nb in neighbors4(cur):
-            if not in_bounds(nb, width, height):
-                continue
-            if nb not in open_cells or nb in parent:
-                continue
-            parent[nb] = cur
-            q.append(nb)
-
-    if goal not in parent:
-        return []
-
-    path = []
-    cur = goal
-    while cur is not None:
-        path.append(cur)
-        cur = parent[cur]
-    path.reverse()
-    return path
-
-
-
 def _pick_path_cell_by_progress(path: list[Coord], lo: float, hi: float, rng) -> Coord:
     if len(path) < 3:
         raise ValueError("Path too short to sample progress-based slot")
@@ -388,7 +375,7 @@ def _pick_path_cell_by_progress(path: list[Coord], lo: float, hi: float, rng) ->
 
 
 
-def generate_dense_maze(spec: MazeGenSpec) -> MazeLayout:
+def generate_dense_maze(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
     assert spec.backbone == Backbone.DENSE_MAZE
     rng = spec.rng()
     p: DenseMazeParams = spec.backbone_params
@@ -417,7 +404,17 @@ def generate_dense_maze(spec: MazeGenSpec) -> MazeLayout:
         raise ValueError("Could not find start/goal in dense maze")
 
     start, goal = best_pair
-    path = _shortest_path_on_open_cells(start, goal, open_cells, width, height)
+    walls = build_walls_from_open(width, height, open_cells)
+    task = _task_from_geometry(
+        spec,
+        width,
+        height,
+        walls,
+        start,
+        goal,
+        {"dense_maze_cells": [p.maze_width_cells, p.maze_height_cells]},
+    )
+    path = _navigation_cells(task)
     if not path:
         raise ValueError("Dense maze path generation failed")
 
@@ -445,32 +442,18 @@ def generate_dense_maze(spec: MazeGenSpec) -> MazeLayout:
         pickup2 = path[max(3, (3 * n) // 5)]
         blocker2 = path[max(4, (4 * n) // 5)]
 
-    walls = build_walls_from_open(width, height, open_cells)
-
-    return MazeLayout(
-        width=width,
-        height=height,
-        walls=walls,
-        start=start,
-        goal=goal,
-        slots={
-            "pickup_1_candidates": [pickup1],
-            "blocker_1_candidates": [blocker1],
-            "pickup_2_candidates": [pickup2],
-            "blocker_2_candidates": [blocker2],
-            "distractor_branch_candidates": [],
-        },
-        route_cells=[set(path)],
-        metadata={
-            "backbone": spec.backbone.value,
-            "logic_chain": spec.logic_chain.value,
-            "dense_maze_cells": [p.maze_width_cells, p.maze_height_cells],
-            "solution_path_length": len(path) - 1,
-        },
-    )
+    slots = {
+        "pickup_1_candidates": [pickup1],
+        "blocker_1_candidates": [blocker1],
+        "pickup_2_candidates": [pickup2],
+        "blocker_2_candidates": [blocker2],
+        "distractor_branch_candidates": [],
+    }
+    task.metadata["solution_path_length"] = len(path) - 1
+    return task, slots
 
 
-def generate_from_spec(spec: MazeGenSpec) -> MazeLayout:
+def generate_from_spec(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
     if spec.backbone == Backbone.WINDING_CORRIDOR:
         return generate_winding_corridor(spec)
     if spec.backbone == Backbone.MULTI_ROUTE:

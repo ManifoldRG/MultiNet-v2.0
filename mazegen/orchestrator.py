@@ -1,5 +1,9 @@
 import random
-from .validator import validate_navigation_layout, validate_maze
+
+from gridworld.baselines import plan_bfs_path
+from gridworld.task_spec import TaskSpecification
+from gridworld.task_validator import TaskValidator
+
 from .generators import generate_from_spec
 from .mechanisms import place_key_door_pair, place_switch_gate_pair, place_sequential_chain, add_dead_end_distractors, add_wrong_key_distractors, add_distractor_chain
 from .models import (
@@ -185,89 +189,72 @@ def sample_spec(seed: int) -> MazeGenSpec:
         )
 
 
-def build_maze_from_spec(spec: MazeGenSpec) -> tuple[object, dict]:
-    """
-    Build a maze end-to-end from a generation spec.
+def acceptance_report(task: TaskSpecification) -> dict:
+    """Accept a task only when the gridworld schema and TaskValidator agree."""
+    schema_ok, schema_reasons = task.validate()
+    reasons = list(schema_reasons)
+    validator = TaskValidator(task)
+    beatable, _, message = validator.validate()
+    planned = plan_bfs_path(task)
+    if not beatable:
+        reasons.append(message)
+    else:
+        reasons.extend(validator.validate_mechanism_necessity())
+        if not validator.validate_chain_ordering():
+            reasons.append("dependency chain order is not required")
+        reasons.extend(validator.validate_distractor_safety(base_beatable=True))
+        if planned.success:
+            task.max_steps = max(task.max_steps, len(planned.action_labels) * 4)
 
-    Returns:
-        (obj, report)
-        - obj is a MazeLayout for navigation-only mazes
-        - obj is a MazeInstance for mechanism mazes
-        - report is the corresponding validation report
-    """
-    layout = generate_from_spec(spec)
+    return {
+        "is_valid": schema_ok and not reasons,
+        "reasons": reasons,
+        "solver_result": {
+            "optimal_cost": len(planned.action_labels) if planned.success else None,
+            "path": [tuple(pos) for pos in planned.positions] if planned.success else [],
+            "interactions": list(planned.action_labels) if planned.success else [],
+        },
+    }
 
-    if spec.logic_chain == LogicChain.NONE:
-        report = validate_navigation_layout(layout, spec.validation_params)
-        return layout, report
+
+def build_maze_from_spec(spec: MazeGenSpec) -> tuple[TaskSpecification, dict]:
+    """Carve a layout, place the requested chain, and validate it with TaskValidator."""
+    task, slots = generate_from_spec(spec)
 
     if spec.logic_chain == LogicChain.KD:
-        maze = place_key_door_pair(layout, color="red")
-        report = validate_maze(maze, expected_logic="kd")
-        return maze, report
+        place_key_door_pair(task, slots, color="red")
+    elif spec.logic_chain == LogicChain.SG:
+        place_switch_gate_pair(task, slots, switch_id="1")
+    elif spec.logic_chain == LogicChain.KS:
+        place_sequential_chain(task, slots, "ks", {"keys": ["red"], "switches": ["1"]})
+    elif spec.logic_chain == LogicChain.SK:
+        place_sequential_chain(task, slots, "sk", {"keys": ["red"], "switches": ["1"]})
+    elif spec.logic_chain == LogicChain.KK:
+        place_sequential_chain(task, slots, "kk", {"keys": ["red", "blue"]})
+    elif spec.logic_chain != LogicChain.NONE:
+        raise ValueError(f"Unsupported logic chain: {spec.logic_chain}")
 
-    if spec.logic_chain == LogicChain.SG:
-        maze = place_switch_gate_pair(layout, switch_id="1")
-        report = validate_maze(maze, expected_logic="sg")
-        return maze, report
-
-    if spec.logic_chain == LogicChain.KS:
-        maze = place_sequential_chain(
-            layout,
-            chain_type="ks",
-            palette={"keys": ["red"], "switches": ["1"]},
-        )
-        report = validate_maze(maze, expected_logic="ks")
-        return maze, report
-
-    if spec.logic_chain == LogicChain.SK:
-        maze = place_sequential_chain(
-            layout,
-            chain_type="sk",
-            palette={"keys": ["red"], "switches": ["1"]},
-        )
-        report = validate_maze(maze, expected_logic="sk")
-        return maze, report
-
-    if spec.logic_chain == LogicChain.KK:
-        maze = place_sequential_chain(
-            layout,
-            chain_type="kk",
-            palette={"keys": ["red", "blue"]},
-        )
-        report = validate_maze(maze, expected_logic="kk")
-        return maze, report
-
-    raise ValueError(f"Unsupported logic chain: {spec.logic_chain}")
+    return task, acceptance_report(task)
 
 
 def build_maze_with_distractors(spec: MazeGenSpec):
-    obj, report = build_maze_from_spec(spec)
-    if not report["is_valid"]:
-        return obj, report
-
-    # For now, only mechanism mazes get distractors.
-    if spec.logic_chain == LogicChain.NONE:
-        return obj, report
-
-    maze = obj
+    task, report = build_maze_from_spec(spec)
+    if not report["is_valid"] or spec.logic_chain == LogicChain.NONE:
+        return task, report
 
     if spec.distractor_mode == DistractorMode.DEAD_END_ROOMS:
-        maze = add_dead_end_distractors(maze, count=max(1, spec.max_distractors), branch_length=2)
-
+        add_dead_end_distractors(task, count=max(1, spec.max_distractors), branch_length=2)
     elif spec.distractor_mode == DistractorMode.WRONG_KEYS:
-        maze = add_dead_end_distractors(maze, count=max(1, spec.max_distractors), branch_length=2)
-        maze = add_wrong_key_distractors(
-            maze,
+        add_dead_end_distractors(task, count=max(1, spec.max_distractors), branch_length=2)
+        add_wrong_key_distractors(
+            task,
             colors=["yellow", "green", "purple"][: max(1, spec.max_distractors)],
         )
-
     elif spec.distractor_mode == DistractorMode.DISTRACTOR_CHAIN:
-        maze = add_dead_end_distractors(maze, count=1, branch_length=2)
-        maze = add_distractor_chain(maze, chain_type="kd", color="green")
+        add_dead_end_distractors(task, count=1, branch_length=2)
+        add_distractor_chain(task, chain_type="kd", color="green")
 
-    report = validate_maze(maze, expected_logic=spec.logic_chain.value)
-    return maze, report
+    return task, acceptance_report(task)
 
 
 
@@ -276,7 +263,7 @@ def build_valid_maze_with_retries(spec: MazeGenSpec, max_retries: int = 10):
     Try to build a valid maze from a spec, retrying with nearby seeds if needed.
 
     Returns:
-        (obj, report, final_spec)
+        (task, report, final_spec)
 
     Raises:
         ValueError if no valid maze is found after max_retries attempts.
@@ -294,7 +281,6 @@ def build_valid_maze_with_retries(spec: MazeGenSpec, max_retries: int = 10):
             distractor_mode=spec.distractor_mode,
             max_distractors=spec.max_distractors,
             backbone_params=spec.backbone_params,
-            validation_params=spec.validation_params,
         )
 
         obj, report = build_maze_with_distractors(trial_spec)

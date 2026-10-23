@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Tuple
 
 Coord = Tuple[int, int]
 
@@ -100,17 +100,6 @@ class DenseMazeParams:
 
 
 @dataclass
-class ValidationParams:
-    require_solvable: bool = True
-    require_no_bypass: bool = True
-    require_chain_order: bool = True
-    require_prerequisite_before_blocker: bool = True
-    require_single_main_path: bool = False
-    require_unique_shortest_path: bool = False
-    min_distinct_solution_routes: int = 1
-
-
-@dataclass
 class MazeGenSpec:
     backbone: Backbone
     logic_chain: LogicChain
@@ -121,82 +110,7 @@ class MazeGenSpec:
     distractor_mode: DistractorMode = DistractorMode.NONE
     max_distractors: int = 0
     backbone_params: object = None
-    validation_params: ValidationParams = field(default_factory=ValidationParams)
 
     def rng(self):
         import random
         return random.Random(self.seed)
-
-
-@dataclass
-class Key:
-    id: str
-    position: Coord
-    color: str
-
-
-@dataclass
-class Door:
-    id: str
-    position: Coord
-    requires_key: str
-    initial_state: str = "locked"
-
-
-@dataclass
-class Switch:
-    id: str
-    position: Coord
-    controls: List[str]
-    switch_type: str = "toggle"
-    initial_state: str = "off"
-
-
-@dataclass
-class Gate:
-    id: str
-    position: Coord
-    initial_state: str = "closed"
-
-
-@dataclass
-class MazeLayout:
-    width: int
-    height: int
-    walls: Set[Coord]
-    start: Coord
-    goal: Coord
-    slots: Dict[str, List[Coord]] = field(default_factory=dict)
-    route_cells: List[Set[Coord]] = field(default_factory=list)
-    metadata: Dict[str, object] = field(default_factory=dict)
-
-
-@dataclass
-class MazeInstance:
-    width: int
-    height: int
-    walls: Set[Coord]
-    start: Coord
-    goal: Coord
-    keys: List[Key] = field(default_factory=list)
-    doors: List[Door] = field(default_factory=list)
-    switches: List[Switch] = field(default_factory=list)
-    gates: List[Gate] = field(default_factory=list)
-    metadata: Dict[str, object] = field(default_factory=dict)
-
-    def to_json_like(self) -> dict:
-        return {
-            "maze": {
-                "dimensions": [self.width, self.height],
-                "walls": sorted([list(w) for w in self.walls]),
-                "start": list(self.start),
-                "goal": list(self.goal),
-            },
-            "mechanisms": {
-                "keys": [k.__dict__ | {"position": list(k.position)} for k in self.keys],
-                "doors": [d.__dict__ | {"position": list(d.position)} for d in self.doors],
-                "switches": [s.__dict__ | {"position": list(s.position)} for s in self.switches],
-                "gates": [g.__dict__ | {"position": list(g.position)} for g in self.gates],
-            },
-            "metadata": self.metadata,
-        }
