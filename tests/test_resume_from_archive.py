@@ -200,7 +200,7 @@ def test_build_live_agent_claude_keeps_archived_params_and_overrides_the_cap(mon
         "claude-opus-5-5", 64000, "xhigh", True, True,
     )
     # The sync path's cache TTL; the batch knobs are unused by generate().
-    assert c.cache_ttl == "5m"
+    assert c.cache_ttl == "1h"
     assert c.timeout == 1200
     assert c.spend_cap_usd == 12.5
 
