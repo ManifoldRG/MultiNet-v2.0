@@ -203,6 +203,37 @@ def test_parse_failure_requeries_without_step():
     assert stepper.state.step_count == step_count_before
 
 
+def test_infra_replies_never_spend_the_parse_retry_budget():
+    # A canceled batch request (deadline or operator cancel) never reached the
+    # model, like an expired or errored one: none of them may end the episode.
+    from interface.episode_step import _INFRA_STOP_REASONS
+
+    assert "batch_canceled" in _INFRA_STOP_REASONS
+    spec = {
+        "task_id": "infra_retry",
+        "seed": 0,
+        "difficulty_tier": 1,
+        "maze": {"dimensions": [5, 5], "walls": [], "start": [1, 1], "goal": [3, 3]},
+        "mechanisms": {},
+        "goal": {"type": "reach_position", "target": [3, 3]},
+        "max_steps": 30,
+    }
+    stepper = EpisodeStepper(_build(spec, max_parse_retries=3), verbose=False)
+    stepper.start()
+    step_count_before = stepper.state.step_count
+    for stop_reason in sorted(_INFRA_STOP_REASONS) * 2:
+        assert stepper.next_query() is not None
+        stepper.apply_reply(Reply(text="", stop_reason=stop_reason))
+        assert stepper.parse_failures == 0
+        assert not stepper.finished
+    assert stepper.state.step_count == step_count_before
+
+    # A real unparseable reply still counts.
+    assert stepper.next_query() is not None
+    stepper.apply_reply(Reply(text="i will not comply"))
+    assert stepper.parse_failures == 1
+
+
 def test_stepper_records_reply_stop_reason_and_truncation_additively():
     # New additive keys appear ONLY when present on the Reply.
     runner = _build(_MECHANICS_SPEC)
