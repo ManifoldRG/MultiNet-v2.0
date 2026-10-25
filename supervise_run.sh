@@ -130,8 +130,11 @@ probe_status() {  # echoes "T V F R P PROG" or returns 1
   printf '%s' "$json" | python3 -c '
 import json, sys
 d = json.load(sys.stdin); u = d.get("units", {}) or {}
+# Work left = pending plus units waiting to be (re)run: resumable infra kills
+# (possibly parked on billing until coordinator-unpark), stale and assigned.
+left = sum(int(u.get(k, 0)) for k in ("pending", "resumable", "stale", "assigned"))
 print(int(d.get("unit_count", 0)), int(u.get("verified", 0)), int(u.get("failed", 0)),
-      int(u.get("running", 0)), int(u.get("pending", 0)), int(d.get("progress_total", 0)))
+      int(u.get("running", 0)), left, int(d.get("progress_total", 0)))
 ' 2>/dev/null || return 1
 }
 

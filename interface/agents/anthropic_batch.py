@@ -23,6 +23,7 @@ import urllib.error
 import urllib.request
 from typing import Dict, List, Optional
 
+from interface.agents.billing import BillingExhausted
 from interface.agents.http_retry import call_with_retry
 
 logger = logging.getLogger(__name__)
@@ -125,8 +126,11 @@ def _create_batch(
                 url, api_key=api_key, method="POST", body={"requests": requests}
             )
         except AnthropicBatchHTTPError as exc:
-            if not _is_low_credit(exc) or time.monotonic() >= deadline:
+            if not _is_low_credit(exc):
                 raise
+            if time.monotonic() >= deadline:
+                # Still out of credit after the wait: billing, so the run parks.
+                raise BillingExhausted("claude", f"Anthropic Batches HTTP {exc.code}: {exc.detail}") from exc
             logger.warning(
                 "Anthropic batch create refused for low credit balance; "
                 "retrying in %.0fs (waiting for auto-refill): %s",

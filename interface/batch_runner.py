@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Deque, Dict, List, Optional
 
+from interface.agents.billing import BillingExhausted
 from interface.episode_checkpoint import discard_checkpoint, save_checkpoint
 from interface.episode_step import EpisodeStepper
 
@@ -240,7 +241,11 @@ class LockstepBatchRunner:
 
     def _record_error(self, unit: LockstepUnit, exc: Exception) -> None:
         logger.exception("unit %s failed: %s", unit.unit_id, exc)
-        self._results[unit.unit_id] = {"error": str(exc)}
+        self._results[unit.unit_id] = {
+            "error": str(exc),
+            # A billing error parks the unit (resumable) instead of failing it.
+            **({"billing": True} if isinstance(exc, BillingExhausted) else {}),
+        }
         self._delete_checkpoint(unit)
 
     @staticmethod

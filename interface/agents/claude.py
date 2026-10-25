@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from interface.agents.anthropic_batch import run_message_batch
+from interface.agents.billing import BillingExhausted
 from interface.agents.http_retry import call_with_retry
 from interface.agents.reply import Reply, detect_token_truncated
 from interface.agents.runner_messages import (
@@ -309,6 +310,8 @@ def _post_messages(
         payload = call_with_retry(_do_request, max_attempts=max_attempts)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
+        if "credit balance" in detail.lower() or '"billing_error"' in detail:
+            raise BillingExhausted("claude", f"Anthropic API HTTP {exc.code}: {detail}") from exc
         raise RuntimeError(f"Anthropic API HTTP {exc.code}: {detail}") from exc
     except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
         if isinstance(exc, urllib.error.URLError) and not isinstance(

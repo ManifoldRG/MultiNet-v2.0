@@ -24,6 +24,7 @@ import argparse
 import dataclasses
 import json
 import re
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
@@ -523,6 +524,7 @@ def _run_one_model(
     phase: Optional[dict[str, Any]] = None,
     render: Optional["RenderSettings"] = None,
     force: bool,
+    resume_killed: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[tuple, Optional[float]]]:
     condition_configs = _condition_configs(
         conditions, prompt_variant=prompt_variant, base_overrides=base_overrides
@@ -558,6 +560,7 @@ def _run_one_model(
                     phase=phase,
                     render=render,
                     force=force,
+                    resume_killed=resume_killed,
                 )
                 if result is None:
                     continue
@@ -651,9 +654,13 @@ def _prepare_unit_run(
     )
 
     def write_run_inputs(extras: Optional[dict[str, Any]] = None) -> None:
+        from pipeline import resume
+
         payload = {
             "inputs_hash": expected_hash,
             "producer_version": PIPELINE_VERSION,
+            # The code that produced this run: an automatic resume refuses another SHA.
+            "code_sha": resume.current_code_sha(),
             "task_id": task_id,
             "model_id": model_name,
             "model_config": _jsonable(model_config or {}),
@@ -741,8 +748,14 @@ def _run_one_unit(
     phase: Optional[dict[str, Any]] = None,
     render: Optional["RenderSettings"] = None,
     force: bool = False,
+    resume_killed: bool = False,
+    resume_from: Optional[dict[str, Any]] = None,
 ) -> Optional[tuple[dict[str, Any], Optional[float]]]:
-    """Run Stage 3/4 for exactly one task/model/seed/prompt variant."""
+    """Run Stage 3/4 for exactly one task/model/seed/prompt variant.
+
+    ``resume_from`` (a fleet worker's resumable unit) continues a killed run
+    through the replay-verify gate (pipeline.resume). Locally, a cached killed
+    episode is kept as-is unless ``resume_killed``: no surprise spend."""
     from pipeline.run_stage3 import run_episode
 
     task_id = row["task_id"]
@@ -776,10 +789,29 @@ def _run_one_unit(
 
     render = render or RenderSettings()
     episode = None
-    if not force and prep.episode_path.exists() and prep.sidecar_path.exists():
+    local_archive: Optional[Path] = None
+    if resume_from is None and not force and prep.episode_path.exists() and prep.sidecar_path.exists():
         sidecar = _load_json_object_if_valid(prep.sidecar_path)
         if sidecar is not None and sidecar.get("inputs_hash") == prep.expected_hash:
             episode = _load_json_object_if_valid(prep.episode_path)
+        if episode is not None and str(episode.get("end_reason", "")).startswith("agent_error:"):
+            label = f"{task_id}/{model_name}/seed_{seed}/{prompt_variant}"
+            if resume_killed:
+                # Resume from a copy: run_episode rewrites run_dir from scratch.
+                local_archive = prep.run_dir.parent / f".{prep.run_dir.name}.resume"
+                if local_archive.exists():
+                    shutil.rmtree(local_archive)
+                shutil.copytree(prep.run_dir, local_archive)
+                resume_from = {
+                    "archive_dir": local_archive,
+                    "expected_inputs_hash": prep.expected_hash,
+                    "resume_count": int((episode.get("resume") or {}).get("resume_count", 0)) + 1,
+                    "label": label,
+                }
+                episode = None
+            else:
+                print(f"{label}: killed episode ({episode['end_reason'][:80]}) kept as-is; "
+                      "pass --resume-killed to resume it")
 
     if episode is None:
         episode = run_episode(
@@ -794,10 +826,18 @@ def _run_one_unit(
                 **({} if render.backend == "minigrid" else {"render": render.provenance(prep.runtime_spec)}),
             },
             render=render,
+            resume_from=resume_from,
+            fresh=force,
         )
-        # ``phase`` rides in the run_inputs extras (additive; written AFTER the
-        # inputs_hash is computed, so it is recorded but excluded from the hash).
-        prep.write_run_inputs(extras={"phase": phase} if phase else None)
+        # ``phase`` and resume provenance ride in the run_inputs extras (additive;
+        # written AFTER the inputs_hash is computed, so recorded but not hashed).
+        extras = {"phase": phase} if phase else {}
+        for key in ("resumed_from", "resume"):
+            if key in episode:
+                extras[key] = episode[key]
+        prep.write_run_inputs(extras=extras or None)
+        if local_archive is not None:
+            shutil.rmtree(local_archive, ignore_errors=True)
 
     return prep.score_episode(episode)
 
@@ -905,8 +945,12 @@ def run_from_config(
     difficulty_max_static_score: Optional[float] = None,
     force: bool = False,
     agent_factory: Optional[AgentFactory] = None,
+    resume_killed: bool = False,
 ) -> dict[str, Any]:
-    """Run-config entry: each model runs its own task selection (model -> task files)."""
+    """Run-config entry: each model runs its own task selection (model -> task files).
+
+    ``resume_killed``: resume cached agent_error:* episodes (replay-verified)
+    instead of keeping them as-is."""
     manifest_path = Path(manifest_path)
     artifacts_root = Path(artifacts_root)
     config = scorer_config or load_scorer_config()
@@ -983,6 +1027,7 @@ def run_from_config(
             phase=phase,
             render=render,
             force=force,
+            resume_killed=resume_killed,
         )
         all_run_rows.extend(rr)
         composites.update(comp)
@@ -1242,6 +1287,11 @@ def main(argv: Optional[list[str]] = None) -> None:
     )
     parser.add_argument("--force", action="store_true", help="Recompute existing artifacts.")
     parser.add_argument(
+        "--resume-killed", action="store_true",
+        help="Resume cached infra-killed (agent_error:*) episodes through the replay-verify gate "
+             "instead of keeping them as-is (spends on the rest of each episode).",
+    )
+    parser.add_argument(
         "--distributed-role",
         choices=[
             "coordinator-prepare",
@@ -1250,9 +1300,11 @@ def main(argv: Optional[list[str]] = None) -> None:
             "lockstep-worker",
             "coordinator-run-api-client",
             "coordinator-finalize",
+            "coordinator-unpark",
         ],
         help="Run one distributed pipeline role instead of the single-process pipeline.",
     )
+    parser.add_argument("--provider", help="coordinator-unpark: the provider to release (claude, kimi, openai).")
     parser.add_argument("--job-id", help="Optional durable distributed job id for coordinator-prepare.")
     parser.add_argument(
         "--storage-config",
@@ -1305,6 +1357,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             run_set_id=args.run_set_id,
             difficulty_max_static_score=args.difficulty_max_static_score,
             force=args.force,
+            resume_killed=args.resume_killed,
         )
     else:
         if not args.agent:
