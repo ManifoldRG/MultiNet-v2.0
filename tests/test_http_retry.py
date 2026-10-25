@@ -90,6 +90,22 @@ def test_is_retryable_classification():
     assert not is_retryable_error(ValueError("nope"))
 
 
+@pytest.mark.parametrize("code", [520, 521, 522, 523, 524])
+def test_cloudflare_origin_errors_are_retried(code):
+    """Cloudflare's 52x (origin down, refused, timed out, unreachable) are
+    transient: an Astra episode died on one in the mechanics-15 3D run."""
+    assert is_retryable_error(_http_error(code))
+    sleeps: list[float] = []
+    fn = _Flaky([_http_error(code)], result="ok")
+    assert call_with_retry(fn, sleep=sleeps.append, rand=lambda: 0.0) == "ok"
+    assert fn.calls == 2
+
+
+@pytest.mark.parametrize("code", [499, 505, 519, 525, 526])
+def test_neighbouring_statuses_stay_non_retryable(code):
+    assert not is_retryable_error(_http_error(code))
+
+
 def test_backoff_honors_retry_after_header():
     captured: list[float] = []
     fn = _Flaky([_http_error(429, retry_after=7)], result="ok")
@@ -133,17 +149,19 @@ class _FakeResp:
 
 
 class _FlakyOpen:
-    """Fake urlopen: fail with a retryable 503 (Retry-After 0) N times, then 200."""
+    """Fake urlopen: fail with a retryable status (503 unless given; Retry-After 0)
+    N times, then 200."""
 
-    def __init__(self, fails: int, body: str):
+    def __init__(self, fails: int, body: str, code: int = 503):
         self.fails = fails
         self.body = body
+        self.code = code
         self.calls = 0
 
     def __call__(self, req, timeout=None):
         self.calls += 1
         if self.calls <= self.fails:
-            raise _http_error(503, retry_after=0)
+            raise _http_error(self.code, retry_after=0)
         return _FakeResp(self.body)
 
 
@@ -175,3 +193,18 @@ def test_kimi_agent_retries_transient_then_succeeds(monkeypatch):
     agent = kimi_mod.KimiK26Agent(api_key="test-key")
     assert agent([{"role": "user", "content": "hi"}]) == "OK"
     assert opener.calls == 3
+
+
+def test_openai_agent_retries_a_cloudflare_522_then_succeeds(monkeypatch):
+    from interface.agents import openai_agent as openai_mod
+
+    body = json.dumps(
+        {"choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}],
+         "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+    )
+    opener = _FlakyOpen(fails=1, body=body, code=522)
+    monkeypatch.setattr(openai_mod.urllib.request, "urlopen", opener)
+
+    agent = openai_mod.OpenAIAgent(openai_mod.OpenAIConfig(), api_key="test-key")
+    assert agent.generate([{"role": "user", "content": "hi"}]).text == "OK"
+    assert opener.calls == 2

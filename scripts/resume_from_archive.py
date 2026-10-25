@@ -17,7 +17,8 @@ this driver:
    ``episode.json`` (no manifests/submodules touched);
 3. builds a synthetic checkpoint payload from the archive (query counter and
    trailing parse-failure count rebuilt from the query records; the terminal
-   infra-kill status — ``parse_failed`` or any ``agent_error:`` — cleared) and
+   infra-kill status — ``parse_failed``, any ``agent_error:``, or this driver's
+   own ``resume_interrupted:`` — cleared) and
    hands it to the old code's ``resume_stepper``, which replays the recorded
    actions through a fresh backend, verifying position_after/state_after per
    step and rebuilding stall-watchdog state with the old code's
@@ -29,7 +30,8 @@ this driver:
    ``enable_prompt_cache`` from the experiment when the entry leaves it unset;
    OpenAI also needs ``--spend-cap-usd`` because its spend ledger is per process) and
    flushes full episode artifacts to ``--out-dir`` via the old code's
-   ``flush_episode_log``.
+   ``flush_episode_log``, with the archive's ``run_inputs.json`` and render
+   block, so a continue stopped early is itself an archive this driver resumes.
 
 The archive directory is never written to; the worktree is never modified.
 """
@@ -46,9 +48,23 @@ from pathlib import Path
 ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
 # The runner ends an episode with "agent_error:<Type>: ..." only for transport or
 # billing failures (interface/runner.py) — an infra outcome, never a model one.
-INFRA_KILL_PREFIXES = ("agent_error:",)
+# This driver's continue mode ends one with "resume_interrupted:<why>" only when
+# it stopped the run itself (its query cap, an agent error, the scripted agent
+# running out), never on a model outcome, so that archive resumes again.
+INFRA_KILL_PREFIXES = ("agent_error:", "resume_interrupted:")
 # The stepper's in-progress default (see EpisodeStepper.start()).
 IN_PROGRESS_END_REASON = "max_steps"
+# Mirrors interface/episode_step._INFRA_STOP_REASONS (a test keeps them equal):
+# replies the provider failed to deliver, which never spend the parse-retry budget.
+INFRA_STOP_REASONS = frozenset(
+    {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
+)
+# Mirrors interface/episode_checkpoint._SET_VALUED_STATE_FIELDS (a test keeps
+# them equal): GridState fields serialized from sets. Archives written before
+# they were serialized sorted list them in their process's PYTHONHASHSEED order.
+SET_VALUED_STATE_FIELDS = (
+    "open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells",
+)
 
 
 # --------------------------------------------------------------------------
@@ -56,15 +72,28 @@ IN_PROGRESS_END_REASON = "max_steps"
 # --------------------------------------------------------------------------
 
 def trailing_parse_failures(query_records: list[dict]) -> int:
-    """parse_failures resets to 0 on any successfully parsed reply, so the
-    live counter equals the number of TRAILING consecutive parse_ok=False
-    query records."""
+    """parse_failures resets to 0 on any successfully parsed reply and an infra
+    reply (see INFRA_STOP_REASONS; not token-truncated) leaves it unchanged, so
+    the live counter equals the number of TRAILING parse_ok=False query records
+    that were not infra replies."""
     n = 0
     for rec in reversed(query_records):
         if rec.get("parse_ok"):
             break
+        if rec.get("stop_reason") in INFRA_STOP_REASONS and not rec.get("token_truncated"):
+            continue
         n += 1
     return n
+
+
+def canonical_state(state: dict) -> dict:
+    """A state snapshot with its set-valued fields in one order, so two
+    snapshots of the same state compare equal whatever process wrote them."""
+    out = dict(state)
+    for key in SET_VALUED_STATE_FIELDS:
+        if isinstance(out.get(key), list):
+            out[key] = sorted(out[key], key=lambda v: json.dumps(v, sort_keys=True))
+    return out
 
 
 def is_infra_kill(end_reason: object) -> bool:
@@ -384,10 +413,13 @@ def main() -> int:
     step_records = [r for r in episode["transcript"] if r.get("kind") == "step"]
     replayed_final = _json_safe(state_snapshot(stepper.state))
     archived_final = episode["final_state"]
-    final_matches = replayed_final == archived_final
+    # Set-valued fields compare as sets: an archive lists them in the order its
+    # process happened to, which need not be this one's.
+    replayed_canon, archived_canon = canonical_state(replayed_final), canonical_state(archived_final)
+    final_matches = replayed_canon == archived_canon
     mismatched_keys = [
-        k for k in set(archived_final) | set(replayed_final)
-        if archived_final.get(k) != replayed_final.get(k)
+        k for k in set(archived_canon) | set(replayed_canon)
+        if archived_canon.get(k) != replayed_canon.get(k)
     ]
 
     report = {
@@ -456,6 +488,9 @@ def main() -> int:
     result = stepper.result()
     if stopped_early:
         result["end_reason"] = f"resume_interrupted:{stopped_early}"
+    if render is not None:
+        # The resume gate needs episode.json and run_inputs.json to name the same render.
+        result["render"] = render
     # Re-attach archived image payloads so the old flush path re-writes the
     # replayed queries' images instead of silently dropping the references.
     missing_images = rehydrate_agent_messages(result["transcript"], archive_dir)
@@ -463,6 +498,9 @@ def main() -> int:
         print(f"  note: {missing_images} archived query image(s) were absent from "
               "the archive and recorded as text placeholders")
     episode_path = flush_episode_log(result, out_dir)
+    # Same inputs, same as-run code: the sidecar carries over verbatim, so the
+    # out dir is an archive this driver can resume again.
+    (out_dir / "run_inputs.json").write_bytes((archive_dir / "run_inputs.json").read_bytes())
 
     print("=== continue outcome ===")
     print(f"  end_reason: {result['end_reason']}")

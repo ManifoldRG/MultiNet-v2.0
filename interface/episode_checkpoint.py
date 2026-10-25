@@ -155,9 +155,9 @@ def _load_parts(transcript: list[dict], parts: Path) -> None:
         rec["_checkpoint_part"] = (parts, ref["part"])
 
 
-# GridState fields serialized from sets: their list order follows
-# PYTHONHASHSEED, so two processes can write the same state in different
-# orders. Replay compares them as sets.
+# GridState fields serialized from sets. GridState.to_dict lists them sorted
+# now, but older checkpoints and archives list them in their process's
+# PYTHONHASHSEED order, so replay compares them as sets.
 _SET_VALUED_STATE_FIELDS = (
     "open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells",
 )
@@ -310,7 +310,9 @@ def _reconstruct_last_feedback(stepper, step_records, parse_failures):
 
     A pending parse retry (``parse_failures > 0``) means the last feedback was
     the parse-failure prompt; otherwise it is the last executed step's feedback,
-    or the initial feedback if no step has run yet.
+    or the initial feedback if no step has run yet. An infra reply changes
+    neither ``parse_failures`` nor the live feedback, so trailing infra query
+    records need no case of their own.
     """
     if parse_failures > 0:
         return feedback_templates.PARSE_FAILURE_FEEDBACK.format(

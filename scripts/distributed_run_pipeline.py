@@ -1158,8 +1158,16 @@ def make_coordinator_server(
     port: int = 8765,
     stale_after_seconds: float = 300.0,
     storage: Optional[StorageConfig] = None,
+    max_unit_attempts: int = 3,
+    max_resumes: int = MAX_RESUMES,
 ) -> ThreadingHTTPServer:
-    store = CoordinatorStore(artifacts_root, stale_after_seconds=stale_after_seconds, storage=storage)
+    store = CoordinatorStore(
+        artifacts_root,
+        stale_after_seconds=stale_after_seconds,
+        storage=storage,
+        max_unit_attempts=max_unit_attempts,
+        max_resumes=max_resumes,
+    )
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -1244,6 +1252,8 @@ def serve_coordinator(
     port: int = 8765,
     stale_after_seconds: float = 300.0,
     storage: Optional[StorageConfig] = None,
+    max_unit_attempts: int = 3,
+    max_resumes: int = MAX_RESUMES,
 ) -> None:
     server = make_coordinator_server(
         artifacts_root,
@@ -1251,6 +1261,8 @@ def serve_coordinator(
         port=port,
         stale_after_seconds=stale_after_seconds,
         storage=storage,
+        max_unit_attempts=max_unit_attempts,
+        max_resumes=max_resumes,
     )
     print(f"Coordinator serving {artifacts_root} on http://{host}:{port}")
     try:
@@ -2202,6 +2214,8 @@ def dispatch_distributed_role(args: Any) -> None:
             port=args.port,
             stale_after_seconds=args.stale_after_seconds,
             storage=_load_storage(args),
+            max_unit_attempts=args.max_unit_attempts,
+            max_resumes=args.max_resumes,
         )
         return
     if role == "worker":

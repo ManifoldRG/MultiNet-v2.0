@@ -318,3 +318,135 @@ def test_checkpoint_written_atomically(tmp_path):
         "finished",
         "end_reason",
     }
+
+
+# Every GridState field serialized from a set, populated with several members.
+_SET_STATE_SCRIPT = """
+import json
+from gridworld.backends.base import GridState
+from interface.episode_log import state_snapshot
+ids = ["red", "blue", "green", "yellow", "purple", "grey", "k10", "k2"]
+cells = {(x, y) for x in range(4) for y in range(3)}
+state = GridState(
+    agent_position=(1, 1), agent_direction=0,
+    open_doors={f"d_{i}" for i in ids}, collected_keys={f"k_{i}" for i in ids},
+    active_switches={f"s_{i}" for i in ids}, open_gates={f"g_{i}" for i in ids},
+    observability_mode="fog_of_war", visible_cells=set(cells), explored_cells=set(cells),
+)
+print(json.dumps(state_snapshot(state)))
+"""
+
+
+def test_set_valued_state_fields_serialize_the_same_under_any_hash_seed():
+    """open_doors, collected_keys, ... are sets of strings: listed in iteration
+    order they follow PYTHONHASHSEED, so two processes wrote the same state
+    differently (and an archive's final-state check failed on a resume)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[1]
+    outputs = set()
+    for seed in ("0", "1", "2", "3"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        run = subprocess.run([sys.executable, "-c", _SET_STATE_SCRIPT], capture_output=True, text=True,
+                             cwd=repo, env=env, timeout=120)
+        assert run.returncode == 0, run.stderr
+        outputs.add(run.stdout)
+    assert len(outputs) == 1
+    snap = json.loads(outputs.pop())
+    for key in ("open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells"):
+        assert len(snap[key]) > 1 and snap[key] == sorted(snap[key]), key
+
+
+# --------------------------------------------------------------------------- #
+# An infra reply (the provider never delivered an answer) changes nothing the
+# model is shown next: the retry is the prompt it would have gotten had the
+# reply never happened, live and after a resume.
+# --------------------------------------------------------------------------- #
+def _infra(stop_reason="batch_expired"):
+    return Reply(text="", stop_reason=stop_reason)
+
+
+def _prompt_after(runner, replies):
+    """The stepper and the next prompt after applying ``replies`` in order."""
+    stepper = EpisodeStepper(runner)
+    stepper.start()
+    for reply in replies:
+        assert stepper.next_query() is not None
+        stepper.apply_reply(reply)
+    return stepper, _json_safe(stepper.next_query())
+
+
+_BEFORE_INFRA = {
+    "after a step": [_reply("MOVE_FORWARD")],
+    "with a parse failure pending": [_reply("MOVE_FORWARD"), Reply(text="no answer here")],
+    "at the first query": [],
+}
+
+
+@pytest.mark.parametrize("chat_history", ["stateless", "rolling", "full"])
+@pytest.mark.parametrize("before", list(_BEFORE_INFRA), ids=str)
+def test_an_infra_reply_leaves_the_next_prompt_as_it_was(before, chat_history):
+    from interface.episode_step import _INFRA_STOP_REASONS
+
+    replies = _BEFORE_INFRA[before]
+    expected_stepper, expected = _prompt_after(_build_runner(_CORRIDOR_SPEC, chat_history=chat_history), replies)
+    for stop_reason in sorted(_INFRA_STOP_REASONS):
+        stepper, prompt = _prompt_after(
+            _build_runner(_CORRIDOR_SPEC, chat_history=chat_history), [*replies, _infra(stop_reason), _infra()]
+        )
+        assert prompt == expected, stop_reason
+        assert stepper.last_feedback == expected_stepper.last_feedback
+        assert stepper.parse_failures == expected_stepper.parse_failures
+        # The infra rounds are still on record, as unparsed queries.
+        infra = [r for r in stepper.transcript if r.get("kind") == "query"][-2:]
+        assert [r["stop_reason"] for r in infra] == [stop_reason, "batch_expired"]
+        assert not any(r["parse_ok"] for r in infra)
+
+
+def test_a_canceled_batch_request_is_an_infra_reply():
+    """A deadline cancel returns the round's unanswered requests as
+    "batch_canceled": none of them may spend a parse retry or tell the model
+    it failed to parse."""
+    stepper, prompt = _prompt_after(
+        _build_runner(_CORRIDOR_SPEC), [_reply("MOVE_FORWARD"), *[_infra("batch_canceled")] * 4]
+    )
+    # Four canceled rounds, more than max_parse_retries: the episode goes on.
+    assert prompt is not None and stepper.parse_failures == 0
+    assert "Could not parse FINAL_OUTPUT" not in json.dumps(prompt)
+
+
+def test_a_token_truncated_reply_is_still_a_parse_failure():
+    """Running out of output budget is the model's outcome, whatever the stop
+    reason says: it spends a retry and the model is told."""
+    stepper, prompt = _prompt_after(
+        _build_runner(_CORRIDOR_SPEC),
+        [Reply(text="", stop_reason="batch_expired", token_truncated=True)],
+    )
+    assert stepper.parse_failures == 1
+    assert "Could not parse FINAL_OUTPUT" in json.dumps(prompt)
+
+
+@pytest.mark.parametrize("before", list(_BEFORE_INFRA), ids=str)
+@pytest.mark.parametrize("rebuild", ["checkpoint", "archive"])
+def test_a_resume_after_an_infra_reply_rebuilds_the_live_prompt(tmp_path, before, rebuild):
+    """The rebuilt stepper's next prompt is the live one, both from a
+    query-boundary checkpoint and from a killed run's archive transcript
+    (resume_from_archive / pipeline.resume rebuild parse_failures from it)."""
+    from scripts.resume_from_archive import build_checkpoint_payload
+
+    replies = [*_BEFORE_INFRA[before], _infra()]
+    live, live_prompt = _prompt_after(_build_runner(_CORRIDOR_SPEC), replies)
+    ckpt = tmp_path / "checkpoint.json"
+    if rebuild == "checkpoint":
+        save_checkpoint(ckpt, live)
+    else:
+        episode = {"end_reason": "agent_error:RuntimeError: killed", "task_spec": {"seed": _CORRIDOR_SPEC["seed"]},
+                   "transcript": _json_safe(live.transcript)}
+        ckpt.write_text(json.dumps(build_checkpoint_payload(episode)), encoding="utf-8")
+    resumed = resume_stepper(ckpt, runner=_build_runner(_CORRIDOR_SPEC))
+    assert resumed.parse_failures == live.parse_failures
+    assert resumed.last_feedback == live.last_feedback
+    assert _json_safe(resumed.next_query()) == live_prompt

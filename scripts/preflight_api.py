@@ -37,7 +37,10 @@ def _probe(provider: str, cfg: dict[str, Any]) -> None:
 
     from interface.agents.kimi_k26 import _is_k3
 
-    small = {k: v for k, v in cfg.items() if k not in ("spend_cap_usd", "service_tier", "effort")}
+    # The run's spend cap stays: the agent refuses a cap it cannot price at
+    # construction, and that must fail here, not on the fleet. The probe's own
+    # spend is cents against it.
+    small = {k: v for k, v in cfg.items() if k not in ("service_tier", "effort")}
     small.update({"timeout": 120, "max_attempts": 2})
     if provider == "openai":
         # max_completion_tokens covers reasoning too: leave room for a visible reply.

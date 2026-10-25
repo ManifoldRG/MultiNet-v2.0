@@ -43,8 +43,12 @@ start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST DIFF
   # the worst-case round (docs/batch-api-lockstep-runner-design.md). Unset ->
   # run_pipeline's default.
   local stale_after="${STALE_AFTER_SECONDS:-}"
+  # [MAX_UNIT_ATTEMPTS] [MAX_RESUMES] coordinator-serve's per-unit caps: fresh
+  # hand-outs before a unit is left failed, and resumes after non-billing infra
+  # kills. Unset -> run_pipeline's defaults.
+  local max_attempts="${MAX_UNIT_ATTEMPTS:-}" max_resumes="${MAX_RESUMES:-}"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' MAX_UNIT_ATTEMPTS='$max_attempts' MAX_RESUMES='$max_resumes' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -86,6 +90,8 @@ python -m scripts.run_pipeline \
   ${prepare_args[@]+"${prepare_args[@]}"}
 serve_args=()
 [[ -n "${STALE_AFTER:-}" ]] && serve_args+=(--stale-after-seconds "$STALE_AFTER")
+[[ -n "${MAX_UNIT_ATTEMPTS:-}" ]] && serve_args+=(--max-unit-attempts "$MAX_UNIT_ATTEMPTS")
+[[ -n "${MAX_RESUMES:-}" ]] && serve_args+=(--max-resumes "$MAX_RESUMES")
 nohup python -m scripts.run_pipeline \
   --distributed-role coordinator-serve \
   --artifacts-root "artifacts/$RUN_ID" \

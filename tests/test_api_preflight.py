@@ -68,13 +68,18 @@ def test_a_moonshot_balance_below_the_spend_cap_fails():
     assert "7.09" in rows["kimi_k26"]["detail"] and "20" in rows["kimi_k26"]["detail"]
 
 
-_MECHANICS_15_2D = REPO / "gridworld" / "fixtures" / "run_config.mechanics_15_2d.json"
+_MECHANICS_15 = sorted((REPO / "gridworld" / "fixtures").glob("run_config.mechanics_15_*.json"))
 
 
-@pytest.mark.parametrize("name", sorted(json.loads(_MECHANICS_15_2D.read_text())["models"]))
-def test_the_probe_builds_each_api_model_through_its_real_agent(name, monkeypatch):
+@pytest.mark.parametrize(
+    "path, name",
+    [(path, name) for path in _MECHANICS_15 for name in sorted(json.loads(path.read_text())["models"])],
+    ids=lambda v: v.stem.removeprefix("run_config.") if isinstance(v, Path) else v,
+)
+def test_the_probe_builds_each_api_model_through_its_real_agent(path, name, monkeypatch):
     """The probe's small config must pass the real agent's construction checks
-    (kimi-k3 refuses enable_thinking false); the agent is built, never called."""
+    (kimi-k3 refuses enable_thinking false, a spend cap needs a price); the
+    agent is built, never called."""
     import scripts.run_pipeline as run_pipeline
 
     for key in ("ANTHROPIC_API_KEY", "MOONSHOT_API_KEY", "OPENAI_API_KEY"):
@@ -87,9 +92,27 @@ def test_the_probe_builds_each_api_model_through_its_real_agent(name, monkeypatc
         return (lambda messages: "OK"), "stub"
 
     monkeypatch.setattr(run_pipeline, "_build_agent_from_spec", build)
-    cfg = json.loads(_MECHANICS_15_2D.read_text())["models"][name]
+    cfg = json.loads(path.read_text())["models"][name]
     preflight_api._probe(str(cfg["provider"]).lower(), cfg)
-    assert len(built) == 1 and built[0]["max_tokens"] <= 256 and "spend_cap_usd" not in built[0]
+    assert len(built) == 1 and built[0]["max_tokens"] <= 256
+    # The run's own cap goes to the probe agent, so its construction check runs.
+    assert built[0].get("spend_cap_usd") == cfg.get("spend_cap_usd")
+
+
+def test_the_probe_refuses_a_spend_cap_it_cannot_price(monkeypatch):
+    """A cap on a model with no price on record is no cap at all; the agent
+    refuses it at construction, so the preflight fails before any request."""
+    import urllib.request
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-never-sent")
+    sent = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: sent.append(a) or pytest.fail("request sent"))
+    rows = preflight_api.preflight(
+        {"models": {"gpt_next": {"provider": "openai", "model": "gpt-7-unpriced", "spend_cap_usd": 50}}},
+        balance=lambda: 0.0,
+    )
+    assert rows[0]["status"] == "failed" and "No OpenAI price on record" in rows[0]["detail"], rows
+    assert sent == []
 
 
 def _cli(tmp_path: Path, env: dict) -> subprocess.CompletedProcess:

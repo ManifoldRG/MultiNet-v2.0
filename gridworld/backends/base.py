@@ -150,7 +150,12 @@ class GridState:
     explored_cells: set[tuple[int, int]] = field(default_factory=set)  # All ever-seen cells (fog_of_war)
 
     def to_dict(self) -> dict:
-        """Convert state to dictionary for serialization."""
+        """Convert state to dictionary for serialization.
+
+        Set-valued fields are listed sorted: a set of strings iterates in
+        PYTHONHASHSEED order, so listing it as-is wrote the same state
+        differently in two processes.
+        """
         return {
             "agent_position": list(self.agent_position),
             "agent_direction": self.agent_direction,
@@ -160,10 +165,10 @@ class GridState:
             "terminated": self.terminated,
             "truncated": self.truncated,
             "reward": self.reward,
-            "open_doors": list(self.open_doors),
-            "collected_keys": list(self.collected_keys),
-            "active_switches": list(self.active_switches),
-            "open_gates": list(self.open_gates),
+            "open_doors": sorted(self.open_doors),
+            "collected_keys": sorted(self.collected_keys),
+            "active_switches": sorted(self.active_switches),
+            "open_gates": sorted(self.open_gates),
             "block_positions": {k: list(v) for k, v in self.block_positions.items()},
             "teleporter_cooldowns": self.teleporter_cooldowns,
             "key_positions": {k: list(v) for k, v in self.key_positions.items()},
@@ -171,8 +176,8 @@ class GridState:
             "rotator_dirs": list(self.rotator_dirs),
             "goal_reached": self.goal_reached,
             "observability_mode": self.observability_mode,
-            "visible_cells": [list(c) for c in self.visible_cells],
-            "explored_cells": [list(c) for c in self.explored_cells],
+            "visible_cells": [list(c) for c in sorted(self.visible_cells)],
+            "explored_cells": [list(c) for c in sorted(self.explored_cells)],
         }
 
     @classmethod

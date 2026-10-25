@@ -11,8 +11,11 @@ import pytest
 
 from scripts.resume_from_archive import (
     IN_PROGRESS_END_REASON,
+    INFRA_STOP_REASONS,
+    SET_VALUED_STATE_FIELDS,
     build_checkpoint_payload,
     build_live_agent,
+    canonical_state,
     drive_continue_loop,
     rehydrate_agent_messages,
     scripted_action_from_spec,
@@ -20,8 +23,11 @@ from scripts.resume_from_archive import (
 )
 
 
-def _query(idx: int, parse_ok: bool) -> dict:
-    return {"kind": "query", "query_index": idx, "parse_ok": parse_ok, "agent_messages": []}
+def _query(idx: int, parse_ok: bool, stop_reason: str | None = None, **extra) -> dict:
+    rec = {"kind": "query", "query_index": idx, "parse_ok": parse_ok, "agent_messages": [], **extra}
+    if stop_reason is not None:
+        rec["stop_reason"] = stop_reason
+    return rec
 
 
 def _step(idx: int, failures_after: int = 0) -> dict:
@@ -35,6 +41,26 @@ def test_trailing_parse_failures_counts_only_the_trailing_run():
     # earlier mid-episode outage blips (queries 13/15/68 in the R1 archive).
     assert trailing_parse_failures([_query(1, False), _query(2, True)]) == 0
     assert trailing_parse_failures([]) == 0
+
+
+def test_trailing_parse_failures_skips_infra_replies():
+    """An infra reply (the provider delivered nothing) neither counts toward nor
+    resets the stepper's parse_failures, so the rebuilt counter skips it."""
+    assert trailing_parse_failures([_query(1, True), _query(2, False, "batch_expired")]) == 0
+    assert trailing_parse_failures([_query(1, True), _query(2, False), _query(3, False, "sync_error")]) == 1
+    assert trailing_parse_failures(
+        [_query(1, False), _query(2, False, "engine_overloaded"), _query(3, False), _query(4, False, "batch_errored")]
+    ) == 2
+    # Token-cap truncation is the model's outcome even with an infra stop reason.
+    assert trailing_parse_failures([_query(1, False, "batch_expired", token_truncated=True)]) == 1
+    # A model reply that merely ended normally is a parse failure as before.
+    assert trailing_parse_failures([_query(1, True), _query(2, False, "end_turn")]) == 1
+
+
+def test_infra_stop_reasons_mirror_the_stepper():
+    from interface.episode_step import _INFRA_STOP_REASONS
+
+    assert INFRA_STOP_REASONS == _INFRA_STOP_REASONS
 
 
 def test_build_checkpoint_payload_clears_the_infra_kill():
@@ -82,11 +108,34 @@ def test_build_checkpoint_payload_clears_an_agent_error_kill():
 
 @pytest.mark.parametrize(
     "end_reason",
-    ["stalled", "truncated", "max_steps", "wrong_done", "resume_interrupted:agent_error:X", None],
+    ["stalled", "truncated", "max_steps", "wrong_done", "success", None],
 )
 def test_build_checkpoint_payload_refuses_model_outcomes(end_reason):
     with pytest.raises(SystemExit):
         build_checkpoint_payload({"end_reason": end_reason, "task_spec": {"seed": 0}, "transcript": []})
+
+
+@pytest.mark.parametrize(
+    "end_reason",
+    [
+        "resume_interrupted:max_new_queries(200)",
+        "resume_interrupted:agent_error:RuntimeError: Moonshot API timed out after 600s.",
+        "resume_interrupted:scripted_agent_exhausted",
+    ],
+)
+def test_build_checkpoint_payload_clears_an_interrupted_resume(end_reason):
+    """continue mode stops on its query cap or an agent error and writes
+    resume_interrupted:<why>: the driver stopped, not the model, so the
+    archive resumes again."""
+    episode = {
+        "end_reason": end_reason,
+        "task_spec": {"seed": 3},
+        "transcript": [{"kind": "reset"}, _query(1, True), _step(1), _query(2, True), _step(2)],
+    }
+    payload = build_checkpoint_payload(episode)
+    assert (payload["query_count"], payload["parse_failures"]) == (2, 0)
+    assert payload["finished"] is False
+    assert payload["end_reason"] == IN_PROGRESS_END_REASON
 
 
 _OPENAI_RUN_CFG = {
@@ -281,15 +330,18 @@ def test_continue_loop_stops_when_a_scripted_agent_reports_exhausted():
 _RENDER_3D = {"backend": "mujoco3d", "camera": "top_down", "resolution": "grid"}
 
 
-def _parse_failed_archive(tmp_path: Path, render: dict | None = None) -> Path:
-    """A real infra-killed (parse_failed) episode archive, 2D unless ``render``."""
+def _parse_failed_archive(
+    tmp_path: Path, render: dict | None = None, maze: str = "V01_empty_room.json", actions=("MOVE_FORWARD",),
+) -> Path:
+    """A real infra-killed (parse_failed) episode archive, 2D unless ``render``:
+    ``actions`` answer the first queries, then the network is out."""
     import itertools
     import json
 
     from interface.loader import default_maze_path
     from scripts.run_pipeline import run_from_config
 
-    replies = itertools.chain(["FINAL_OUTPUT: MOVE_FORWARD"], itertools.repeat("(network outage)"))
+    replies = itertools.chain((f"FINAL_OUTPUT: {a}" for a in actions), itertools.repeat("(network outage)"))
 
     class _DyingAgent:
         last_usage = None
@@ -302,7 +354,7 @@ def _parse_failed_archive(tmp_path: Path, render: dict | None = None) -> Path:
     cfg.write_text(json.dumps({
         **({} if render is None else {"render": render}),
         "models": {"stub": {
-            "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path(maze))],
         }},
     }))
     artifacts = tmp_path / "artifacts"
@@ -325,15 +377,16 @@ def _edit_render(archive: Path, **changes) -> None:
         (archive / name).write_text(json.dumps(payload))
 
 
-def _resume(archive: Path, out_dir: Path):
+def _resume(archive: Path, out_dir: Path, *extra: str, mode: str = "replay-verify", env: dict | None = None):
+    import os
     import subprocess
     import sys
 
     repo = Path(__file__).resolve().parents[1]
     return subprocess.run(
         [sys.executable, str(repo / "scripts" / "resume_from_archive.py"), "--archive-dir", str(archive),
-         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", "replay-verify"],
-        capture_output=True, text=True, timeout=300,
+         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", mode, *extra],
+        capture_output=True, text=True, timeout=300, env=None if env is None else {**os.environ, **env},
     )
 
 
@@ -342,6 +395,85 @@ def test_resume_replays_a_2d_archive(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "replay-verify: PASS" in result.stdout
     assert "backend: minigrid" in result.stdout
+
+
+def test_canonical_state_ignores_the_order_of_set_valued_fields():
+    archived = {"collected_keys": ["k_red", "k_blue"], "visible_cells": [[2, 1], [1, 1]], "agent_position": [1, 1],
+                "rotator_dirs": [3, 0]}
+    replayed = {"collected_keys": ["k_blue", "k_red"], "visible_cells": [[1, 1], [2, 1]], "agent_position": [1, 1],
+                "rotator_dirs": [3, 0]}
+    assert archived != replayed
+    assert canonical_state(archived) == canonical_state(replayed)
+    # Ordered fields keep their order.
+    assert canonical_state({**replayed, "rotator_dirs": [0, 3]}) != canonical_state(archived)
+
+
+def test_set_valued_state_fields_mirror_the_checkpoint_replay():
+    from interface.episode_checkpoint import _SET_VALUED_STATE_FIELDS, _canonical_state
+
+    assert SET_VALUED_STATE_FIELDS == _SET_VALUED_STATE_FIELDS
+    state = {key: [["b"], ["a"]] for key in SET_VALUED_STATE_FIELDS}
+    assert canonical_state(state) == _canonical_state(state)
+
+
+def _two_key_archive(tmp_path: Path) -> tuple[Path, list[str]]:
+    """A parse_failed archive killed after both of V08's keys were collected."""
+    import json
+
+    from gridworld.baselines import plan_bfs_path
+    from interface.loader import default_maze_path
+    from interface.parser import ACTION_ORDER
+    from scorer.io import task_spec_from_payload
+
+    plan = plan_bfs_path(task_spec_from_payload(json.loads(default_maze_path("V08_chain_kk.json").read_text())))
+    archive = _parse_failed_archive(tmp_path, maze="V08_chain_kk.json",
+                                    actions=[ACTION_ORDER[a] for a in plan.actions][:-1])
+    keys = json.loads((archive / "episode.json").read_text())["final_state"]["collected_keys"]
+    assert len(keys) == 2, "the plan must collect both keys before the kill"
+    return archive, keys
+
+
+@pytest.mark.parametrize("order", [sorted, lambda keys: sorted(keys, reverse=True)])
+def test_resume_verifies_an_archive_whatever_order_it_listed_set_fields_in(tmp_path: Path, order):
+    """Archives written before set fields were sorted list them in their
+    process's hash order; the final-state check must compare them as sets."""
+    import json
+
+    archive, keys = _two_key_archive(tmp_path)
+    episode = json.loads((archive / "episode.json").read_text())
+    episode["final_state"]["collected_keys"] = order(keys)
+    (archive / "episode.json").write_text(json.dumps(episode))
+    # A fixed hash seed for the replay, so one of the two orders is not the one
+    # its process would list: the check must not depend on it.
+    result = _resume(archive, tmp_path / "out", env={"PYTHONHASHSEED": "0"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "replay-verify: PASS" in result.stdout
+
+
+def test_an_interrupted_resume_writes_an_archive_that_resumes_again(tmp_path: Path):
+    """A capped continue run (here the offline scripted agent's two queries)
+    ends resume_interrupted:...; its out dir must itself be a resumable
+    archive: replay-verify passes and another continue picks up from it."""
+    import json
+
+    first, second = tmp_path / "first", tmp_path / "second"
+    archive = _parse_failed_archive(tmp_path)
+    run = _resume(archive, first, "--agent", "scripted:TURN_LEFT", mode="continue")
+    assert run.returncode == 0, run.stdout + run.stderr
+    episode = json.loads((first / "episode.json").read_text())
+    assert episode["end_reason"] == "resume_interrupted:scripted_agent_exhausted"
+    assert (first / "run_inputs.json").read_bytes() == (archive / "run_inputs.json").read_bytes()
+
+    verify = _resume(first, tmp_path / "verify")
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    assert "replay-verify: PASS" in verify.stdout
+
+    run = _resume(first, second, "--agent", "scripted:TURN_LEFT", mode="continue")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "absent from the archive" not in run.stdout  # the replayed queries kept their images
+    again = json.loads((second / "episode.json").read_text())
+    assert again["query_count"] == episode["query_count"] + 2
+    assert again["steps_used"] == episode["steps_used"] + 2
 
 
 def test_resume_replays_a_3d_archive_on_the_3d_backend(tmp_path: Path):

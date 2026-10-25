@@ -52,11 +52,13 @@ logger = logging.getLogger(__name__)
 # response, NOT that the model produced an unparseable move. These must not
 # consume the per-episode parse-retry budget (they'd terminate a valid episode
 # on provider flakiness). Set by the batch/sync agents (moonshot_batch, the
-# sync-transport path) and by provider overload responses. Token-cap truncation
-# is intentionally NOT here — exhausting the output budget is a real model
+# sync-transport path) and by provider overload responses. A request the
+# harness canceled (Message Batches returns canceled items explicitly, as
+# "batch_canceled") was never answered either. Token-cap truncation is
+# intentionally NOT here — exhausting the output budget is a real model
 # outcome the run enforces.
 _INFRA_STOP_REASONS = frozenset(
-    {"sync_error", "batch_expired", "batch_errored", "engine_overloaded"}
+    {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
 )
 
 
@@ -420,7 +422,22 @@ class EpisodeStepper:
         has_image = self._pending_has_image
         state = self.state
         self.action_queue = self.querying.parse_actions(model_text)
-        if self.chat_history != "stateless":
+        # Infrastructure failures (transport/provider unavailability) are NOT
+        # the model failing to produce a valid move — the model never got to
+        # answer. Token-cap truncation (finish_reason=length / token_truncated)
+        # is deliberately EXCLUDED: overrunning the 64k budget IS a real,
+        # enforced model outcome.
+        infra_failure = (
+            not self.action_queue
+            and reply.stop_reason in _INFRA_STOP_REASONS
+            and not reply.token_truncated
+        )
+        if self.chat_history != "stateless" and infra_failure:
+            # Drop this round's user turn: the retry must send the chat as if
+            # the failed round never happened, with no "did not contain a
+            # valid action" turn for an answer the model never gave.
+            self.messages.pop()
+        elif self.chat_history != "stateless":
             # Keep successful action history in the same canonical form
             # required for the next reply. In particular, do not let a
             # legacy parser fallback such as ``ACTION: TURN_LEFT`` teach
@@ -501,13 +518,11 @@ class EpisodeStepper:
         # if not, we'll count it as a parse failure and give feedback,
         # but still allow retries until max_parse_retries is reached
         if not self.action_queue:
-            # Infrastructure failures (transport/provider unavailability) are NOT
-            # the model failing to produce a valid move — the model never got to
-            # answer. Don't spend its parse-retry budget on them; retry on the
-            # next round instead of terminating the episode. Token-cap truncation
-            # (finish_reason=length / token_truncated) is deliberately EXCLUDED
-            # here: overrunning the 64k budget IS a real, enforced model outcome.
-            if reply.stop_reason in _INFRA_STOP_REASONS and not reply.token_truncated:
+            # An infra failure does not spend the parse-retry budget and leaves
+            # last_feedback as it was: the next round re-asks with exactly the
+            # prompt the model would have gotten had this reply never happened
+            # (it must not say "Could not parse" about an answer never given).
+            if infra_failure:
                 logger.warning(
                     "LLM query #%d: task_id=%s infrastructure failure "
                     "(stop_reason=%s); NOT counting toward parse-retry budget %d/%d",
@@ -516,9 +531,6 @@ class EpisodeStepper:
                     reply.stop_reason,
                     self.parse_failures,
                     self.config.max_parse_retries,
-                )
-                self.last_feedback = feedback_templates.PARSE_FAILURE_FEEDBACK.format(
-                    actions_hint=self.actions_hint
                 )
                 return
             self.parse_failures += 1

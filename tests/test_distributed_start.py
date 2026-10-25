@@ -93,6 +93,40 @@ def test_coordinator_stale_after_empty_when_unset(tmp_path):
     assert "STALE_AFTER=''" in glog.read_text()
 
 
+def test_coordinator_passes_the_unit_attempt_and_resume_caps_when_set(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; DIFFICULTY_MAX=1000.0; MAX_UNIT_ATTEMPTS=5; MAX_RESUMES=4; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "MAX_UNIT_ATTEMPTS='5'" in log and "MAX_RESUMES='4'" in log
+    assert '--max-unit-attempts "$MAX_UNIT_ATTEMPTS"' in log
+    assert '--max-resumes "$MAX_RESUMES"' in log
+
+
+def test_coordinator_unit_caps_empty_when_unset(tmp_path):
+    _fake_gcloud_capture(tmp_path)
+    glog = tmp_path / "g.log"; glog.write_text("")
+    snippet = (
+        'source ./lib/distributed_start.sh; '
+        'COORD=r1-coord; ZONE=z1; RUN_ID=r1; DIFFICULTY_MAX=1000.0; '
+        'RUN_CONFIG=gridworld/fixtures/run_config.smoke_claude_sonnet.json; '
+        'MANIFEST=gridworld/fixtures/manifest.smoke_eval.json; '
+        'start_coordinator'
+    )
+    r = bash(snippet, env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "GCLOUD_LOG": str(glog)})
+    assert r.returncode == 0, r.stderr
+    log = glog.read_text()
+    assert "MAX_UNIT_ATTEMPTS=''" in log and "MAX_RESUMES=''" in log
+
+
 _CLAUDE_TOPO = ('{"workers":[{"name":"r1-claude-api-0","kind":"api",'
                 '"model_group":"claude-api","provider":"claude","model":"claude-sonnet-4-6"}]}')
 _KIMI_TOPO = ('{"workers":[{"name":"r1-kimi-api-0","kind":"api",'
