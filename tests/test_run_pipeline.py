@@ -1644,6 +1644,39 @@ def test_failed_unit_is_reassigned_until_attempt_cap(tmp_path):
     assert store.assign(w3)["unit"] is None  # attempt cap reached -> terminal
 
 
+@pytest.mark.parametrize(
+    "flags, expected",
+    [
+        ([], None),  # the store's own defaults
+        (["--max-unit-attempts", "5", "--max-resumes", "4"], {"max_unit_attempts": 5, "max_resumes": 4}),
+    ],
+)
+def test_coordinator_serve_takes_the_attempt_and_resume_caps(tmp_path, monkeypatch, flags, expected):
+    """coordinator-serve built its store with max_unit_attempts and max_resumes
+    hard-wired; both are flags now, defaulting to the store's own defaults."""
+    import inspect
+
+    from scripts import distributed_run_pipeline as dist
+    from scripts.run_pipeline import main
+
+    real_store = dist.CoordinatorStore
+    built = {}
+
+    class _RecordingStore(real_store):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            built.update(max_unit_attempts=self.max_unit_attempts, max_resumes=self.max_resumes)
+
+    monkeypatch.setattr(dist, "CoordinatorStore", _RecordingStore)
+    monkeypatch.setattr(dist.ThreadingHTTPServer, "serve_forever", lambda self, *a, **k: None)
+    main(["--distributed-role", "coordinator-serve", "--artifacts-root", str(tmp_path / "artifacts"),
+          "--host", "127.0.0.1", "--port", "0", *flags])
+    if expected is None:
+        params = inspect.signature(real_store.__init__).parameters
+        expected = {k: params[k].default for k in ("max_unit_attempts", "max_resumes")}
+    assert built == expected
+
+
 def test_distributed_upload_validates_and_extracts_archive(tmp_path):
     from scripts.distributed_run_pipeline import CoordinatorStore, prepare_job
 

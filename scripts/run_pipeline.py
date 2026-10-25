@@ -1321,6 +1321,17 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--port", type=int, default=8765, help="Coordinator bind port for coordinator-serve.")
     parser.add_argument("--coordinator-url", help="Coordinator base URL for worker mode.")
     parser.add_argument("--stale-after-seconds", type=float, default=300.0)
+    parser.add_argument(
+        "--max-unit-attempts", type=int, default=3,
+        help="coordinator-serve: times a unit is handed out fresh (first run, or rerun after a "
+             "worker failure or stale lease) before it is left failed. Resuming a killed unit "
+             "is not an attempt.",
+    )
+    parser.add_argument(
+        "--max-resumes", type=int, default=2,
+        help="coordinator-serve: resumes of a unit after non-billing infra kills (agent_error:*) "
+             "before it fails. Billing kills never count.",
+    )
     parser.add_argument("--poll-interval-seconds", type=float, default=10.0)
     parser.add_argument("--heartbeat-interval-seconds", type=float, default=30.0)
     parser.add_argument("--worker-state", help="Path to a worker-local retry/resume state file.")

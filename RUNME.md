@@ -134,9 +134,17 @@ Text-only (NL) runs need nothing extra: set `"experiment_config":
   refuses on any divergence, and continues, so only the rest of the episode is
   paid for. Automatic resume needs the same code SHA (replay checks the
   environment, not the prompts); a cross-SHA resume is a manual
-  `scripts/resume_from_archive.py` job. After `MAX_RESUMES` (2) non-billing
-  kills a unit fails. Resumed episodes record `resumed_from` and `resume`
-  (as-run SHA, replay-verified, resume query index).
+  `scripts/resume_from_archive.py` job. After `--max-resumes` (default 2)
+  non-billing kills a unit fails. Resumed episodes record `resumed_from` and
+  `resume` (as-run SHA, replay-verified, resume query index).
+- *Attempt and resume caps.* `coordinator-serve` hands a unit out fresh
+  (first run, or a rerun after a worker failure or a stale lease) at most
+  `--max-unit-attempts` times (default 3); resuming a killed unit is not an
+  attempt. `start_coordinator` passes `MAX_UNIT_ATTEMPTS` and `MAX_RESUMES`
+  through when set, like `STALE_AFTER_SECONDS`. Both are read when the
+  coordinator starts: to raise one mid-run, restart `coordinator-serve` with
+  the flag (no re-prepare). A unit left failed at the attempt cap is handed
+  out again under a higher cap; one failed past `--max-resumes` is terminal.
 - *Reports.* `/status` lists `infra_killed` units with their stall counter
   (`s/K`) and steps left (`max_steps - steps_used`), and `parked_providers`.
   `coordinator-finalize` refuses while killed units remain, unless
