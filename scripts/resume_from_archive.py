@@ -43,7 +43,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
+ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed", "checkpoint"}
 # The runner ends an episode with "agent_error:<Type>: ..." only for transport or
 # billing failures (interface/runner.py) — an infra outcome, never a model one.
 INFRA_KILL_PREFIXES = ("agent_error:",)
@@ -140,7 +140,7 @@ def rehydrate_agent_messages(transcript: list[dict], archive_dir: Path) -> int:
     return missing
 
 
-def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, reset_usage=None):
+def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, reset_usage=None, on_query=None):
     """Run live query rounds until the stepper finishes, the cap is hit, or the
     agent dies. Returns ``(new_queries, stopped_early)``; a non-None
     ``stopped_early`` becomes a ``resume_interrupted:`` end_reason.
@@ -190,6 +190,11 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
             f"keys={sorted(getattr(state, 'collected_keys', ()) or ())} "
             f"doors={sorted(getattr(state, 'open_doors', ()) or ())} "
             f"stall={getattr(watchdog, 'stall_count', None)}")
+        if on_query is not None:
+            try:
+                on_query(stepper)
+            except Exception as exc:  # noqa: BLE001 — a save failure must not drop the run
+                log(f"  progress save failed: {exc}")
     return new_queries, stopped_early
 
 
@@ -458,23 +463,43 @@ def main() -> int:
             )
         agent = build_live_agent(model_cfg, timeout=args.timeout, spend_cap_usd=args.spend_cap_usd)
 
+    def publish(end_reason=None):
+        import shutil
+        result = stepper.result()
+        if end_reason is not None:
+            result["end_reason"] = end_reason
+        missing = rehydrate_agent_messages(result["transcript"], archive_dir)
+        staging = out_dir.with_name(out_dir.name + ".next")
+        if staging.exists():
+            shutil.rmtree(staging)
+        episode_path = flush_episode_log(result, staging)
+        inputs = archive_dir / "run_inputs.json"
+        if inputs.is_file():
+            shutil.copy(inputs, staging / "run_inputs.json")
+        previous = out_dir.with_name(out_dir.name + ".prev")
+        if previous.exists():
+            shutil.rmtree(previous)
+        if out_dir.exists():
+            out_dir.rename(previous)
+        staging.rename(out_dir)
+        if previous.exists():
+            shutil.rmtree(previous)
+        return episode_path, missing, result
+
     new_queries, stopped_early = drive_continue_loop(
         stepper,
         agent,
         max_new_queries=args.max_new_queries,
         reset_usage=_reset_agent_usage,
+        on_query=lambda _stepper: publish("checkpoint"),
     )
 
-    result = stepper.result()
-    if stopped_early:
-        result["end_reason"] = f"resume_interrupted:{stopped_early}"
-    # Re-attach archived image payloads so the old flush path re-writes the
-    # replayed queries' images instead of silently dropping the references.
-    missing_images = rehydrate_agent_messages(result["transcript"], archive_dir)
+    episode_path, missing_images, result = publish(
+        f"resume_interrupted:{stopped_early}" if stopped_early else None
+    )
     if missing_images:
         print(f"  note: {missing_images} archived query image(s) were absent from "
               "the archive and recorded as text placeholders")
-    episode_path = flush_episode_log(result, out_dir)
 
     print("=== continue outcome ===")
     print(f"  end_reason: {result['end_reason']}")
