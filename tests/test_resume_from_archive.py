@@ -84,11 +84,34 @@ def test_build_checkpoint_payload_clears_an_agent_error_kill():
 
 @pytest.mark.parametrize(
     "end_reason",
-    ["stalled", "truncated", "max_steps", "wrong_done", "resume_interrupted:agent_error:X", None],
+    ["stalled", "truncated", "max_steps", "wrong_done", "success", None],
 )
 def test_build_checkpoint_payload_refuses_model_outcomes(end_reason):
     with pytest.raises(SystemExit):
         build_checkpoint_payload({"end_reason": end_reason, "task_spec": {"seed": 0}, "transcript": []})
+
+
+@pytest.mark.parametrize(
+    "end_reason",
+    [
+        "resume_interrupted:max_new_queries(200)",
+        "resume_interrupted:agent_error:RuntimeError: Moonshot API timed out after 600s.",
+        "resume_interrupted:scripted_agent_exhausted",
+    ],
+)
+def test_build_checkpoint_payload_clears_an_interrupted_resume(end_reason):
+    """continue mode stops on its query cap or an agent error and writes
+    resume_interrupted:<why>: the driver stopped, not the model, so the
+    archive resumes again."""
+    episode = {
+        "end_reason": end_reason,
+        "task_spec": {"seed": 3},
+        "transcript": [{"kind": "reset"}, _query(1, True), _step(1), _query(2, True), _step(2)],
+    }
+    payload = build_checkpoint_payload(episode)
+    assert (payload["query_count"], payload["parse_failures"]) == (2, 0)
+    assert payload["finished"] is False
+    assert payload["end_reason"] == IN_PROGRESS_END_REASON
 
 
 _OPENAI_RUN_CFG = {
@@ -330,7 +353,7 @@ def _edit_render(archive: Path, **changes) -> None:
         (archive / name).write_text(json.dumps(payload))
 
 
-def _resume(archive: Path, out_dir: Path, *extra: str, env: dict | None = None):
+def _resume(archive: Path, out_dir: Path, *extra: str, mode: str = "replay-verify", env: dict | None = None):
     import os
     import subprocess
     import sys
@@ -338,7 +361,7 @@ def _resume(archive: Path, out_dir: Path, *extra: str, env: dict | None = None):
     repo = Path(__file__).resolve().parents[1]
     return subprocess.run(
         [sys.executable, str(repo / "scripts" / "resume_from_archive.py"), "--archive-dir", str(archive),
-         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", "replay-verify", *extra],
+         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", mode, *extra],
         capture_output=True, text=True, timeout=300, env=None if env is None else {**os.environ, **env},
     )
 
@@ -401,6 +424,32 @@ def test_resume_verifies_an_archive_whatever_order_it_listed_set_fields_in(tmp_p
     result = _resume(archive, tmp_path / "out", env={"PYTHONHASHSEED": "0"})
     assert result.returncode == 0, result.stdout + result.stderr
     assert "replay-verify: PASS" in result.stdout
+
+
+def test_an_interrupted_resume_writes_an_archive_that_resumes_again(tmp_path: Path):
+    """A capped continue run (here the offline scripted agent's two queries)
+    ends resume_interrupted:...; its out dir must itself be a resumable
+    archive: replay-verify passes and another continue picks up from it."""
+    import json
+
+    first, second = tmp_path / "first", tmp_path / "second"
+    archive = _parse_failed_archive(tmp_path)
+    run = _resume(archive, first, "--agent", "scripted:TURN_LEFT", mode="continue")
+    assert run.returncode == 0, run.stdout + run.stderr
+    episode = json.loads((first / "episode.json").read_text())
+    assert episode["end_reason"] == "resume_interrupted:scripted_agent_exhausted"
+    assert (first / "run_inputs.json").read_bytes() == (archive / "run_inputs.json").read_bytes()
+
+    verify = _resume(first, tmp_path / "verify")
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    assert "replay-verify: PASS" in verify.stdout
+
+    run = _resume(first, second, "--agent", "scripted:TURN_LEFT", mode="continue")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "absent from the archive" not in run.stdout  # the replayed queries kept their images
+    again = json.loads((second / "episode.json").read_text())
+    assert again["query_count"] == episode["query_count"] + 2
+    assert again["steps_used"] == episode["steps_used"] + 2
 
 
 def test_resume_replays_a_3d_archive_on_the_3d_backend(tmp_path: Path):

@@ -17,7 +17,8 @@ this driver:
    ``episode.json`` (no manifests/submodules touched);
 3. builds a synthetic checkpoint payload from the archive (query counter and
    trailing parse-failure count rebuilt from the query records; the terminal
-   infra-kill status — ``parse_failed`` or any ``agent_error:`` — cleared) and
+   infra-kill status — ``parse_failed``, any ``agent_error:``, or this driver's
+   own ``resume_interrupted:`` — cleared) and
    hands it to the old code's ``resume_stepper``, which replays the recorded
    actions through a fresh backend, verifying position_after/state_after per
    step and rebuilding stall-watchdog state with the old code's
@@ -29,7 +30,8 @@ this driver:
    ``enable_prompt_cache`` from the experiment when the entry leaves it unset;
    OpenAI also needs ``--spend-cap-usd`` because its spend ledger is per process) and
    flushes full episode artifacts to ``--out-dir`` via the old code's
-   ``flush_episode_log``.
+   ``flush_episode_log``, with the archive's ``run_inputs.json`` and render
+   block, so a continue stopped early is itself an archive this driver resumes.
 
 The archive directory is never written to; the worktree is never modified.
 """
@@ -46,7 +48,10 @@ from pathlib import Path
 ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
 # The runner ends an episode with "agent_error:<Type>: ..." only for transport or
 # billing failures (interface/runner.py) — an infra outcome, never a model one.
-INFRA_KILL_PREFIXES = ("agent_error:",)
+# This driver's continue mode ends one with "resume_interrupted:<why>" only when
+# it stopped the run itself (its query cap, an agent error, the scripted agent
+# running out), never on a model outcome, so that archive resumes again.
+INFRA_KILL_PREFIXES = ("agent_error:", "resume_interrupted:")
 # The stepper's in-progress default (see EpisodeStepper.start()).
 IN_PROGRESS_END_REASON = "max_steps"
 # Mirrors interface/episode_checkpoint._SET_VALUED_STATE_FIELDS (a test keeps
@@ -475,6 +480,9 @@ def main() -> int:
     result = stepper.result()
     if stopped_early:
         result["end_reason"] = f"resume_interrupted:{stopped_early}"
+    if render is not None:
+        # The resume gate needs episode.json and run_inputs.json to name the same render.
+        result["render"] = render
     # Re-attach archived image payloads so the old flush path re-writes the
     # replayed queries' images instead of silently dropping the references.
     missing_images = rehydrate_agent_messages(result["transcript"], archive_dir)
@@ -482,6 +490,9 @@ def main() -> int:
         print(f"  note: {missing_images} archived query image(s) were absent from "
               "the archive and recorded as text placeholders")
     episode_path = flush_episode_log(result, out_dir)
+    # Same inputs, same as-run code: the sidecar carries over verbatim, so the
+    # out dir is an archive this driver can resume again.
+    (out_dir / "run_inputs.json").write_bytes((archive_dir / "run_inputs.json").read_bytes())
 
     print("=== continue outcome ===")
     print(f"  end_reason: {result['end_reason']}")

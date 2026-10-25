@@ -134,7 +134,10 @@ Text-only (NL) runs need nothing extra: set `"experiment_config":
   refuses on any divergence, and continues, so only the rest of the episode is
   paid for. Automatic resume needs the same code SHA (replay checks the
   environment, not the prompts); a cross-SHA resume is a manual
-  `scripts/resume_from_archive.py` job. After `--max-resumes` (default 2)
+  `scripts/resume_from_archive.py` job. Its `--mode continue` output is an
+  archive too: one stopped early (`resume_interrupted:`, e.g. at
+  `--max-new-queries`) is continued by running the script on that output.
+  After `--max-resumes` (default 2)
   non-billing kills a unit fails. Resumed episodes record `resumed_from` and
   `resume` (as-run SHA, replay-verified, resume query index).
 - *Attempt and resume caps.* `coordinator-serve` hands a unit out fresh
