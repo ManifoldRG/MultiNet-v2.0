@@ -310,7 +310,9 @@ def _reconstruct_last_feedback(stepper, step_records, parse_failures):
 
     A pending parse retry (``parse_failures > 0``) means the last feedback was
     the parse-failure prompt; otherwise it is the last executed step's feedback,
-    or the initial feedback if no step has run yet.
+    or the initial feedback if no step has run yet. An infra reply changes
+    neither ``parse_failures`` nor the live feedback, so trailing infra query
+    records need no case of their own.
     """
     if parse_failures > 0:
         return feedback_templates.PARSE_FAILURE_FEEDBACK.format(

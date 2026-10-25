@@ -11,6 +11,7 @@ import pytest
 
 from scripts.resume_from_archive import (
     IN_PROGRESS_END_REASON,
+    INFRA_STOP_REASONS,
     SET_VALUED_STATE_FIELDS,
     build_checkpoint_payload,
     build_live_agent,
@@ -22,8 +23,11 @@ from scripts.resume_from_archive import (
 )
 
 
-def _query(idx: int, parse_ok: bool) -> dict:
-    return {"kind": "query", "query_index": idx, "parse_ok": parse_ok, "agent_messages": []}
+def _query(idx: int, parse_ok: bool, stop_reason: str | None = None, **extra) -> dict:
+    rec = {"kind": "query", "query_index": idx, "parse_ok": parse_ok, "agent_messages": [], **extra}
+    if stop_reason is not None:
+        rec["stop_reason"] = stop_reason
+    return rec
 
 
 def _step(idx: int, failures_after: int = 0) -> dict:
@@ -37,6 +41,26 @@ def test_trailing_parse_failures_counts_only_the_trailing_run():
     # earlier mid-episode outage blips (queries 13/15/68 in the R1 archive).
     assert trailing_parse_failures([_query(1, False), _query(2, True)]) == 0
     assert trailing_parse_failures([]) == 0
+
+
+def test_trailing_parse_failures_skips_infra_replies():
+    """An infra reply (the provider delivered nothing) neither counts toward nor
+    resets the stepper's parse_failures, so the rebuilt counter skips it."""
+    assert trailing_parse_failures([_query(1, True), _query(2, False, "batch_expired")]) == 0
+    assert trailing_parse_failures([_query(1, True), _query(2, False), _query(3, False, "sync_error")]) == 1
+    assert trailing_parse_failures(
+        [_query(1, False), _query(2, False, "engine_overloaded"), _query(3, False), _query(4, False, "batch_errored")]
+    ) == 2
+    # Token-cap truncation is the model's outcome even with an infra stop reason.
+    assert trailing_parse_failures([_query(1, False, "batch_expired", token_truncated=True)]) == 1
+    # A model reply that merely ended normally is a parse failure as before.
+    assert trailing_parse_failures([_query(1, True), _query(2, False, "end_turn")]) == 1
+
+
+def test_infra_stop_reasons_mirror_the_stepper():
+    from interface.episode_step import _INFRA_STOP_REASONS
+
+    assert INFRA_STOP_REASONS == _INFRA_STOP_REASONS
 
 
 def test_build_checkpoint_payload_clears_the_infra_kill():

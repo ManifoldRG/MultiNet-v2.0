@@ -54,6 +54,11 @@ ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
 INFRA_KILL_PREFIXES = ("agent_error:", "resume_interrupted:")
 # The stepper's in-progress default (see EpisodeStepper.start()).
 IN_PROGRESS_END_REASON = "max_steps"
+# Mirrors interface/episode_step._INFRA_STOP_REASONS (a test keeps them equal):
+# replies the provider failed to deliver, which never spend the parse-retry budget.
+INFRA_STOP_REASONS = frozenset(
+    {"sync_error", "batch_expired", "batch_errored", "engine_overloaded"}
+)
 # Mirrors interface/episode_checkpoint._SET_VALUED_STATE_FIELDS (a test keeps
 # them equal): GridState fields serialized from sets. Archives written before
 # they were serialized sorted list them in their process's PYTHONHASHSEED order.
@@ -67,13 +72,16 @@ SET_VALUED_STATE_FIELDS = (
 # --------------------------------------------------------------------------
 
 def trailing_parse_failures(query_records: list[dict]) -> int:
-    """parse_failures resets to 0 on any successfully parsed reply, so the
-    live counter equals the number of TRAILING consecutive parse_ok=False
-    query records."""
+    """parse_failures resets to 0 on any successfully parsed reply and an infra
+    reply (see INFRA_STOP_REASONS; not token-truncated) leaves it unchanged, so
+    the live counter equals the number of TRAILING parse_ok=False query records
+    that were not infra replies."""
     n = 0
     for rec in reversed(query_records):
         if rec.get("parse_ok"):
             break
+        if rec.get("stop_reason") in INFRA_STOP_REASONS and not rec.get("token_truncated"):
+            continue
         n += 1
     return n
 

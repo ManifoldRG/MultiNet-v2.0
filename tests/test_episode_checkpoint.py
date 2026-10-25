@@ -358,3 +358,83 @@ def test_set_valued_state_fields_serialize_the_same_under_any_hash_seed():
     snap = json.loads(outputs.pop())
     for key in ("open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells"):
         assert len(snap[key]) > 1 and snap[key] == sorted(snap[key]), key
+
+
+# --------------------------------------------------------------------------- #
+# An infra reply (the provider never delivered an answer) changes nothing the
+# model is shown next: the retry is the prompt it would have gotten had the
+# reply never happened, live and after a resume.
+# --------------------------------------------------------------------------- #
+def _infra(stop_reason="batch_expired"):
+    return Reply(text="", stop_reason=stop_reason)
+
+
+def _prompt_after(runner, replies):
+    """The stepper and the next prompt after applying ``replies`` in order."""
+    stepper = EpisodeStepper(runner)
+    stepper.start()
+    for reply in replies:
+        assert stepper.next_query() is not None
+        stepper.apply_reply(reply)
+    return stepper, _json_safe(stepper.next_query())
+
+
+_BEFORE_INFRA = {
+    "after a step": [_reply("MOVE_FORWARD")],
+    "with a parse failure pending": [_reply("MOVE_FORWARD"), Reply(text="no answer here")],
+    "at the first query": [],
+}
+
+
+@pytest.mark.parametrize("chat_history", ["stateless", "rolling", "full"])
+@pytest.mark.parametrize("before", list(_BEFORE_INFRA), ids=str)
+def test_an_infra_reply_leaves_the_next_prompt_as_it_was(before, chat_history):
+    from interface.episode_step import _INFRA_STOP_REASONS
+
+    replies = _BEFORE_INFRA[before]
+    expected_stepper, expected = _prompt_after(_build_runner(_CORRIDOR_SPEC, chat_history=chat_history), replies)
+    for stop_reason in sorted(_INFRA_STOP_REASONS):
+        stepper, prompt = _prompt_after(
+            _build_runner(_CORRIDOR_SPEC, chat_history=chat_history), [*replies, _infra(stop_reason), _infra()]
+        )
+        assert prompt == expected, stop_reason
+        assert stepper.last_feedback == expected_stepper.last_feedback
+        assert stepper.parse_failures == expected_stepper.parse_failures
+        # The infra rounds are still on record, as unparsed queries.
+        infra = [r for r in stepper.transcript if r.get("kind") == "query"][-2:]
+        assert [r["stop_reason"] for r in infra] == [stop_reason, "batch_expired"]
+        assert not any(r["parse_ok"] for r in infra)
+
+
+def test_a_token_truncated_reply_is_still_a_parse_failure():
+    """Running out of output budget is the model's outcome, whatever the stop
+    reason says: it spends a retry and the model is told."""
+    stepper, prompt = _prompt_after(
+        _build_runner(_CORRIDOR_SPEC),
+        [Reply(text="", stop_reason="batch_expired", token_truncated=True)],
+    )
+    assert stepper.parse_failures == 1
+    assert "Could not parse FINAL_OUTPUT" in json.dumps(prompt)
+
+
+@pytest.mark.parametrize("before", list(_BEFORE_INFRA), ids=str)
+@pytest.mark.parametrize("rebuild", ["checkpoint", "archive"])
+def test_a_resume_after_an_infra_reply_rebuilds_the_live_prompt(tmp_path, before, rebuild):
+    """The rebuilt stepper's next prompt is the live one, both from a
+    query-boundary checkpoint and from a killed run's archive transcript
+    (resume_from_archive / pipeline.resume rebuild parse_failures from it)."""
+    from scripts.resume_from_archive import build_checkpoint_payload
+
+    replies = [*_BEFORE_INFRA[before], _infra()]
+    live, live_prompt = _prompt_after(_build_runner(_CORRIDOR_SPEC), replies)
+    ckpt = tmp_path / "checkpoint.json"
+    if rebuild == "checkpoint":
+        save_checkpoint(ckpt, live)
+    else:
+        episode = {"end_reason": "agent_error:RuntimeError: killed", "task_spec": {"seed": _CORRIDOR_SPEC["seed"]},
+                   "transcript": _json_safe(live.transcript)}
+        ckpt.write_text(json.dumps(build_checkpoint_payload(episode)), encoding="utf-8")
+    resumed = resume_stepper(ckpt, runner=_build_runner(_CORRIDOR_SPEC))
+    assert resumed.parse_failures == live.parse_failures
+    assert resumed.last_feedback == live.last_feedback
+    assert _json_safe(resumed.next_query()) == live_prompt
