@@ -16,8 +16,10 @@ from typing import Callable, Optional, TypeVar
 T = TypeVar("T")
 
 # 429 = rate limit; 500/502/503/504 = transient server-side failures;
+# 520-524 = Cloudflare in front of the provider could not reach its origin
+# (down, refused, timed out, unreachable, timed out answering);
 # 529 = Anthropic "overloaded" (transient; other providers never send it).
-_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504, 529})
+_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529})
 
 
 def is_retryable_error(exc: BaseException) -> bool:
