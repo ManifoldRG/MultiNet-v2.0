@@ -57,7 +57,7 @@ IN_PROGRESS_END_REASON = "max_steps"
 # Mirrors interface/episode_step._INFRA_STOP_REASONS (a test keeps them equal):
 # replies the provider failed to deliver, which never spend the parse-retry budget.
 INFRA_STOP_REASONS = frozenset(
-    {"sync_error", "batch_expired", "batch_errored", "engine_overloaded"}
+    {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
 )
 # Mirrors interface/episode_checkpoint._SET_VALUED_STATE_FIELDS (a test keeps
 # them equal): GridState fields serialized from sets. Archives written before

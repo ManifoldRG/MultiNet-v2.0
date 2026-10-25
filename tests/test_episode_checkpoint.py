@@ -406,6 +406,18 @@ def test_an_infra_reply_leaves_the_next_prompt_as_it_was(before, chat_history):
         assert not any(r["parse_ok"] for r in infra)
 
 
+def test_a_canceled_batch_request_is_an_infra_reply():
+    """A deadline cancel returns the round's unanswered requests as
+    "batch_canceled": none of them may spend a parse retry or tell the model
+    it failed to parse."""
+    stepper, prompt = _prompt_after(
+        _build_runner(_CORRIDOR_SPEC), [_reply("MOVE_FORWARD"), *[_infra("batch_canceled")] * 4]
+    )
+    # Four canceled rounds, more than max_parse_retries: the episode goes on.
+    assert prompt is not None and stepper.parse_failures == 0
+    assert "Could not parse FINAL_OUTPUT" not in json.dumps(prompt)
+
+
 def test_a_token_truncated_reply_is_still_a_parse_failure():
     """Running out of output budget is the model's outcome, whatever the stop
     reason says: it spends a retry and the model is told."""
