@@ -117,10 +117,13 @@ SPEND = _SpendLedger()
 
 
 class OpenAISpendCapReached(BillingExhausted):
-    """Raised before a request once the process-wide spend cap is reached."""
+    """Raised before a request once the process-wide spend cap is reached.
 
-    def __init__(self, detail: str):
-        super().__init__("openai", detail)
+    It names the capped model, so the coordinator parks that model's groups
+    rather than every OpenAI group."""
+
+    def __init__(self, detail: str, *, model: Optional[str] = None):
+        super().__init__("openai", detail, model=model)
 
 
 def _as_parts(content: object) -> List[object]:
@@ -365,7 +368,8 @@ class OpenAIAgent:
         cap = self.config.spend_cap_usd
         if cap is not None and SPEND.usd >= cap:
             raise OpenAISpendCapReached(
-                f"OpenAI spend cap ${cap:.2f} reached (running total ${SPEND.usd:.2f}); refusing request."
+                f"OpenAI spend cap ${cap:.2f} reached (running total ${SPEND.usd:.2f}); refusing request.",
+                model=self.config.model,
             )
         body = _build_body(
             _to_openai_messages(

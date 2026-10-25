@@ -260,3 +260,154 @@ def test_a_lockstep_batch_billing_error_uploads_partials_as_resumable_and_parks(
         state = store.load_state()["units"][uid]
         if state["status"] == "resumable":
             assert state["infra_kill"]["query_count"] == 2
+
+
+# --------------------------------------------------------------------------- #
+# A spend cap parks its model; an empty account parks the provider
+# --------------------------------------------------------------------------- #
+def test_a_billing_error_names_its_model_when_it_is_a_spend_cap():
+    from interface.agents.billing import billing_model, billing_provider, is_park_echo
+
+    capped = f"agent_error:BillingExhausted: {BillingExhausted('openai', 'cap $5 reached', model='gpt-6-astra')}"
+    assert capped == "agent_error:BillingExhausted: openai: model gpt-6-astra: cap $5 reached"
+    assert billing_provider(capped) == "openai" and billing_model(capped) == "gpt-6-astra"
+    assert not is_park_echo(capped)
+    empty = f"agent_error:BillingExhausted: {BillingExhausted('claude', 'credit balance too low')}"
+    assert billing_model(empty) is None
+    colon = f"agent_error:BillingExhausted: {BillingExhausted('claude', 'cap', model='us.anthropic.opus-v2:0')}"
+    assert billing_model(colon) == "us.anthropic.opus-v2:0"
+
+
+def test_the_openai_spend_cap_carries_its_model(monkeypatch):
+    from interface.agents.openai_agent import SPEND, OpenAIAgent, OpenAIConfig, OpenAISpendCapReached
+
+    monkeypatch.setattr(SPEND, "usd", 0.0)
+    agent = OpenAIAgent(OpenAIConfig(model="gpt-6-astra", spend_cap_usd=0.0), api_key="k")
+    with pytest.raises(OpenAISpendCapReached) as exc:
+        agent.generate([{"role": "user", "content": "hi"}])
+    assert exc.value.provider == "openai" and exc.value.model == "gpt-6-astra"
+
+
+def _two_model_job(tmp_path: Path, seeds=(0,)) -> Path:
+    cfg = tmp_path / "rc.json"
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg.write_text(json.dumps({"models": {
+        "opus": {"provider": "claude", "model": "claude-opus-5-5", "group": "opus-api", "tasks": [task]},
+        "sonnet": {"provider": "claude", "model": "claude-sonnet-5", "group": "sonnet-api", "tasks": [task]},
+        "kimi_a": {"provider": "kimi", "model": "kimi-stub", "group": "kimi-api", "tasks": [task]},
+    }}), encoding="utf-8")
+    artifacts = tmp_path / "coordinator"
+    prepare_job(run_config_path=cfg, manifest_path=_MANIFEST, seeds=list(seeds), conditions=None,
+                artifacts_root=artifacts, run_set_id="park", difficulty_max_static_score=1000.0)
+    return artifacts
+
+
+def _kill_opus_unit(store: CoordinatorStore, tmp_path: Path, error: BillingExhausted) -> dict:
+    store.register({"worker_id": "o1", "capabilities": {"model_group": "opus-api"}})
+    unit = store.assign("o1", {"model_group": "opus-api"})["unit"]
+    drp.run_assigned_unit(unit, artifacts_root=tmp_path / "o1",
+                          agent_factory=lambda k, c: (_Agent(3, error), "claude-opus-5-5"))
+    result = store.upload("o1", unit["unit_id"], drp.package_run_archive(unit, artifacts_root=tmp_path / "o1").read_bytes())
+    assert result["status"] == "resumable" and result["parked"] is True
+    return unit
+
+
+def test_a_spend_cap_parks_only_its_models_groups(tmp_path):
+    store = CoordinatorStore(_two_model_job(tmp_path))
+    _kill_opus_unit(store, tmp_path, BillingExhausted("claude", "spend cap $40 reached", model="claude-opus-5-5"))
+    status = store.status()
+    assert status["parked_providers"] == {}
+    assert list(status["parked_models"]) == ["claude/claude-opus-5-5"]
+    assert status["parked_models"]["claude/claude-opus-5-5"]["groups"] == ["opus-api"]
+
+    assert store.assign("o2", {"model_group": "opus-api"})["parked"] is True
+    assert store.heartbeat("o2")["park"] is True
+    sonnet = store.assign("s1", {"model_group": "sonnet-api"})["unit"]  # same provider, other model: runs on
+    assert sonnet is not None and sonnet["model_group"] == "sonnet-api"
+    assert store.heartbeat("s1", sonnet["unit_id"])["park"] is False
+
+
+def test_an_empty_account_still_parks_every_group_on_the_provider(tmp_path):
+    store = CoordinatorStore(_two_model_job(tmp_path))
+    _kill_opus_unit(store, tmp_path, BillingExhausted("claude", "credit balance too low"))
+    parked = store.status()["parked_providers"]
+    assert list(parked) == ["claude"] and parked["claude"]["groups"] == ["opus-api", "sonnet-api"]
+    assert store.assign("s1", {"model_group": "sonnet-api"})["parked"] is True
+    assert store.assign("k1", {"model_group": "kimi-api"})["unit"] is not None
+
+
+def test_unpark_releases_one_model_and_leaves_the_provider_park(tmp_path):
+    artifacts = _two_model_job(tmp_path)
+    store = CoordinatorStore(artifacts)
+    unit = _kill_opus_unit(store, tmp_path, BillingExhausted("claude", "spend cap $40 reached", model="claude-opus-5-5"))
+    state = store.load_state()
+    state["parked_providers"] = {"claude": {"groups": ["opus-api", "sonnet-api"], "since": "t", "unit_id": "x",
+                                            "reason": "credit balance too low"}}
+    store.save_state(state)
+    with pytest.raises(KeyError):
+        store.unpark("claude", model="claude-sonnet-5")  # not parked on its own
+
+    from scripts.run_pipeline import main
+
+    main(["--distributed-role", "coordinator-unpark", "--artifacts-root", str(artifacts),
+          "--provider", "claude", "--model", "claude-opus-5-5"])
+    status = CoordinatorStore(artifacts).status()
+    assert status["parked_models"] == {} and list(status["parked_providers"]) == ["claude"]
+    store.unpark("claude")
+    again = store.assign("o2", {"model_group": "opus-api"})["unit"]
+    assert again["unit_id"] == unit["unit_id"] and "resume" in again
+
+
+def test_a_lockstep_spend_cap_parks_only_its_model(tmp_path):
+    store = CoordinatorStore(_two_model_job(tmp_path, seeds=(0, 1)))
+    agent = _BatchAgent(3, BillingExhausted("claude", "spend cap $40 reached", model="claude-opus-5-5"))
+    result = run_lockstep_worker(artifacts_root=tmp_path / "lock", capabilities={"model_group": "opus-api"},
+                                 max_batches=2, client=store, agent_factory=lambda k, c: (agent, "claude-opus-5-5"))
+    assert len(result["parked"]) == 2
+    status = store.status()
+    assert status["parked_providers"] == {} and list(status["parked_models"]) == ["claude/claude-opus-5-5"]
+    assert store.assign("s1", {"model_group": "sonnet-api"})["unit"] is not None
+
+
+def test_a_real_openai_cap_stop_parks_only_that_model(tmp_path, monkeypatch):
+    """Through the agent the run config builds: Astra's cap stops Astra; Terra, on
+    the same provider, keeps taking units."""
+    import urllib.request
+
+    from interface.agents.openai_agent import SPEND
+
+    class _Completion:  # ~$0.014 at Astra's flex price: over the cap after one query
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "choices": [{"message": {"content": "FINAL_OUTPUT: MOVE_FORWARD"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 400, "total_tokens": 1400},
+            }).encode()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-never-sent")
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Completion())
+    monkeypatch.setattr(SPEND, "usd", 0.0)
+    cfg = tmp_path / "rc.json"
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg.write_text(json.dumps({"models": {
+        "astra": {"provider": "openai", "model": "gpt-6-astra", "group": "astra", "service_tier": "flex",
+                  "spend_cap_usd": 0.01, "tasks": [task]},
+        "terra": {"provider": "openai", "model": "gpt-5.6-terra", "group": "terra", "tasks": [task]},
+    }}), encoding="utf-8")
+    artifacts = tmp_path / "coordinator"
+    prepare_job(run_config_path=cfg, manifest_path=_MANIFEST, seeds=[0], conditions=None,
+                artifacts_root=artifacts, run_set_id="park", difficulty_max_static_score=1000.0)
+    store = CoordinatorStore(artifacts)
+    unit = store.assign("a1", {"model_group": "astra"})["unit"]
+    drp.run_assigned_unit(unit, artifacts_root=tmp_path / "a1")  # the cap refuses the second request
+    up = store.upload("a1", unit["unit_id"], drp.package_run_archive(unit, artifacts_root=tmp_path / "a1").read_bytes())
+    assert up["status"] == "resumable" and up["parked"] is True
+    assert list(store.status()["parked_models"]) == ["openai/gpt-6-astra"]
+    assert store.assign("t1", {"model_group": "terra"})["unit"] is not None

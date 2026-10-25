@@ -34,7 +34,13 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
 from gridworld.render_settings import RenderSettings
-from interface.agents.billing import BillingExhausted, BillingParked, billing_provider, is_park_echo
+from interface.agents.billing import (
+    BillingExhausted,
+    BillingParked,
+    billing_model,
+    billing_provider,
+    is_park_echo,
+)
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -80,14 +86,16 @@ def _infra_kill_summary(episode: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parked_groups(state: dict[str, Any]) -> set[str]:
-    """Model groups whose provider is parked on a billing error."""
-    return {g for info in (state.get("parked_providers") or {}).values() for g in info.get("groups", [])}
+    """Model groups parked on a billing error: every group of a provider that ran
+    out of credit, and every group of a model that hit its spend cap."""
+    parks = [*(state.get("parked_providers") or {}).values(), *(state.get("parked_models") or {}).values()]
+    return {g for info in parks for g in info.get("groups", [])}
 
 
 class _Park:
     """A worker's park signal, shared by its in-flight episodes: once set (its
-    provider hit a billing limit), each episode raises BillingParked at its
-    next query and the worker takes no new units."""
+    provider hit a billing limit, or its model a spend cap), each episode raises
+    BillingParked at its next query and the worker takes no new units."""
 
     def __init__(self) -> None:
         self.event = threading.Event()
@@ -856,12 +864,30 @@ class CoordinatorStore:
                 unit_state.update({"infra_kill": kill, "infra_kills": kills})
                 if billing and not is_park_echo(end_reason):
                     provider = str(unit.get("provider") or billing_provider(end_reason))
-                    state.setdefault("parked_providers", {})[provider] = {
-                        "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
-                        "since": _iso(),
-                        "unit_id": unit_id,
-                        "reason": end_reason,
-                    }
+                    model = billing_model(end_reason)
+                    if model is None:
+                        # The account is out of credit: every model on it stops.
+                        state.setdefault("parked_providers", {})[provider] = {
+                            "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
+                            "since": _iso(),
+                            "unit_id": unit_id,
+                            "reason": end_reason,
+                        }
+                    else:
+                        # One model's spend cap: its groups stop, the provider's
+                        # other models run on.
+                        groups = {unit["model_group"]} | {
+                            u["model_group"] for u in plan["units"]
+                            if u.get("provider") == provider and (u.get("model_config") or {}).get("model") == model
+                        }
+                        state.setdefault("parked_models", {})[f"{provider}/{model}"] = {
+                            "provider": provider,
+                            "model": model,
+                            "groups": sorted(groups),
+                            "since": _iso(),
+                            "unit_id": unit_id,
+                            "reason": end_reason,
+                        }
                 if status == "failed":
                     # Terminal: unlike a transient worker failure, it is not retried.
                     unit_state.update({"failure_reason": end_reason, "terminal": True})
@@ -888,17 +914,23 @@ class CoordinatorStore:
         self._mirror_unit(unit_id, run_dir, run_set_id)
         return {"ok": True, "status": status, "parked": unit.get("model_group") in _parked_groups(state)}
 
-    def unpark(self, provider: str) -> dict[str, Any]:
-        """Release a provider parked on a billing error (after a top-up): its
-        groups take units again, resumable ones included."""
+    def unpark(self, provider: str, model: Optional[str] = None) -> dict[str, Any]:
+        """Release a provider parked on a billing error (after a top-up), or with
+        ``model`` one model parked on its spend cap (after raising it): their
+        groups take units again, resumable ones included. Each park is released
+        on its own: unparking the provider leaves a model's cap park in place."""
         with self._guard():
             state = self.load_state()
-            info = (state.get("parked_providers") or {}).pop(provider, None)
+            if model is None:
+                info = (state.get("parked_providers") or {}).pop(provider, None)
+            else:
+                info = (state.get("parked_models") or {}).pop(f"{provider}/{model}", None)
             if info is None:
-                parked = sorted(state.get("parked_providers") or {})
-                raise KeyError(f"provider {provider!r} is not parked (parked: {parked})")
+                parked = sorted(state.get("parked_providers") or {}) + sorted(state.get("parked_models") or {})
+                what = f"provider {provider!r}" if model is None else f"model {model!r} on {provider!r}"
+                raise KeyError(f"{what} is not parked (parked: {parked})")
             self.save_state(state)
-            return {"ok": True, "unparked": provider, "groups": info["groups"]}
+            return {"ok": True, "unparked": provider, "model": model, "groups": info["groups"]}
 
     def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
         """Best-effort mirror of a verified run dir to the configured bucket.
@@ -943,6 +975,7 @@ class CoordinatorStore:
                 "progress_total": progress_total,
                 "infra_killed": _infra_killed_rows(plan, state),
                 "parked_providers": state.get("parked_providers") or {},
+                "parked_models": state.get("parked_models") or {},
             }
 
     def _mark_stale(self, plan: dict[str, Any], state: dict[str, Any]) -> None:
@@ -1125,8 +1158,8 @@ class CoordinatorClient:
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         return self._json("POST", "/fail", {"worker_id": worker_id, "unit_id": unit_id, "reason": reason})
 
-    def unpark(self, provider: str) -> dict[str, Any]:
-        return self._json("POST", "/unpark", {"provider": provider})
+    def unpark(self, provider: str, model: Optional[str] = None) -> dict[str, Any]:
+        return self._json("POST", "/unpark", {"provider": provider, "model": model})
 
     def upload(self, worker_id: str, unit_id: str, archive_path: Path) -> dict[str, Any]:
         query = urllib.parse.urlencode({"worker_id": worker_id, "unit_id": unit_id})
@@ -1212,7 +1245,7 @@ def make_coordinator_server(
                         ),
                     )
                 elif parsed.path == "/unpark":
-                    self._send_json(200, store.unpark(str(payload["provider"])))
+                    self._send_json(200, store.unpark(str(payload["provider"]), payload.get("model")))
                 elif parsed.path == "/fail":
                     self._send_json(
                         200,
@@ -2034,9 +2067,9 @@ def run_lockstep_worker(
 
 
 class _ParkingBatchAgent:
-    """The lockstep worker's batch agent: once its provider is parked, the next
-    round raises BillingParked, so every in-flight episode parks at that query
-    boundary through the batch runner's billing path."""
+    """The lockstep worker's batch agent: once its provider (or its model) is
+    parked, the next round raises BillingParked, so every in-flight episode
+    parks at that query boundary through the batch runner's billing path."""
 
     def __init__(self, inner: Any, park: _Park, provider: str) -> None:
         self._inner, self._park, self._provider = inner, park, provider
@@ -2305,8 +2338,9 @@ def dispatch_distributed_role(args: Any) -> None:
     if role == "coordinator-unpark":
         if not args.provider:
             raise SystemExit("--provider is required for coordinator-unpark.")
-        result = CoordinatorStore(args.artifacts_root).unpark(args.provider)
-        print(f"Unparked provider {result['unparked']}: groups {', '.join(result['groups'])} take units again.")
+        result = CoordinatorStore(args.artifacts_root).unpark(args.provider, getattr(args, "model", None))
+        what = f"model {result['model']} on {result['unparked']}" if result["model"] else f"provider {result['unparked']}"
+        print(f"Unparked {what}: groups {', '.join(result['groups'])} take units again.")
         return
     if role == "coordinator-finalize":
         result = finalize_job(

@@ -1305,6 +1305,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         help="Run one distributed pipeline role instead of the single-process pipeline.",
     )
     parser.add_argument("--provider", help="coordinator-unpark: the provider to release (claude, kimi, openai).")
+    parser.add_argument("--model", help="coordinator-unpark: release only this model's spend-cap park (with --provider).")
     parser.add_argument("--job-id", help="Optional durable distributed job id for coordinator-prepare.")
     parser.add_argument(
         "--storage-config",
