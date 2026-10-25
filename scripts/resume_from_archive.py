@@ -292,7 +292,6 @@ def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
         # Message Batches path, whatever worker_role the run config named.
         from interface.agents.claude import ClaudeAnthropicAgent, ClaudeAnthropicConfig
 
-        cfg["cache_ttl"] = "1h"
         allowed = _capped_fields(ClaudeAnthropicConfig, provider)
         return ClaudeAnthropicAgent(
             config=ClaudeAnthropicConfig(**{k: v for k, v in cfg.items() if k in allowed})
