@@ -1189,6 +1189,49 @@ def test_infra_only_model_config_keys_excluded_from_run_hash():
         assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) == base_hash, infra
 
 
+def test_spend_caps_and_service_tiers_stay_out_of_the_run_hash():
+    """A spend cap bounds what a run may spend and a service tier sets the price
+    per token; neither changes what the model sees or emits. Both were hashed,
+    so raising a model's cap (Astra $160 -> $300) re-paid every finished episode."""
+    spec = _chain_spec()
+    astra = load_run_config(_FIXTURES / "run_config.mechanics_15_3d.json")["models"]["gpt6_astra"]
+    assert astra["spend_cap_usd"] and astra["service_tier"] == "flex"
+    base = {k: v for k, v in astra.items() if k not in ("spend_cap_usd", "service_tier")}
+    base_hash = _expected_run_hash(spec, "gpt-6-astra", 0, "minigrid", model_config=base)
+    for billing in (
+        {"spend_cap_usd": astra["spend_cap_usd"], "service_tier": "flex"},
+        {"spend_cap_usd": 160},
+        {"spend_cap_usd": 300.0},
+        {"service_tier": "default"},
+    ):
+        cfg = {**base, **billing}
+        assert _expected_run_hash(spec, "gpt-6-astra", 0, "minigrid", model_config=cfg) == base_hash, billing
+
+
+def test_a_spend_cap_change_keeps_every_unit_of_a_named_job(tmp_path):
+    """The job id hashes the whole run-config (notes included), so a re-prepare
+    that must keep its units names the job; then a cap change moves no unit."""
+    from scripts.distributed_run_pipeline import prepare_job
+
+    task = str(default_maze_path("V01_empty_room.json"))
+
+    def plan(cap: float) -> dict:
+        cfg = tmp_path / f"run_config_{cap:g}.json"
+        cfg.write_text(json.dumps({"models": {"astra": {
+            "provider": "openai", "model": "gpt-6-astra", "max_tokens": 64000,
+            "service_tier": "flex", "spend_cap_usd": cap, "tasks": [task],
+        }}}), encoding="utf-8")
+        return prepare_job(
+            run_config_path=cfg, manifest_path=_MANIFEST, seeds=[0], conditions=None,
+            artifacts_root=tmp_path / f"artifacts_{cap:g}", run_set_id="dist",
+            difficulty_max_static_score=_STABLE_DIFFICULTY_MAX, job_id="job_named",
+        )
+
+    keys = ("unit_id", "episode_inputs_hash", "inputs_hash")
+    before, after = ([{k: u[k] for k in keys} for u in plan(cap)["units"]] for cap in (160, 300))
+    assert before and before == after
+
+
 def test_generation_model_config_keys_change_run_hash():
     """Knobs that change what the model produces must still invalidate the cache."""
     spec = _chain_spec()
@@ -1203,6 +1246,9 @@ def test_generation_model_config_keys_change_run_hash():
         {"dtype": "float16"},
         {"quantization": "fp8"},
         {"sampling_kwargs": {"top_p": 0.9}},
+        {"reasoning_effort": "high"},
+        {"effort": "max"},
+        {"image_detail": "high"},
     ):
         cfg = {**base, **gen}
         assert _expected_run_hash(spec, "m", 0, "minigrid", model_config=cfg) != base_hash, gen

@@ -244,6 +244,13 @@ _NON_RUNTIME_MODEL_KEYS = {
     "worker_concurrency",
     # billing: cache breakpoints change what a call costs, never what the model emits
     "enable_prompt_cache",
+    # billing: a spend cap bounds what the run may spend and a service tier
+    # (OpenAI flex/default) sets the price per token; neither changes what the
+    # model sees or emits. Hashing them made raising a cap mid-run re-pay every
+    # finished episode. (The distributed job_id still hashes the whole
+    # run-config; re-prepare with --job-id to keep a running job's units.)
+    "spend_cap_usd",
+    "service_tier",
     # transport / model-loading (do not affect outputs)
     "timeout",
     "max_attempts",
