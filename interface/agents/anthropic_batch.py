@@ -6,12 +6,14 @@ then streams the JSONL results and maps them back by `custom_id`. Batch results
 arrive in ARBITRARY order, so the caller keys on `custom_id` — never position.
 
 A poll deadline (wall-clock, `time.monotonic`) bounds the wait: on expiry we
-`POST .../cancel`, then keep polling for a short grace period (`cancel_grace_s`)
-until the batch reaches `"ended"` — a freshly-canceled batch sits in
-`"canceling"` with `results_url` null, and giving up immediately would discard
-every finished (already billed) item. If the batch still is not ended after the
-grace period, whatever we have is returned (possibly `{}`). Every HTTP call
-goes through `http_retry.call_with_retry`, matching the sync agent.
+`POST .../cancel`, then keep polling until the batch reaches `"ended"` — a
+freshly-canceled batch sits in `"canceling"` with `results_url` null until the
+items already in progress finish, and giving up early would discard every
+finished (already billed) item. A cancel always ends the batch, so past the
+grace period (`cancel_grace_s`) we keep waiting, up to `cancel_wait_s` from the
+cancel. Only a batch that has still not ended then returns `{}`, with its id
+logged so its results can be fetched by hand. Every HTTP call goes through
+`http_retry.call_with_retry`, matching the sync agent.
 """
 
 from __future__ import annotations
@@ -37,6 +39,14 @@ _ANTHROPIC_VERSION = "2023-06-01"
 # instead, bounded by `credit_wait_s`.
 _CREDIT_WAIT_S = 3600.0
 _CREDIT_POLL_S = 60.0
+
+# How long after a deadline cancel we wait for the batch to end before dropping
+# its results. A canceled batch ends once its in-progress items finish, which
+# can outlast the cancel grace (one batch in the mechanics-15 3D run ended 6
+# minutes after it, with 6 billed results). A round can take the low-credit
+# wait + batch_deadline_s + this: 3600 + 7200 + 1800 = 12600, the coordinator's
+# documented --stale-after-seconds.
+_CANCEL_WAIT_S = 1800.0
 
 
 class AnthropicBatchHTTPError(RuntimeError):
@@ -167,14 +177,16 @@ def run_message_batch(
     base_url: str = "https://api.anthropic.com",
     credit_wait_s: float = _CREDIT_WAIT_S,
     credit_poll_s: float = _CREDIT_POLL_S,
+    cancel_wait_s: Optional[float] = None,
 ) -> Dict[str, dict]:
     """Create a message batch, poll to completion, return `{custom_id: result}`.
 
     `requests` is `[{"custom_id": str, "params": <full /v1/messages body>}]`.
-    On deadline expiry the batch is canceled, then polled for up to
-    `cancel_grace_s` more until it reaches `"ended"` so already-finished (billed)
-    item results are salvaged; missing `custom_id`s are simply absent. If it
-    never ends within the grace period (`results_url` still null), returns `{}`.
+    On deadline expiry the batch is canceled, then polled until it reaches
+    `"ended"` so already-finished (billed) item results are salvaged; missing
+    `custom_id`s are simply absent. Past `cancel_grace_s` it logs and keeps
+    waiting, up to `cancel_wait_s` (default `_CANCEL_WAIT_S`) from the cancel; a
+    batch that never ends by then (`results_url` still null) returns `{}`.
     A low-credit refusal at creation is retried every `credit_poll_s` for up to
     `credit_wait_s` (see `_create_batch`).
     """
@@ -189,6 +201,7 @@ def run_message_batch(
     batch_id = created["id"]
     status_url = f"{base}/v1/messages/batches/{batch_id}"
     cancel_url = f"{status_url}/cancel"
+    logger.info("Anthropic batch %s created with %d requests", batch_id, len(requests))
 
     batch = _poll_until_ended(
         created,
@@ -198,26 +211,48 @@ def run_message_batch(
         deadline=time.monotonic() + deadline_s,
     )
     if batch.get("processing_status") != "ended":
-        # Deadline hit: cancel, then give the batch a grace window to settle to
-        # "ended" — its finished items are already billed and must be salvaged.
+        # Deadline hit: cancel, then wait for the batch to settle to "ended" —
+        # its finished items are already billed and must be salvaged.
         # The cancel POST can 4xx if the batch reached a terminal state between the
         # last poll and here; that race is benign, so log and fall through to the
         # grace poll, which handles every terminal state and salvages results.
+        logger.warning("Anthropic batch %s passed its %.0fs deadline; canceling it", batch_id, deadline_s)
         try:
             batch = _request_json(cancel_url, api_key=api_key, method="POST")
         except Exception as exc:  # noqa: BLE001 - the batch may already have ended
             logger.warning(
-                "Anthropic batch cancel failed (batch may have already ended): %s", exc
+                "Anthropic batch %s cancel failed (batch may have already ended): %s", batch_id, exc
             )
+        canceled_at = time.monotonic()
         batch = _poll_until_ended(
             batch,
             status_url,
             api_key=api_key,
             poll_interval_s=poll_interval_s,
-            deadline=time.monotonic() + cancel_grace_s,
+            deadline=canceled_at + cancel_grace_s,
         )
+        wait_s = _CANCEL_WAIT_S if cancel_wait_s is None else cancel_wait_s
+        if batch.get("processing_status") != "ended" and wait_s > cancel_grace_s:
+            # A cancel always ends the batch once the items in progress finish;
+            # dropping it now would discard the finished ones, which are billed.
+            logger.warning(
+                "Anthropic batch %s still %s %.0fs after its cancel; waiting up to %.0fs for it to end",
+                batch_id, batch.get("processing_status"), cancel_grace_s, wait_s,
+            )
+            batch = _poll_until_ended(
+                batch,
+                status_url,
+                api_key=api_key,
+                poll_interval_s=poll_interval_s,
+                deadline=canceled_at + wait_s,
+            )
 
     results_url = batch.get("results_url")
     if not results_url:
+        logger.error(
+            "Anthropic batch %s has not ended (%s); its results are not used, and any "
+            "finished items are billed: fetch them by batch id",
+            batch_id, batch.get("processing_status"),
+        )
         return {}
     return _parse_results_jsonl(_request(results_url, api_key=api_key, method="GET"))

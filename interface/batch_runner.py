@@ -18,19 +18,29 @@ Round loop (per the task brief, adapted to the real seams):
   1. Top the working set up to ``max_batches`` from queued/refilled units.
   2. For each live unit call ``next_query()`` — which *drains local actions* until
      it needs a query or the episode ends. ``None`` means finished this round:
-     capture ``result()`` and delete its checkpoint. A returned message list
-     means the unit participates; **this is the one legal checkpoint boundary**
-     (both stepper buffers are empty right after ``next_query`` returns), so we
-     checkpoint here, NOT after ``apply_reply`` (which leaves queued-but-undrained
-     actions — ``save_checkpoint`` would rightly refuse).
+     capture ``result()``, hand it to ``on_finish`` (which persists it) BEFORE
+     this round's batch is submitted, then delete its checkpoint. A returned
+     message list means the unit participates; **this is the one legal
+     checkpoint boundary** (both stepper buffers are empty right after
+     ``next_query`` returns), so we checkpoint here, NOT after ``apply_reply``
+     (which leaves queued-but-undrained actions — ``save_checkpoint`` would
+     rightly refuse).
   3. ``agent.generate_batch([...messages...])`` in stable unit order.
   4. ``apply_reply`` each reply into its unit's stepper. Batch-item stub replies
      (``stop_reason`` like ``batch_expired``) carry empty text and flow through as
      ordinary parse failures — no special-casing needed.
   5. ``on_round(active_units)`` — a heartbeat hook for the coordinator.
 
+Every unit that leaves the working set (finished or errored) goes to
+``on_finish(unit, result)`` at once, not after the round: the next batch can run
+for ``batch_deadline_s`` and more, and a crash in it must not lose a finished,
+paid episode that was only in memory.
+
 A stepper that raises is caught, recorded as ``{"error": str(exc)}`` for that
-unit, and the batch continues; one bad episode never kills the run.
+unit, and the batch continues; one bad episode never kills the run. A billing
+error (``BillingExhausted``, which covers spend caps) is recorded with
+``"billing": True`` and keeps the unit's checkpoint, so the parked episode can
+continue from the refused round's query boundary.
 """
 
 from __future__ import annotations
@@ -54,7 +64,8 @@ class LockstepUnit:
     """One episode in the working set: its id, its stepper, its checkpoint file.
 
     ``checkpoint_path`` is optional; when set, the runner writes a query-boundary
-    checkpoint each round the unit is active and deletes it when the unit ends.
+    checkpoint each round the unit is active and deletes it when the unit ends,
+    unless it ended on a billing stop.
     """
 
     unit_id: str
@@ -93,6 +104,7 @@ class LockstepBatchRunner:
         round_deadline_s: float = 7200.0,
         refill: Optional[Callable[[], Optional[LockstepUnit]]] = None,
         on_round: Optional[Callable[[List[LockstepUnit]], None]] = None,
+        on_finish: Optional[Callable[[LockstepUnit, dict], Optional[bool]]] = None,
     ) -> None:
         if max_batches < 1:
             raise ValueError(f"max_batches must be >= 1, got {max_batches}")
@@ -104,6 +116,7 @@ class LockstepBatchRunner:
         self._round_deadline_s = round_deadline_s
         self._refill = refill
         self._on_round = on_round
+        self._on_finish = on_finish
         self._pending: Deque[LockstepUnit] = deque()
         self._results: Dict[str, dict] = {}
         self._batch_accepts_deadline = _accepts_deadline_kwarg(generate_batch)
@@ -233,20 +246,42 @@ class LockstepBatchRunner:
 
     def _finish(self, unit: LockstepUnit) -> None:
         try:
-            self._results[unit.unit_id] = unit.stepper.result()
+            result = unit.stepper.result()
         except Exception as exc:  # noqa: BLE001 - a bad result() is still just one unit
             self._record_error(unit, exc)
             return
-        self._delete_checkpoint(unit)
+        self._results[unit.unit_id] = result
+        # The checkpoint goes only once the result is persisted. If it was not,
+        # a retry resumes at the last query boundary instead of re-paying the
+        # whole episode.
+        if self._handed_off(unit, result):
+            self._delete_checkpoint(unit)
+
+    def _handed_off(self, unit: LockstepUnit, result: dict) -> bool:
+        """Give a unit's final result to ``on_finish``; False if it says (by
+        returning False, or raising) that the result was not persisted."""
+        if self._on_finish is None:
+            return True
+        try:
+            return self._on_finish(unit, result) is not False
+        except Exception:  # noqa: BLE001 - one unit's hand-off must not abort the batch
+            logger.exception("on_finish failed for unit %s", unit.unit_id)
+            return False
 
     def _record_error(self, unit: LockstepUnit, exc: Exception) -> None:
         logger.exception("unit %s failed: %s", unit.unit_id, exc)
+        billing = isinstance(exc, BillingExhausted)
         self._results[unit.unit_id] = {
             "error": str(exc),
             # A billing error parks the unit (resumable) instead of failing it.
-            **({"billing": True} if isinstance(exc, BillingExhausted) else {}),
+            **({"billing": True} if billing else {}),
         }
-        self._delete_checkpoint(unit)
+        if not billing:
+            # A billing or spend-cap stop keeps the checkpoint taken at this
+            # round's query boundary: a continuation starts there and re-pays
+            # nothing. Any other error fails the unit, which reruns from scratch.
+            self._delete_checkpoint(unit)
+        self._handed_off(unit, self._results[unit.unit_id])
 
     @staticmethod
     def _delete_checkpoint(unit: LockstepUnit) -> None:

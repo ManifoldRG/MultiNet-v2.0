@@ -131,6 +131,18 @@ def _patch(monkeypatch, responder):
     monkeypatch.setattr(batch_mod.time, "sleep", lambda _s: None)
 
 
+class _FakeClock:
+    """``time.monotonic`` that only ``time.sleep`` advances: long waits run instantly."""
+
+    def __init__(self, monkeypatch):
+        self.now = 1000.0
+        monkeypatch.setattr(batch_mod.time, "monotonic", lambda: self.now)
+        monkeypatch.setattr(batch_mod.time, "sleep", self._sleep)
+
+    def _sleep(self, seconds):
+        self.now += seconds
+
+
 # --- client: run_message_batch ---------------------------------------------
 
 
@@ -213,19 +225,48 @@ def test_cancel_on_ended_race_still_salvages(monkeypatch):
     assert results["i0"]["message"]["content"][-1]["text"] == "finished before cancel"
 
 
-def test_deadline_grace_expiry_returns_empty(monkeypatch):
-    """Batch never reaches "ended" within cancel_grace_s -> {} (no results_url)."""
+def test_a_batch_that_ends_after_the_cancel_grace_still_returns_its_billed_results(monkeypatch, caplog):
+    """A canceled batch always ends once its in-progress items finish, and the
+    finished ones are billed. In the 3D run one ended 6 minutes after the grace
+    and its 6 succeeded results were thrown away; keep polling and use them."""
+    responder = _ScriptedURLopen(
+        status_sequence=["in_progress"],
+        post_cancel_status_sequence=["canceling"] * 40 + ["ended"],  # 400s at 10s polls
+        results_jsonl=_jsonl(
+            _succeeded("i0", "finished before cancel"),
+            {"custom_id": "i1", "result": {"type": "canceled"}},
+        ),
+    )
+    _patch(monkeypatch, responder)
+    clock = _FakeClock(monkeypatch)
+    start = clock.now
+    with caplog.at_level("INFO", logger=batch_mod.__name__):
+        results = run_message_batch(
+            [{"custom_id": "i0", "params": {}}, {"custom_id": "i1", "params": {}}],
+            api_key="k", poll_interval_s=10, deadline_s=60, cancel_grace_s=300,
+        )
+    assert set(results) == {"i0", "i1"}
+    assert results["i0"]["message"]["content"][-1]["text"] == "finished before cancel"
+    assert clock.now - start > 60 + 300  # it waited past the grace
+    assert "batch_1" in caplog.text  # the batch id is in the log
+
+
+def test_a_canceled_batch_that_never_ends_is_bounded_and_logged(monkeypatch, caplog):
+    """The wait after a cancel is still bounded; past it the results are not
+    used, and the batch id is logged so they can be fetched by hand."""
     responder = _ScriptedURLopen(status_sequence=["in_progress"])  # cancel -> "canceling" forever
     _patch(monkeypatch, responder)
-    results = run_message_batch(
-        [{"custom_id": "i0", "params": {}}],
-        api_key="k",
-        poll_interval_s=0.001,
-        deadline_s=0.02,
-        cancel_grace_s=0.02,
-    )
+    clock = _FakeClock(monkeypatch)
+    start = clock.now
+    with caplog.at_level("INFO", logger=batch_mod.__name__):
+        results = run_message_batch(
+            [{"custom_id": "i0", "params": {}}],
+            api_key="k", poll_interval_s=10, deadline_s=60, cancel_grace_s=300, cancel_wait_s=1800,
+        )
     assert results == {}
     assert responder.count("POST", "/cancel") == 1
+    assert 60 + 1800 <= clock.now - start <= 60 + 1800 + 10
+    assert any(r.levelname == "ERROR" and "batch_1" in r.getMessage() for r in caplog.records)
 
 
 def test_malformed_results_line_is_skipped(monkeypatch):
@@ -329,14 +370,43 @@ def test_deadline_salvages_finished_and_expires_missing(monkeypatch):
     assert replies[1] == Reply(text="", stop_reason="batch_expired")
 
 
+def _clocked_agent():
+    """Deadline knobs at run scale, for tests on the fake clock."""
+    return ClaudeAnthropicAgent(
+        ClaudeAnthropicConfig(model="claude-opus-4-8", batch_poll_interval_s=10, batch_deadline_s=60,
+                              batch_cancel_grace_s=300),
+        api_key="secret",
+    )
+
+
 def test_deadline_missing_ids_become_batch_expired(monkeypatch):
     responder = _ScriptedURLopen(status_sequence=["in_progress"])  # never ends
     _patch(monkeypatch, responder)
-    replies = _deadline_agent().generate_batch(
+    _FakeClock(monkeypatch)
+    replies = _clocked_agent().generate_batch(
         [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]]
     )
     assert responder.count("POST", "/cancel") == 1
     assert all(r == Reply(text="", stop_reason="batch_expired") for r in replies)
+
+
+def test_generate_batch_uses_and_bills_results_that_land_after_the_grace(monkeypatch):
+    responder = _ScriptedURLopen(
+        status_sequence=["in_progress"],
+        post_cancel_status_sequence=["canceling"] * 40 + ["ended"],
+        results_jsonl=_jsonl(
+            _succeeded("i0", "FINAL_OUTPUT: A"),
+            {"custom_id": "i1", "result": {"type": "canceled"}},
+        ),
+    )
+    _patch(monkeypatch, responder)
+    _FakeClock(monkeypatch)
+    replies = _clocked_agent().generate_batch(
+        [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]]
+    )
+    assert replies[0].text == "FINAL_OUTPUT: A" and replies[0].stop_reason == "end_turn"
+    assert replies[0].usage == {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}  # recorded on the query
+    assert replies[1] == Reply(text="", stop_reason="batch_canceled")
 
 
 def test_generate_batch_reply_parsing(monkeypatch):

@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import dataclasses
+import io
 import json
 import logging
 import shutil
@@ -33,7 +34,13 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
 from gridworld.render_settings import RenderSettings
-from interface.agents.billing import BillingExhausted, BillingParked, billing_provider, is_park_echo
+from interface.agents.billing import (
+    BillingExhausted,
+    BillingParked,
+    billing_model,
+    billing_provider,
+    is_park_echo,
+)
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -49,6 +56,11 @@ DISTRIBUTED_DIR = "distributed"
 PLAN_FILENAME = "job_plan.json"
 STATE_FILENAME = "job_state.json"
 EXPECTED_RUN_FILES = ("episode.json", "run_inputs.json", "run_score.json")
+# A lockstep unit's query-boundary checkpoint, in its run dir. It is worker-local:
+# finalize keeps it while it rewrites the run dir, and the upload archive leaves
+# it out.
+CHECKPOINT_FILENAME = "checkpoint.json"
+_CHECKPOINT_ENTRIES = (CHECKPOINT_FILENAME, f"{CHECKPOINT_FILENAME}.parts", f"{CHECKPOINT_FILENAME}.tmp")
 ACTIVE_STATUSES = {"assigned", "running"}
 # Resumes allowed per unit for kills that are not billing (a deterministic error,
 # e.g. a context-overflow 400, would otherwise loop forever).
@@ -74,14 +86,16 @@ def _infra_kill_summary(episode: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parked_groups(state: dict[str, Any]) -> set[str]:
-    """Model groups whose provider is parked on a billing error."""
-    return {g for info in (state.get("parked_providers") or {}).values() for g in info.get("groups", [])}
+    """Model groups parked on a billing error: every group of a provider that ran
+    out of credit, and every group of a model that hit its spend cap."""
+    parks = [*(state.get("parked_providers") or {}).values(), *(state.get("parked_models") or {}).values()]
+    return {g for info in parks for g in info.get("groups", [])}
 
 
 class _Park:
     """A worker's park signal, shared by its in-flight episodes: once set (its
-    provider hit a billing limit), each episode raises BillingParked at its
-    next query and the worker takes no new units."""
+    provider hit a billing limit, or its model a spend cap), each episode raises
+    BillingParked at its next query and the worker takes no new units."""
 
     def __init__(self) -> None:
         self.event = threading.Event()
@@ -637,6 +651,8 @@ class CoordinatorStore:
         _write_json_atomic(state_path(self.artifacts_root), state)
 
     def register(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Register a worker process. Each call opens a new session: a worker
+        that restarts under its old id gets its active units back (``assign``)."""
         with self._guard():
             state = self.load_state()
             worker_id = payload.get("worker_id") or f"worker_{uuid.uuid4().hex[:12]}"
@@ -647,6 +663,7 @@ class CoordinatorStore:
                     "capabilities": dict(payload.get("capabilities") or {}),
                     "hostname": payload.get("hostname") or socket.gethostname(),
                     "registered_at": worker.get("registered_at") or _iso(),
+                    "session_id": uuid.uuid4().hex[:12],
                     "heartbeat_at": _now(),
                     "status": "idle",
                 }
@@ -692,6 +709,19 @@ class CoordinatorStore:
             worker_concurrency = max(
                 int((worker.get("capabilities") or {}).get("worker_concurrency") or 1), 1
             )
+            # A restarted worker registers again under its old id (a new session)
+            # and has lost every unit it held: hand each one back, one per call and
+            # before any new work, instead of leaving them to go stale. A unit
+            # records the session it was handed to, so none is handed back twice.
+            session = worker.get("session_id")
+            for held in active_units:
+                held_state = state["units"][held["unit_id"]]
+                if held_state.get("session_id") != session:
+                    held_state.update({"session_id": session, "heartbeat_at": _now(), "updated_at": _iso()})
+                    worker["status"] = "assigned"
+                    worker["current_unit_id"] = held["unit_id"]
+                    self.save_state(state)
+                    return {"unit": self._assignment(plan, held, held_state), "job_id": plan["job_id"]}
             if active_units and len(active_units) >= worker_concurrency:
                 self.save_state(state)
                 held = active_units[0]
@@ -726,6 +756,7 @@ class CoordinatorStore:
                     {
                         "status": "assigned",
                         "worker_id": worker_id,
+                        "session_id": session,
                         "assigned_at": _iso(),
                         "heartbeat_at": _now(),
                         "updated_at": _iso(),
@@ -850,12 +881,30 @@ class CoordinatorStore:
                 unit_state.update({"infra_kill": kill, "infra_kills": kills})
                 if billing and not is_park_echo(end_reason):
                     provider = str(unit.get("provider") or billing_provider(end_reason))
-                    state.setdefault("parked_providers", {})[provider] = {
-                        "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
-                        "since": _iso(),
-                        "unit_id": unit_id,
-                        "reason": end_reason,
-                    }
+                    model = billing_model(end_reason)
+                    if model is None:
+                        # The account is out of credit: every model on it stops.
+                        state.setdefault("parked_providers", {})[provider] = {
+                            "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
+                            "since": _iso(),
+                            "unit_id": unit_id,
+                            "reason": end_reason,
+                        }
+                    else:
+                        # One model's spend cap: its groups stop, the provider's
+                        # other models run on.
+                        groups = {unit["model_group"]} | {
+                            u["model_group"] for u in plan["units"]
+                            if u.get("provider") == provider and (u.get("model_config") or {}).get("model") == model
+                        }
+                        state.setdefault("parked_models", {})[f"{provider}/{model}"] = {
+                            "provider": provider,
+                            "model": model,
+                            "groups": sorted(groups),
+                            "since": _iso(),
+                            "unit_id": unit_id,
+                            "reason": end_reason,
+                        }
                 if status == "failed":
                     # Terminal: unlike a transient worker failure, it is not retried.
                     unit_state.update({"failure_reason": end_reason, "terminal": True})
@@ -882,17 +931,23 @@ class CoordinatorStore:
         self._mirror_unit(unit_id, run_dir, run_set_id)
         return {"ok": True, "status": status, "parked": unit.get("model_group") in _parked_groups(state)}
 
-    def unpark(self, provider: str) -> dict[str, Any]:
-        """Release a provider parked on a billing error (after a top-up): its
-        groups take units again, resumable ones included."""
+    def unpark(self, provider: str, model: Optional[str] = None) -> dict[str, Any]:
+        """Release a provider parked on a billing error (after a top-up), or with
+        ``model`` one model parked on its spend cap (after raising it): their
+        groups take units again, resumable ones included. Each park is released
+        on its own: unparking the provider leaves a model's cap park in place."""
         with self._guard():
             state = self.load_state()
-            info = (state.get("parked_providers") or {}).pop(provider, None)
+            if model is None:
+                info = (state.get("parked_providers") or {}).pop(provider, None)
+            else:
+                info = (state.get("parked_models") or {}).pop(f"{provider}/{model}", None)
             if info is None:
-                parked = sorted(state.get("parked_providers") or {})
-                raise KeyError(f"provider {provider!r} is not parked (parked: {parked})")
+                parked = sorted(state.get("parked_providers") or {}) + sorted(state.get("parked_models") or {})
+                what = f"provider {provider!r}" if model is None else f"model {model!r} on {provider!r}"
+                raise KeyError(f"{what} is not parked (parked: {parked})")
             self.save_state(state)
-            return {"ok": True, "unparked": provider, "groups": info["groups"]}
+            return {"ok": True, "unparked": provider, "model": model, "groups": info["groups"]}
 
     def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
         """Best-effort mirror of a verified run dir to the configured bucket.
@@ -937,6 +992,7 @@ class CoordinatorStore:
                 "progress_total": progress_total,
                 "infra_killed": _infra_killed_rows(plan, state),
                 "parked_providers": state.get("parked_providers") or {},
+                "parked_models": state.get("parked_models") or {},
             }
 
     def _mark_stale(self, plan: dict[str, Any], state: dict[str, Any]) -> None:
@@ -1119,8 +1175,8 @@ class CoordinatorClient:
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         return self._json("POST", "/fail", {"worker_id": worker_id, "unit_id": unit_id, "reason": reason})
 
-    def unpark(self, provider: str) -> dict[str, Any]:
-        return self._json("POST", "/unpark", {"provider": provider})
+    def unpark(self, provider: str, model: Optional[str] = None) -> dict[str, Any]:
+        return self._json("POST", "/unpark", {"provider": provider, "model": model})
 
     def upload(self, worker_id: str, unit_id: str, archive_path: Path) -> dict[str, Any]:
         query = urllib.parse.urlencode({"worker_id": worker_id, "unit_id": unit_id})
@@ -1206,7 +1262,7 @@ def make_coordinator_server(
                         ),
                     )
                 elif parsed.path == "/unpark":
-                    self._send_json(200, store.unpark(str(payload["provider"])))
+                    self._send_json(200, store.unpark(str(payload["provider"]), payload.get("model")))
                 elif parsed.path == "/fail":
                     self._send_json(
                         200,
@@ -1431,9 +1487,35 @@ def package_run_archive(
             raise FileNotFoundError(f"Run directory is missing expected file: {run_dir / name}")
     with tarfile.open(archive_path, "w:gz") as tar:
         for path in sorted(run_dir.rglob("*")):
-            if path.is_file():
+            if path.is_file() and path.relative_to(run_dir).parts[0] not in _CHECKPOINT_ENTRIES:
                 tar.add(path, arcname=str(path.relative_to(run_dir)))
     return archive_path
+
+
+def _applied_queries(record: Any) -> int:
+    """Query records in a checkpoint or an episode: one per applied query."""
+    transcript = record.get("transcript") if isinstance(record, dict) else None
+    return sum(1 for rec in transcript or [] if isinstance(rec, dict) and rec.get("kind") == "query")
+
+
+def _checkpoint_behind_archive(checkpoint: Path, resume_payload: dict[str, Any]) -> bool:
+    """True when a unit's local checkpoint is no further along than the resume
+    archive the coordinator sent. A checkpoint kept from a billing stop on this
+    worker can be older than the partial another worker uploaded since, and
+    resuming from it would re-pay (and diverge from) that worker's queries. A
+    checkpoint ahead of the archive is this worker's own progress past it before
+    a crash, and wins."""
+    try:
+        checkpointed = _applied_queries(_read_json(checkpoint))
+    except (OSError, ValueError):
+        return True  # unreadable: the archive is the only usable state
+    try:
+        raw = base64.b64decode(resume_payload["archive_b64"])
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tar:
+            archived = json.load(tar.extractfile("episode.json"))
+    except (AttributeError, KeyError, OSError, ValueError, tarfile.TarError):
+        return False  # the resume path refuses a bad archive itself
+    return checkpointed <= _applied_queries(archived)
 
 
 def _load_worker_state(path: Path) -> dict[str, Any]:
@@ -1743,20 +1825,22 @@ def run_lockstep_worker(
     the working set (<= ``max_batches``) topped up by ``client.assign`` refills.
 
     Per round the ``on_round`` hook heartbeats every still-active unit
-    (progress = the unit's stepper ``query_count``) AND finalizes any unit that
-    completed that round: a normal result is written (episode.json /
+    (progress = the unit's stepper ``query_count``). The runner's ``on_finish``
+    hook finalizes a unit the moment it leaves the working set, before the next
+    batch is submitted: a normal result is written (episode.json /
     run_inputs.json /run_score.json) through the same scoring path as
     ``run_assigned_unit`` and uploaded; an ``{"error": ...}`` result is
     ``client.fail``ed. Finalizing mid-run (not after ``run()``) frees the
     coordinator's per-worker concurrency slot so refill hands out fresh work,
-    keeping the batch saturated.
+    keeping the batch saturated, and puts a finished episode on the coordinator
+    instead of in memory while the next batch runs.
 
     ``worker_concurrency`` in ``capabilities`` MUST equal ``max_batches`` so the
     coordinator's assign never re-hands an already-held unit as new work.
     """
     from interface.batch_runner import LockstepBatchRunner, LockstepUnit
     from interface.config import ExperimentConfig
-    from interface.episode_checkpoint import resume_stepper
+    from interface.episode_checkpoint import discard_checkpoint, resume_stepper
     from interface.episode_log import flush_episode_log
     from interface.episode_step import EpisodeStepper
     from pipeline.run_stage3 import build_episode_runner
@@ -1791,7 +1875,6 @@ def run_lockstep_worker(
     failed: list[str] = []
     group_model_key: dict[str, Optional[str]] = {"key": None}
     agent_box: dict[str, Any] = {}
-    runner_box: dict[str, Any] = {}
     park = _Park()
     parked: list[str] = []
 
@@ -1841,12 +1924,16 @@ def run_lockstep_worker(
         )
         # The run dir must exist before the runner writes its per-round checkpoint.
         prep.run_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_path = prep.run_dir / "checkpoint.json"
+        checkpoint_path = prep.run_dir / CHECKPOINT_FILENAME
         runner = build_episode_runner(
             prep.source, prep.experiment_config, int(unit["seed"]),
             max_steps=prep.runtime_spec.max_steps, render=render,
         )
         resumed.pop(unit_id, None)
+        if unit.get("resume") and checkpoint_path.exists() and _checkpoint_behind_archive(
+            checkpoint_path, unit["resume"]
+        ):
+            discard_checkpoint(checkpoint_path)  # the coordinator's partial is at least as far along
         if unit.get("resume") and not checkpoint_path.exists():
             # A resumable unit: replay-verify the killed run, then continue it.
             from pipeline import resume
@@ -1865,8 +1952,9 @@ def run_lockstep_worker(
                 return None
             stepper.maze_path = str(prep.source)
         elif checkpoint_path.exists():
-            # Crash resume: rebuild the stepper at the query boundary the previous
-            # attempt checkpointed instead of re-running from scratch.
+            # Crash resume (or a billing stop's kept checkpoint): rebuild the stepper
+            # at the query boundary the previous attempt checkpointed instead of
+            # re-running from scratch.
             stepper = resume_stepper(checkpoint_path, runner=runner)
             stepper.maze_path = str(prep.source)
         else:
@@ -1878,7 +1966,10 @@ def run_lockstep_worker(
         finalized.discard(unit_id)  # allow a re-assigned (retried) unit to re-run
         return lsu
 
-    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> None:
+    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> bool:
+        """Upload (or fail back) a unit's final result; True once it is on the
+        coordinator. The run dir keeps its checkpoint: the runner deletes it
+        only after a normal result is uploaded."""
         unit = handed_out[unit_id]
         try:
             if isinstance(result, dict) and "error" in result and result.get("billing"):
@@ -1895,19 +1986,20 @@ def run_lockstep_worker(
             elif isinstance(result, dict) and "error" in result:
                 _safe_fail(client, worker_id, unit_id, str(result["error"]))
                 failed.append(unit_id)
-                return
+                return False
             prep = preps[unit_id]
             render = _unit_render(unit)
             if render.backend != "minigrid":                 # as run_episode stamps it
                 result["render"] = render.provenance(prep.runtime_spec)
             result.update(resumed.get(unit_id, {}))           # resumed_from / resume
-            flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
+            flush_episode_log(result, prep.run_dir, keep=_CHECKPOINT_ENTRIES)  # episode.json (+frames)
             prep.write_run_inputs(extras={"pricing_tier": "batch", **resumed.get(unit_id, {})})
             episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))
             prep.score_episode(episode)                      # run_score.json
             archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
             _upload_archive(client, worker_id, unit_id, archive_path)
             completed.append(unit_id)
+            return True
         except Exception as exc:  # noqa: BLE001 - one bad unit must not kill the batch
             logger.warning("lockstep worker %s: finalize unit %s failed: %s", worker_id, unit_id, exc)
             _safe_fail(
@@ -1915,6 +2007,7 @@ def run_lockstep_worker(
                 "".join(traceback.format_exception_only(type(exc), exc)).strip(),
             )
             failed.append(unit_id)
+            return False
 
     def refill():
         if park.event.is_set():
@@ -1938,21 +2031,14 @@ def run_lockstep_worker(
         return _build_unit(unit)
 
     def on_round(active) -> None:
-        active_ids = {u.unit_id for u in active}
         for u in active:
             _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0), park=park)
-        # Finalize units that dropped out of the working set this round. Their
-        # results are already in the runner's results map (populated before this
-        # hook fires), including the ``{"error": ...}`` shape for failed steppers.
-        results = getattr(runner_box.get("runner"), "_results", {})
-        for unit_id in list(handed_out):
-            if unit_id in active_ids or unit_id in finalized:
-                continue
-            result = results.get(unit_id)
-            if result is None:
-                continue
-            finalized.add(unit_id)
-            _finalize_unit(unit_id, result)
+
+    def on_finish(lsu, result: dict[str, Any]) -> bool:
+        # The unit left the working set (finished, or the ``{"error": ...}``
+        # shape for a failed stepper): finalize it now, before the next batch.
+        finalized.add(lsu.unit_id)
+        return _finalize_unit(lsu.unit_id, result)
 
     # Take units until one builds: a refused resume or a foreign model key is
     # failed back by _build_unit, and the worker moves on to the next unit.
@@ -1979,8 +2065,8 @@ def run_lockstep_worker(
         round_deadline_s=round_deadline_s,
         refill=refill,
         on_round=on_round,
+        on_finish=on_finish,
     )
-    runner_box["runner"] = runner
     runner.add(first_lsu)
     runner.run()
 
@@ -1997,9 +2083,9 @@ def run_lockstep_worker(
 
 
 class _ParkingBatchAgent:
-    """The lockstep worker's batch agent: once its provider is parked, the next
-    round raises BillingParked, so every in-flight episode parks at that query
-    boundary through the batch runner's billing path."""
+    """The lockstep worker's batch agent: once its provider (or its model) is
+    parked, the next round raises BillingParked, so every in-flight episode
+    parks at that query boundary through the batch runner's billing path."""
 
     def __init__(self, inner: Any, park: _Park, provider: str) -> None:
         self._inner, self._park, self._provider = inner, park, provider
@@ -2268,8 +2354,9 @@ def dispatch_distributed_role(args: Any) -> None:
     if role == "coordinator-unpark":
         if not args.provider:
             raise SystemExit("--provider is required for coordinator-unpark.")
-        result = CoordinatorStore(args.artifacts_root).unpark(args.provider)
-        print(f"Unparked provider {result['unparked']}: groups {', '.join(result['groups'])} take units again.")
+        result = CoordinatorStore(args.artifacts_root).unpark(args.provider, getattr(args, "model", None))
+        what = f"model {result['model']} on {result['unparked']}" if result["model"] else f"provider {result['unparked']}"
+        print(f"Unparked {what}: groups {', '.join(result['groups'])} take units again.")
         return
     if role == "coordinator-finalize":
         result = finalize_job(
