@@ -12,6 +12,8 @@ import json
 import tarfile
 from pathlib import Path
 
+import pytest
+
 from interface.agents.billing import BillingExhausted
 from interface.agents.reply import Reply
 from interface.config import ExperimentConfig
@@ -141,3 +143,81 @@ def test_a_kept_checkpoint_never_shadows_a_newer_partial(tmp_path):
     assert state["status"] == "verified" and episode["success"] is True
     assert episode["resumed_from"]["killed_at_query"] == 3
     assert agent.rounds == len(PLAN) - 1 - 3  # only the queries after the newer partial were paid for
+
+
+# --------------------------------------------------------------------------- #
+# A finished unit is uploaded before the next round's batch
+# --------------------------------------------------------------------------- #
+class _CrashOnRound:
+    """Wraps a batch agent; round ``crash_on`` kills the process mid-batch."""
+
+    def __init__(self, inner, crash_on):
+        self._inner, self._crash_on = inner, crash_on
+        self.rounds = 0
+
+    def generate_batch(self, batch):
+        self.rounds += 1
+        if self.rounds == self._crash_on:
+            raise KeyboardInterrupt  # the worker VM dies while the batch is in flight
+        return self._inner.generate_batch(batch)
+
+
+def test_a_finished_unit_is_uploaded_before_the_next_rounds_batch(tmp_path):
+    """corr_a finishes after round 1 while corr_b still needs a query. Round 2's
+    batch can run for hours; corr_a must already be on the coordinator when the
+    worker dies during it, not in memory."""
+    from tests.test_lockstep_worker import ScriptedBatchAgent, _scripts_for, _write_job
+
+    artifacts, plan = _write_job(tmp_path)
+    store = CoordinatorStore(artifacts)
+    agent = _CrashOnRound(ScriptedBatchAgent(_scripts_for()), crash_on=2)
+    with pytest.raises(KeyboardInterrupt):
+        run_lockstep_worker(artifacts_root=tmp_path / "w", capabilities={"model_group": "claude-batch"},
+                            max_batches=2, client=store, agent_factory=lambda k, c: (agent, "stub-batch-model"))
+    by_task = {u["task_id"]: u["unit_id"] for u in plan["units"]}
+    state = store.load_state()["units"]
+    assert state[by_task["corr_a"]]["status"] == "verified"
+    assert state[by_task["corr_b"]]["status"] == "running"
+
+
+class _FlakyUploads(CoordinatorStore):
+    """The first upload fails (a coordinator 502); later ones land."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.failures_left = 1
+
+    def upload(self, worker_id, unit_id, archive_bytes):
+        if self.failures_left:
+            self.failures_left -= 1
+            raise RuntimeError("Coordinator request failed (502)")
+        return super().upload(worker_id, unit_id, archive_bytes)
+
+
+class _Script:
+    """Batch agent answering ``tokens`` in round order."""
+
+    def __init__(self, tokens):
+        self.tokens = list(tokens)
+        self.rounds = 0
+
+    def generate_batch(self, batch):
+        self.rounds += 1
+        token = self.tokens[self.rounds - 1] if self.rounds <= len(self.tokens) else "DONE"
+        return [Reply(text=f"FINAL_OUTPUT: {token}", usage=_USAGE) for _ in batch]
+
+
+def test_a_finished_unit_whose_upload_failed_keeps_its_checkpoint(tmp_path):
+    """The checkpoint goes only once the result is on the coordinator. When the
+    upload fails, the retry resumes at the last query boundary: it re-pays the
+    final query, not the whole episode."""
+    _job(tmp_path)
+    store = _FlakyUploads(tmp_path / "coordinator")
+    queries = len(PLAN) - 1
+    agent = _Script(PLAN[:queries] + [PLAN[queries - 1]])  # the retry re-asks the last query
+    _lockstep(store, tmp_path / "w", agent)
+    unit = store.load_plan()["units"][0]
+    episode = json.loads((store.artifacts_root / unit["run_dir"] / "episode.json").read_text())
+    assert store.load_state()["units"][unit["unit_id"]]["status"] == "verified"
+    assert episode["success"] is True and episode["query_count"] == queries
+    assert agent.rounds == queries + 1

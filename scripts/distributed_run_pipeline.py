@@ -1808,13 +1808,15 @@ def run_lockstep_worker(
     the working set (<= ``max_batches``) topped up by ``client.assign`` refills.
 
     Per round the ``on_round`` hook heartbeats every still-active unit
-    (progress = the unit's stepper ``query_count``) AND finalizes any unit that
-    completed that round: a normal result is written (episode.json /
+    (progress = the unit's stepper ``query_count``). The runner's ``on_finish``
+    hook finalizes a unit the moment it leaves the working set, before the next
+    batch is submitted: a normal result is written (episode.json /
     run_inputs.json /run_score.json) through the same scoring path as
     ``run_assigned_unit`` and uploaded; an ``{"error": ...}`` result is
     ``client.fail``ed. Finalizing mid-run (not after ``run()``) frees the
     coordinator's per-worker concurrency slot so refill hands out fresh work,
-    keeping the batch saturated.
+    keeping the batch saturated, and puts a finished episode on the coordinator
+    instead of in memory while the next batch runs.
 
     ``worker_concurrency`` in ``capabilities`` MUST equal ``max_batches`` so the
     coordinator's assign never re-hands an already-held unit as new work.
@@ -1856,7 +1858,6 @@ def run_lockstep_worker(
     failed: list[str] = []
     group_model_key: dict[str, Optional[str]] = {"key": None}
     agent_box: dict[str, Any] = {}
-    runner_box: dict[str, Any] = {}
     park = _Park()
     parked: list[str] = []
 
@@ -1948,7 +1949,10 @@ def run_lockstep_worker(
         finalized.discard(unit_id)  # allow a re-assigned (retried) unit to re-run
         return lsu
 
-    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> None:
+    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> bool:
+        """Upload (or fail back) a unit's final result; True once it is on the
+        coordinator. The run dir keeps its checkpoint: the runner deletes it
+        only after a normal result is uploaded."""
         unit = handed_out[unit_id]
         try:
             if isinstance(result, dict) and "error" in result and result.get("billing"):
@@ -1965,7 +1969,7 @@ def run_lockstep_worker(
             elif isinstance(result, dict) and "error" in result:
                 _safe_fail(client, worker_id, unit_id, str(result["error"]))
                 failed.append(unit_id)
-                return
+                return False
             prep = preps[unit_id]
             render = _unit_render(unit)
             if render.backend != "minigrid":                 # as run_episode stamps it
@@ -1978,6 +1982,7 @@ def run_lockstep_worker(
             archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
             _upload_archive(client, worker_id, unit_id, archive_path)
             completed.append(unit_id)
+            return True
         except Exception as exc:  # noqa: BLE001 - one bad unit must not kill the batch
             logger.warning("lockstep worker %s: finalize unit %s failed: %s", worker_id, unit_id, exc)
             _safe_fail(
@@ -1985,6 +1990,7 @@ def run_lockstep_worker(
                 "".join(traceback.format_exception_only(type(exc), exc)).strip(),
             )
             failed.append(unit_id)
+            return False
 
     def refill():
         if park.event.is_set():
@@ -2008,21 +2014,14 @@ def run_lockstep_worker(
         return _build_unit(unit)
 
     def on_round(active) -> None:
-        active_ids = {u.unit_id for u in active}
         for u in active:
             _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0), park=park)
-        # Finalize units that dropped out of the working set this round. Their
-        # results are already in the runner's results map (populated before this
-        # hook fires), including the ``{"error": ...}`` shape for failed steppers.
-        results = getattr(runner_box.get("runner"), "_results", {})
-        for unit_id in list(handed_out):
-            if unit_id in active_ids or unit_id in finalized:
-                continue
-            result = results.get(unit_id)
-            if result is None:
-                continue
-            finalized.add(unit_id)
-            _finalize_unit(unit_id, result)
+
+    def on_finish(lsu, result: dict[str, Any]) -> bool:
+        # The unit left the working set (finished, or the ``{"error": ...}``
+        # shape for a failed stepper): finalize it now, before the next batch.
+        finalized.add(lsu.unit_id)
+        return _finalize_unit(lsu.unit_id, result)
 
     # Take units until one builds: a refused resume or a foreign model key is
     # failed back by _build_unit, and the worker moves on to the next unit.
@@ -2049,8 +2048,8 @@ def run_lockstep_worker(
         round_deadline_s=round_deadline_s,
         refill=refill,
         on_round=on_round,
+        on_finish=on_finish,
     )
-    runner_box["runner"] = runner
     runner.add(first_lsu)
     runner.run()
 
