@@ -134,11 +134,13 @@ Each **round** (one tick):
    round that runs longer than `stale_after_seconds` emits none while it is in
    flight. Per-round heartbeats keep progress *visible*; they do NOT by
    themselves keep long rounds from going stale. A single batch round can run the
-   full `batch_deadline_s` (2 h), so the coordinator must be started with
-   `--stale-after-seconds` ≥ `batch_deadline_s + batch_cancel_grace_s` (+ slack;
-   e.g. 9000), and there must be **exactly one lockstep worker per API model
-   group** — otherwise a stale unit is re-assigned to the other worker and
-   double-paid.
+   full `batch_deadline_s` (2 h), plus up to 30 min for a canceled batch to end
+   (its finished items are billed, so the client waits for them), so the
+   coordinator must be started with `--stale-after-seconds` of at least
+   `batch_deadline_s + 1800` plus the 1 h low-credit wait (7200 + 1800 + 3600 =
+   12600, what the run configs use), and there must be **exactly one lockstep
+   worker per API model group** — otherwise a stale unit is re-assigned to the
+   other worker and double-paid.
 5. Terminated mazes (solved / failed / stall-K) drop out; **refill from the
    coordinator up to `MAX_BATCHES`**. The batch stays full until the unit pool
    drains, then the tail shrinks.
