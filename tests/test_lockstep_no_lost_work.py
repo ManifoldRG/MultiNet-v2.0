@@ -221,3 +221,56 @@ def test_a_finished_unit_whose_upload_failed_keeps_its_checkpoint(tmp_path):
     assert store.load_state()["units"][unit["unit_id"]]["status"] == "verified"
     assert episode["success"] is True and episode["query_count"] == queries
     assert agent.rounds == queries + 1
+
+
+# --------------------------------------------------------------------------- #
+# A restarted worker gets back every unit it holds
+# --------------------------------------------------------------------------- #
+def test_a_reregistered_worker_gets_back_each_unit_it_holds_once(tmp_path):
+    store = _job(tmp_path, seeds=(0, 1, 2))
+    caps = {**CAPS, "worker_concurrency": 2}
+    store.register({"worker_id": "w", "capabilities": caps})
+    held = [store.assign("w", caps)["unit"]["unit_id"] for _ in range(2)]
+    assert store.assign("w", caps)["unit"]["unit_id"] == held[0]  # at its limit: the usual re-return
+
+    store.register({"worker_id": "w", "capabilities": caps})  # the worker restarted with its old id
+    again = [store.assign("w", caps)["unit"]["unit_id"] for _ in range(2)]
+    assert sorted(again) == sorted(held)
+    assert store.assign("w", caps)["unit"]["unit_id"] == held[0]  # all handed back: at its limit again
+    states = store.load_state()["units"]
+    assert [states[uid]["attempts"] for uid in held] == [1, 1]  # handed back, not re-run as new work
+
+    bigger = {**CAPS, "worker_concurrency": 3}
+    store.register({"worker_id": "w", "capabilities": bigger})  # restarted with a bigger working set
+    first = {store.assign("w", bigger)["unit"]["unit_id"] for _ in range(2)}
+    assert first == set(held)  # its own units before any new work
+    assert store.assign("w", bigger)["unit"]["unit_id"] not in held
+
+
+def test_a_restarted_lockstep_worker_resumes_every_unit_it_held(tmp_path, monkeypatch):
+    """In the run a restarted worker got back one of its units; the others sat
+    until --stale-after-seconds (12600 s) or an operator marked them stale."""
+    from interface import episode_checkpoint
+
+    store = _job(tmp_path, seeds=(0, 1, 2))
+    root, state_file = tmp_path / "w", tmp_path / "w" / "worker_state.json"
+    with pytest.raises(KeyboardInterrupt):
+        _lockstep(store, root, _CrashOnRound(_PlanBatch(), crash_on=3), max_batches=3, worker_state_path=state_file)
+    held = sorted(uid for uid, st in store.load_state()["units"].items() if st["status"] in ("assigned", "running"))
+    assert len(held) == 3
+
+    resumed = []
+    real_resume = episode_checkpoint.resume_stepper
+
+    def spy(path, *, runner):
+        resumed.append(path)
+        return real_resume(path, runner=runner)
+
+    monkeypatch.setattr(episode_checkpoint, "resume_stepper", spy)
+    agent = _PlanBatch(start=2)  # two queries were applied before the crash
+    result = _lockstep(store, root, agent, max_batches=3, worker_state_path=state_file)
+    states = store.load_state()["units"]
+    assert sorted(result["failed"]) == [] and result["completed"] == 3
+    assert [states[uid]["status"] for uid in held] == ["verified"] * 3
+    assert [states[uid]["attempts"] for uid in held] == [1, 1, 1]  # never went stale or re-ran
+    assert len(resumed) == 3 and agent.rounds == len(PLAN) - 1 - 2

@@ -651,6 +651,8 @@ class CoordinatorStore:
         _write_json_atomic(state_path(self.artifacts_root), state)
 
     def register(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Register a worker process. Each call opens a new session: a worker
+        that restarts under its old id gets its active units back (``assign``)."""
         with self._guard():
             state = self.load_state()
             worker_id = payload.get("worker_id") or f"worker_{uuid.uuid4().hex[:12]}"
@@ -661,6 +663,7 @@ class CoordinatorStore:
                     "capabilities": dict(payload.get("capabilities") or {}),
                     "hostname": payload.get("hostname") or socket.gethostname(),
                     "registered_at": worker.get("registered_at") or _iso(),
+                    "session_id": uuid.uuid4().hex[:12],
                     "heartbeat_at": _now(),
                     "status": "idle",
                 }
@@ -706,6 +709,19 @@ class CoordinatorStore:
             worker_concurrency = max(
                 int((worker.get("capabilities") or {}).get("worker_concurrency") or 1), 1
             )
+            # A restarted worker registers again under its old id (a new session)
+            # and has lost every unit it held: hand each one back, one per call and
+            # before any new work, instead of leaving them to go stale. A unit
+            # records the session it was handed to, so none is handed back twice.
+            session = worker.get("session_id")
+            for held in active_units:
+                held_state = state["units"][held["unit_id"]]
+                if held_state.get("session_id") != session:
+                    held_state.update({"session_id": session, "heartbeat_at": _now(), "updated_at": _iso()})
+                    worker["status"] = "assigned"
+                    worker["current_unit_id"] = held["unit_id"]
+                    self.save_state(state)
+                    return {"unit": self._assignment(plan, held, held_state), "job_id": plan["job_id"]}
             if active_units and len(active_units) >= worker_concurrency:
                 self.save_state(state)
                 held = active_units[0]
@@ -740,6 +756,7 @@ class CoordinatorStore:
                     {
                         "status": "assigned",
                         "worker_id": worker_id,
+                        "session_id": session,
                         "assigned_at": _iso(),
                         "heartbeat_at": _now(),
                         "updated_at": _iso(),
