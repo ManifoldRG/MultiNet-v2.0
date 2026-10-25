@@ -155,9 +155,9 @@ def _load_parts(transcript: list[dict], parts: Path) -> None:
         rec["_checkpoint_part"] = (parts, ref["part"])
 
 
-# GridState fields serialized from sets: their list order follows
-# PYTHONHASHSEED, so two processes can write the same state in different
-# orders. Replay compares them as sets.
+# GridState fields serialized from sets. GridState.to_dict lists them sorted
+# now, but older checkpoints and archives list them in their process's
+# PYTHONHASHSEED order, so replay compares them as sets.
 _SET_VALUED_STATE_FIELDS = (
     "open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells",
 )

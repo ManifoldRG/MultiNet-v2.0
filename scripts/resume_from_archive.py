@@ -49,6 +49,12 @@ ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
 INFRA_KILL_PREFIXES = ("agent_error:",)
 # The stepper's in-progress default (see EpisodeStepper.start()).
 IN_PROGRESS_END_REASON = "max_steps"
+# Mirrors interface/episode_checkpoint._SET_VALUED_STATE_FIELDS (a test keeps
+# them equal): GridState fields serialized from sets. Archives written before
+# they were serialized sorted list them in their process's PYTHONHASHSEED order.
+SET_VALUED_STATE_FIELDS = (
+    "open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells",
+)
 
 
 # --------------------------------------------------------------------------
@@ -65,6 +71,16 @@ def trailing_parse_failures(query_records: list[dict]) -> int:
             break
         n += 1
     return n
+
+
+def canonical_state(state: dict) -> dict:
+    """A state snapshot with its set-valued fields in one order, so two
+    snapshots of the same state compare equal whatever process wrote them."""
+    out = dict(state)
+    for key in SET_VALUED_STATE_FIELDS:
+        if isinstance(out.get(key), list):
+            out[key] = sorted(out[key], key=lambda v: json.dumps(v, sort_keys=True))
+    return out
 
 
 def is_infra_kill(end_reason: object) -> bool:
@@ -384,10 +400,13 @@ def main() -> int:
     step_records = [r for r in episode["transcript"] if r.get("kind") == "step"]
     replayed_final = _json_safe(state_snapshot(stepper.state))
     archived_final = episode["final_state"]
-    final_matches = replayed_final == archived_final
+    # Set-valued fields compare as sets: an archive lists them in the order its
+    # process happened to, which need not be this one's.
+    replayed_canon, archived_canon = canonical_state(replayed_final), canonical_state(archived_final)
+    final_matches = replayed_canon == archived_canon
     mismatched_keys = [
-        k for k in set(archived_final) | set(replayed_final)
-        if archived_final.get(k) != replayed_final.get(k)
+        k for k in set(archived_canon) | set(replayed_canon)
+        if archived_canon.get(k) != replayed_canon.get(k)
     ]
 
     report = {

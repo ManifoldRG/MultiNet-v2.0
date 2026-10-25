@@ -11,8 +11,10 @@ import pytest
 
 from scripts.resume_from_archive import (
     IN_PROGRESS_END_REASON,
+    SET_VALUED_STATE_FIELDS,
     build_checkpoint_payload,
     build_live_agent,
+    canonical_state,
     drive_continue_loop,
     rehydrate_agent_messages,
     scripted_action_from_spec,
@@ -281,15 +283,18 @@ def test_continue_loop_stops_when_a_scripted_agent_reports_exhausted():
 _RENDER_3D = {"backend": "mujoco3d", "camera": "top_down", "resolution": "grid"}
 
 
-def _parse_failed_archive(tmp_path: Path, render: dict | None = None) -> Path:
-    """A real infra-killed (parse_failed) episode archive, 2D unless ``render``."""
+def _parse_failed_archive(
+    tmp_path: Path, render: dict | None = None, maze: str = "V01_empty_room.json", actions=("MOVE_FORWARD",),
+) -> Path:
+    """A real infra-killed (parse_failed) episode archive, 2D unless ``render``:
+    ``actions`` answer the first queries, then the network is out."""
     import itertools
     import json
 
     from interface.loader import default_maze_path
     from scripts.run_pipeline import run_from_config
 
-    replies = itertools.chain(["FINAL_OUTPUT: MOVE_FORWARD"], itertools.repeat("(network outage)"))
+    replies = itertools.chain((f"FINAL_OUTPUT: {a}" for a in actions), itertools.repeat("(network outage)"))
 
     class _DyingAgent:
         last_usage = None
@@ -302,7 +307,7 @@ def _parse_failed_archive(tmp_path: Path, render: dict | None = None) -> Path:
     cfg.write_text(json.dumps({
         **({} if render is None else {"render": render}),
         "models": {"stub": {
-            "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path("V01_empty_room.json"))],
+            "provider": "claude", "model": "stub-model", "tasks": [str(default_maze_path(maze))],
         }},
     }))
     artifacts = tmp_path / "artifacts"
@@ -325,15 +330,16 @@ def _edit_render(archive: Path, **changes) -> None:
         (archive / name).write_text(json.dumps(payload))
 
 
-def _resume(archive: Path, out_dir: Path):
+def _resume(archive: Path, out_dir: Path, *extra: str, env: dict | None = None):
+    import os
     import subprocess
     import sys
 
     repo = Path(__file__).resolve().parents[1]
     return subprocess.run(
         [sys.executable, str(repo / "scripts" / "resume_from_archive.py"), "--archive-dir", str(archive),
-         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", "replay-verify"],
-        capture_output=True, text=True, timeout=300,
+         "--repo-root", str(repo), "--out-dir", str(out_dir), "--mode", "replay-verify", *extra],
+        capture_output=True, text=True, timeout=300, env=None if env is None else {**os.environ, **env},
     )
 
 
@@ -342,6 +348,59 @@ def test_resume_replays_a_2d_archive(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "replay-verify: PASS" in result.stdout
     assert "backend: minigrid" in result.stdout
+
+
+def test_canonical_state_ignores_the_order_of_set_valued_fields():
+    archived = {"collected_keys": ["k_red", "k_blue"], "visible_cells": [[2, 1], [1, 1]], "agent_position": [1, 1],
+                "rotator_dirs": [3, 0]}
+    replayed = {"collected_keys": ["k_blue", "k_red"], "visible_cells": [[1, 1], [2, 1]], "agent_position": [1, 1],
+                "rotator_dirs": [3, 0]}
+    assert archived != replayed
+    assert canonical_state(archived) == canonical_state(replayed)
+    # Ordered fields keep their order.
+    assert canonical_state({**replayed, "rotator_dirs": [0, 3]}) != canonical_state(archived)
+
+
+def test_set_valued_state_fields_mirror_the_checkpoint_replay():
+    from interface.episode_checkpoint import _SET_VALUED_STATE_FIELDS, _canonical_state
+
+    assert SET_VALUED_STATE_FIELDS == _SET_VALUED_STATE_FIELDS
+    state = {key: [["b"], ["a"]] for key in SET_VALUED_STATE_FIELDS}
+    assert canonical_state(state) == _canonical_state(state)
+
+
+def _two_key_archive(tmp_path: Path) -> tuple[Path, list[str]]:
+    """A parse_failed archive killed after both of V08's keys were collected."""
+    import json
+
+    from gridworld.baselines import plan_bfs_path
+    from interface.loader import default_maze_path
+    from interface.parser import ACTION_ORDER
+    from scorer.io import task_spec_from_payload
+
+    plan = plan_bfs_path(task_spec_from_payload(json.loads(default_maze_path("V08_chain_kk.json").read_text())))
+    archive = _parse_failed_archive(tmp_path, maze="V08_chain_kk.json",
+                                    actions=[ACTION_ORDER[a] for a in plan.actions][:-1])
+    keys = json.loads((archive / "episode.json").read_text())["final_state"]["collected_keys"]
+    assert len(keys) == 2, "the plan must collect both keys before the kill"
+    return archive, keys
+
+
+@pytest.mark.parametrize("order", [sorted, lambda keys: sorted(keys, reverse=True)])
+def test_resume_verifies_an_archive_whatever_order_it_listed_set_fields_in(tmp_path: Path, order):
+    """Archives written before set fields were sorted list them in their
+    process's hash order; the final-state check must compare them as sets."""
+    import json
+
+    archive, keys = _two_key_archive(tmp_path)
+    episode = json.loads((archive / "episode.json").read_text())
+    episode["final_state"]["collected_keys"] = order(keys)
+    (archive / "episode.json").write_text(json.dumps(episode))
+    # A fixed hash seed for the replay, so one of the two orders is not the one
+    # its process would list: the check must not depend on it.
+    result = _resume(archive, tmp_path / "out", env={"PYTHONHASHSEED": "0"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "replay-verify: PASS" in result.stdout
 
 
 def test_resume_replays_a_3d_archive_on_the_3d_backend(tmp_path: Path):

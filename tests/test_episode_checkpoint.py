@@ -318,3 +318,43 @@ def test_checkpoint_written_atomically(tmp_path):
         "finished",
         "end_reason",
     }
+
+
+# Every GridState field serialized from a set, populated with several members.
+_SET_STATE_SCRIPT = """
+import json
+from gridworld.backends.base import GridState
+from interface.episode_log import state_snapshot
+ids = ["red", "blue", "green", "yellow", "purple", "grey", "k10", "k2"]
+cells = {(x, y) for x in range(4) for y in range(3)}
+state = GridState(
+    agent_position=(1, 1), agent_direction=0,
+    open_doors={f"d_{i}" for i in ids}, collected_keys={f"k_{i}" for i in ids},
+    active_switches={f"s_{i}" for i in ids}, open_gates={f"g_{i}" for i in ids},
+    observability_mode="fog_of_war", visible_cells=set(cells), explored_cells=set(cells),
+)
+print(json.dumps(state_snapshot(state)))
+"""
+
+
+def test_set_valued_state_fields_serialize_the_same_under_any_hash_seed():
+    """open_doors, collected_keys, ... are sets of strings: listed in iteration
+    order they follow PYTHONHASHSEED, so two processes wrote the same state
+    differently (and an archive's final-state check failed on a resume)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[1]
+    outputs = set()
+    for seed in ("0", "1", "2", "3"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        run = subprocess.run([sys.executable, "-c", _SET_STATE_SCRIPT], capture_output=True, text=True,
+                             cwd=repo, env=env, timeout=120)
+        assert run.returncode == 0, run.stderr
+        outputs.add(run.stdout)
+    assert len(outputs) == 1
+    snap = json.loads(outputs.pop())
+    for key in ("open_doors", "collected_keys", "active_switches", "open_gates", "visible_cells", "explored_cells"):
+        assert len(snap[key]) > 1 and snap[key] == sorted(snap[key]), key
