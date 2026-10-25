@@ -21,6 +21,7 @@ import pytest
 
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
+from interface.agents.billing import BillingExhausted
 from interface.agents.reply import Reply
 from interface.batch_runner import LockstepBatchRunner, LockstepUnit
 from interface.config import ExperimentConfig
@@ -498,6 +499,46 @@ def test_batch_exception_errors_round_but_keeps_prior_results():
     assert results["GOOD"]["success"] is True          # prior result survived
     assert "error" in results["BAD"]                    # round unit errored, not crashed
     assert "batch tick blew up" in results["BAD"]["error"]
+
+
+class FailOnRoundBatchAgent:
+    """Answers through ``inner`` until round ``fail_on_call``, which raises ``error``."""
+
+    def __init__(self, inner, *, fail_on_call, error):
+        self._inner, self._fail_on_call, self._error = inner, fail_on_call, error
+        self._calls = 0
+
+    def generate_batch(self, batch):
+        self._calls += 1
+        if self._calls == self._fail_on_call:
+            raise self._error
+        return self._inner.generate_batch(batch)
+
+
+@pytest.mark.parametrize(
+    "error,kept",
+    [(BillingExhausted("claude", "credit balance too low"), True), (RuntimeError("HTTP 500"), False)],
+)
+def test_a_billing_stop_keeps_the_checkpoint_and_other_errors_drop_it(tmp_path, error, kept):
+    """A billing (or spend-cap) stop is resumable: the unit's checkpoint at the
+    refused round's query boundary survives, so a continuation re-pays nothing.
+    Any other error drops it, as before."""
+    from interface.episode_checkpoint import resume_stepper
+
+    spec = _spec("u", [7, 3], [1, 1], [5, 1])                         # "1 by 5"
+    ckpt = tmp_path / "unit.json"
+    unit = _make_unit("U", spec, checkpoint_path=ckpt)
+    inner = ScriptedBatchAgent({"1 by 5": ["MOVE_FORWARD"] * 4})
+    runner = LockstepBatchRunner(FailOnRoundBatchAgent(inner, fail_on_call=2, error=error), max_batches=1)
+    runner.add(unit)
+    results = runner.run()
+
+    assert results["U"]["error"] == str(error)
+    assert results["U"].get("billing", False) is kept
+    assert ckpt.exists() is kept
+    if kept:
+        resumed = resume_stepper(ckpt, runner=_make_unit("FRESH", spec).stepper._runner)
+        assert resumed.query_count == 1 and resumed.step_index == 1  # round 1 applied, round 2 refused
 
 
 # --------------------------------------------------------------------------- #

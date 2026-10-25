@@ -198,11 +198,24 @@ def _json_safe(obj: Any) -> Any:
     return obj
 
 
-def flush_episode_log(result: dict[str, Any], out_dir: Path) -> Path:
-    """Write PNG frames and JSON-safe ``episode.json`` from a ``runner.run()`` result."""
-    if out_dir.exists():
+def flush_episode_log(result: dict[str, Any], out_dir: Path, *, keep: tuple[str, ...] = ()) -> Path:
+    """Write PNG frames and JSON-safe ``episode.json`` from a ``runner.run()`` result.
+
+    ``out_dir`` is rewritten from scratch, except its top-level entries named in
+    ``keep`` (a lockstep worker keeps its unit's checkpoint there until the
+    result is safely uploaded).
+    """
+    if out_dir.exists() and keep:
+        for child in out_dir.iterdir():
+            if child.name in keep:
+                continue
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    elif out_dir.exists():
         shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
+    out_dir.mkdir(parents=True, exist_ok=bool(keep))
     frames_dir = out_dir / "frames"
     queries_dir = out_dir / "queries"
     # Query images reference the step frames (same PNG bytes) or, for anything

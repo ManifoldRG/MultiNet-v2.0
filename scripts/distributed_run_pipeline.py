@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import dataclasses
+import io
 import json
 import logging
 import shutil
@@ -49,6 +50,11 @@ DISTRIBUTED_DIR = "distributed"
 PLAN_FILENAME = "job_plan.json"
 STATE_FILENAME = "job_state.json"
 EXPECTED_RUN_FILES = ("episode.json", "run_inputs.json", "run_score.json")
+# A lockstep unit's query-boundary checkpoint, in its run dir. It is worker-local:
+# finalize keeps it while it rewrites the run dir, and the upload archive leaves
+# it out.
+CHECKPOINT_FILENAME = "checkpoint.json"
+_CHECKPOINT_ENTRIES = (CHECKPOINT_FILENAME, f"{CHECKPOINT_FILENAME}.parts", f"{CHECKPOINT_FILENAME}.tmp")
 ACTIVE_STATUSES = {"assigned", "running"}
 # Resumes allowed per unit for kills that are not billing (a deterministic error,
 # e.g. a context-overflow 400, would otherwise loop forever).
@@ -1431,9 +1437,35 @@ def package_run_archive(
             raise FileNotFoundError(f"Run directory is missing expected file: {run_dir / name}")
     with tarfile.open(archive_path, "w:gz") as tar:
         for path in sorted(run_dir.rglob("*")):
-            if path.is_file():
+            if path.is_file() and path.relative_to(run_dir).parts[0] not in _CHECKPOINT_ENTRIES:
                 tar.add(path, arcname=str(path.relative_to(run_dir)))
     return archive_path
+
+
+def _applied_queries(record: Any) -> int:
+    """Query records in a checkpoint or an episode: one per applied query."""
+    transcript = record.get("transcript") if isinstance(record, dict) else None
+    return sum(1 for rec in transcript or [] if isinstance(rec, dict) and rec.get("kind") == "query")
+
+
+def _checkpoint_behind_archive(checkpoint: Path, resume_payload: dict[str, Any]) -> bool:
+    """True when a unit's local checkpoint is no further along than the resume
+    archive the coordinator sent. A checkpoint kept from a billing stop on this
+    worker can be older than the partial another worker uploaded since, and
+    resuming from it would re-pay (and diverge from) that worker's queries. A
+    checkpoint ahead of the archive is this worker's own progress past it before
+    a crash, and wins."""
+    try:
+        checkpointed = _applied_queries(_read_json(checkpoint))
+    except (OSError, ValueError):
+        return True  # unreadable: the archive is the only usable state
+    try:
+        raw = base64.b64decode(resume_payload["archive_b64"])
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tar:
+            archived = json.load(tar.extractfile("episode.json"))
+    except (AttributeError, KeyError, OSError, ValueError, tarfile.TarError):
+        return False  # the resume path refuses a bad archive itself
+    return checkpointed <= _applied_queries(archived)
 
 
 def _load_worker_state(path: Path) -> dict[str, Any]:
@@ -1756,7 +1788,7 @@ def run_lockstep_worker(
     """
     from interface.batch_runner import LockstepBatchRunner, LockstepUnit
     from interface.config import ExperimentConfig
-    from interface.episode_checkpoint import resume_stepper
+    from interface.episode_checkpoint import discard_checkpoint, resume_stepper
     from interface.episode_log import flush_episode_log
     from interface.episode_step import EpisodeStepper
     from pipeline.run_stage3 import build_episode_runner
@@ -1841,12 +1873,16 @@ def run_lockstep_worker(
         )
         # The run dir must exist before the runner writes its per-round checkpoint.
         prep.run_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_path = prep.run_dir / "checkpoint.json"
+        checkpoint_path = prep.run_dir / CHECKPOINT_FILENAME
         runner = build_episode_runner(
             prep.source, prep.experiment_config, int(unit["seed"]),
             max_steps=prep.runtime_spec.max_steps, render=render,
         )
         resumed.pop(unit_id, None)
+        if unit.get("resume") and checkpoint_path.exists() and _checkpoint_behind_archive(
+            checkpoint_path, unit["resume"]
+        ):
+            discard_checkpoint(checkpoint_path)  # the coordinator's partial is at least as far along
         if unit.get("resume") and not checkpoint_path.exists():
             # A resumable unit: replay-verify the killed run, then continue it.
             from pipeline import resume
@@ -1865,8 +1901,9 @@ def run_lockstep_worker(
                 return None
             stepper.maze_path = str(prep.source)
         elif checkpoint_path.exists():
-            # Crash resume: rebuild the stepper at the query boundary the previous
-            # attempt checkpointed instead of re-running from scratch.
+            # Crash resume (or a billing stop's kept checkpoint): rebuild the stepper
+            # at the query boundary the previous attempt checkpointed instead of
+            # re-running from scratch.
             stepper = resume_stepper(checkpoint_path, runner=runner)
             stepper.maze_path = str(prep.source)
         else:
@@ -1901,7 +1938,7 @@ def run_lockstep_worker(
             if render.backend != "minigrid":                 # as run_episode stamps it
                 result["render"] = render.provenance(prep.runtime_spec)
             result.update(resumed.get(unit_id, {}))           # resumed_from / resume
-            flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
+            flush_episode_log(result, prep.run_dir, keep=_CHECKPOINT_ENTRIES)  # episode.json (+frames)
             prep.write_run_inputs(extras={"pricing_tier": "batch", **resumed.get(unit_id, {})})
             episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))
             prep.score_episode(episode)                      # run_score.json

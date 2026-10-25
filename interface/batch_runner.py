@@ -30,7 +30,10 @@ Round loop (per the task brief, adapted to the real seams):
   5. ``on_round(active_units)`` — a heartbeat hook for the coordinator.
 
 A stepper that raises is caught, recorded as ``{"error": str(exc)}`` for that
-unit, and the batch continues; one bad episode never kills the run.
+unit, and the batch continues; one bad episode never kills the run. A billing
+error (``BillingExhausted``, which covers spend caps) is recorded with
+``"billing": True`` and keeps the unit's checkpoint, so the parked episode can
+continue from the refused round's query boundary.
 """
 
 from __future__ import annotations
@@ -54,7 +57,8 @@ class LockstepUnit:
     """One episode in the working set: its id, its stepper, its checkpoint file.
 
     ``checkpoint_path`` is optional; when set, the runner writes a query-boundary
-    checkpoint each round the unit is active and deletes it when the unit ends.
+    checkpoint each round the unit is active and deletes it when the unit ends,
+    unless it ended on a billing stop.
     """
 
     unit_id: str
@@ -241,12 +245,17 @@ class LockstepBatchRunner:
 
     def _record_error(self, unit: LockstepUnit, exc: Exception) -> None:
         logger.exception("unit %s failed: %s", unit.unit_id, exc)
+        billing = isinstance(exc, BillingExhausted)
         self._results[unit.unit_id] = {
             "error": str(exc),
             # A billing error parks the unit (resumable) instead of failing it.
-            **({"billing": True} if isinstance(exc, BillingExhausted) else {}),
+            **({"billing": True} if billing else {}),
         }
-        self._delete_checkpoint(unit)
+        if not billing:
+            # A billing or spend-cap stop keeps the checkpoint taken at this
+            # round's query boundary: a continuation starts there and re-pays
+            # nothing. Any other error fails the unit, which reruns from scratch.
+            self._delete_checkpoint(unit)
 
     @staticmethod
     def _delete_checkpoint(unit: LockstepUnit) -> None:
