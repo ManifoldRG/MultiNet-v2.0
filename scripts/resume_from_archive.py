@@ -69,8 +69,9 @@ def trailing_parse_failures(query_records: list[dict]) -> int:
 
 def is_infra_kill(end_reason: object) -> bool:
     """True for archived end reasons this driver may clear and resume."""
-    return end_reason in ARCHIVED_END_REASONS_TO_CLEAR or str(end_reason).startswith(
-        INFRA_KILL_PREFIXES
+    reason = str(end_reason)
+    return end_reason in ARCHIVED_END_REASONS_TO_CLEAR or any(
+        prefix in reason for prefix in INFRA_KILL_PREFIXES
     )
 
 
@@ -176,8 +177,19 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
             stepper.query_count -= 1
             break
         new_queries += 1
-        log(f"  new query {new_queries}: env_step={stepper.state.step_count} "
-            f"parsed={stepper.action_queue or 'PARSE-FAIL'}")
+        state = stepper.state
+        direction = getattr(state, "agent_direction", None)
+        facing = "?" if direction is None else ("EAST", "SOUTH", "WEST", "NORTH")[int(direction) % 4]
+        pos = getattr(state, "agent_position", None)
+        row_col = None if pos is None else (int(pos[1]), int(pos[0]))
+        watchdog = getattr(stepper, "_stall_watchdog", None)
+        log(f"  new query {new_queries}: env_step={state.step_count} "
+            f"parsed={stepper.action_queue or 'PARSE-FAIL'} "
+            f"pos={pos} row_col={row_col} facing={facing} "
+            f"carrying={getattr(state, 'agent_carrying', None)} "
+            f"keys={sorted(getattr(state, 'collected_keys', ()) or ())} "
+            f"doors={sorted(getattr(state, 'open_doors', ()) or ())} "
+            f"stall={getattr(watchdog, 'stall_count', None)}")
     return new_queries, stopped_early
 
 

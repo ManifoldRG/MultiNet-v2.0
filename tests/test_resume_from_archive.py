@@ -82,7 +82,7 @@ def test_build_checkpoint_payload_clears_an_agent_error_kill():
 
 @pytest.mark.parametrize(
     "end_reason",
-    ["stalled", "truncated", "max_steps", "wrong_done", "resume_interrupted:agent_error:X", None],
+    ["stalled", "truncated", "max_steps", "wrong_done", "resume_interrupted:max_new_queries(600)", None],
 )
 def test_build_checkpoint_payload_refuses_model_outcomes(end_reason):
     with pytest.raises(SystemExit):
