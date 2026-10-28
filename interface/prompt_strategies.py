@@ -103,6 +103,14 @@ class MinimalInteractionRulesStandPromptStrategy(MinimalPromptStrategy):
         return "\n".join([super().build_system_prompt(querying_suffix), hint])
 
 
+class MinimalTopdownLegend2DPromptStrategy(MinimalPromptStrategy):
+    """The minimal prompt plus one line naming the 2D frame: top-down, north up, floor/wall colours."""
+
+    def build_system_prompt(self, querying_suffix: str = "") -> str:
+        hint = system_templates.TOPDOWN_LEGEND_2D_HINT
+        return "\n".join([super().build_system_prompt(querying_suffix), hint])
+
+
 class StandardPromptStrategy(MinimalPromptStrategy):
     def build_system_prompt(self, querying_suffix: str = "") -> str:
         del querying_suffix

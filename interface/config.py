@@ -14,6 +14,7 @@ class ExperimentConfig:
     prompting: Literal[
         "minimal",
         "minimal_interaction_rules_stand",
+        "minimal_topdown_legend_2d",
         "standard",
         "verbose",
         "text_initial_maze",

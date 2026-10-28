@@ -26,6 +26,7 @@ from interface.observation import (
 )
 from interface.prompt_strategies import (
     MinimalInteractionRulesStandPromptStrategy,
+    MinimalTopdownLegend2DPromptStrategy,
     MinimalPromptStrategy,
     PromptStrategy,
     RenderContext,
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 _PROMPT_STRATEGIES = {
     "minimal": MinimalPromptStrategy,
     "minimal_interaction_rules_stand": MinimalInteractionRulesStandPromptStrategy,
+    "minimal_topdown_legend_2d": MinimalTopdownLegend2DPromptStrategy,
     "standard": StandardPromptStrategy,
     "verbose": VerbosePromptStrategy,
     "text_initial_maze": TextInitialMazePromptStrategy,

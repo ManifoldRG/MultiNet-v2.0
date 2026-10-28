@@ -44,6 +44,16 @@ INTERACTION_RULES_STAND_HINT = (
     "You must stand on a key/switch to act on it."
 )
 
+# One line appended after the Valid actions line of the minimal prompt
+# (prompting="minimal_topdown_legend_2d"): the 3D start map's label ("a top-down
+# view of the whole maze, north up") plus the 2D MiniGrid frame's floor/wall
+# colours, which the minimal 2D prompt never states. Astra 2D-vs-3D view ablation
+# (mechanics-15, 2026-10-28). Nothing else in the prompt changes.
+TOPDOWN_LEGEND_2D_HINT = (
+    "Each image is a top-down view of the whole maze, north up. "
+    "Black squares are floor; gray squares are walls."
+)
+
 INITIAL_MAZE_SECTION = "Initial maze (fixed for this episode):\n{maze_text}"
 
 # `INITIAL_MAZE_SECTION` is used when the observation includes text.

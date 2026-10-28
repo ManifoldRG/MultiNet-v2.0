@@ -4,6 +4,7 @@ from interface.config import ExperimentConfig
 from interface.prompt_strategies import (
     MinimalInteractionRulesStandPromptStrategy,
     MinimalPromptStrategy,
+    MinimalTopdownLegend2DPromptStrategy,
 )
 from interface.runner import _PROMPT_STRATEGIES
 
@@ -29,3 +30,14 @@ def test_variant_is_selectable_from_config():
     name = "minimal_interaction_rules_stand"
     assert ExperimentConfig(prompting=name).prompting == name
     assert _PROMPT_STRATEGIES[name] is MinimalInteractionRulesStandPromptStrategy
+
+
+def test_topdown_legend_2d_appends_one_line_after_actions():
+    assert MinimalTopdownLegend2DPromptStrategy(HINT).build_system_prompt() == (
+        MINIMAL
+        + "\nEach image is a top-down view of the whole maze, north up. "
+        "Black squares are floor; gray squares are walls."
+    )
+    name = "minimal_topdown_legend_2d"
+    assert ExperimentConfig(prompting=name).prompting == name
+    assert _PROMPT_STRATEGIES[name] is MinimalTopdownLegend2DPromptStrategy
