@@ -51,6 +51,14 @@ TASK_COMPLETE = "Task complete."
 WRONG_DONE = "DONE called but not at the goal."
 UNKNOWN_ACTION = "Unknown or unsupported action {action}."
 
+# Neutral tile labels (minimal level): what the step did, never which tile did it.
+# A step that left the agent somewhere other than the cell it faced names the
+# landing cell; a step that put the whole maze back to its start says so; an
+# action that changed nothing is NOTHING.
+NEUTRAL_MOVED_TO = "MOVED ({row},{col})"
+NEUTRAL_RESET = "RESET"
+NEUTRAL_NO_EFFECT = "NOTHING"
+
 BLOCKED_FEEDBACK = "BLOCKED — {action}: {message}"
 TURNED_FEEDBACK = "TURNED — {action}: {message}"
 MOVED_FEEDBACK = "MOVED — {action}: {message}"

@@ -71,6 +71,13 @@ CURRENT_KEYS_USED_UP_LINE = "Keys used up: {keys}."
 CURRENT_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):"
 NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, or teleporters in the current state description.)"
 
+# Neutral tile labels (ExperimentConfig.tile_labels="neutral", interface/tile_labels.py):
+# each tile kind is shown under a made-up word, and nothing here says what it does.
+NEUTRAL_TILE_LINE = "There is a {label} tile at ({row},{col})."
+NEUTRAL_POINTING_TILE_LINE = "There is a {label} tile at ({row},{col}) pointing {direction}."
+NEUTRAL_MAP_CONTENTS_HEADER = "Map contents as of this step (keys on the ground, doors, switches, gates, labelled tiles):"
+NEUTRAL_NO_MECHANISMS_LINE = "(No keys on the ground, doors, switches, gates, or labelled tiles in the current state description.)"
+
 CELL_OUT_OF_BOUNDS = "out of bounds"
 CELL_WALL = "wall"
 CELL_GOAL = "GOAL ({row},{col})"
