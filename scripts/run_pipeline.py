@@ -791,7 +791,8 @@ def _run_one_unit(
             max_steps=prep.runtime_spec.max_steps,
             provenance={
                 **_phase_episode_provenance(phase, model_config),
-                **({} if render.backend == "minigrid" else {"render": render.provenance(prep.runtime_spec)}),
+                # None (not stamped) for plain 2D, as in run_inputs.json.
+                "render": render.provenance(prep.runtime_spec),
             },
             render=render,
         )
@@ -930,15 +931,17 @@ def run_from_config(
     phase = run_config.get("phase")
 
     # Optional top-level render block: which backend/camera/resolution draws the
-    # frames. Parsed here so a bad block fails before any paid model call; the
-    # 2D default leaves artifact paths and run hashes exactly as they were.
+    # frames, and optionally the 2D observability. Parsed here so a bad block
+    # fails before any paid model call; the 2D default leaves artifact paths and
+    # run hashes exactly as they were.
     render = RenderSettings.from_run_config(run_config)
-    if render.backend != "minigrid":
-        # 3D frames (and a start map) are images: every experiment cell must carry them.
+    if render != RenderSettings():
+        # 3D frames (and a start map) are images, and a fogged 2D frame hides
+        # only what an image shows: every experiment cell must fit the block.
         for _variant, cell in _condition_configs(
             conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay
         ):
-            render.check_observation(cell.observation)
+            render.check_experiment(cell)
 
     # Resolve each model's task rows + build its agent.
     plans: list[tuple[str, Agent, dict[str, Any], list[dict[str, Any]]]] = []
