@@ -1,0 +1,31 @@
+{
+  "description": "Personal one-maze GPT-6 Luna smoke run",
+  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "text_only",
+    "context_window": "last_n",
+    "chat_history": "stateless",
+    "querying": "step_by_step",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "progress_stall_k": 10
+  },
+  "models": {
+    "gpt6_luna": {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 1,
+      "tasks": ["validation_10_v01_empty_room"],
+      "reasoning_effort": "low",
+      "max_tokens": 1024,
+      "spend_cap_usd": 1.0,
+      "timeout": 60,
+      "max_attempts": 2
+    }
+  }
+}
