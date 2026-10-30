@@ -6,6 +6,10 @@ in the artifact/hash *label* rather than in a new hashed field, so 2D runs keep
 byte-identical run hashes and every camera gets its own artifact directory. A 3D
 label also carries RENDER3D_VERSION, so a visual change writes new episodes
 beside the old ones instead of over them.
+
+``multigrid`` is the 2D backend for hex tasks (spec ``maze.tiling``): the same
+R1 rulebook as MiniGrid, frames from gridworld.render2d in the MiniGrid look.
+Its label carries RENDER2D_VERSION the way a 3D label carries its version.
 """
 
 from __future__ import annotations
@@ -17,7 +21,9 @@ from typing import Any, Optional
 from gridworld.render3d.cameras import PRESETS  # pure pose math; no mujoco import
 from gridworld.task_spec import TaskSpecification
 
-BACKENDS = ("minigrid", "mujoco3d")
+BACKENDS = ("minigrid", "multigrid", "mujoco3d")
+# Maze tilings each backend can draw (MiniGrid, and 3D on top of it, are square).
+BACKEND_TILINGS = {"minigrid": ("square",), "multigrid": ("square", "hex"), "mujoco3d": ("square",)}
 # MiniGrid's tile size. The 3D frame is square (this many px per cell of the
 # longer side), so it matches MiniGrid's 32W x 32H frame, and its image-token
 # cost, only for a square maze.
@@ -55,6 +61,13 @@ class RenderSettings:
             for key in ("camera", "resolution"):
                 if key in block:
                     raise ValueError(f"{key} is a 3D setting; the minigrid backend has no {key}")
+        if backend == "multigrid":
+            # Unset values are accepted: a distributed unit carries the whole
+            # settings dataclass (dataclasses.asdict) and must parse back.
+            defaults = {"camera": None, "resolution": "grid"}
+            for key, default in defaults.items():
+                if block.get(key, default) != default:
+                    raise ValueError(f"{key} is a 3D setting; the multigrid backend has no {key}")
         if backend == "mujoco3d" and camera not in PRESETS:
             raise ValueError(f"3D runs need a camera from {list(PRESETS)}, got {camera!r}")
         resolution = block.get("resolution", "grid")
@@ -64,7 +77,7 @@ class RenderSettings:
         if not isinstance(start_map, bool):
             raise ValueError(f"render start_map must be a bool, got {start_map!r}")
         if start_map and backend != "mujoco3d":
-            raise ValueError("start_map is a 3D setting; the minigrid frame already shows the whole maze")
+            raise ValueError(f"start_map is a 3D setting; the {backend} frame already shows the whole maze")
         if start_map and camera == "top_down":
             raise ValueError("start_map adds a top-down map; the top_down camera already is one")
         return cls(backend=backend, camera=camera, resolution=resolution, start_map=start_map)
@@ -75,6 +88,10 @@ class RenderSettings:
         render version (read at call time, like provenance)."""
         if self.backend == "minigrid":
             return "minigrid"
+        if self.backend == "multigrid":
+            from gridworld.render2d import RENDER2D_VERSION
+
+            return f"multigrid_r{RENDER2D_VERSION}"
         from gridworld import render3d
 
         suffix = "_map" if self.start_map else ""
@@ -84,6 +101,8 @@ class RenderSettings:
         """Backend constructor arguments for this task."""
         if self.backend == "minigrid":
             return {}
+        if self.backend == "multigrid":
+            return {"tiling": spec.maze.tiling}
         kwargs: dict[str, Any] = {"camera": self.camera, "resolution": self.frame_pixels(spec)}
         if self.start_map:
             kwargs["start_map"] = True
@@ -95,12 +114,21 @@ class RenderSettings:
         return GRID_PIXELS_PER_CELL * max(spec.maze.dimensions)
 
     def provenance(self, spec: TaskSpecification) -> Optional[dict[str, Any]]:
-        """What draws this task's 3D frames, for the episode cache key and
-        run_inputs.json: the settings, the resolved frame size, the render-layer
-        version and the mujoco version. None for 2D, so 2D run hashes stay
-        byte-identical."""
+        """What draws this task's frames, for the episode cache key and
+        run_inputs.json: the settings, the resolved frame size and the
+        render-layer version (3D: also the mujoco version). None for MiniGrid
+        2D, so 2D run hashes stay byte-identical."""
         if self.backend == "minigrid":
             return None
+        if self.backend == "multigrid":
+            from gridworld.render2d import RENDER2D_VERSION, frame_shape
+
+            return {
+                **dataclasses.asdict(self),
+                "tiling": spec.maze.tiling,
+                "frame_shape": list(frame_shape(spec)),
+                "render2d_version": RENDER2D_VERSION,
+            }
         from gridworld.render3d import RENDER3D_VERSION
 
         return {
@@ -114,7 +142,9 @@ class RenderSettings:
         """Fail fast when a 3D render meets an observation with no images: the
         model would never see a frame, so the run would repeat the 2D run under
         another label and pay for GL work."""
-        if self.backend == "minigrid" or observation != "text_only":
+        if self.backend in ("minigrid", "multigrid") or observation != "text_only":
+            # The 2D backends are state backends too: text_only on them is the
+            # NL run, which shows no frame.
             return
         if self.start_map:
             raise ValueError(
@@ -124,6 +154,17 @@ class RenderSettings:
             f"render {self.backend!r} draws frames, but observation 'text_only' shows the model none; "
             "run text_only on the 2D backend"
         )
+
+    def check_tiling(self, spec: TaskSpecification) -> None:
+        """Fail fast when this backend cannot draw the task's tiling (a hex
+        maze needs ``render: {"backend": "multigrid"}``)."""
+        tilings = BACKEND_TILINGS[self.backend]
+        if spec.maze.tiling not in tilings:
+            raise ValueError(
+                f"task {spec.task_id!r} is a {spec.maze.tiling} maze but the {self.backend} "
+                f"backend only draws {', '.join(tilings)}; "
+                'use run-config render: {"backend": "multigrid"}'
+            )
 
 
 def _mujoco_version() -> str:

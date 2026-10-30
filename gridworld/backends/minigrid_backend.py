@@ -11,7 +11,7 @@ import numpy as np
 from minigrid.core.world_object import Door as MiniGridDoor
 
 from ..task_spec import TaskSpecification
-from ..task_parser import TaskParser
+from ..task_parser import TaskParser, require_square_tiling
 from ..custom_env import CustomMiniGridEnv, Gate, Key as CustomKey
 from .base import AbstractGridBackend, GridState
 
@@ -45,6 +45,7 @@ class MiniGridBackend(AbstractGridBackend):
         Args:
             task_spec: The task specification defining the puzzle
         """
+        require_square_tiling(task_spec)
         self.task_spec = task_spec
         self._configured = True
         # Environment will be created on reset

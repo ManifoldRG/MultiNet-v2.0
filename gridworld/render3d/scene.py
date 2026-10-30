@@ -63,6 +63,9 @@ class UnsupportedSpecError(ValueError):
 def check_supported(spec: TaskSpecification) -> None:
     problems = []
     mech = spec.mechanisms
+    if spec.maze.tiling != "square":
+        # The scene builds square floor tiles and walls (see docs/multigrid_hex_port.md).
+        problems.append(f"tiling={spec.maze.tiling!r}")
     if mech.blocks:
         problems.append("blocks")
     if mech.hazards:

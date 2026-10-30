@@ -66,11 +66,11 @@ The two backends have different feature support. Choose based on your needs:
     Feature              | MiniGridBackend | MultiGridBackend
     ---------------------|-----------------|------------------
     Tilings:             |                 |
-      Square grid        | ✓               | ✓
-      Hexagonal grid     | ✗               | ✓
-      Triangle grid      | ✗               | ✓
-      3-4-6-4            | ✗               | ✓
-      4-8-8              | ✗               | ✓
+      Square grid        | ✓               | ✓ (R1 rulebook)
+      Hexagonal grid     | ✗               | ✓ (R1 rulebook)
+      Triangle grid      | ✗               | ✓ (native rules)
+      3-4-6-4            | ✗               | ✓ (native rules)
+      4-8-8              | ✗               | ✓ (native rules)
     Objects:             |                 |
       Walls              | ✓               | ✓
       Movable/Blocks     | ✓               | ✓
@@ -80,15 +80,22 @@ The two backends have different feature support. Choose based on your needs:
       Gates              | ✓               | ✓
       Hazards (Lava)     | ✓               | ✓
       Teleporters        | ✓               | ✓
-      Zones (targets)    | ✗               | ✓
+      Death/frozen/rotating tiles | ✓      | ✓ (square, hex)
+      Zones (targets)    | ✗               | ✓ (native rules)
     Features:            |                 |
       Partial obs (cone) | ✓               | ✓
       Fog of war         | ✓               | ✓
-      Mature/tested      | ✓               | ✗ (newer)
+      Mature/tested      | ✓               | ✓ square/hex, ✗ others
+
+    Square and hex tasks on MultiGridBackend step through the same R1
+    rulebook as MiniGrid (gridworld.world_model) and draw MiniGrid-look frames
+    (gridworld.render2d): square is step-for-step and pixel-for-pixel
+    MiniGrid. The other tilings keep multigrid's native execute_action.
 
     Recommendation:
     - Use MiniGridBackend for standard square grid tasks (more mature)
-    - Use MultiGridBackend for exotic tilings (hex/triangle/3464/488) or zones
+    - Use MultiGridBackend for hex tasks (spec maze.tiling "hex"), other
+      exotic tilings (triangle/3464/488) or zones
 
 See Also:
     - minigrid_backend.py: MiniGrid (gymnasium) implementation
@@ -114,7 +121,9 @@ class GridState:
     """
     # Agent state
     agent_position: tuple[int, int]
-    agent_direction: int  # 0=right, 1=down, 2=left, 3=up
+    # Clockwise from east (gridworld.tiling): square 0=right, 1=down, 2=left,
+    # 3=up; hex 0=E, 1=SE, 2=SW, 3=W, 4=NW, 5=NE.
+    agent_direction: int
     agent_carrying: Optional[str] = None  # ID or color of carried object
 
     # Environment state
@@ -137,9 +146,11 @@ class GridState:
     # not authoritative once an episode is under way.
     key_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
     freeze_remaining: int = 0
-    # Live arrow direction of each rotating tile, same order as the task spec.
-    # 0=east, 1=south, 2=west, 3=north. Every action advances these.
+    # Live arrow direction of each rotating tile, same order as the task spec,
+    # in agent_direction's convention. Every action advances these.
     rotator_dirs: tuple[int, ...] = ()
+    # The task's maze.tiling: how positions connect and directions count.
+    tiling: str = "square"
 
     # Goal state
     goal_reached: bool = False
@@ -173,6 +184,8 @@ class GridState:
             "observability_mode": self.observability_mode,
             "visible_cells": [list(c) for c in self.visible_cells],
             "explored_cells": [list(c) for c in self.explored_cells],
+            # Square is implicit, so square snapshots are unchanged.
+            **({} if self.tiling == "square" else {"tiling": self.tiling}),
         }
 
     @classmethod
@@ -201,6 +214,7 @@ class GridState:
             observability_mode=d.get("observability_mode", "full"),
             visible_cells={tuple(c) for c in d.get("visible_cells", [])},
             explored_cells={tuple(c) for c in d.get("explored_cells", [])},
+            tiling=d.get("tiling", "square"),
         )
 
 
@@ -319,9 +333,10 @@ class AbstractGridBackend(ABC):
         return {door.id: door.id in open_ids for door in self.task_spec.mechanisms.doors}
 
     def rotator_directions(self) -> tuple[int, ...]:
-        """Current direction (0=E 1=S 2=W 3=N) of each rotating tile, in the
-        spec's ``rotating_tiles`` order. The phase spins every legal step and is
-        not part of GridState, so renderers read it here. Default: none."""
+        """Current direction (clockwise from east: square 0=E 1=S 2=W 3=N,
+        hex 0-5) of each rotating tile, in the spec's ``rotating_tiles`` order.
+        The phase spins every legal step and is not part of GridState, so
+        renderers read it here. Default: none."""
         return ()
 
     def freeze_remaining(self) -> int:

@@ -728,14 +728,14 @@ class MiniGridPlaySession:
                 ProgressEvent("Teleported through the ", color, " teleporter", color, "teleport")
             )
         elif kind == "carried":
-            direction = direction_name(int(mechanic["direction"]))
+            direction = direction_name(int(mechanic["direction"]), new.tiling)
             self.event_log.append(
                 ProgressEvent(
                     "Rode a ", "rotating tile", f" pointing {direction}", "orange", "rotate"
                 )
             )
         elif kind == "rotating" and not mechanic["stayed"]:
-            direction = direction_name(int(mechanic["pointing"]))
+            direction = direction_name(int(mechanic["pointing"]), new.tiling)
             self.event_log.append(
                 ProgressEvent(
                     "Stepped on a ", "rotating tile", f" pointing {direction}", "orange", "rotate"

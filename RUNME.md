@@ -217,6 +217,29 @@ python -m scripts.render_3d_mazes --manifest gridworld/fixtures/manifest.json \
   --experiment r1 --camera top_down --camera first_person --contact-sheet --out <dir>
 ```
 
+### Hex mazes (MultiGrid backend)
+
+A task spec declares `"maze": {"tiling": "hex", ...}` to be a pointy-top hex
+maze: cell `(x, y)` is column `x` of row `y` in the odd-r layout (odd rows half
+a cell east), direction 0 is east and TURN_LEFT/TURN_RIGHT turn 60 degrees.
+A run-config selects the backend that can draw it with a top-level
+`"render": {"backend": "multigrid"}` block. It steps square and hex tasks
+through the same rulebook as MiniGrid (`gridworld/world_model.py`; square is
+step-for-step and pixel-for-pixel MiniGrid) and draws frames in the MiniGrid
+look (`gridworld/render2d.py`); the artifact label is
+`multigrid_r<RENDER2D_VERSION>`. The minigrid and 3D backends refuse hex
+mazes, and the cardinal action space is square-only; both fail the run before
+Stage 2. `scripts/make_hex_mechanics.py` converts mechanics-15 mazes to hex
+(`mazes/mechanics_hex/`, `manifest.mechanics_15_hex.json`), and
+`run_config.mechanics_15_hex_2d.json` / `..._hex_2d_astra.json` are the R2 2D
+cell on them. Design record: [docs/multigrid_hex_port.md](docs/multigrid_hex_port.md).
+
+```bash
+python -m scripts.run_pipeline --run-config gridworld/fixtures/run_config.mechanics_15_hex_2d_astra.json \
+  --manifest gridworld/fixtures/manifest.mechanics_15_hex.json --artifacts-root <dir> \
+  --run-set-id <id> --difficulty-max-static-score 20000
+```
+
 ## Appendix: legacy local/VLM demo harness
 
 An earlier single-machine harness predates the canonical pipeline and
@@ -225,7 +248,8 @@ exotic tilings. It is **not** the stack behind any published number.
 
 ```bash
 python run_eval.py --model random --benchmark tiers --tier 1  # random baseline on tier tasks
-python run_eval.py --model ollama --backend multigrid --tiling hex
+python run_eval.py --model ollama --backend multigrid --tiling hex \
+  --benchmark directory --task-dir mazes/mechanics_hex   # hex needs hex task specs
 python visualize_all_tilings.py
 python -m scripts.vlm_sanity_check --model ollama  # VLM vision sanity check
 ```

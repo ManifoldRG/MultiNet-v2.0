@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Literal, Optional, Any
 import json
 
+from .tiling import TILINGS, direction_count
+
 
 @dataclass
 class Position:
@@ -165,6 +167,9 @@ class MazeLayout:
     start: Position
     goal: Position
     floor: Optional[list[Position]] = None  # If not specified, all non-wall cells are floor
+    # "square" (MiniGrid) or "hex": pointy-top, cells are the (column, row) of
+    # the odd-r offset layout (see gridworld/tiling.py).
+    tiling: str = "square"
 
     @classmethod
     def from_dict(cls, d: dict) -> "MazeLayout":
@@ -175,7 +180,10 @@ class MazeLayout:
         floor = None
         if "floor" in d and d["floor"]:
             floor = [Position.from_list(f) if isinstance(f, list) else Position.from_dict(f) for f in d["floor"]]
-        return cls(dimensions=dims, walls=walls, start=start, goal=goal, floor=floor)
+        return cls(
+            dimensions=dims, walls=walls, start=start, goal=goal, floor=floor,
+            tiling=d.get("tiling", "square"),
+        )
 
 
 @dataclass
@@ -345,7 +353,8 @@ class TaskSpecification:
                 walls=[Position.from_list(w) if isinstance(w, list) else Position.from_dict(w) for w in layout.get("walls", [])],
                 start=Position.from_list(layout["start"]) if isinstance(layout["start"], list) else Position.from_dict(layout["start"]),
                 goal=Position.from_list(layout["goal"]) if isinstance(layout["goal"], list) else Position.from_dict(layout["goal"]),
-                floor=[Position.from_list(f) if isinstance(f, list) else Position.from_dict(f) for f in layout.get("floor", [])] if layout.get("floor") else None
+                floor=[Position.from_list(f) if isinstance(f, list) else Position.from_dict(f) for f in layout.get("floor", [])] if layout.get("floor") else None,
+                tiling=maze_data.get("tiling", "square"),
             )
             # Mechanisms may be under maze
             mechanisms_data = maze_data.get("mechanisms", d.get("mechanisms", {}))
@@ -447,6 +456,10 @@ class TaskSpecification:
             },
             "max_steps": self.max_steps
         }
+        if self.maze.tiling != "square":
+            # Square is the default and stays implicit, so every square spec's
+            # hash (Stage 2 cache, run hash) is unchanged.
+            data["maze"]["tiling"] = self.maze.tiling
         if self.dependency_chain is not None:
             data["dependency_chain"] = {
                 "depth": self.dependency_chain.depth,
@@ -503,6 +516,16 @@ class TaskSpecification:
         # Check dimensions
         if width < 3 or height < 3:
             errors.append(f"Maze dimensions too small: {width}x{height}, minimum is 3x3")
+
+        tiling = self.maze.tiling
+        if tiling not in TILINGS:
+            errors.append(f"Unknown maze tiling {tiling!r}; choose from {list(TILINGS)}")
+        declared = (self.metadata or {}).get("tiling")
+        if declared is not None and declared != tiling:
+            errors.append(
+                f"metadata.tiling {declared!r} disagrees with maze.tiling {tiling!r}; "
+                "the maze field decides how cells connect"
+            )
 
         def in_bounds(pos: Position) -> bool:
             return 0 <= pos.x < width and 0 <= pos.y < height
@@ -617,6 +640,16 @@ class TaskSpecification:
         for rotating in self.mechanisms.rotating_tiles:
             check_position(rotating, "Rotating tile")
             register_position(rotating, "Rotating tile")
+        if tiling in TILINGS:
+            # An arrow can point any way the agent can face: 0-3 on square
+            # (E, S, W, N), 0-5 on hex (E, SE, SW, W, NW, NE).
+            n_dirs = direction_count(tiling)
+            for direction in self.mechanisms.rotating_initial_directions:
+                if isinstance(direction, bool) or not isinstance(direction, int) or not 0 <= direction < n_dirs:
+                    errors.append(
+                        f"Rotating tile direction {direction!r} is not one of the "
+                        f"{n_dirs} directions of a {tiling} tiling (0-{n_dirs - 1})"
+                    )
 
         # Check door-key color consistency
         key_colors = {k.color for k in self.mechanisms.keys}
