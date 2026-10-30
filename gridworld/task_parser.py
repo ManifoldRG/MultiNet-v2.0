@@ -13,6 +13,16 @@ from .task_spec import TaskSpecification
 from .custom_env import CustomMiniGridEnv
 
 
+def require_square_tiling(spec: TaskSpecification) -> None:
+    """MiniGrid is a square grid: a hex maze must not be silently read as one."""
+    if spec.maze.tiling != "square":
+        raise ValueError(
+            f"Task {spec.task_id!r} declares a {spec.maze.tiling} tiling; MiniGrid only "
+            "draws square grids. Run it on the multigrid backend "
+            '(run-config render: {"backend": "multigrid"}).'
+        )
+
+
 class TaskParser:
     """
     Parse TaskSpecification and create configured MiniGrid environments.
@@ -74,6 +84,7 @@ class TaskParser:
         is_valid, errors = spec.validate()
         if not is_valid:
             raise ValueError(f"Invalid task specification: {'; '.join(errors)}")
+        require_square_tiling(spec)
 
         width, height = spec.maze.dimensions
 
