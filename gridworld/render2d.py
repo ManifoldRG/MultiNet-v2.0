@@ -5,7 +5,8 @@ draws its grid: 3x supersampled, black floor with grey grid lines, MiniGrid's
 own renders for the key, switch, portal, skull, ice, lava and box icons, doors
 and gates as MiniGrid's frames and rings, and the red agent triangle and the
 rotating tile's arrow turned by the direction angle (90 degrees a step on
-square, 60 on hex). The rotating tile under the agent and the frost overlay are
+square, 60 on hex, where both triangles are drawn narrower so that each of
+the six directions reads one way). The rotating tile under the agent and the frost overlay are
 then drawn at full scale on top, as ``CustomMiniGridEnv.get_frame`` does.
 
 On a square task the frame is MiniGridBackend's (tests/test_render2d.py checks
@@ -68,6 +69,14 @@ _LINE = 0.031
 _AGENT_TRIANGLE = ((0.12, 0.19), (0.87, 0.50), (0.12, 0.81))
 _ARROW_TRIANGLE = ((0.22, 0.22), (0.22, 0.78), (0.82, 0.50))
 _SMALL_AGENT_TRIANGLE = ((0.32, 0.35), (0.68, 0.50), (0.32, 0.65))
+# MiniGrid's triangles are close to equilateral (the agent's apex is 45
+# degrees, the arrow's 50), so turned by 120 degrees they look like themselves
+# shifted: fine in 90-degree steps, ambiguous in 60-degree ones (the agent
+# facing northwest reads as east). Hex draws the same triangles narrower, apex
+# 30-37 degrees, so each of the six directions reads one way.
+_HEX_AGENT_TRIANGLE = ((0.15, 0.30), (0.87, 0.50), (0.15, 0.70))
+_HEX_ARROW_TRIANGLE = ((0.22, 0.30), (0.22, 0.70), (0.82, 0.50))
+_HEX_SMALL_AGENT_TRIANGLE = ((0.32, 0.40), (0.70, 0.50), (0.32, 0.60))
 _ICON_SENTINEL = np.array([1, 2, 3], dtype=np.uint8)
 
 
@@ -387,7 +396,7 @@ class TilingFrameRenderer:
         agent = self._cell(state.agent_pos)
         pix, u, v = fine.local(agent)
         u, v = _rotated(u, v, _direction_angle(self.tiling, state.agent_dir))
-        self._fill(flat, pix, AGENT, _in_triangle(u, v, *_AGENT_TRIANGLE))
+        self._fill(flat, pix, AGENT, _in_triangle(u, v, *self._triangle(_AGENT_TRIANGLE, _HEX_AGENT_TRIANGLE)))
 
         img = _downsample(canvas)
 
@@ -448,9 +457,12 @@ class TilingFrameRenderer:
         keep = drawn[i, j]
         flat[pix[keep]] = tile[i[keep], j[keep]]
 
+    def _triangle(self, square, hexed):
+        return hexed if self.tiling == "hex" else square
+
     def _arrow(self, u, v, direction: int):
         u, v = _rotated(u, v, _direction_angle(self.tiling, direction))
-        return _in_triangle(u, v, *_ARROW_TRIANGLE)
+        return _in_triangle(u, v, *self._triangle(_ARROW_TRIANGLE, _HEX_ARROW_TRIANGLE))
 
     def _full_scale_overlays(self, img: np.ndarray, state: PlannerState, agent: int) -> None:
         """CustomMiniGridEnv.get_frame: drawn on the finished frame, without
@@ -463,7 +475,8 @@ class TilingFrameRenderer:
             flat[pix] = TURNTABLE
             self._fill(flat, pix, ARROW, self._arrow(u, v, direction))
             ru, rv = _rotated(u, v, _direction_angle(self.tiling, state.agent_dir))
-            self._fill(flat, pix, AGENT, _in_triangle(ru, rv, *_SMALL_AGENT_TRIANGLE))
+            small = self._triangle(_SMALL_AGENT_TRIANGLE, _HEX_SMALL_AGENT_TRIANGLE)
+            self._fill(flat, pix, AGENT, _in_triangle(ru, rv, *small))
         if state.freeze_remaining > 0:
             # Iced over: the agent's cell frosts on step-on and each swallowed
             # action thins it; diagonal cracks appear as it thaws.

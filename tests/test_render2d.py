@@ -40,18 +40,21 @@ def _centre(renderer: TilingFrameRenderer, xy) -> tuple[float, float]:
     return cols.mean(), rows.mean()
 
 
-def _pointing(frame, renderer, xy, colour) -> float:
-    """Where a triangle of ``colour`` in cell ``xy`` points: the screen angle
-    (degrees, y down) from its centroid to its tip, the pixel farthest away."""
+def _pointing(frame, renderer, xy, colour) -> tuple[int, float]:
+    """Which hex direction a triangle of ``colour`` in cell ``xy`` points, and
+    by what margin: how far its pixels reach from their centroid along each
+    of the six directions, the best reach over the runner-up. A nearly
+    equilateral triangle (MiniGrid's turntable arrow) reaches almost as far
+    toward a base corner as toward its tip, so 60-degree turns of it are
+    ambiguous; the margin catches that."""
     rows, cols = _cell_pixels(renderer, xy)
     hit = (frame[rows, cols] == colour).all(axis=-1)
-    ys, xs = rows[hit].astype(float), cols[hit].astype(float)
-    tip = np.argmax((xs - xs.mean()) ** 2 + (ys - ys.mean()) ** 2)
-    return math.degrees(math.atan2(ys[tip] - ys.mean(), xs[tip] - xs.mean())) % 360
-
-
-def _angle_gap(a, b) -> float:
-    return abs((a - b + 180) % 360 - 180)
+    ys, xs = rows[hit] - rows[hit].mean(), cols[hit] - cols[hit].mean()
+    reach = [
+        (xs * math.cos(k * math.pi / 3) + ys * math.sin(k * math.pi / 3)).max() for k in range(6)
+    ]
+    best = int(np.argmax(reach))
+    return best, reach[best] / sorted(reach)[-2]
 
 
 def test_square_frames_are_minigrids():
@@ -97,8 +100,8 @@ def test_hex_agent_triangle_points_along_its_facing():
     renderer = backend._frame_renderer
     frame = backend.render()
     for direction in range(6):
-        angle = _pointing(frame, renderer, (1, 1), AGENT)
-        assert _angle_gap(angle, 60 * direction) < 5, (direction, angle)
+        pointing, margin = _pointing(frame, renderer, (1, 1), AGENT)
+        assert pointing == direction and margin > 1.3, (direction, pointing, margin)
         frame, *_ = backend.step(A.TURN_RIGHT)
 
 
@@ -110,8 +113,8 @@ def test_hex_turntable_arrow_points_along_its_direction():
     for _ in range(6):
         frame = renderer.render(state)
         direction = state.rotator_dirs[0]
-        angle = _pointing(frame, renderer, (3, 5), ARROW)
-        assert _angle_gap(angle, 60 * direction) < 5, (direction, angle)
+        pointing, margin = _pointing(frame, renderer, (3, 5), ARROW)
+        assert pointing == direction and margin > 1.3, (direction, pointing, margin)
         state = apply(ctx, state, A.TURN_LEFT)
 
 
