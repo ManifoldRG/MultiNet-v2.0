@@ -63,6 +63,20 @@ _CARDINAL_SYNONYMS: dict[str, str] = {
 }
 
 
+def check_tiling(space: ActionSpace, tiling: str) -> None:
+    """Refuse the cardinal action space on a hex task.
+
+    Pointy-top hexes have no north or south neighbour, so MOVE_NORTH and
+    MOVE_SOUTH have no faithful meaning, and a six-move vocabulary would change
+    the prompt. Hex tasks run egocentric (docs/multigrid_hex_port.md, D6).
+    """
+    if space == "cardinal" and tiling != "square":
+        raise ValueError(
+            f"the cardinal action space (MOVE_NORTH/SOUTH/EAST/WEST) is square-only; "
+            f"this task's tiling is {tiling!r}: run it with action_space='egocentric'"
+        )
+
+
 def valid_actions(space: ActionSpace) -> set[str]:
     """The token vocabulary the model may emit in this action space."""
     return set(CARDINAL_ACTIONS if space == "cardinal" else EGOCENTRIC_ACTIONS)

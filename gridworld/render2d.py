@@ -187,6 +187,14 @@ def hex_frame_shape(width: int, height: int, size: float = HEX_SIZE) -> tuple[in
     )
 
 
+def frame_shape(spec: TaskSpecification, hex_size: float = HEX_SIZE) -> tuple[int, int]:
+    """(H, W) of a task's frames: MiniGrid's 32 px tiles on square."""
+    width, height = spec.maze.dimensions
+    if spec.maze.tiling == "hex":
+        return hex_frame_shape(width, height, hex_size)
+    return (height * TILE_PIXELS, width * TILE_PIXELS)
+
+
 # --------------------------------------------------------------------------- #
 # MiniGrid's fill_coords predicates, vectorised over a cell's pixels
 # --------------------------------------------------------------------------- #
@@ -292,7 +300,7 @@ class TilingFrameRenderer:
         self.width, self.height = spec.maze.dimensions
         self.n_cells = self.width * self.height
         if self.tiling == "hex":
-            out = hex_frame_shape(self.width, self.height, hex_size)
+            out = frame_shape(spec, hex_size)
             self._fine = _hex_geometry(
                 self.width, self.height, hex_size * SUBDIVS, (out[0] * SUBDIVS, out[1] * SUBDIVS)
             )

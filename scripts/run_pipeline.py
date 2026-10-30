@@ -348,9 +348,9 @@ def _expected_run_hash(
     """Hash the inputs that determine a Stage-3 episode.
 
     Excludes scorer config: that invalidates run_score, not the model call.
-    ``render`` is ``RenderSettings.provenance`` (3D only: render-layer and
-    mujoco versions + resolved frame size); it is omitted for 2D so 2D hashes
-    stay byte-identical.
+    ``render`` is ``RenderSettings.provenance`` (3D and multigrid: render-layer
+    version + resolved frame size, 3D also the mujoco version); it is omitted
+    for MiniGrid 2D so 2D hashes stay byte-identical.
     TODO(post-release): fold in backend_version + adapter/model code version so code
     changes invalidate cached episodes at v1.
     """
@@ -417,6 +417,26 @@ def _runtime_capped_spec(spec, canonical_paths: dict[str, Any]):
     if spec.max_steps <= cap:
         return spec
     return dataclasses.replace(spec, max_steps=cap)
+
+
+def check_tasks_runnable(
+    rows: list[dict[str, Any]],
+    manifest_path: Path,
+    render: RenderSettings,
+    cells: list[tuple[str, Any]],
+) -> None:
+    """Fail fast, before Stage 2 or any paid call, on a task the backend cannot
+    draw (a hex maze outside ``render: {"backend": "multigrid"}``) or an
+    experiment cell that cannot run on its tiling (cardinal actions on hex)."""
+    # Lazy: importing scripts.run_pipeline must not pull in interface.
+    from interface.action_space import check_tiling
+
+    for row in rows:
+        source = _resolve_source(row, manifest_path)
+        spec = task_spec_from_payload(json.loads(Path(source).read_text(encoding="utf-8")))
+        render.check_tiling(spec)
+        for _variant, cell in cells:
+            check_tiling(cell.action_space, spec.maze.tiling)
 
 
 # --------------------------------------------------------------------------- #
@@ -867,6 +887,10 @@ def run_pipeline(
 
     catalog = load_manifest(manifest_path)
     rows = resolve_task_rows([experiment], catalog, manifest_path)
+    check_tasks_runnable(
+        rows, manifest_path, RenderSettings(),
+        _condition_configs(conditions, prompt_variant=prompt_variant),
+    )
     static_by_task, difficulty_max = _score_suite(
         rows,
         manifest_path,
@@ -954,6 +978,10 @@ def run_from_config(
             union.setdefault(r["task_id"], r)
 
     union_rows = list(union.values())
+    check_tasks_runnable(
+        union_rows, manifest_path, render,
+        _condition_configs(conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay),
+    )
     static_by_task, difficulty_max = _score_suite(
         union_rows,
         manifest_path,

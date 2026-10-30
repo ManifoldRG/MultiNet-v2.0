@@ -313,6 +313,10 @@ def prepare_job(
             union.setdefault(row["task_id"], row)
 
     union_rows = list(union.values())
+    pipeline.check_tasks_runnable(
+        union_rows, manifest_path, render,
+        pipeline._condition_configs(conditions, base_overrides=exp_overlay),
+    )
     static_by_task, difficulty_max = pipeline._score_suite(
         union_rows,
         manifest_path,

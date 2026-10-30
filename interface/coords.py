@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from gridworld.backends.base import GridState
 from gridworld.task_spec import Position, TaskSpecification
+from gridworld.tiling import direction_name as tiling_direction_name, neighbor
 from prompting_experiments.prompt_templates import observation as observation_templates
 
+# Square compass order (the cardinal action space and smoke-test plans); a
+# hex task's facing names come from gridworld.tiling via direction_name.
 FACING_ORDER = ["NORTH", "EAST", "SOUTH", "WEST"]
 
 FACING_TO_DELTA: dict[str, tuple[int, int]] = {
@@ -36,11 +39,15 @@ def agent_row_col(state: GridState) -> tuple[int, int]:
 
 
 def agent_facing(state: GridState) -> str:
-    return direction_name(state.agent_direction)
+    return direction_name(state.agent_direction, getattr(state, "tiling", "square"))
 
 
-def direction_name(direction: int) -> str:
-    return _DIR_TO_FACING.get(int(direction) % 4, "NORTH")
+def direction_name(direction: int, tiling: str = "square") -> str:
+    """EAST, SOUTH, WEST, NORTH on square; EAST, SOUTHEAST, SOUTHWEST, WEST,
+    NORTHWEST, NORTHEAST on hex (gridworld.tiling's clockwise order)."""
+    if tiling == "square":
+        return _DIR_TO_FACING.get(int(direction) % 4, "NORTH")
+    return tiling_direction_name(tiling, direction)
 
 
 def rotating_dirs(task_spec: TaskSpecification, state: GridState | None) -> tuple[int, ...]:
@@ -58,7 +65,7 @@ def rotating_pointing(
     dirs = rotating_dirs(task_spec, state)
     for i, cell in enumerate(task_spec.mechanisms.rotating_tiles):
         if to_row_col(cell) == (row, col):
-            return direction_name(dirs[i])
+            return direction_name(dirs[i], task_spec.maze.tiling)
     return None
 
 
@@ -85,9 +92,10 @@ def inventory_list(state: GridState) -> list[str]:
 
 
 def forward_cell(state: GridState) -> tuple[int, int]:
-    row, col = agent_row_col(state)
-    dr, dc = FACING_TO_DELTA[agent_facing(state)]
-    return (row + dr, col + dc)
+    """(row, col) of the cell the agent faces, on the state's tiling."""
+    x, y = state.agent_position
+    tiling = getattr(state, "tiling", "square")
+    return to_row_col(neighbor(tiling, (int(x), int(y)), int(state.agent_direction)))
 
 
 def live_key_position(key, state: GridState):
