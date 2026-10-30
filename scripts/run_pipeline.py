@@ -330,6 +330,12 @@ def _experiment_config_payload(experiment_config: Any | None) -> dict[str, Any]:
 def _experiment_config_hash_payload(experiment_config: Any | None) -> dict[str, Any]:
     payload = _experiment_config_payload(experiment_config)
     payload.pop("prompt_cache", None)
+    # The memory arms (interface/scratchpad.py) came after many cached runs.
+    # The default arm (no scratchpad) leaves its fields out, so those run
+    # hashes stay as they were; a scratchpad arm hashes its arm and its cap.
+    if payload.get("memory", "full_context") == "full_context":
+        payload.pop("memory", None)
+        payload.pop("scratchpad_max_chars", None)
     return payload
 
 

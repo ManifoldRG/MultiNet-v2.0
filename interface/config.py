@@ -5,6 +5,14 @@ from typing import Literal, Optional, get_args, get_origin, get_type_hints
 
 
 DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
+DEFAULT_SCRATCHPAD_MAX_CHARS = 2000
+
+# The memory arm and the history window it needs. full_context is the harness
+# as it was before the arms existed (no scratchpad, any context_window).
+MEMORY_ARM_CONTEXT_WINDOW = {
+    "scratchpad_window": "last_n",
+    "full_context_scratchpad": "full",
+}
 
 
 @dataclass
@@ -40,6 +48,17 @@ class ExperimentConfig:
     action_space: Literal["egocentric", "cardinal"] = "egocentric"
     feedback: Literal["minimal", "standard", "causal"] = "minimal"
     progress_stall_k: Optional[int] = None
+    # Memory arm (interface/scratchpad.py). full_context: no scratchpad.
+    # scratchpad_window: a scratchpad plus the last context_n steps
+    # (context_window="last_n"; context_n is K). full_context_scratchpad: a
+    # scratchpad plus the full history (context_window="full").
+    memory: Literal[
+        "full_context",
+        "scratchpad_window",
+        "full_context_scratchpad",
+    ] = "full_context"
+    # The scratchpad is cut to this many characters; the model is told.
+    scratchpad_max_chars: int = DEFAULT_SCRATCHPAD_MAX_CHARS
 
     def __post_init__(self) -> None:
         hints = get_type_hints(type(self))
@@ -73,6 +92,32 @@ class ExperimentConfig:
             raise ValueError(
                 f"context_n must be a positive int, got {self.context_n!r}"
             )
+        if (
+            isinstance(self.scratchpad_max_chars, bool)
+            or not isinstance(self.scratchpad_max_chars, int)
+            or self.scratchpad_max_chars <= 0
+        ):
+            raise ValueError(
+                "scratchpad_max_chars must be a positive int, "
+                f"got {self.scratchpad_max_chars!r}"
+            )
+        if self.scratchpad:
+            window = MEMORY_ARM_CONTEXT_WINDOW[self.memory]
+            if self.context_window != window:
+                raise ValueError(
+                    f"memory={self.memory!r} needs context_window={window!r}, "
+                    f"got {self.context_window!r}"
+                )
+            if self.chat_history != "stateless":
+                raise ValueError(
+                    f"memory={self.memory!r} needs chat_history='stateless', "
+                    f"got {self.chat_history!r}"
+                )
+
+    @property
+    def scratchpad(self) -> bool:
+        """True for the arms where the model keeps a scratchpad."""
+        return self.memory != "full_context"
 
     def to_dict(self) -> dict:
         return asdict(self)

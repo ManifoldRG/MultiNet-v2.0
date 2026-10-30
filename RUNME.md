@@ -90,6 +90,41 @@ Every config carries a `spend_cap_usd` hard stop.
 3. Launch: `launch_distributed.sh` with `RUN_CONFIG=gridworld/fixtures/run_config.r1_frontier.json`
    (one coordinator + one API VM; `API_WORKER_CONCURRENCY` sized to the tier).
 
+### Memory arms: a model-written scratchpad (paid)
+
+`experiment_config.memory` picks how the stateless harness remembers
+(`interface/scratchpad.py` has the design):
+
+| `memory` | history | scratchpad |
+|---|---|---|
+| `full_context` (default) | as `context_window` says (R2: `full`) | none; requests and run hashes as before |
+| `scratchpad_window` | last `context_n` steps (needs `context_window: last_n`) | yes |
+| `full_context_scratchpad` | full (needs `context_window: full`) | yes |
+
+The model writes `<scratchpad>...</scratchpad>` before its `FINAL_OUTPUT` line
+and sees the notes at the next step, capped at `scratchpad_max_chars` (2000).
+Query records in `episode.json` carry `scratchpad_before`, `scratchpad`,
+`scratchpad_status` and `scratchpad_written_chars`.
+
+`run_config.mechanics_15_nl_memory_{full_context,scratchpad_window,full_context_scratchpad}.json`
+run GPT-6 Astra on five mechanics-15 NL mazes, one config per arm. Give each arm
+its own artifacts root (run directories are not keyed by arm):
+
+```bash
+python -m scripts.run_pipeline --distributed-role coordinator-prepare \
+  --run-config gridworld/fixtures/run_config.mechanics_15_nl_memory_full_context.json \
+  --manifest gridworld/fixtures/manifest.mechanics_15.json --seeds 0 \
+  --difficulty-max-static-score 8000 --artifacts-root artifacts-memory/prescored
+for arm in full_context scratchpad_window full_context_scratchpad; do
+  mkdir -p artifacts-memory/$arm && cp -r artifacts-memory/prescored/tasks artifacts-memory/$arm/
+  python -m scripts.run_pipeline \
+    --run-config gridworld/fixtures/run_config.mechanics_15_nl_memory_$arm.json \
+    --manifest gridworld/fixtures/manifest.mechanics_15.json --seeds 0 \
+    --difficulty-max-static-score 8000 --artifacts-root artifacts-memory/$arm \
+    > artifacts-memory/$arm.log 2>&1 &
+done
+```
+
 ## 4. Scoring
 
 Scoring runs inside the pipeline (`scorer/`): static maze/difficulty scores

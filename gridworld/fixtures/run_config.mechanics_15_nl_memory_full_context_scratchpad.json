@@ -1,0 +1,51 @@
+{
+  "description": "Memory arms, NL: GPT-6 Astra on 5 mechanics-15 mazes under the R2 NL cell (run_config.mechanics_15_nl.json: minimal/text_only/egocentric/zero_shot/stateless, step_by_step, progress_stall_k=30, prompt caching on), memory arm full_context_scratchpad (the full history as in R2 plus a model-written scratchpad). One of three configs that differ only in the memory arm: run_config.mechanics_15_nl_memory_{full_context,scratchpad_window,full_context_scratchpad}.json.",
+  "manifest": "gridworld/fixtures/manifest.mechanics_15.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_requires": "The memory field comes from the scratchpad memory PR (interface/scratchpad.py); launching before it is on the launched SHA fails at config load for the two scratchpad arms.",
+  "_note_prompt": "The R2 NL prompt with: one sentence after the Valid actions line of the system prompt (\"Scratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 2000 characters).\"); the current notes after the current state (\"Your scratchpad:\" and the notes between the tags); the reply format opening with the <scratchpad> block before FINAL_OUTPUT. The full history is unchanged.",
+  "_note_mazes": "The 5 mazes where R2 NL Astra (full context, 15/15 solved) spent the most steps over the BFS optimum: M8 portals_frozen 168 vs 95, M8 death_frozen 195 vs 161, M10 (all four mechanics) 100 vs 75, M9 portals_death_frozen 103 vs 81, M8 frozen_rotating 161 vs 144. Together they cover portals, death, rotating and frozen tiles, and they are long (75-161 optimal steps), so a 5-step window drops most of the history.",
+  "_note_model_params": "GPT-6 Astra exactly as in run_config.mechanics_15_nl.json (reasoning_effort=xhigh, flex tier, 64k max_completion_tokens, prompt caching on) except spend_cap_usd and worker concurrency. spend_cap_usd is a per-process hard stop (run each arm in its own process) and, like every runtime model key, enters the run hash, so these units do not reuse R2's cached episodes.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "text_only",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30,
+    "prompt_cache": true,
+    "memory": "full_context_scratchpad",
+    "scratchpad_max_chars": 2000
+  },
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "enable_prompt_cache": true,
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 50,
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 5,
+      "max_in_flight": 5,
+      "tasks": [
+        "mech15_M8_18x18_dense_kr_sg_kb_portals_frozen_0",
+        "mech15_M8_18x18_dense_kr_sg_kb_death_frozen_0",
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+        "mech15_M9_18x18_dense_kr_sg_kb_portals_death_frozen_0",
+        "mech15_M8_18x18_dense_kr_sg_kb_frozen_rotating_0"
+      ]
+    }
+  },
+  "_note_cost": "Projected from R2's measured episodes (same lengths) plus the notes: each query writes the notes as output ($25/M on flex) and reads them back uncached ($5/M); the full history stays cached as in R2. With 150 / 300 / 500 tokens of notes per query (500 is the 2,000-character cap): ~$10 / ~$14 / ~$18 for the 5 episodes, vs ~$7 at full context (input ~$3.3 / ~$3.8 / ~$4.6, vs ~$2.6). Extra reasoning spent on the notes is not in this projection. Worst case (every episode to its 3x step cap, 500-token notes every query): ~$47. spend_cap_usd=50.",
+  "_note_launch": "Local run in its own artifacts root: the three arms share run directories (keyed by task/backend/model/seed/variant, not by arm), so one root would hold only the last arm run. Pre-score Stage 2 once (no model calls): python -m scripts.run_pipeline --distributed-role coordinator-prepare --run-config gridworld/fixtures/run_config.mechanics_15_nl_memory_full_context_scratchpad.json --manifest gridworld/fixtures/manifest.mechanics_15.json --seeds 0 --difficulty-max-static-score 8000 --artifacts-root artifacts-memory/prescored; then cp -r artifacts-memory/prescored/tasks artifacts-memory/full_context_scratchpad/ and run: python -m scripts.run_pipeline --run-config gridworld/fixtures/run_config.mechanics_15_nl_memory_full_context_scratchpad.json --manifest gridworld/fixtures/manifest.mechanics_15.json --seeds 0 --difficulty-max-static-score 8000 --artifacts-root artifacts-memory/full_context_scratchpad. Serial at ~11 s per Astra query on flex (R2 NL): about 2-3 hours for the 5 episodes; the three arms can run side by side as three processes.",
+  "_note_cache": "full_context and full_context_scratchpad: the history goes out one text block per step with breakpoints on the newest step and the previous request's newest step, as in R2; the scratchpad sits after the last breakpoint with the current state, so the cached prefix is the same as full_context's. scratchpad_window: the window slides every step, so only the system prompt is cached."
+}

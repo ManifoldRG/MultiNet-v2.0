@@ -13,6 +13,7 @@ from gridworld.backends.base import AbstractGridBackend
 from gridworld.task_spec import TaskSpecification
 
 from interface import action_space as action_space_mod
+from interface import scratchpad as scratchpad_mod
 from interface.agents.reply import Reply
 from interface.config import ExperimentConfig
 from interface.episode_log import state_snapshot
@@ -193,6 +194,10 @@ class ExperimentRunner:
         stall_remaining: int | None = None,
     ) -> tuple[str, dict]:
         system_prompt = self.prompt.build_system_prompt()
+        if self.config.scratchpad:
+            system_prompt = scratchpad_mod.with_system_line(
+                system_prompt, self.config.scratchpad_max_chars
+            )
         # If the system prompt includes the `{maze_text}` placeholder, format
         # it with the rendered maze. Otherwise, for text observations append
         # the `INITIAL_MAZE_SECTION` so the maze is present in system-level
@@ -350,6 +355,16 @@ class ExperimentRunner:
         prompt_question = self.querying.user_prompt_question()
         if prompt_question:
             prompt_text = _replace_current_question(prompt_text, prompt_question)
+        if self.config.scratchpad:
+            # After the current state, in the uncached tail of every modality.
+            notes, truncated_from = scratchpad_mod.current(transcript)
+            prompt_text = scratchpad_mod.insert_before_question(
+                prompt_text,
+                scratchpad_mod.section(
+                    notes, truncated_from, self.config.scratchpad_max_chars
+                ),
+                prompt_question or user_templates.NEXT_ACTION_QUESTION,
+            )
         if last_feedback.startswith("Could not parse"):
             question = prompt_question or user_templates.NEXT_ACTION_QUESTION
             before, match, after = prompt_text.rpartition(question)
@@ -357,10 +372,10 @@ class ExperimentRunner:
                 f"{before}{last_feedback}\n\n{match}{after}"
                 if match else f"{prompt_text}\n\n{last_feedback}"
             )
-        prompt_text = _append_after_current_question(
-            prompt_text,
-            self.querying.final_output_instruction(),
-        )
+        instruction = self.querying.final_output_instruction()
+        if self.config.scratchpad:
+            instruction = scratchpad_mod.with_output_format(instruction)
+        prompt_text = _append_after_current_question(prompt_text, instruction)
         sections = [prompt_text]
         querying_suffix = self.querying.user_prompt_suffix()
         if querying_suffix:
