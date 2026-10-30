@@ -13,6 +13,9 @@ Provides all standard object types for gridworld puzzles:
 - Gate: Barriers controlled by switches
 - Hazard: Dangerous cells that terminate episode
 - Teleporter: Linked pairs that transport agent
+- Death, Frozen, Rotating: PR #57 tiles, given meaning only by the R1
+  rulebook (gridworld.world_model) that MultiGridBackend steps square and
+  hex tasks through
 """
 
 from typing import Optional, Literal
@@ -365,3 +368,82 @@ class Teleporter(WorldObj):
         """Reduce cooldown by one step."""
         if self.current_cooldown > 0:
             self.current_cooldown -= 1
+
+
+@ObjectRegistry.register("death")
+class DeathCell(WorldObj):
+    """
+    Death tile (spec ``death_portals``): entering it resets the whole maze
+    to its start state. The reset is the R1 rulebook's (gridworld.world_model);
+    the native ``execute_action`` has no death semantics.
+    """
+
+    def __init__(self, id: str, color: str = "red"):
+        super().__init__(id, color)
+
+    @property
+    def obj_type(self) -> str:
+        return "death"
+
+    def can_overlap(self) -> bool:
+        return True
+
+    def can_pickup(self) -> bool:
+        return False
+
+    def can_push(self) -> bool:
+        return False
+
+
+@ObjectRegistry.register("frozen")
+class FrozenTile(WorldObj):
+    """
+    Ice tile: entering it swallows the next ``freeze_steps`` actions (R1
+    rulebook; the native ``execute_action`` ignores it).
+    """
+
+    def __init__(self, id: str, color: str = "white"):
+        super().__init__(id, color)
+
+    @property
+    def obj_type(self) -> str:
+        return "frozen"
+
+    def can_overlap(self) -> bool:
+        return True
+
+    def can_pickup(self) -> bool:
+        return False
+
+    def can_push(self) -> bool:
+        return False
+
+
+@ObjectRegistry.register("rotating")
+class RotatingTile(WorldObj):
+    """
+    Turntable: its arrow turns one direction clockwise every action, and
+    MOVE_FORWARD from it rides the arrow (R1 rulebook; the native
+    ``execute_action`` ignores it).
+
+    Attributes:
+        direction: Arrow direction in gridworld.tiling's convention
+            (0 = east, clockwise), not the tiling's native label index
+    """
+
+    def __init__(self, id: str, color: str = "orange", direction: int = 0):
+        super().__init__(id, color)
+        self.direction = direction
+
+    @property
+    def obj_type(self) -> str:
+        return "rotating"
+
+    def can_overlap(self) -> bool:
+        return True
+
+    def can_pickup(self) -> bool:
+        return False
+
+    def can_push(self) -> bool:
+        return False

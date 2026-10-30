@@ -346,6 +346,8 @@ def test_multigrid_hex_adapter_preserves_grid_coordinates():
             "walls": [],
             "start": [1, 1],
             "goal": [6, 6],
+            # A hex backend refuses a square spec (docs/multigrid_hex_port.md D5).
+            "tiling": "hex",
         },
         "mechanisms": {
             "keys": [{"id": "k1", "position": [6, 5], "color": "red"}],
