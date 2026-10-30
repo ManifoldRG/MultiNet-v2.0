@@ -1,0 +1,20 @@
+{
+  "name": "multinet_episodes_ended",
+  "description": "MultiNet episode attempts that ended, by outcome: solved/unsolved (finished and verified), infra_killed (API, billing or process kill; resumable), failed, or stale (the worker stopped heartbeating). Written by scripts/run_events.py.",
+  "filter": "log_id(\"multinet-run-events\") AND jsonPayload.event=\"episode_ended\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1",
+    "labels": [
+      {"key": "run_id", "valueType": "STRING", "description": "The run's RUN_ID (run_set_id)."},
+      {"key": "model_id", "valueType": "STRING", "description": "The run-config model label."},
+      {"key": "outcome", "valueType": "STRING", "description": "solved, unsolved, infra_killed, failed or stale."}
+    ]
+  },
+  "labelExtractors": {
+    "run_id": "EXTRACT(jsonPayload.run_id)",
+    "model_id": "EXTRACT(jsonPayload.model_id)",
+    "outcome": "EXTRACT(jsonPayload.outcome)"
+  }
+}

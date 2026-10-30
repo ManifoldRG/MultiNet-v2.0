@@ -41,6 +41,7 @@ from scorer.io import stable_hash
 
 from scripts import run_pipeline as pipeline
 from scripts.gcs_storage import StorageConfig, gcs_destination, mirror_to_bucket
+from scripts.run_events import RunEvents
 
 logger = logging.getLogger(__name__)
 
@@ -569,8 +570,11 @@ class CoordinatorStore:
         storage: Optional[StorageConfig] = None,
         max_unit_attempts: int = 3,
         max_resumes: int = MAX_RESUMES,
+        events: Optional[RunEvents] = None,
     ):
         self.artifacts_root = Path(artifacts_root)
+        # Episode start/end events for the run dashboard (--cloud-logging); None = off.
+        self.events = events
         self.max_resumes = int(max_resumes)
         self.stale_after_seconds = float(stale_after_seconds)
         self.storage = storage
@@ -739,6 +743,8 @@ class CoordinatorStore:
                 worker["status"] = "assigned"
                 worker["current_unit_id"] = unit["unit_id"]
                 self.save_state(state)
+                if self.events:
+                    self.events.episode_started(plan, unit, unit_state, worker)
                 return {"unit": self._assignment(plan, unit, unit_state), "job_id": plan["job_id"]}
 
             worker["status"] = "idle"
@@ -797,6 +803,14 @@ class CoordinatorStore:
             worker["status"] = "failed"
             worker.pop("current_unit_id", None)
             self.save_state(state)
+            if self.events:
+                try:  # fail() never reads the plan otherwise; the event must not fail the report
+                    plan = self.load_plan()
+                    unit = self._find_unit(plan, unit_id)
+                except Exception as exc:
+                    logger.warning("run events: no episode_ended event for %s: %s", unit_id, exc)
+                else:
+                    self.events.episode_ended(plan, unit, unit_state, worker, worker_id, reason=reason)
             return {"ok": True}
 
     def upload(self, worker_id: str, unit_id: str, archive_bytes: bytes) -> dict[str, Any]:
@@ -833,6 +847,9 @@ class CoordinatorStore:
                     }
                 )
                 self.save_state(state)
+                if self.events:
+                    self.events.episode_ended(plan, unit, unit_state, state["workers"].get(worker_id), worker_id,
+                                              reason=str(exc))
                 raise
 
             # A finished episode is verified. One that ended on an infra kill
@@ -874,6 +891,8 @@ class CoordinatorStore:
             worker["status"] = "idle"
             worker.pop("current_unit_id", None)
             self.save_state(state)
+            if self.events:
+                self.events.episode_ended(plan, unit, unit_state, worker, worker_id, episode=episode)
             run_dir = unit["run_dir"]
             run_set_id = plan.get("run_set_id", "")
 
@@ -957,6 +976,10 @@ class CoordinatorStore:
                     "updated_at": _iso(),
                 }
             )
+            if self.events:
+                previous = unit_state["previous_worker_id"]
+                self.events.episode_ended(plan, unit, unit_state, state["workers"].get(previous), previous,
+                                          reason=f"no heartbeat for over {self.stale_after_seconds:.0f}s")
 
     def _active_unit_for_worker(
         self,
@@ -1157,9 +1180,10 @@ def make_coordinator_server(
     host: str = "0.0.0.0",
     port: int = 8765,
     stale_after_seconds: float = 300.0,
+    events: Optional[RunEvents] = None,
     storage: Optional[StorageConfig] = None,
 ) -> ThreadingHTTPServer:
-    store = CoordinatorStore(artifacts_root, stale_after_seconds=stale_after_seconds, storage=storage)
+    store = CoordinatorStore(artifacts_root, stale_after_seconds=stale_after_seconds, storage=storage, events=events)
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -1243,6 +1267,7 @@ def serve_coordinator(
     host: str = "0.0.0.0",
     port: int = 8765,
     stale_after_seconds: float = 300.0,
+    events: Optional[RunEvents] = None,
     storage: Optional[StorageConfig] = None,
 ) -> None:
     server = make_coordinator_server(
@@ -1250,13 +1275,19 @@ def serve_coordinator(
         host=host,
         port=port,
         stale_after_seconds=stale_after_seconds,
+        events=events,
         storage=storage,
     )
     print(f"Coordinator serving {artifacts_root} on http://{host}:{port}")
+    if events:
+        print("Run events: writing episode starts and ends to Cloud Logging (log multinet-run-events).")
+        events.coordinator_started(plan_path(artifacts_root), state_path(artifacts_root))
     try:
         server.serve_forever()
     finally:
         server.server_close()
+        if events:
+            events.close()
 
 
 def materialize_worker_inputs(unit: dict[str, Any], artifacts_root: str | Path) -> dict[str, Any]:
@@ -2201,6 +2232,7 @@ def dispatch_distributed_role(args: Any) -> None:
             host=args.host,
             port=args.port,
             stale_after_seconds=args.stale_after_seconds,
+            events=RunEvents() if getattr(args, "cloud_logging", False) else None,
             storage=_load_storage(args),
         )
         return

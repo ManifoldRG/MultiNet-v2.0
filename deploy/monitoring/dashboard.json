@@ -1,0 +1,141 @@
+{
+  "displayName": "MultiNet runs",
+  "dashboardFilters": [
+    {
+      "labelKey": "run_id",
+      "filterType": "METRIC_LABEL"
+    }
+  ],
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 48,
+        "height": 10,
+        "widget": {
+          "title": "About this dashboard",
+          "text": {
+            "format": "MARKDOWN",
+            "content": "**What this shows.** Coordinators started with `CLOUD_LOGGING=1` write one log entry when they hand an episode to a worker (*started*) and one when that attempt ends (*ended*). There is no per-step progress: an episode in progress shows only as started. Runs launched without the flag do not appear. Setup and fields: `deploy/MONITORING.md`.\n\n**Outcomes.** `solved` / `unsolved`: finished and verified. `infra_killed`: an API, billing or process kill; the unit resumes. `failed`: the attempt failed; the coordinator retries it unless the unit is out of attempts or the failure is final. `stale`: the worker stopped heartbeating; the unit is handed out again. Retries and resumes count as new starts.\n\n**What it does not know.** Charts lag a few minutes (log-based metrics) and count only events after the metrics were created; the event list is closer to live. Delivery is best effort: if Cloud Logging is unreachable, events are dropped and an `events_dropped` entry reports how many once writes resume. The coordinator's `/status` and the finalized results are the source of truth. The run filter applies to the charts and table, not the event list."
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 10,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "Episodes ended in the selected time range",
+          "timeSeriesTable": {
+            "metricVisualization": "NUMBER",
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/multinet_episodes_ended\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_SUM",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.run_id",
+                        "metric.label.model_id",
+                        "metric.label.outcome"
+                      ]
+                    }
+                  },
+                  "outputFullDuration": true
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 16,
+        "yPos": 10,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "Episodes ended, by outcome",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "STACKED_BAR",
+                "targetAxis": "Y1",
+                "minAlignmentPeriod": "300s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/multinet_episodes_ended\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_SUM",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.outcome"
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "episodes per 5 min",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 32,
+        "yPos": 10,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "Episodes started, by model (incl. retries and resumes)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "STACKED_BAR",
+                "targetAxis": "Y1",
+                "minAlignmentPeriod": "300s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/multinet_episodes_started\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_SUM",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.model_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "episodes per 5 min",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 26,
+        "width": 48,
+        "height": 24,
+        "widget": {
+          "title": "Run events, newest first (all runs)",
+          "logsPanel": {
+            "filter": "log_id(\"multinet-run-events\")"
+          }
+        }
+      }
+    ]
+  }
+}

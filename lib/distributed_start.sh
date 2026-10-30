@@ -30,7 +30,10 @@ seed_prescored_tasks() {  # uses globals COORD ZONE RUN_ID [PRESCORED_TASKS]
         "mkdir -p ~/MultiNet-v2.0/artifacts/$RUN_ID && tar -x -C ~/MultiNet-v2.0/artifacts/$RUN_ID"
 }
 
-start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST DIFFICULTY_MAX [SEEDS] [CONDITIONS] [PROMPT_VARIANT] [PRESCORED_TASKS]
+# [CLOUD_LOGGING=1] (both coordinator starts): coordinator-serve --cloud-logging also
+# writes episode start/end events to Cloud Logging for the run dashboard
+# (deploy/MONITORING.md). Best effort: it never blocks or fails the run. Off unless 1.
+start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST DIFFICULTY_MAX [SEEDS] [CONDITIONS] [PROMPT_VARIANT] [PRESCORED_TASKS] [CLOUD_LOGGING]
   [[ -n "${DIFFICULTY_MAX:-}" ]] || { echo "DIFFICULTY_MAX is required (no default; see require_difficulty_max)" >&2; return 1; }
   seed_prescored_tasks || return 1
   local seeds="${SEEDS:-0}" diff="$DIFFICULTY_MAX"
@@ -44,7 +47,7 @@ start_coordinator() {  # uses globals COORD ZONE RUN_ID RUN_CONFIG MANIFEST DIFF
   # run_pipeline's default.
   local stale_after="${STALE_AFTER_SECONDS:-}"
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' RUN_CONFIG='$RUN_CONFIG' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' CONDITIONS='$conditions' PROMPT_VARIANT='$prompt_variant' STALE_AFTER='$stale_after' CLOUD_LOGGING='${CLOUD_LOGGING:-}' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -85,6 +88,7 @@ python -m scripts.run_pipeline \
   --difficulty-max-static-score "$DIFFICULTY_MAX" \
   ${prepare_args[@]+"${prepare_args[@]}"}
 serve_args=()
+[[ "${CLOUD_LOGGING:-}" == "1" ]] && serve_args+=(--cloud-logging)
 [[ -n "${STALE_AFTER:-}" ]] && serve_args+=(--stale-after-seconds "$STALE_AFTER")
 nohup python -m scripts.run_pipeline \
   --distributed-role coordinator-serve \
@@ -113,7 +117,7 @@ start_coordinator_combined() {
   local seeds="${SEEDS:-0}" diff="$DIFFICULTY_MAX" batch_args="" n
   for n in $MASSIVE_BATCHES; do batch_args="$batch_args --batch $n"; done
   gcloud compute ssh "$COORD" --zone "$ZONE" \
-    --command "RUN_ID='$RUN_ID' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' BATCH_ARGS='$batch_args' SWEEP_TOPO='${SWEEP_TOPO:-}' bash -s" <<'REMOTE'
+    --command "RUN_ID='$RUN_ID' MANIFEST='$MANIFEST' SEEDS='$seeds' DIFFICULTY_MAX='$diff' BATCH_ARGS='$batch_args' SWEEP_TOPO='${SWEEP_TOPO:-}' CLOUD_LOGGING='${CLOUD_LOGGING:-}' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/MultiNet-v2.0
 source .venv-multinet/bin/activate
@@ -142,10 +146,13 @@ SWEEP_TOPO="$SWEEP_TOPO" python -m scripts.prepare_combined_job \
   --artifacts-root "artifacts/$RUN_ID" --run-set-id "$RUN_ID" \
   --manifest "$MANIFEST" --difficulty-max-static-score "$DIFFICULTY_MAX" \
   --seeds $SEEDS $BATCH_ARGS
+serve_args=()
+[[ "${CLOUD_LOGGING:-}" == "1" ]] && serve_args+=(--cloud-logging)
 nohup python -m scripts.run_pipeline \
   --distributed-role coordinator-serve \
   --artifacts-root "artifacts/$RUN_ID" \
   --host 0.0.0.0 --port 8765 \
+  ${serve_args[@]+"${serve_args[@]}"} \
   > "artifacts/$RUN_ID/coordinator-serve.log" 2>&1 &
 echo "$!" > "artifacts/$RUN_ID/coordinator-serve.pid"
 coord_up=0

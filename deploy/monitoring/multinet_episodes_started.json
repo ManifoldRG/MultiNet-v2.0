@@ -1,0 +1,18 @@
+{
+  "name": "multinet_episodes_started",
+  "description": "MultiNet episodes a coordinator (coordinator-serve --cloud-logging) handed to a worker: fresh, retried after a failure or stale lease, or resumed after an infra kill. Written by scripts/run_events.py.",
+  "filter": "log_id(\"multinet-run-events\") AND jsonPayload.event=\"episode_started\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1",
+    "labels": [
+      {"key": "run_id", "valueType": "STRING", "description": "The run's RUN_ID (run_set_id)."},
+      {"key": "model_id", "valueType": "STRING", "description": "The run-config model label."}
+    ]
+  },
+  "labelExtractors": {
+    "run_id": "EXTRACT(jsonPayload.run_id)",
+    "model_id": "EXTRACT(jsonPayload.model_id)"
+  }
+}
