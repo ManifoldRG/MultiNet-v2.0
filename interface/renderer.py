@@ -27,6 +27,7 @@ from prompting_experiments.prompt_templates import observation as observation_te
 if TYPE_CHECKING:
     from gridworld.backends.base import GridState
     from gridworld.task_spec import TaskSpecification
+    from interface.tile_labels import TileLabeling
 
 ObservationTextFormat = Literal["coords", "json", "ascii"]
 _FACING = {"NORTH": "^", "EAST": ">", "SOUTH": "v", "WEST": "<"}
@@ -78,7 +79,11 @@ def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
     ]
 
 
-def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = None) -> list[str]:
+def _mechanism_lines(
+    task_spec: TaskSpecification,
+    state: GridState | None = None,
+    labeling: TileLabeling | None = None,
+) -> list[str]:
     parts: list[str] = []
     collected = state.collected_keys if state else set()
     open_doors = state.open_doors if state else set()
@@ -132,6 +137,10 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
                 initial_state=gate.initial_state,
             )
         )
+
+    if labeling is not None:
+        # Neutral labels: the tiles under made-up words, no effect named.
+        return parts + labeling.tile_lines(task_spec, state)
 
     for cell in task_spec.mechanisms.kill_cells:
         row, col = to_row_col(cell)
@@ -443,12 +452,22 @@ def _ascii_block(task_spec, state, include_facing: bool, remaining=None, stall_r
     ])
 
 
+def _check_labeling_format(labeling, observation_text_format: str) -> None:
+    # The json and ascii renderings name the tile kinds in their keys and legend.
+    if labeling is not None and observation_text_format != "coords":
+        raise ValueError(
+            f"neutral tile labels are only rendered in the coords text format, not {observation_text_format!r}"
+        )
+
+
 def render_initial_maze_text(
     task_spec: TaskSpecification,
     *,
     observation_text_format: ObservationTextFormat = "coords",
     include_facing: bool = False,
+    labeling: TileLabeling | None = None,
 ) -> str:
+    _check_labeling_format(labeling, observation_text_format)
     if observation_text_format == "json":
         rows, cols = maze_rows_cols(task_spec)
         return _dumps({
@@ -465,7 +484,7 @@ def render_initial_maze_text(
             + "\n\n"
             + _ascii_block(task_spec, None, include_facing)
         )
-    return "\n".join(_static_layout_lines(task_spec) + _mechanism_lines(task_spec))
+    return "\n".join(_static_layout_lines(task_spec) + _mechanism_lines(task_spec, labeling=labeling))
 
 
 def _moves_remaining(state) -> int:
@@ -479,7 +498,9 @@ def render_user_observation_text(
     include_facing: bool = False,
     observation_text_format: ObservationTextFormat = "coords",
     stall_remaining: int | None = None,
+    labeling: TileLabeling | None = None,
 ) -> str:
+    _check_labeling_format(labeling, observation_text_format)
     pos = agent_row_col(state)
     inv = inventory_list(state)
     remaining = _moves_remaining(state)
@@ -515,15 +536,23 @@ def render_user_observation_text(
         observation_templates.CURRENT_INVENTORY_LINE.format(inventory=", ".join(inv) or "empty"),
         observation_templates.MOVES_REMAINING_LINE.format(n=remaining),
     ]
-    if state.freeze_remaining > 0:
+    # Neutral labels: no frozen status line. That the agent's actions are being
+    # swallowed shows only in the step feedback (NOTHING), after the fact.
+    if state.freeze_remaining > 0 and labeling is None:
         head.append(observation_templates.FROZEN_STATUS_LINE)
     if stall_remaining is not None:
         head.append(observation_templates.STALL_REMAINING_LINE.format(n=stall_remaining))
     spent = _spent_key_colors(task_spec, state)
     if spent:
         head.append(observation_templates.CURRENT_KEYS_USED_UP_LINE.format(keys=", ".join(spent)))
-    head += ["", observation_templates.CURRENT_MAP_CONTENTS_HEADER]
-    head += _mechanism_lines(task_spec, state) or [observation_templates.NO_MECHANISMS_LINE]
+    if labeling is None:
+        header = observation_templates.CURRENT_MAP_CONTENTS_HEADER
+        empty = observation_templates.NO_MECHANISMS_LINE
+    else:
+        header = observation_templates.NEUTRAL_MAP_CONTENTS_HEADER
+        empty = observation_templates.NEUTRAL_NO_MECHANISMS_LINE
+    head += ["", header]
+    head += _mechanism_lines(task_spec, state, labeling) or [empty]
     return "\n".join(head)
 
 
