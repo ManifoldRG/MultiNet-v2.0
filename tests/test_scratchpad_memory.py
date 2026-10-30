@@ -358,6 +358,35 @@ def test_checkpoint_resume_restores_the_notes(arm, at, tmp_path):
         resumed.apply_reply(Reply(text=reply))
 
 
+@pytest.mark.parametrize("arm", SCRATCHPAD_ARMS)
+def test_resume_from_an_infra_killed_archive_restores_the_notes(arm, tmp_path):
+    """The archive path (scripts/resume_from_archive.py): an episode killed by
+    an agent error resumes from its episode.json with the notes it had."""
+    from scripts.resume_from_archive import build_checkpoint_payload
+
+    _, uninterrupted = drive(_runner(arm))
+
+    class _Dies(_Scripted):
+        def __call__(self, messages):
+            if self.calls == 5:
+                raise RuntimeError("provider outage")
+            self.calls += 1
+            return super().__call__(messages)
+
+    agent = _Dies(REPLIES)
+    agent.calls = 0
+    result = _runner(arm).run(agent, verbose=False)
+    assert result["end_reason"].startswith("agent_error:")
+    flush_episode_log(result, tmp_path / "ep")
+    episode = json.loads((tmp_path / "ep" / "episode.json").read_text())
+    checkpoint = tmp_path / "ckpt.json"
+    checkpoint.write_text(json.dumps(build_checkpoint_payload(episode)))
+    resumed = resume_stepper(checkpoint, runner=_runner(arm))
+    # Request 6 shows query 5's cut notes and the line saying so.
+    assert resumed.next_query() == uninterrupted[5]
+    assert "only the first 80 were kept" in _user_text(uninterrupted[5])
+
+
 def _anthropic_blocks(messages):
     system, turns = _to_anthropic_turns(messages)
     system, turns = _resolve_cache_markers(system, turns, ttl="5m", enabled=True)

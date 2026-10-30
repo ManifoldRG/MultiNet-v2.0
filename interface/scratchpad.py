@@ -172,7 +172,7 @@ def with_system_line(system_prompt: str, max_chars: int) -> str:
 
 def with_output_format(instruction: str) -> str:
     """The querying mode's "Output exactly:" instruction, opening with the block."""
-    lead = "Output exactly:\n"
+    lead = memory_templates.OUTPUT_FORMAT_LEAD
     if instruction.startswith(lead):
         return lead + memory_templates.SCRATCHPAD_OUTPUT_FORMAT + instruction[len(lead):]
     return memory_templates.SCRATCHPAD_OUTPUT_FORMAT + instruction

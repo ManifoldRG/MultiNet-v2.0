@@ -21,5 +21,7 @@ SCRATCHPAD_TRUNCATED_NOTE = (
     "Your last notes had {chars} characters; only the first {max_chars} were kept."
 )
 
-# Opens the reply format after "Output exactly:", before the FINAL_OUTPUT line.
+# Opens the reply format: inserted after OUTPUT_FORMAT_LEAD, the opening line
+# of every querying mode's instruction (prompt_templates/querying.py).
+OUTPUT_FORMAT_LEAD = "Output exactly:\n"
 SCRATCHPAD_OUTPUT_FORMAT = "<scratchpad>\n<your notes>\n</scratchpad>\n"
