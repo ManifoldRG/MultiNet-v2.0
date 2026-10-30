@@ -1,0 +1,693 @@
+[
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 12.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "6565fb30353bf8cf4a482192a603450fe6b102697edbadb06113d144a20cd353",
+   "kimi": "faae0e2a056e77e9bb877493e7ebf1638f4716eb963bfd3ed79f5d3c0e9d97c7",
+   "openai": "08cf442512a04f55a132f36cb93374551cefb5f916435ccb2bafe8abf0ff5b54"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 11.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "279596e20141aad2bd1fcedea1b8eaf0a0c864c109dee8152a179b5166cee7f1",
+   "kimi": "45995f2ef9754a989dde4331983592bebec89c34a0ac36492d20969956aefd64",
+   "openai": "1a9ed8eb452f175c183c068cf246e43a3f950adae8285115c8295f5349b74825"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "90fdcaf9f9cf07a32cb63f2cdf3d52587894767dccd516fe7c00d0894fee5d47",
+   "kimi": "0e24910036a43e576bff8d52e02652c5f1cf6affa51560c307be3f10d2348efd",
+   "openai": "7b4cd6cceed6c48ecdc74b0c97e157e7a9b6abf075605daa19586727a8f1e419"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "286a0b4898e3c75cbf52ab29467f580be662f90b7af017f91f280300595fee16",
+   "kimi": "b7aee4e119bed6da49e4fa69f18bd30eac9ee11b54bc32d815551d462fe1bfd0",
+   "openai": "f00d8ded14cca7c8a5869cf49252542ed4941e8a2164a8f6a77499987af5ae75"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 9.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "0f453a00c426f61113d19df5b2bf130f7fea13bfbdebb300202b563ec312bb34",
+   "kimi": "db6df87b330d39d6593891453922ea55c6c41d64137836935ff6ea92b3a01929",
+   "openai": "fa25757ee4e27eab9341215673025fc59ca86434a2386a45532471d7d696b38e"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 8.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "e14516c069c3d04c197f0476fb962e0c802b47816d1f5ce51835992c426c09a0",
+   "kimi": "0e4b0b10bcb0e9e80a26e047dd68436ec2591d42591f0192f290ae2af8bb8c09",
+   "openai": "91c84cfec0684b78134636d2b2b3edc79e02ec0c49b36e32d35b3bb0b3475abd"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 7.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "430252e54ce17dc4151917f32f503050642f3abfd0771c839a289d9df3d62292",
+   "kimi": "a2c31f5fdda62ac15a1bfb57833b19376a537a0924bf8021695c9c121e7075ab",
+   "openai": "cf1fe04d4fb6a704b5a4222bc4b26f84fdec1134abcd41f5917ca6f56f6e6660"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 6.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "dc399b2f2774c33092509da93a92ad85ab6f039863f4d2f6ed9f8be9f9a83d3b",
+   "kimi": "168b6891a227e0737248f1ba88ce644ce24f99bde19faa1bd8cd1d69e56c0dc4",
+   "openai": "42fe3edcd72c398e251074a9d884917a21d0a1704a5b168fa5872b2b59d1a2b9"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 6.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "4bdf2927359617fc5e5b0cca471025b8ad98ddd7d2efeeed12199399fba837d1",
+   "kimi": "ceb2a0d2c6632550c365f7b900d477b7df7ce7cff39f9e210af39d8bae85d870",
+   "openai": "8986827837c5f8a18e0a7009e9ff92b709df8268a3b363920c48c6725fda6fb6"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 5.\nMoves remaining until stall: 29. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\nWhat is your next action?\n\nOutput exactly:\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "ab855c2ce18c2b5e84b0c53bcd8f18c204872c6bbe9855f904b2183b853dae16",
+   "kimi": "5e50d77fea6107ed38c19873479547ffd40cb9654b2f0aca4ffa6c8861a41522",
+   "openai": "b1b76196fe261ddea8ed4ee35fddca6e720b047ec896f45048e19a9761f5cb2e"
+  }
+ }
+]
