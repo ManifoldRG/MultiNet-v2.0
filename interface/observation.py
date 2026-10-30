@@ -677,6 +677,7 @@ def current_observation_text(
     include_facing: bool = False,
     observation_text_format: str = "coords",
     stall_remaining: int | None = None,
+    labeling=None,
 ) -> str:
     if observation == "image_only":
         return ""
@@ -686,6 +687,7 @@ def current_observation_text(
         task_spec, state, include_facing=include_facing,
         observation_text_format=observation_text_format,
         stall_remaining=stall_remaining,
+        labeling=labeling,
     )
 
 

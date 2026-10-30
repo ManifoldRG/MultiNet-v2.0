@@ -35,6 +35,7 @@ from interface.prompt_strategies import (
 from interface.prompt_strategies import TextInitialMazePromptStrategy
 from interface.querying import QueryingMode
 from interface.renderer import render_initial_maze_text, rgb_to_image_block
+from interface.tile_labels import TileLabeling
 from prompting_experiments.prompt_templates import querying as querying_templates
 from prompting_experiments.prompt_templates import system as system_templates
 from prompting_experiments.prompt_templates import user as user_templates
@@ -184,6 +185,12 @@ class ExperimentRunner:
         # 3D render.start_map: the backend's top-down snapshot of the reset
         # state, set by EpisodeStepper.start(); None for every other run.
         self.start_map_rgb: np.ndarray | None = None
+        # Neutral tile labels for this maze; None renders the R2 names.
+        self.tile_labeling: TileLabeling | None = (
+            TileLabeling.for_task(task_spec, config.tile_label_seed)
+            if config.tile_labels == "neutral"
+            else None
+        )
 
     def build_prompt_message(
         self,
@@ -200,6 +207,7 @@ class ExperimentRunner:
         maze = dict(
             observation_text_format=self.config.observation_text_format,
             include_facing=self.config.observation_text_includes_facing,
+            labeling=self.tile_labeling,
         )
         if "{maze_text}" in system_prompt:
             system_prompt = system_prompt.format(
@@ -328,6 +336,7 @@ class ExperimentRunner:
             include_facing=self.config.observation_text_includes_facing,
             observation_text_format=self.config.observation_text_format,
             stall_remaining=stall_remaining,
+            labeling=self.tile_labeling,
         )
         prompt_text = self.prompt.build_user_prompt(
             obs_text,
@@ -402,7 +411,7 @@ class ExperimentRunner:
         initial_state: dict,
         maze_path: str | Path | None,
     ) -> dict:
-        return {
+        result = {
             "success": success,
             "steps_used": state.step_count,
             "end_reason": end_reason,
@@ -414,3 +423,7 @@ class ExperimentRunner:
             "task_spec": self.task_spec.to_dict(),
             "maze_path": str(maze_path) if maze_path is not None else None,
         }
+        if self.tile_labeling is not None:
+            # The labels the model saw and what each one really was, for grading.
+            result["tile_labels"] = self.tile_labeling.to_dict()
+        return result

@@ -284,6 +284,7 @@ class EpisodeStepper:
                 step_detail, event_type = format_step_feedback(
                     action, prev_state, prev_state, 0.0, False, self.task_spec,
                     level=self.config.feedback,
+                    neutral_tiles=self._runner.tile_labeling is not None,
                 )
                 self.last_feedback = step_detail
                 self.consecutive_failures += 1
@@ -330,6 +331,7 @@ class EpisodeStepper:
             step_detail, event_type = format_step_feedback(
                 action, prev_state, state, reward, terminated, self.task_spec,
                 level=self.config.feedback, mechanic=mechanic,
+                neutral_tiles=self._runner.tile_labeling is not None,
             )
             self.last_feedback = step_detail
 
