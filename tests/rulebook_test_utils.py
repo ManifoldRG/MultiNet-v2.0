@@ -50,3 +50,36 @@ def every_mechanic(tiling: str, **overrides) -> TaskSpecification:
     }
     d.update(overrides)
     return TaskSpecification.from_dict(d)
+
+
+class PlannerReplayAgent:
+    """Replays the planner's optimal actions through the real runner, one maze
+    after another, at zero API cost.
+
+    ``plans`` are action-name lists in the order the pipeline runs the mazes.
+    With context_window="full" every query after an episode's first resends
+    the earlier steps under the full-history header, so a request without it
+    opens the next episode: the agent moves to the next plan and refuses to if
+    the previous one was not used up exactly.
+    """
+
+    def __init__(self, plans: list[list[str]]):
+        self._plans = [list(plan) for plan in plans]
+        self._current: list[str] | None = None
+        self.episodes = 0
+        self.last_usage = None
+
+    def __call__(self, messages: list[dict]) -> str:
+        from prompting_experiments.prompt_templates.user import FULL_HISTORY_USER_PROMPT
+
+        self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
+        content = messages[-1]["content"]
+        texts = [content] if isinstance(content, str) else [b.get("text", "") for b in content]
+        if not any(FULL_HISTORY_USER_PROMPT["header"] in t for t in texts):
+            if self._current:
+                raise AssertionError(f"episode ended with {len(self._current)} planned actions unused")
+            self._current = self._plans.pop(0)
+            self.episodes += 1
+        if not self._current:
+            raise AssertionError("the plan is used up but the episode goes on")
+        return f"FINAL_OUTPUT: {self._current.pop(0)}"
