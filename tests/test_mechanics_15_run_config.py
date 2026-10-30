@@ -130,3 +130,50 @@ def test_prompt_cache_is_on_and_hash_invariant(monkeypatch):
     assert _experiment_config_hash_payload(_CFG["experiment_config"]) == (
         _experiment_config_hash_payload({**_CFG["experiment_config"], "prompt_cache": False})
     )
+
+
+_NEUTRAL = json.loads((_FIX / "run_config.mechanics_15_nl_neutral.json").read_text())
+_NEUTRAL_5 = json.loads((_FIX / "run_config.mechanics_15_nl_neutral_5.json").read_text())
+_MANIFEST = json.loads((_FIX / "manifest.mechanics_15.json").read_text())["tasks"]
+
+
+def test_nl_neutral_run_is_the_nl_run_for_astra_with_neutral_labels():
+    from interface.config import ExperimentConfig
+    from scripts.run_pipeline import _condition_configs
+
+    nl = json.loads((_FIX / "run_config.mechanics_15_nl.json").read_text())
+    assert _NEUTRAL["experiment_config"] == {
+        **nl["experiment_config"], "tile_labels": "neutral", "tile_label_seed": 0}
+    assert _NEUTRAL["manifest"] == nl["manifest"]
+    assert "render" not in _NEUTRAL and "conditions" not in _NEUTRAL
+    assert list(_NEUTRAL["models"]) == ["gpt6_astra"]
+    assert _NEUTRAL["models"]["gpt6_astra"] == {**nl["models"]["gpt6_astra"], "spend_cap_usd": 25}
+    # Resolved the way the pipeline and the fleet units resolve it.
+    [(_, cfg)] = _condition_configs(None, base_overrides=_NEUTRAL["experiment_config"])
+    assert (cfg.tile_labels, cfg.tile_label_seed) == ("neutral", 0)
+    assert ExperimentConfig.from_dict(cfg.to_dict()) == cfg
+
+
+def test_nl_neutral_subset_is_the_full_run_on_five_mazes():
+    assert _NEUTRAL_5["experiment_config"] == _NEUTRAL["experiment_config"]
+    assert _NEUTRAL_5["manifest"] == _NEUTRAL["manifest"]
+    sub, full = _NEUTRAL_5["models"]["gpt6_astra"], _NEUTRAL["models"]["gpt6_astra"]
+    # Same unit hashes: a full run into the same artifacts root reuses these episodes.
+    assert _runtime_model_config(sub) == _runtime_model_config(full)
+    new = {t["task_id"]: t["new_mechanisms"] for t in _MANIFEST}
+    assert set(sub["tasks"]) <= set(new) and len(sub["tasks"]) == 5
+    singles = [new[t] for t in sub["tasks"] if len(new[t]) == 1]
+    assert sorted(m for [m] in singles) == ["death", "frozen", "portals", "rotating"]
+    assert [len(new[t]) for t in sub["tasks"] if len(new[t]) > 1] == [4]
+
+
+def test_nl_neutral_configs_build_a_capped_astra_on_one_sync_worker(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    for cfg in (_NEUTRAL, _NEUTRAL_5):
+        astra, _ = _build_agent_from_spec("gpt6_astra", cfg["models"]["gpt6_astra"])
+        assert (astra.config.model, astra.config.reasoning_effort, astra.config.service_tier) == (
+            "gpt-6-astra", "xhigh", "flex")
+        assert (astra.config.max_tokens, astra.config.spend_cap_usd) == (64000, 25)
+        topo = derive_topology(cfg, "neutral")
+        assert [(w["model_group"], w["worker_role"]) for w in topo["workers"]] == [("openai-api", "worker")]
+        assert topo["required_credentials"] == ["OPENAI_API_KEY"]

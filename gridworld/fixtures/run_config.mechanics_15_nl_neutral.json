@@ -1,0 +1,45 @@
+{
+  "description": "Mechanics-15 NL with neutral tile labels (rule-learning arm): GPT-6 Astra only, the same 15 mazes, cell and Astra settings as run_config.mechanics_15_nl.json, plus tile_labels=neutral (seed 0) and a $25 spend cap. R2's NL text named every tile by its effect (death portal, frozen tile, rotating tile, purple teleporter between A and B); here each tile kind goes by a made-up word drawn per maze, so the model has to learn what a tile does from what happens when it steps on one.",
+  "manifest": "gridworld/fixtures/manifest.mechanics_15.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_design": "Only names and feedback change; the mazes, the world model, the prompt (minimal: no mechanics rules) and the stall watchdog (progress_stall_k=30) are R2's. Tiles: each special tile kind (death, frozen, rotating, portal) is listed under a pseudo-word from interface/tile_labels.py's LABEL_POOL, drawn per maze from sha256(tile_label_seed:task_id:word), every kind the same way (one line per cell, grouped by label, row-major), so the names, the listing order and the portal colours no longer say what a tile does. Rotating tiles keep their current direction ('pointing EAST'). Portal pairing is not shown: one step onto a pad shows where it leads. Step feedback (minimal) reports what a step did, never which tile did it: RESET when the maze went back to its start (R2: DEATH RESET), NOTHING for an action a frozen tile swallowed (R2: FROZEN), MOVED (r,c) when a move landed somewhere other than the cell ahead (R2: TELEPORTED (r,c) / CARRIED dir), plain MOVED onto a tile (R2: ROTATING dir / FROZEN); the 'You are frozen' status line is gone. Keys, doors, the switch and the gate keep their R2 names: the red key opens the red door on every one of these layouts, so recolouring them is either a no-op or a misleading prior, not a neutral one. episode.json carries tile_labels (label -> real effect, cells, portal wiring) for grading; event_type and mechanic on each step stay the world model's, so R2's metrics apply unchanged.",
+  "_note_requires": "tile_labels comes from feat/nl-rule-reshuffle; a SHA without it fails at config load (ExperimentConfig has no tile_labels field). context_window=full needs PR #54 and NL history caching PR #75, as for R2 NL.",
+  "_note_solvable": "Every maze is exactly as solvable as in R2: the labels live in the text layer only. tests/test_tile_labels.py replays the planner's BFS route on all 15 mazes through the NL pipeline under these settings and checks success in the BFS step count on the planner's states, the recorded mapping, and that no prompt contains an effect or pairing word.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "text_only",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30,
+    "prompt_cache": true,
+    "tile_labels": "neutral",
+    "tile_label_seed": 0
+  },
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "enable_prompt_cache": true,
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 25,
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 15,
+      "max_in_flight": 15,
+      "tasks": [
+        "all"
+      ]
+    }
+  },
+  "_note_cost": "From R2 NL Astra ($13.93 reported, $14.07 re-priced from the recorded usage at flex rates, 1.14x BFS, $0.93/episode). Fitting R2's per-query cost (input $0.0025 + $0.0000115 x history step, output $0.0048 mean) and projecting over the 15 mazes' BFS lengths: 1.14x BFS ~$14, 1.5x ~$19, 2x ~$26, 3x (every episode to the step cap) ~$42. If learning doubles the reasoning output: ~$22 / ~$30 / ~$41 / ~$65. Expect $15-30. spend_cap_usd=25 is a per-process hard stop on the Astra worker's running total and enters the unit hash; with 15 episodes in flight a cap stop cuts all of them at once (end_reason agent_error), so run the 5-maze subset (run_config.mechanics_15_nl_neutral_5.json, <= $23 even at 3x BFS with doubled output) first and re-project from its measured steps before this. Pair it with an OpenAI project budget.",
+  "_note_launch": "As R2 NL: difficulty cap 8000 (DIFFICULTY_MAX=8000 / --difficulty-max-static-score 8000; M10 scores about 7,840), and pre-scored Stage 2 (PRESCORED_TASKS=<artifacts root with R2's tasks/>; a bundle is reused only when its maze and scorer-config hash match, which the labels do not touch). R2 NL Astra's longest episode took 0.5 h (195 queries at ~12 s); a 3x-BFS episode is ~1.6 h, so MAX_RUN_DURATION=6h is ample on the fleet. Write to a fresh artifacts root: the run dir has no tile_labels component and would overwrite R2's."
+}
