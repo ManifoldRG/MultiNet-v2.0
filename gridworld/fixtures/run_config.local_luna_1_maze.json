@@ -1,6 +1,6 @@
 {
-  "description": "Personal one-maze GPT-6 Luna smoke run",
-  "manifest": "gridworld/fixtures/manifest.smoke_eval.json",
+  "description": "Personal test run, not for PRs. GPT-6 Luna on 1 easy maze (V01 empty room), one serial API worker, $1 spend cap. Quickest end-to-end check (about 1 minute once the worker starts). Launch: CLOUD_LOGGING=1 RUN_CONFIG=gridworld/fixtures/run_config.local_luna_1_maze.json MANIFEST=gridworld/fixtures/manifest.json DIFFICULTY_MAX=1000 MAX_RUN_DURATION=2h ./launch_distributed.sh",
+  "manifest": "gridworld/fixtures/manifest.json",
   "experiment_config": {
     "prompting": "minimal",
     "observation": "text_only",

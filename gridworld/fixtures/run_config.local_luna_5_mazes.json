@@ -1,0 +1,31 @@
+{
+  "description": "Personal test run, not for PRs. GPT-6 Luna on 5 small mazes (V01 empty room, V02 winding corridor, V03 multi path, V04 single key, V05 single switch), one serial API worker, $1 spend cap. Mix of navigation, key-door and switch-gate, so the run dashboard shows more than one outcome. Launch: CLOUD_LOGGING=1 RUN_CONFIG=gridworld/fixtures/run_config.local_luna_5_mazes.json MANIFEST=gridworld/fixtures/manifest.json DIFFICULTY_MAX=1000 MAX_RUN_DURATION=2h ./launch_distributed.sh",
+  "manifest": "gridworld/fixtures/manifest.json",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "text_only",
+    "context_window": "last_n",
+    "chat_history": "stateless",
+    "querying": "step_by_step",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "progress_stall_k": 10
+  },
+  "models": {
+    "gpt6_luna": {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 1,
+      "max_in_flight": 1,
+      "tasks": ["validation_10_v01_empty_room", "validation_10_v02_winding_corridor", "validation_10_v03_multi_path", "validation_10_v04_single_key", "validation_10_v05_single_switch"],
+      "reasoning_effort": "low",
+      "max_tokens": 1024,
+      "spend_cap_usd": 1.0,
+      "timeout": 60,
+      "max_attempts": 2
+    }
+  }
+}
