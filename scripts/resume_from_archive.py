@@ -183,13 +183,18 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
 
 def _render_block(payload: dict) -> dict | None:
     render = payload.get("render")
-    if render is None or (isinstance(render, dict) and render.get("backend", "minigrid") == "minigrid"):
+    if render is None or (
+        isinstance(render, dict)
+        and render.get("backend", "minigrid") == "minigrid"
+        and "observability" not in render  # a fogged 2D run records its mask
+    ):
         return None
     return render
 
 
 def recorded_render(episode: dict, run_inputs: dict) -> dict | None:
-    """The 3D render block an archive recorded, or None for a 2D archive.
+    """The render block an archive recorded (3D, or 2D under a run-config
+    observability override), or None for a plain 2D archive.
 
     run_inputs.json and episode.json must record the same block, and a 3D
     backend label needs one: otherwise the driver cannot tell how the frames
@@ -346,12 +351,12 @@ def main() -> int:
     if render is None:
         backend, label = MiniGridBackend(render_mode="rgb_array"), "minigrid"
     else:
-        # Rebuild the recorded 3D backend, only if this worktree draws the same
-        # frames (render version, mujoco, settings, frame size).
+        # Rebuild the recorded 3D (or fogged 2D) backend, only if this worktree
+        # draws the same frames (render version, mujoco, settings, frame size).
         from gridworld.backends import get_backend
         from gridworld.render_settings import RenderSettings
 
-        keys = ("backend", "camera", "resolution", "start_map")
+        keys = ("backend", "camera", "resolution", "start_map", "observability", "view_size")
         settings = RenderSettings.from_run_config({"render": {k: render[k] for k in keys if k in render}})
         current = settings.provenance(task_spec)
         if current != render or run_inputs.get("backend") != settings.label:
@@ -361,6 +366,7 @@ def main() -> int:
                 f"render={current!r} (backend {settings.label!r})"
             )
         backend, label = get_backend(settings.backend, **settings.backend_kwargs(task_spec)), settings.label
+        task_spec = settings.apply_to_spec(task_spec)  # the archived spec already carries it
     print(f"backend: {label}")
     backend.configure(task_spec)
     runner = build_runner(config, backend, task_spec)

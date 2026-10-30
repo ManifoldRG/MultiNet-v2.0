@@ -8,7 +8,6 @@ unit at a time against the same helpers used by the single-process pipeline.
 from __future__ import annotations
 
 import contextlib
-import dataclasses
 import json
 import logging
 import shutil
@@ -55,22 +54,23 @@ def render_settings_for(
     run_config: dict[str, Any], conditions: Optional[str], prompt_variant: Optional[str] = None
 ) -> RenderSettings:
     """The run-config's render block, checked against every experiment cell
-    before any work (a 3D frame needs an observation that carries images)."""
+    before any work (a 3D frame needs an observation that carries images; a
+    fogged 2D frame needs image_only)."""
     render = RenderSettings.from_run_config(run_config)
-    if render.backend != "minigrid":
+    if render != RenderSettings():
         overlay = run_config.get("experiment_config") or {}
         for _variant, cell in pipeline._condition_configs(
             conditions, prompt_variant=prompt_variant, base_overrides=overlay
         ):
-            render.check_observation(cell.observation)
+            render.check_experiment(cell)
     return render
 
 
 def _unit_render(unit: dict[str, Any]) -> RenderSettings:
-    """The render settings a worker draws ``unit`` with. A 2D unit carries no
-    ``render`` block. A 3D unit's label pins the render version it was planned
-    under; a worker on other render code would write another run_dir and hash,
-    so it refuses before any work."""
+    """The render settings a worker draws ``unit`` with. A plain 2D unit carries
+    no ``render`` block. A 3D (or fogged 2D) unit's label pins the render
+    version it was planned under; a worker on other render code would write
+    another run_dir and hash, so it refuses before any work."""
     block = unit.get("render")
     render = RenderSettings() if block is None else RenderSettings.from_run_config({"render": block})
     planned = unit.get("backend", "minigrid")
@@ -389,8 +389,9 @@ def prepare_job(
                         "worker_tags": _as_list(model_cfg.get("worker_tags")),
                         "max_in_flight": model_cfg.get("max_in_flight"),
                     }
-                    if render.backend != "minigrid":
-                        unit["render"] = dataclasses.asdict(render)
+                    render_block = render.unit_block()  # None for plain 2D
+                    if render_block is not None:
+                        unit["render"] = render_block
                     episode_inputs_hash = pipeline._expected_run_hash(
                         runtime_spec,
                         model_id,
@@ -1643,8 +1644,9 @@ def run_lockstep_worker(
                 return
             prep = preps[unit_id]
             render = _unit_render(unit)
-            if render.backend != "minigrid":                 # as run_episode stamps it
-                result["render"] = render.provenance(prep.runtime_spec)
+            render_provenance = render.provenance(prep.runtime_spec)
+            if render_provenance is not None:                # as run_episode stamps it
+                result["render"] = render_provenance
             flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
             prep.write_run_inputs(extras={"pricing_tier": "batch"})
             episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))

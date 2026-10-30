@@ -217,6 +217,26 @@ python -m scripts.render_3d_mazes --manifest gridworld/fixtures/manifest.json \
   --experiment r1 --camera top_down --camera first_person --contact-sheet --out <dir>
 ```
 
+### 2D partial observability (fog of war)
+
+A maze's `rules.observability` (`full`, `view_cone`, `fog_of_war`) and
+`view_size` decide what the 2D frame shows. Cells in MiniGrid's view (a
+`view_size` square ahead of the agent; walls and closed doors/gates occlude)
+are drawn live, and the agent always is. `fog_of_war` draws explored cells out
+of view as they looked when last seen, at half brightness, and keeps that
+memory through a death reset; `view_cone` draws only what is in view now.
+Every other cell is a dark plum, diagonally hatched UNKNOWN tile
+(`gridworld/custom_env.py`). Dynamics, the BFS optimum and Stage 2 static
+scores are unchanged; the stall watchdog counts newly seen cells as progress.
+
+To run manifest mazes under fog without new maze files, add a 2D render block,
+`"render": {"observability": "fog_of_war", "view_size": 7}` (`view_size`
+defaults to 7). It overrides every task's rules, needs `"observation":
+"image_only"` (the text observations describe the whole maze), and gets its
+own artifact label, `minigrid_<mode>_v<view_size>_r<FOG_RENDER_VERSION>`
+(e.g. `minigrid_fog_of_war_v7_r1`), on local runs and the fleet alike. Without
+the key, 2D runs, frames and hashes are unchanged.
+
 ## Appendix: legacy local/VLM demo harness
 
 An earlier single-machine harness predates the canonical pipeline and

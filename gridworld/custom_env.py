@@ -7,6 +7,9 @@ Supports all mechanism types: keys, doors, switches, gates, blocks, hazards.
 
 from __future__ import annotations
 
+import copy
+from functools import lru_cache
+
 import numpy as np
 from typing import Optional, Any
 
@@ -59,6 +62,35 @@ SWITCH_RENDER_COLORS = {
 # PORTAL_STATE_BASE + colour, above every switch state.
 TILE_COLOUR_STATE = {name: i for i, name in enumerate(sorted(SWITCH_RENDER_COLORS))}
 PORTAL_STATE_BASE = 2 * len(TILE_COLOUR_STATE)
+
+
+# Partial-observability frame mask (rules.observability view_cone / fog_of_war).
+# A cell the agent cannot see is drawn as UNKNOWN: a dark plum tile crossed by
+# lighter diagonal hatching, with no grid lines, so an unknown region reads as
+# one continuous hatch. No maze tile is hatched or plum: floor is black, walls
+# are flat grey (100, 100, 100), and objects (and their dimmed memories) are
+# red/green/blue/yellow/cyan/orange/ice or MiniGrid's bluer purple. Under
+# fog_of_war a cell seen earlier but out of view now is drawn as REMEMBERED:
+# the tile as it looked when last seen, at REMEMBERED_DIM brightness. The
+# agent's own cell is always in view. Full observability never reaches this
+# code, so its frames are unchanged.
+UNKNOWN_BASE = np.array([58, 30, 66], dtype=np.uint8)
+UNKNOWN_HATCH = np.array([112, 74, 122], dtype=np.uint8)
+REMEMBERED_DIM = 0.5
+
+
+@lru_cache(maxsize=8)
+def unknown_tile(tile_size: int) -> np.ndarray:
+    """The UNKNOWN tile at ``tile_size`` px: plum base, lighter diagonal hatch.
+    The hatch runs continuously across neighbouring unknown tiles."""
+    tile = np.empty((tile_size, tile_size, 3), dtype=np.uint8)
+    tile[:] = UNKNOWN_BASE
+    period = max(4, tile_size // 4)
+    width = max(1, period // 4)
+    rows, cols = np.indices((tile_size, tile_size))
+    tile[(rows + cols) % period < width] = UNKNOWN_HATCH
+    tile.setflags(write=False)
+    return tile
 
 
 class Switch(Ball):
@@ -306,8 +338,12 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.switch_gate_map: dict[str, list[str]] = {}  # switch_id -> [gate_ids]
         self.gate_initial_state: dict[str, bool] = {}
 
-        # Fog of war tracking: set of (x, y) cells the agent has visited/seen
+        # Fog of war tracking: set of (x, y) cells the agent has visited/seen,
+        # and what each looked like when last seen (a snapshot of its object,
+        # None for empty floor). Both are filled only by update_explored(), so
+        # the remembered cells are exactly the explored cells.
         self.explored_cells: set[tuple[int, int]] = set()
+        self.remembered_cells: dict[tuple[int, int], WorldObj | None] = {}
 
         # Mission space for the environment - the func returns our custom text
         mission_space = MissionSpace(mission_func=lambda: mission_text)
@@ -339,6 +375,7 @@ class CustomMiniGridEnv(MiniGridEnv):
 
         # Reset fog-of-war tracking
         self.explored_cells = set()
+        self.remembered_cells = {}
         self.key_objects.clear()
         self.collected_keys.clear()
         self.freeze_remaining = 0
@@ -744,7 +781,42 @@ class CustomMiniGridEnv(MiniGridEnv):
                     j = (i + k * (t // 4)) % t
                     iced[i, j] = (58, 82, 110)
             tile[:] = iced
+        if not agent_pov and self.observability != "full":
+            self._mask_unseen(img, tile_size)
         return img
+
+    @property
+    def observability(self) -> str:
+        """rules.observability of the task ("full" without a task spec)."""
+        if self.task_spec is None:
+            return "full"
+        return self.task_spec.rules.observability
+
+    def _mask_unseen(self, img: np.ndarray, tile_size: int) -> None:
+        """Hide, in place, every cell the agent cannot see now (see UNKNOWN_BASE).
+
+        fog_of_war draws an explored cell out of view as it looked when last
+        seen (remembered_cells), dimmed: a door opened, a switch thrown or a
+        tile rotated out of view, or a death reset of the world, shows up only
+        once the cell is seen again. view_cone keeps no memory: only the cells
+        in view now are drawn. Cells in view show their live state.
+        """
+        visible = self.get_visible_cells()
+        visible.add((int(self.agent_pos[0]), int(self.agent_pos[1])))
+        remember = self.observability == "fog_of_war"
+        unknown = unknown_tile(tile_size)
+        t = tile_size
+        for y in range(self.height):
+            for x in range(self.width):
+                if (x, y) in visible:
+                    continue
+                tile = img[y * t:(y + 1) * t, x * t:(x + 1) * t]
+                if remember and (x, y) in self.remembered_cells:
+                    # cast as Grid.render does, then dim
+                    seen = Grid.render_tile(self.remembered_cells[(x, y)], tile_size=t).astype(np.uint8)
+                    tile[:] = (seen * REMEMBERED_DIM).round().astype(np.uint8)
+                else:
+                    tile[:] = unknown
 
     def get_mission_text(self) -> str:
         """Return the mission text."""
@@ -780,5 +852,18 @@ class CustomMiniGridEnv(MiniGridEnv):
         return visible
 
     def update_explored(self):
-        """Update fog-of-war: add currently visible cells to explored set."""
-        self.explored_cells |= self.get_visible_cells()
+        """Update fog-of-war: add currently visible cells to the explored set
+        and record what each looks like now (its last-seen state).
+
+        Nothing clears either outside a fresh episode (_gen_grid): a death
+        reset puts the world back to its start state inside the same episode,
+        and the agent keeps what it saw, as its frame history does."""
+        visible = self.get_visible_cells()
+        self.explored_cells |= visible
+        for x, y in visible:
+            obj = self.grid.get(x, y)
+            # A shallow copy freezes the state render_tile reads (door open or
+            # locked, switch on, gate open, rotator direction), so a later
+            # change out of view, e.g. a gate opened by a far switch or a key
+            # put back by a death reset, is not drawn until the cell is seen.
+            self.remembered_cells[(x, y)] = None if obj is None else copy.copy(obj)

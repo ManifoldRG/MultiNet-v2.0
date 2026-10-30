@@ -1,0 +1,51 @@
+{
+  "description": "Mechanics-15, 2D under fog of war: GPT-6 Astra alone on four of the 15 mazes, every setting identical to its cell in run_config.mechanics_15_2d.json (the R2 fixed cell, context_window=full, progress_stall_k=30, xhigh, flex, image_detail=high, prompt cache) except the render block, which imposes rules.observability=fog_of_war with view_size 7 on every task, the four tasks, and spend_cap_usd 25. The frames hide cells the agent has not seen; the minimal prompt is unchanged and still says nothing about the image.",
+  "manifest": "gridworld/fixtures/manifest.mechanics_15.json",
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_requires": "render.observability needs the 2D fog frames and the render-block override (branch feat/2d-fog-frames); an older SHA refuses the render block at load (unknown render key).",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30,
+    "prompt_cache": true
+  },
+  "render": {
+    "observability": "fog_of_war",
+    "view_size": 7
+  },
+  "_note_fog": "What the model sees (gridworld/custom_env.py): cells in MiniGrid's view, a 7x7 square ahead of the agent (6 cells forward, 3 to each side, none behind; walls and closed doors/gates occlude), drawn live; the agent always. Explored cells out of view are drawn as last seen at half brightness: a gate opened by the far switch, a rotator's turn or a death reset shows once the cell is seen again, and the memory survives a death reset. Never-seen cells are a dark plum tile with a lighter diagonal hatch, never floor black or wall grey. view_size 7 is MiniGrid's default agent_view_size and the task spec's: in these 1-wide dense corridors occlusion, not range, limits sight, and 7 sees ~20 cells a step (5 sees ~15, 9 ~24) along the BFS paths. Dynamics are unchanged: the BFS optimum and the 3x step cap are the 2D run's, Stage 2 scores the task files, and the stall watchdog counts newly seen cells as progress. Artifacts land under the backend label minigrid_fog_of_war_v7_r1.",
+  "_note_selection": "Four mazes that together cover all four mechanics, each in at least two (portals: all four; rotating: M8_portals_rotating, M10; death and frozen: M10, M9_portals_death_frozen), chosen from Astra's square-2D R2 solves, so a fog run's extra steps read against a full-observability baseline: M7_portals (91 steps, BFS 90, $2.01; the clean anchor, run first), M8_portals_rotating (70, BFS 49, $2.49), M10 (85, BFS 75, $3.02), M9_portals_death_frozen (97, BFS 81, $3.55): $11.07 for the four in 2D. M7_death (134, BFS 121) is cleaner than M8_portals_rotating but costs ~2.5x as much under fog; the four single-mechanic M7 mazes would cost ~$28 even at 1.5x BFS. Order is the run order: a local run plays them in sequence, so the cap cuts the last maze first.",
+  "_note_cost": "Projection from Astra's own R2 square-2D episodes on these mazes (flex: input $5/M, cached $0.50/M, output $25/M), which reproduce its $80.12 / $5.34-per-episode R2 total: per maze, uncached input and output scale with the episode's steps N and cached history reads with N^2 (context_window=full rereads every earlier frame each query, ~399 tokens a frame), with output per query +30% for fog. Fog adds exploration, so N is the unknown. Totals for the four if each episode runs 1.5x / 2x / 2.5x / 3x (the step cap) its BFS optimum: ~$17 / ~$24 / ~$33 / ~$43 (M7_portals ~$3.7 / $5.7 / $8.0 / $10.7). The model must now find the keys, switch and doors before it can plan a route, seeing ~20 cells a step in 1-wide corridors, so 2-2.5x is a plausible central guess and the step cap the ceiling. spend_cap_usd 25 is a per-process running total: in the sequential local run it lets all four finish up to ~2x BFS; past that it stops the run inside M9_portals_death_frozen (cumulative at 2.5x: $8.0 / $13.6 / $22.8 / $33.0). Raise it to ~$35 to cover 2.5x, or ~$45 for the step cap.",
+  "_note_launch": "Local, one process, mazes in sequence (the ablation style of the R2 2D-view ablation). Pre-scored Stage 2: copy the four tasks/<task_id>/ bundles (canonical_paths.json + scored_static.json) from the R2 mechanics-15 run (e.g. Multinet-v2-results r2-mech15-3d-20261023/mech15-3d-20261023/tasks/; their inputs_hash matches this code) into <artifacts-root>/tasks/, or Stage 2 recomputes them (tens of minutes per maze, no API cost). Then, from the repo root with OPENAI_API_KEY in .env: set -a; . ./.env; set +a; PYTHONHASHSEED=0 PYTHONUNBUFFERED=1 python -m scripts.run_pipeline --run-config gridworld/fixtures/run_config.mechanics_15_2d_fog_astra.json --manifest gridworld/fixtures/manifest.mechanics_15.json --artifacts-root artifacts/mech15-2d-fog-astra --run-set-id mech15-2d-fog-astra --difficulty-max-static-score 8000. On the fleet the one Astra worker (worker_concurrency 15) would run all four at once, so a cap hit would cut all four mid-episode: run it locally.",
+  "_note_model_params": "As in run_config.mechanics_15_2d.json for GPT-6 Astra: reasoning_effort=xhigh, flex tier, image_detail=high, max_tokens 64000, explicit prompt-cache breakpoints (enable_prompt_cache), plain worker (the OpenAI agent has no batch path). spend_cap_usd is a hard stop on the process's priced usage (interface/agents/openai_agent.py); it resets if the process restarts, so pair it with an OpenAI project budget.",
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "enable_prompt_cache": true,
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 25,
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 15,
+      "max_in_flight": 15,
+      "tasks": [
+        "mech15_M7_18x18_dense_kr_sg_kb_portals_0",
+        "mech15_M8_18x18_dense_kr_sg_kb_portals_rotating_0",
+        "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+        "mech15_M9_18x18_dense_kr_sg_kb_portals_death_frozen_0"
+      ]
+    }
+  }
+}

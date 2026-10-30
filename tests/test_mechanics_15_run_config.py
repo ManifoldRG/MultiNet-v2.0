@@ -130,3 +130,28 @@ def test_prompt_cache_is_on_and_hash_invariant(monkeypatch):
     assert _experiment_config_hash_payload(_CFG["experiment_config"]) == (
         _experiment_config_hash_payload({**_CFG["experiment_config"], "prompt_cache": False})
     )
+
+
+def test_fog_run_is_the_2d_astra_cell_under_fog_on_four_mazes():
+    from gridworld.render_settings import FOG_RENDER_VERSION
+    from interface.config import ExperimentConfig
+
+    fog = json.loads((_FIX / "run_config.mechanics_15_2d_fog_astra.json").read_text())
+    assert fog["experiment_config"] == _CFG["experiment_config"]
+    assert fog["manifest"] == _CFG["manifest"]
+    assert list(fog["models"]) == ["gpt6_astra"]
+    astra, base = fog["models"]["gpt6_astra"], _CFG["models"]["gpt6_astra"]
+    changed = ("tasks", "spend_cap_usd")
+    assert {k: v for k, v in astra.items() if k not in changed} == {
+        k: v for k, v in base.items() if k not in changed}
+    assert astra["spend_cap_usd"] == 25
+    rs = RenderSettings.from_run_config(fog)
+    assert (rs.backend, rs.observability, rs.view_size) == ("minigrid", "fog_of_war", 7)
+    assert rs.label == f"minigrid_fog_of_war_v7_r{FOG_RENDER_VERSION}"
+    rs.check_experiment(ExperimentConfig.from_dict({**ExperimentConfig().to_dict(), **fog["experiment_config"]}))
+    manifest = {t["task_id"]: t for t in json.loads((_FIX / "manifest.mechanics_15.json").read_text())["tasks"]}
+    tasks = [manifest[t] for t in astra["tasks"]]
+    assert len(tasks) == 4
+    assert {m for t in tasks for m in t["new_mechanisms"]} == {"portals", "death", "rotating", "frozen"}
+    # The clean square-2D solve (Astra 91 steps vs BFS 90) runs first, before the cap can bind.
+    assert tasks[0]["task_id"] == "mech15_M7_18x18_dense_kr_sg_kb_portals_0"
