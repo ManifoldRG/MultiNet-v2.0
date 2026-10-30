@@ -359,10 +359,18 @@ def test_serve_announces_the_run_and_flushes_on_exit(tmp_path, monkeypatch):
         def server_close(self):
             pass
 
+    class _Stdout(io.StringIO):  # what a nohup'd log file has on disk: only what was flushed
+        flushed = ""
+
+        def flush(self):
+            self.flushed = self.getvalue()
+
     monkeypatch.setattr(drp, "make_coordinator_server", lambda root, **kw: _Server())
+    monkeypatch.setattr("sys.stdout", stdout := _Stdout())
     post = _Post()
     with pytest.raises(KeyboardInterrupt):
         drp.serve_coordinator(artifacts, events=_events(post))
+    assert "Run events: writing episode starts and ends" in stdout.flushed
     [started] = post.events("coordinator_started")  # sent by the close in serve's finally
     assert started["run_id"] == "dash-run" and started["unit_count"] == 1
     assert started["units"] == {"pending": 1} and started["models"] == ["stub-model"]

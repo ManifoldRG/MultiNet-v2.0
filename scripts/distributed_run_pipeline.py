@@ -1280,7 +1280,8 @@ def serve_coordinator(
     )
     print(f"Coordinator serving {artifacts_root} on http://{host}:{port}")
     if events:
-        print("Run events: writing episode starts and ends to Cloud Logging (log multinet-run-events).")
+        # Flushed: stdout is a file under nohup, and this line is how an operator checks events are on.
+        print("Run events: writing episode starts and ends to Cloud Logging (log multinet-run-events).", flush=True)
         events.coordinator_started(plan_path(artifacts_root), state_path(artifacts_root))
     try:
         server.serve_forever()
