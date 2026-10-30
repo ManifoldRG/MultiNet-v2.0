@@ -1,0 +1,548 @@
+[
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 12.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "7d63b1bb5a4ebcb602de292313dc3480ea268c7caa4a260c2d88642200f17c6f",
+   "kimi": "38cf233447cb72c7a8c32bfaf36208f831c2bb26d3c9a19365e9232e16359c2e",
+   "openai": "eb9aafbd38c157cce2628736d5212c75e73d3dba9e058fdfbb4794431a5998c5"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 11.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nStart. Plan: follow the corridor to the switch.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "552388d50e49f744f75bd07873452945d67f81126646615ea3ba802e1198a28a",
+   "kimi": "9a80e86e37ddc734db89a69177e3513293a9622e85d2c725bfa4b884666e0d75",
+   "openai": "c1dd1a91a0a4d8e60a0ddf9b40a954172de91e93e153bd9b14a26d9bfcde7aaa"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "825ceb211fad94f9b11149944ab021b37f2619ef29c8f3590811b9206fae15c1",
+   "kimi": "a0f18d7f74f05ec02e10b4cc7835822d65b94bf894ed8f4f37d336c1e180fb3a",
+   "openai": "fa8d27b7c577eb38e7aedf84b53f522ce80faf579b4568fed6c74797d4871fb7"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "3e2cbea2dc4c114c13daaae7e258c63b89cd3021e164311a3773bd49b85b96ea",
+   "kimi": "78428e921e099a6e13897799ff031507d1ff8e98f9ce3d36421faac542a39894",
+   "openai": "759375ef83d6a4745a877153246b95897d920a99bcd22b904e6a0cb4d3883c2a"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c82f958684ab8b9b"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 9.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "987b3ccb863456c738abd44de67c384e4a2f89a8069a16fbb19450ab104d3f67",
+   "kimi": "50f02d610d74d402d6b56d2390052e45b3bd1d637b0efa1b4553a1b04b7727ed",
+   "openai": "884ea803d67c17e4bc011323ddd97488bd11fd56a1eff7947fcf2aff5fe0c388"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:d5f1a78097afb9b8"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 8.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nGate should be open now. xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n</scratchpad>\nYour last notes had 125 characters; only the first 80 were kept.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "bca6213b508c247c47c4a699904644ed1709fc5fa7e77e99220cd3fe3fc97b03",
+   "kimi": "fcd8565682092435c10c86e95fa46fc62f87b1442e14c1e4e8ea47d363582a7c",
+   "openai": "22e0e49f451e9942eea09a1b91ab310f1d12813806590ef3152dd1f994934885"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:5612e96a0dc78c1a"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TOGGLE\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 7.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "73f4add9e6e40a1200c41276d50fca70fa01ac1b405b074e23574da7a93db7d0",
+   "kimi": "532abfa321bbaea5dd58ff9a4fd0ed212fc35d3174fd40e629094b30b5c1566e",
+   "openai": "e1ded1e140bdc53bade225678bb6cef0e01cba3e5dc3280a5c12c241188d1a1e"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:99921828f85308c0"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 6.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nThrough the gate.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "8af306a289ad4efcadab91bf96174ded149cc8e93993cc9511b825e9c594abb8",
+   "kimi": "dcc14f076eacc374f139adde54198b5ebcbb355a3d14fff924a6c7506bdd8d65",
+   "openai": "f5a66a3a8da32a789cf7e0d05179212a957c4fa5ecd3de192e4f5ea36472d94e"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:2ceb3f4ea0176774"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c316ca297c966e47"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 5.\nMoves remaining until stall: 29. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\na\nb\nc\nd\ne\nf\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "e57d3d88a3a680f844928feed5cf3fc8ad00d709430687db1cd870820e3fc133",
+   "kimi": "33f7c72e06793fbd6919984b1ae58c7c7372552efc1946eb1fd587938ebe1285",
+   "openai": "e0557f6c4f337d3474352001172fe4fe43acdc188f6f42034cb0370b37b88589"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Recent steps (oldest first):\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:7c40d5520eec2426"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:35d72d24c1a16158"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: TURN_RIGHT\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c316ca297c966e47"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nFINAL_OUTPUT: MOVE_FORWARD\n",
+      "type": "text"
+     },
+     {
+      "image_url": {
+       "url": "pixels:c9f66d131d716b50"
+      },
+      "type": "image_url"
+     },
+     {
+      "text": "Your inventory: empty.\nMoves remaining: 4.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nCorridor east.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "fc6e9bad6261fede35c51762865f26e4055f63e2d2770d662f61862bb95d468f",
+   "kimi": "8d9ccadf819c3480957a5281838a48bfe782354c18e47c57f87bec972589b057",
+   "openai": "3fc515d62914682437853b50097d49701c18386b882142cd446439a17bc09532"
+  }
+ }
+]

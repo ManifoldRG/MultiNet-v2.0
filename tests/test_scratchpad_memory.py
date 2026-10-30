@@ -30,10 +30,12 @@ from interface.scratchpad import (
 from prompting_experiments.prompt_templates import memory as memory_templates
 from prompting_experiments.prompt_templates import system as system_templates
 from scratchpad_test_utils import (
+    ARMS,
     IMAGE_CELL,
     NL_CELL,
     OVERFLOW_CAP,
     REPLIES,
+    SCRATCHPAD_ARMS,
     drive,
     notes,
 )
@@ -45,20 +47,6 @@ OUTPUT_FORMAT = (
     "Output exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>"
 )
 
-ARMS = {
-    "full_context": {},
-    "scratchpad_window": {
-        "context_window": "last_n",
-        "context_n": 3,
-        "memory": "scratchpad_window",
-        "scratchpad_max_chars": OVERFLOW_CAP,
-    },
-    "full_context_scratchpad": {
-        "memory": "full_context_scratchpad",
-        "scratchpad_max_chars": OVERFLOW_CAP,
-    },
-}
-SCRATCHPAD_ARMS = ("scratchpad_window", "full_context_scratchpad")
 
 
 def _runner(arm: str = "full_context_scratchpad", cell: dict = NL_CELL, max_steps: int = 12, **extra):

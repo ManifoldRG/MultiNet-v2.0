@@ -79,6 +79,23 @@ REPLIES = [
 ]
 OVERFLOW_CAP = 80
 
+# Each arm's overrides on the R2 cell; the window is K=3 here so the short
+# scripted episode slides it.
+ARMS = {
+    "full_context": {},
+    "scratchpad_window": {
+        "context_window": "last_n",
+        "context_n": 3,
+        "memory": "scratchpad_window",
+        "scratchpad_max_chars": OVERFLOW_CAP,
+    },
+    "full_context_scratchpad": {
+        "memory": "full_context_scratchpad",
+        "scratchpad_max_chars": OVERFLOW_CAP,
+    },
+}
+SCRATCHPAD_ARMS = ("scratchpad_window", "full_context_scratchpad")
+
 
 def drive(runner, replies=REPLIES, *, usage: dict | None = None) -> tuple[EpisodeStepper, list[list[dict]]]:
     """Run the stepper by hand; return it and every request it sent."""

@@ -1,0 +1,468 @@
+[
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": "You are at (1, 1) facing EAST.\nYour inventory: empty.\nMoves remaining: 12.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "b5184af3595112be5a8d67b70aa72a09d8402ec92c8aeb30d9ac72ca8410ba57",
+   "kimi": "d40a5db8c0ed8706d0ae00b0ff11125401852f529d828f3c23b5323f2c6e0cfa",
+   "openai": "cb6e97ac2d73081393e10ad0ba16cd456f4ff6447cd98dfc3932c0bcbf79d8f9"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 2) facing EAST.\nYour inventory: empty.\nMoves remaining: 11.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nStart. Plan: follow the corridor to the switch.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "f7832817af3bc7ceedf0b5db04f304f013f7c4e5f467c5e333fc9d6c7b4fc03f",
+   "kimi": "bf0530f1d1a37f12eac6b3180b882571fb17d020f0e0241d754c5e698e05a695",
+   "openai": "1fe83b7d5d1b3332ad06d470602c7460d8ea66fbb04cb4238246a4e9e667c77a"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "868c8e2841f080bfe74e046c008c5f149448f656780e813f687f5d7e29fd881a",
+   "kimi": "2985cc8183379a495ecfcd76911c5acec52a4b4e525dd544217b47727c9dd9c9",
+   "openai": "3692e3f970b04f5951ebe2d603289420189432334b34cd0545aa6cd2bb4eaf14"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "e2d1fd410c5a6b0b94e94313c0162e9f45d6c4ace3f35479dde4fe67583021dd",
+   "kimi": "64b713e7064b5fae19ec624c1b49010ae2c318b401ddb3fa1b9fabaaa73751f3",
+   "openai": "0efaaa0c6e62552e50d3a2e5fabeea5097e2b3dfb921394a1000ce364b733a4a"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: TOGGLE\nFeedback: TOGGLED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 9.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "dad223042e688c2b79449840da29e6ce4785d09b66a0f0e0da2dd620fcad22a4",
+   "kimi": "f4a59f438a87c92f878e89f6bb5abe589411f47c57c7c7a01ed2372c98d80ec6",
+   "openai": "de360fa477e4b2f349fec38f8513b8f3c73198cecfdfc8914c1cc4bec383d9f3"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: TOGGLE\nFeedback: TOGGLED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 4) facing EAST.\nYour inventory: empty.\nMoves remaining: 8.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nYour scratchpad:\n<scratchpad>\nGate should be open now. xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n</scratchpad>\nYour last notes had 125 characters; only the first 80 were kept.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "ef48645484c0c1c9da14664e8cff5796757554aa16475dcc81a6c3d0b0e17c3f",
+   "kimi": "18b447f0ce2a5bbbc590c3a83a20b96bf7a04df2f6178132492e0db8b8b59f67",
+   "openai": "b7b323a057e5108b8a8c07f3deb43b936b5e19d9e8455d9b6e0e2864d2236249"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: TOGGLE\nFeedback: TOGGLED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 4), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 5) facing EAST.\nYour inventory: empty.\nMoves remaining: 7.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nYour scratchpad:\n<scratchpad>\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "ad0da9fcb09ced0a4f324e59c8b10a175f85bca95eb77c7a6bfee3db8a25b981",
+   "kimi": "4404ae690bdf87963eeab676a7a5cd7fd83e5e4a63d4e1ef16f4c0c4115b5e18",
+   "openai": "5ba40f7a22802092ef1ee2653a92b233555a6925f79cfc55fd55efac5089b5cd"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: TOGGLE\nFeedback: TOGGLED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 4), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 5), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 6) facing EAST.\nYour inventory: empty.\nMoves remaining: 6.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nYour scratchpad:\n<scratchpad>\nThrough the gate.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "ca229f6845b6f3758d9e12c60425d32e0f911a0560753d262cf78320b5bfed84",
+   "kimi": "e5b2f0a13abf06b4594065a18cb4b906d31148b4923472d9743adb4fb9225be9",
+   "openai": "b38e388cb79191866bf85a465c4af6222419f976500d5eb4ea0d1f702c403c5d"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: TOGGLE\nFeedback: TOGGLED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 4), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 5), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 6), facing EAST\nFINAL_OUTPUT: TURN_RIGHT\nFeedback: TURNED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (1, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 5.\nMoves remaining until stall: 29. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nYour scratchpad:\n<scratchpad>\na\nb\nc\nd\ne\nf\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "3a25e518fba3aafb2bd3fb397bed70810215f7254bc63c2e095f180517e3ed8c",
+   "kimi": "d013e59e7795f22261245d17aa858166706e8ad6dad938af8a8b4d68ccd0a53c",
+   "openai": "31343d5f4dd2ca8c0bb04942fa3a47e330ff7343c22af8d0395e5a43f37d80d2"
+  }
+ },
+ {
+  "messages": [
+   {
+    "content": "Task: Solve the maze by reaching the goal.\nValid actions: TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE.\nScratchpad: write notes between <scratchpad> and </scratchpad> in each reply; they replace your previous notes and are shown to you at the next step (at most 80 characters).\n\nInitial maze (fixed for this episode):\nThe world is a 6 by 6 grid.\nCoordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``: the row number increases going **south** (down); the column number increases going **east** (right). To reach a cell with a larger row number, go south; with a larger column number, go east.\nThe start is at (1, 1).\nThe goal is at (6, 6).\nThe following cells are walls: (2,1), (2,2), (2,3), (2,4), (2,5), (4,2), (4,3), (4,4), (4,5), (4,6), (6,1), (6,2), (6,3), (6,4), (6,5).\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).",
+    "role": "system"
+   },
+   {
+    "content": [
+     {
+      "text": "Full history (oldest first):",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: TOGGLE\nFeedback: TOGGLED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 3), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 4), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\nPosition before: (1, 5), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 6), facing EAST\nFINAL_OUTPUT: TURN_RIGHT\nFeedback: TURNED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "cache_breakpoint": true,
+      "text": "\nPosition before: (1, 6), facing SOUTH\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED",
+      "text_continues": true,
+      "type": "text"
+     },
+     {
+      "text": "\n\nYou are at (2, 6) facing SOUTH.\nYour inventory: empty.\nMoves remaining: 4.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently on).\nThere is a gate (g1) at (3,3). It is currently open (initially closed).\n\nYour scratchpad:\n<scratchpad>\nCorridor east.\n</scratchpad>\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "type": "text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "provider_body_sha256": {
+   "claude": "994db57025974c649e9bbdb6eb4420e5bc822144ea320028ffe97af6e801a6ff",
+   "kimi": "2a2e436801ad9d3e7f8f57e2791e2dd05ad7723f9673a168a05c132905d1aa87",
+   "openai": "f78f04be0ac3133b259b3730218965201feeacb1a8c62efd95782c7984692fca"
+  }
+ }
+]
