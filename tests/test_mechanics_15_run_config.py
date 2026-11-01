@@ -144,7 +144,7 @@ def test_fog_run_is_the_2d_astra_cell_under_fog_on_four_mazes():
     changed = ("tasks", "spend_cap_usd")
     assert {k: v for k, v in astra.items() if k not in changed} == {
         k: v for k, v in base.items() if k not in changed}
-    assert astra["spend_cap_usd"] == 25
+    assert astra["spend_cap_usd"] == 40
     rs = RenderSettings.from_run_config(fog)
     assert (rs.backend, rs.observability, rs.view_size) == ("minigrid", "fog_of_war", 7)
     assert rs.label == f"minigrid_fog_of_war_v7_r{FOG_RENDER_VERSION}"
