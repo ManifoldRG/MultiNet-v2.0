@@ -79,7 +79,7 @@ def test_astra_smoke_config_differs_only_in_its_spend_cap(monkeypatch):
     assert _SMOKE["render"] == _HEX["render"] and _SMOKE["manifest"] == _HEX["manifest"]
     (astra,) = _SMOKE["models"].values()
     assert {**astra, "spend_cap_usd": _R2["models"]["gpt6_astra"]["spend_cap_usd"]} == _R2["models"]["gpt6_astra"]
-    assert astra["spend_cap_usd"] == 100
+    assert astra["spend_cap_usd"] == 45
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
     agent, label = _build_agent_from_spec("gpt6_astra", astra)
-    assert label == "gpt-6-astra" and agent.config.spend_cap_usd == 100
+    assert label == "gpt-6-astra" and agent.config.spend_cap_usd == 45
