@@ -339,7 +339,11 @@ def _extract_mechanism_events(
         gate.id: getattr(gate, "color", "grey") for gate in task_spec.mechanisms.gates
     } if task_spec else {}
     for index, rec in enumerate(steps):
-        mechanic_event = _mechanic_summary_event(rec.get("mechanic"))
+        tiling = (
+            task_spec.maze.tiling if task_spec
+            else (rec.get("state_after") or {}).get("tiling", "square")
+        )
+        mechanic_event = _mechanic_summary_event(rec.get("mechanic"), tiling)
         if mechanic_event is not None:
             events.append((index, mechanic_event))
             continue
@@ -428,7 +432,9 @@ def _extract_mechanism_events(
     return events
 
 
-def _mechanic_summary_event(mechanic: dict[str, Any] | None) -> str | None:
+def _mechanic_summary_event(
+    mechanic: dict[str, Any] | None, tiling: str = "square"
+) -> str | None:
     """Summary text for a step the world model labelled, else None.
 
     Swallowed ``frozen`` steps and ``rotating`` landings add nothing: the
@@ -454,7 +460,7 @@ def _mechanic_summary_event(mechanic: dict[str, Any] | None) -> str | None:
     if kind == "carried":
         row, col = row_col(mechanic["from_xy"])
         return observation_templates.TEXT_SUMMARY_CARRIED.format(
-            row=row, col=col, direction=direction_name(int(mechanic["direction"]))
+            row=row, col=col, direction=direction_name(int(mechanic["direction"]), tiling)
         )
     return None
 

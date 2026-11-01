@@ -63,10 +63,12 @@ def _mechanic_outcome(
     base_type: str,
     level: Literal["minimal", "standard", "causal"],
     mechanic: dict,
+    tiling: str = "square",
 ) -> tuple[str, str, str] | None:
     """(event_type, message, minimal text) for a step the world model labelled, else None.
 
-    ``base_type`` is the mechanic-blind event type of the same step.
+    ``base_type`` is the mechanic-blind event type of the same step; ``tiling``
+    names the directions a turntable points.
     """
     if base_type == "DONE":
         # Reaching the goal outranks the tile that delivered you there.
@@ -98,14 +100,14 @@ def _mechanic_outcome(
             f"TELEPORTED ({row},{col})",
         )
     if kind == "carried":
-        direction = direction_name(int(mechanic["direction"]))
+        direction = direction_name(int(mechanic["direction"]), tiling)
         return (
             "CARRIED",
             feedback_templates.ROTATING_CARRIED.format(direction=direction),
             f"CARRIED {direction}",
         )
     if kind == "rotating":
-        direction = direction_name(int(mechanic["pointing"]))
+        direction = direction_name(int(mechanic["pointing"]), tiling)
         template = (
             feedback_templates.ROTATING_STAYED
             if mechanic["stayed"]
@@ -272,7 +274,7 @@ def format_step_feedback(
     )
     minimal_text = event_type
     if mechanic is not None:
-        relabelled = _mechanic_outcome(action, event_type, level, mechanic)
+        relabelled = _mechanic_outcome(action, event_type, level, mechanic, task_spec.maze.tiling)
         if relabelled is not None:
             event_type, event_message, minimal_text = relabelled
     if level == "minimal":

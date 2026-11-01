@@ -1,0 +1,116 @@
+{
+ "description": "Mechanics-15 on hex: five of the 15 ogbench mechanics mazes (one per mechanic, and M10 with all four) converted to pointy-top hexes by scripts/make_hex_mechanics.py, same walls, chain and mechanic cells. Run with a multigrid render block (run_config.mechanics_15_hex_2d.json); the minigrid and 3D backends refuse hex mazes.",
+ "selection": {
+  "source_set": "manifest.mechanics_15.json (ogbench M7-M10)",
+  "maze_count": 5,
+  "conversion": "odd-r offset: square cell (x, y) is hex column x of row y",
+  "optimal_steps": "executable-action BFS on the hex maze (gridworld.baselines.plan_bfs_path), the runtime's 3x step-cap base",
+  "square_optimal_steps": "the same on the square original",
+  "checks": "planner-solvable, BFS within R2's 49-161 range, and no key or switch the square maze needs is bypassed"
+ },
+ "tasks": [
+  {
+   "task_id": "mech15hex_M7_18x18_dense_kr_sg_kb_portals_0",
+   "experiment": "mechanics_15_hex",
+   "condition": "M",
+   "variant": "hex_18x18_dense_kr_sg_kb_portals_0",
+   "source": "mazes/mechanics_hex/hex_18x18_dense_kr_sg_kb_portals_0.json",
+   "square_task_id": "mech15_M7_18x18_dense_kr_sg_kb_portals_0",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 1,
+   "optimal_steps": 100,
+   "square_optimal_steps": 90,
+   "new_mechanisms": [
+    "portals"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18",
+   "tiling": "hex"
+  },
+  {
+   "task_id": "mech15hex_M7_18x18_dense_kr_sg_kb_death_0",
+   "experiment": "mechanics_15_hex",
+   "condition": "M",
+   "variant": "hex_18x18_dense_kr_sg_kb_death_0",
+   "source": "mazes/mechanics_hex/hex_18x18_dense_kr_sg_kb_death_0.json",
+   "square_task_id": "mech15_M7_18x18_dense_kr_sg_kb_death_0",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 2,
+   "optimal_steps": 130,
+   "square_optimal_steps": 121,
+   "new_mechanisms": [
+    "death"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18",
+   "tiling": "hex"
+  },
+  {
+   "task_id": "mech15hex_M7_18x18_dense_kr_sg_kb_rotating_0",
+   "experiment": "mechanics_15_hex",
+   "condition": "M",
+   "variant": "hex_18x18_dense_kr_sg_kb_rotating_0",
+   "source": "mazes/mechanics_hex/hex_18x18_dense_kr_sg_kb_rotating_0.json",
+   "square_task_id": "mech15_M7_18x18_dense_kr_sg_kb_rotating_0",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 3,
+   "optimal_steps": 134,
+   "square_optimal_steps": 128,
+   "new_mechanisms": [
+    "rotating"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18",
+   "tiling": "hex"
+  },
+  {
+   "task_id": "mech15hex_M7_18x18_dense_kr_sg_kb_frozen_0",
+   "experiment": "mechanics_15_hex",
+   "condition": "M",
+   "variant": "hex_18x18_dense_kr_sg_kb_frozen_0",
+   "source": "mazes/mechanics_hex/hex_18x18_dense_kr_sg_kb_frozen_0.json",
+   "square_task_id": "mech15_M7_18x18_dense_kr_sg_kb_frozen_0",
+   "maze_family": "M",
+   "maze_category": "M7",
+   "rank": 4,
+   "optimal_steps": 140,
+   "square_optimal_steps": 131,
+   "new_mechanisms": [
+    "frozen"
+   ],
+   "new_mechanism_count": 1,
+   "topology": "dense",
+   "grid": "18x18",
+   "tiling": "hex"
+  },
+  {
+   "task_id": "mech15hex_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+   "experiment": "mechanics_15_hex",
+   "condition": "M",
+   "variant": "hex_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+   "source": "mazes/mechanics_hex/hex_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0.json",
+   "square_task_id": "mech15_M10_18x18_dense_kr_sg_kb_portals_death_rotating_frozen_0",
+   "maze_family": "M",
+   "maze_category": "M10",
+   "rank": 5,
+   "optimal_steps": 83,
+   "square_optimal_steps": 75,
+   "new_mechanisms": [
+    "portals",
+    "death",
+    "rotating",
+    "frozen"
+   ],
+   "new_mechanism_count": 4,
+   "topology": "dense",
+   "grid": "18x18",
+   "tiling": "hex"
+  }
+ ]
+}

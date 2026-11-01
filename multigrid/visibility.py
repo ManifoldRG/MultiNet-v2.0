@@ -101,7 +101,7 @@ def _facing_to_angle(facing: int, tiling: "Tiling") -> float:
     This matches the rendering coordinate system.
 
     For square tilings: 0=N(-pi/2), 1=E(0), 2=S(pi/2), 3=W(pi)
-    For hex tilings: 0=N(-pi/2), then 60-degree increments clockwise
+    For hex tilings: 0=E(0), then 60-degree increments clockwise
     """
     num_dirs = len(tiling.directions)
     tiling_name = tiling.name
@@ -111,8 +111,8 @@ def _facing_to_angle(facing: int, tiling: "Tiling") -> float:
         angle_map = {0: -math.pi / 2, 1: 0.0, 2: math.pi / 2, 3: math.pi}
         return angle_map.get(facing, 0.0)
     elif tiling_name == "hex":
-        # Hex: 0=N, then 60-degree clockwise increments
-        return -math.pi / 2 + facing * (math.pi / 3)
+        # Hex: 0=E, then 60-degree clockwise increments
+        return facing * (math.pi / 3)
     else:
         # Generic: evenly spaced, starting from up
         return -math.pi / 2 + facing * (2 * math.pi / num_dirs)

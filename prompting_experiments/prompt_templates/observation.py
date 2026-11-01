@@ -38,6 +38,22 @@ COORDINATE_EXPLANATION = (
     " going **east** (right). To reach a cell with a larger row number, go south;"
     " with a larger column number, go east."
 )
+# Hex mazes (spec maze.tiling "hex"): pointy-top cells in the odd-r layout,
+# so odd rows sit half a cell east and a cell's diagonal neighbours depend on
+# its row's parity (gridworld/tiling.py).
+HEX_WORLD_SIZE_LINE = "The world is a hexagonal grid of {rows} rows and {cols} columns."
+HEX_COORDINATE_EXPLANATION = (
+    "Coordinates are ``(row, column)`` from the **top-left** corner ``(1, 1)``:"
+    " the row number increases going **south** (down); the column number increases"
+    " going **east** (right). Cells are hexagons with flat east and west sides, and"
+    " every odd-numbered row sits half a cell further east than the even-numbered rows."
+    " A cell has six neighbours: **east** ``(row, column + 1)`` and **west**"
+    " ``(row, column - 1)``; from an odd row, **northeast** ``(row - 1, column + 1)``,"
+    " **northwest** ``(row - 1, column)``, **southeast** ``(row + 1, column + 1)`` and"
+    " **southwest** ``(row + 1, column)``; from an even row, **northeast**"
+    " ``(row - 1, column)``, **northwest** ``(row - 1, column - 1)``, **southeast**"
+    " ``(row + 1, column)`` and **southwest** ``(row + 1, column - 1)``."
+)
 START_LINE = "The start is at {start}."
 GOAL_LINE = "The goal is at {goal}."
 WALLS_LINE = "The following cells are walls: {walls}."

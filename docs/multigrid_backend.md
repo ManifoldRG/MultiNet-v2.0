@@ -12,6 +12,15 @@ The MultiGrid Backend is an experimental implementation of the `AbstractGridBack
 
 **Target Audience**: Researchers investigating how agents generalize across different spatial topologies.
 
+> **Square and hex now run the R1 rulebook** (see [multigrid_hex_port.md](multigrid_hex_port.md)).
+> A task spec declares its tiling (`maze.tiling`, square by default); `MultiGridBackend()` takes it
+> from the spec and refuses a spec of another tiling. Square and hex tasks step through
+> `gridworld.world_model` exactly as MiniGrid does (all PR #57 tiles included) and render with
+> `gridworld.render2d` in the MiniGrid look; hex directions are east, southeast, southwest, west,
+> northwest, northeast (0-5, clockwise). The sections below on native action semantics
+> (`execute_action`, facing-cell pickup, teleporter cooldowns) describe the triangle, 3464 and 488
+> tilings, which keep them.
+
 ---
 
 ## Architecture

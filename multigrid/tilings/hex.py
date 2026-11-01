@@ -40,37 +40,38 @@ class OffsetCoord:
     row: int
 
 
-# Direction labels (clockwise from north)
-DIRECTIONS = ["north", "northeast", "southeast", "south", "southwest", "northwest"]
+# Direction labels, clockwise on screen from east. Pointy-top hexes have
+# flat east and west sides and no north or south neighbour. Index i matches
+# gridworld.tiling's hex direction i (0 = east, TURN_RIGHT adds one).
+DIRECTIONS = ["east", "southeast", "southwest", "west", "northwest", "northeast"]
 
 DIR_INDEX = {
-    "north": 0,
-    "northeast": 1,
-    "southeast": 2,
-    "south": 3,
-    "southwest": 4,
-    "northwest": 5
+    "east": 0,
+    "southeast": 1,
+    "southwest": 2,
+    "west": 3,
+    "northwest": 4,
+    "northeast": 5
 }
 
-# Direction vectors in axial coordinates
-# Pointy-top hex, starting from north (up), going clockwise
+# Direction vectors in axial coordinates (r grows southward)
 DIR_VECTORS_AXIAL = {
-    "north":     AxialCoord(0, -1),
-    "northeast": AxialCoord(1, -1),
-    "southeast": AxialCoord(1, 0),
-    "south":     AxialCoord(0, 1),
+    "east":      AxialCoord(1, 0),
+    "southeast": AxialCoord(0, 1),
     "southwest": AxialCoord(-1, 1),
-    "northwest": AxialCoord(-1, 0)
+    "west":      AxialCoord(-1, 0),
+    "northwest": AxialCoord(0, -1),
+    "northeast": AxialCoord(1, -1)
 }
 
 # Opposite directions
 OPPOSITE = {
-    "north": "south",
-    "northeast": "southwest",
+    "east": "west",
     "southeast": "northwest",
-    "south": "north",
     "southwest": "northeast",
-    "northwest": "southeast"
+    "west": "east",
+    "northwest": "southeast",
+    "northeast": "southwest"
 }
 
 

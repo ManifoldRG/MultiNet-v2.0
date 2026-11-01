@@ -31,11 +31,37 @@ if TYPE_CHECKING:
 ObservationTextFormat = Literal["coords", "json", "ascii"]
 _FACING = {"NORTH": "^", "EAST": ">", "SOUTH": "v", "WEST": "<"}
 _ROTATING = {"NORTH": "^^", "EAST": ">>", "SOUTH": "vv", "WEST": "<<"}
+# Hex has no arrow glyph per direction: the agent is "A" (the legend names its
+# facing) and a turntable shows its arrow's compass abbreviation.
+_HEX_ROTATING = {
+    "EAST": "E", "SOUTHEAST": "SE", "SOUTHWEST": "SW",
+    "WEST": "W", "NORTHWEST": "NW", "NORTHEAST": "NE",
+}
 _ASCII_MAP_HEADER = (
     "Map. Every cell is a two-character token and tokens are separated by a"
     " space, so row N is the Nth line and column N is the Nth token on it."
     " No border is drawn: the first token of the first line is cell (1,1)."
 )
+_HEX_ASCII_MAP_HEADER = (
+    _ASCII_MAP_HEADER
+    + " The cells are hexagons: odd-numbered lines are indented to sit half a cell"
+    " further east, as the odd rows do."
+)
+_HEX_ROW_INDENT = "  "
+
+
+def _world_lines(task_spec: TaskSpecification) -> tuple[str, str]:
+    """(world size line, coordinate explanation) for the task's tiling."""
+    rows, cols = maze_rows_cols(task_spec)
+    if task_spec.maze.tiling == "hex":
+        return (
+            observation_templates.HEX_WORLD_SIZE_LINE.format(rows=rows, cols=cols),
+            observation_templates.HEX_COORDINATE_EXPLANATION,
+        )
+    return (
+        observation_templates.WORLD_SIZE_LINE.format(rows=rows, cols=cols),
+        observation_templates.COORDINATE_EXPLANATION,
+    )
 
 
 #TODO: Move to utils.py
@@ -64,14 +90,14 @@ def rgb_to_image_block(rgb: np.ndarray) -> dict:
 
 
 def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
-    rows, cols = maze_rows_cols(task_spec)
     walls = wall_cells(task_spec)
     wall_str = ", ".join(f"({r},{c})" for r, c in sorted(walls)) or "none"
     start = to_row_col(task_spec.maze.start)
     goal = goal_row_col(task_spec)
+    world_line, coordinates = _world_lines(task_spec)
     return [
-        observation_templates.WORLD_SIZE_LINE.format(rows=rows, cols=cols),
-        observation_templates.COORDINATE_EXPLANATION,
+        world_line,
+        coordinates,
         observation_templates.START_LINE.format(start=start),
         observation_templates.GOAL_LINE.format(goal=goal),
         observation_templates.WALLS_LINE.format(walls=wall_str)
@@ -281,6 +307,7 @@ def _ascii_grid(
     include_facing: bool,
 ) -> tuple[list[str], list[tuple[str, str]], tuple[str, str] | None]:
     rows, cols = maze_rows_cols(task_spec)
+    hexed = task_spec.maze.tiling == "hex"
     walls = wall_cells(task_spec)
     gates, switches = compact_ids(task_spec)
     open_doors = state.open_doors if state else set()
@@ -349,7 +376,8 @@ def _ascii_grid(
     for cell in task_spec.mechanisms.rotating_tiles:
         row, col = to_row_col(cell)
         pointing = rotating_pointing(task_spec, state, row, col)
-        place(row, col, _ROTATING[pointing], f"rotating tile pointing {pointing}")
+        token = _HEX_ROTATING[pointing] if hexed else _ROTATING[pointing]
+        place(row, col, token, f"rotating tile pointing {pointing}")
 
     for teleporter in task_spec.mechanisms.teleporters:
         color = teleporter.color
@@ -358,7 +386,7 @@ def _ascii_grid(
             row, col = to_row_col(end)
             place(row, col, token, f"{color} teleporter")
 
-    agent_token = _FACING[facing] if include_facing else "A"
+    agent_token = _FACING[facing] if include_facing and not hexed else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"
     under = cells.get(pos)
     cells[pos] = (agent_token, agent_desc)
@@ -376,7 +404,8 @@ def _ascii_grid(
             else:
                 line.append(".")
                 used_open = True
-        grid.append(" ".join(t.ljust(2) for t in line).rstrip())
+        indent = _HEX_ROW_INDENT if hexed and row % 2 else ""
+        grid.append(indent + " ".join(t.ljust(2) for t in line).rstrip())
     if used_wall:
         legend.append(("#", "wall"))
     if used_open:
@@ -433,8 +462,9 @@ def _ascii_status(
 
 def _ascii_block(task_spec, state, include_facing: bool, remaining=None, stall_remaining=None) -> str:
     grid, legend, under = _ascii_grid(task_spec, state, include_facing)
+    header = _HEX_ASCII_MAP_HEADER if task_spec.maze.tiling == "hex" else _ASCII_MAP_HEADER
     return "\n".join([
-        _ASCII_MAP_HEADER, "", *grid, "",
+        header, "", *grid, "",
         "Legend:",
         *(f"  {token} = {desc}" for token, desc in legend),
         "", *_ascii_status(
@@ -451,9 +481,12 @@ def render_initial_maze_text(
 ) -> str:
     if observation_text_format == "json":
         rows, cols = maze_rows_cols(task_spec)
+        world = {"rows": rows, "cols": cols}
+        if task_spec.maze.tiling != "square":
+            world["tiling"] = task_spec.maze.tiling
         return _dumps({
-            "world": {"rows": rows, "cols": cols},
-            "coordinates": observation_templates.COORDINATE_EXPLANATION,
+            "world": world,
+            "coordinates": _world_lines(task_spec)[1],
             "start": list(to_row_col(task_spec.maze.start)),
             "goal": list(goal_row_col(task_spec)),
             "walls": [list(c) for c in sorted(wall_cells(task_spec))],
@@ -461,7 +494,7 @@ def render_initial_maze_text(
         })
     if observation_text_format == "ascii":
         return (
-            observation_templates.COORDINATE_EXPLANATION
+            _world_lines(task_spec)[1]
             + "\n\n"
             + _ascii_block(task_spec, None, include_facing)
         )

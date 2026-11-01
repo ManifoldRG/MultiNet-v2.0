@@ -385,6 +385,7 @@ def test_factory_uses_experiment_cache_flag_unless_model_overrides(monkeypatch):
     monkeypatch.setattr(pipeline, "check_run_config_expectations", lambda *_args: None)
     monkeypatch.setattr(pipeline, "load_manifest", lambda *_args: [])
     monkeypatch.setattr(pipeline, "resolve_task_rows", lambda *_args: [{"task_id": "task"}])
+    monkeypatch.setattr(pipeline, "check_tasks_runnable", lambda *_args: None)
     monkeypatch.setattr(pipeline, "_score_suite", lambda *_args, **_kwargs: ({}, 0.0))
     constructed_flags = []
 

@@ -5,8 +5,10 @@ Regression tests for previously-fixed bugs in MultiGrid.
 
 E.7.1: Hex odd-row neighbor symmetry
 E.7.2: Triangle facing validity after movement
+E.7.3: Triangle cross-hex neighbours share an edge
 """
 
+import math
 import sys
 import os
 
@@ -92,3 +94,32 @@ class TestRegression:
                 f"After action {action.name} (step {i+1}), facing={facing} "
                 f"is outside valid range [0, {num_directions})"
             )
+
+    def test_triangle_cross_hex_neighbour_shares_the_outer_edge(self):
+        """A triangle's edge2 neighbour is the triangle across its outer edge.
+
+        Triangle i spans the hex centre and vertices i and i+1 (vertex 0 at
+        the top, clockwise), as the renderer draws it; its edge2 neighbour must
+        have the same two vertices. The map used to follow the hex direction
+        list's order instead and linked triangles that do not touch.
+        """
+        tiling = TriangleTiling()
+        tiling.generate_graph(6, 6)
+
+        def outer_edge(cell):
+            hx, hy = cell.tiling_coords["hex_center"]
+            size = cell.tiling_coords["hex_size"]
+            i = cell.tiling_coords["tri_idx"]
+            angles = (math.pi / 2 - k * math.pi / 3 for k in (i, i + 1))
+            return [(hx + size * math.cos(a), hy - size * math.sin(a)) for a in angles]
+
+        links = 0
+        for cell in tiling.cells.values():
+            neighbour_id = cell.neighbors.get("edge2")
+            if neighbour_id is None:
+                continue
+            links += 1
+            ours, theirs = outer_edge(cell), outer_edge(tiling.cells[neighbour_id])
+            for p in ours:
+                assert min(math.dist(p, q) for q in theirs) < 1e-9, (cell.id, neighbour_id)
+        assert links > 0

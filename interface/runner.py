@@ -149,6 +149,7 @@ def build_runner(
     task_spec: TaskSpecification,
 ) -> ExperimentRunner:
     space = config.action_space
+    action_space_mod.check_tiling(space, task_spec.maze.tiling)
     return ExperimentRunner(
         backend=backend,
         task_spec=task_spec,

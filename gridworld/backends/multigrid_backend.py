@@ -7,11 +7,19 @@ Adapter for the custom MultiGrid system (`multigrid/`) that implements
 the AbstractGridBackend interface. This allows evaluation of custom tilings
 (square, hex, triangle) using the same pipeline as MiniGrid.
 
+Square and hex tasks step through the R1 rulebook (gridworld.world_model),
+exactly as CustomMiniGridEnv.step does: read a PlannerState off the multigrid
+WorldState, apply the action, write the result back. Square through this
+backend is step-for-step identical to MiniGridBackend, and a hex task (spec
+``maze.tiling: "hex"``) gets the same mechanics on six directions. Frames come
+from gridworld.render2d in the MiniGrid look. Triangle, 3464 and 488 keep the
+native multigrid ``execute_action`` semantics (legacy, experimental).
+
 Usage:
     from gridworld.backends import MultiGridBackend
 
-    # Use with triangle tiling
-    backend = MultiGridBackend(tiling="triangle", render_mode="rgb_array")
+    # Tiling taken from the task spec (square or hex)
+    backend = MultiGridBackend(render_mode="rgb_array")
     backend.configure(task_spec)
     obs, state, info = backend.reset(seed=42)
     obs, reward, terminated, truncated, state, info = backend.step(action)
@@ -24,12 +32,30 @@ from typing import Optional
 import numpy as np
 
 from .base import AbstractGridBackend, GridState
+from ..actions import MiniGridActions
 from ..task_spec import TaskSpecification
+from ..tiling import DIRECTION_NAMES
+from ..world_model import PlannerState, TaskPlanningContext, apply, classify_mechanic, successors
 
 # Add parent directory to path for multigrid imports
 _multigrid_path = Path(__file__).parent.parent.parent / "multigrid"
 if str(_multigrid_path.parent) not in sys.path:
     sys.path.insert(0, str(_multigrid_path.parent))
+
+# Tilings the R1 rulebook covers: their tasks are TaskSpecification-native.
+RULEBOOK_TILINGS = ("square", "hex")
+
+
+def _rulebook_only_mechanisms(spec: TaskSpecification) -> list[str]:
+    """PR #57 tiles that only the rulebook gives meaning to."""
+    found = []
+    if spec.mechanisms.kill_cells:
+        found.append("death_portals")
+    if spec.mechanisms.frozen_tiles:
+        found.append("frozen_tiles")
+    if spec.mechanisms.rotating_tiles:
+        found.append("rotating_tiles")
+    return found
 
 
 class MultiGridBackend(AbstractGridBackend):
@@ -39,29 +65,47 @@ class MultiGridBackend(AbstractGridBackend):
     Supports exotic tilings: square, hex, triangle.
 
     Args:
-        tiling: Tiling type ("square", "hex", "triangle")
+        tiling: Tiling type ("square", "hex", "triangle", "3464", "488"), or
+            None to take the task spec's ``maze.tiling``. A square or hex
+            backend only accepts a spec of the same tiling.
         render_mode: Render mode ("rgb_array" or "human")
-        render_width: Width of rendered image (default 640)
-        render_height: Height of rendered image (default 640)
+        render_width: Width of rendered image (default 640, legacy tilings)
+        render_height: Height of rendered image (default 640, legacy tilings)
     """
 
     def __init__(
         self,
-        tiling: str = "square",
+        tiling: Optional[str] = None,
         render_mode: str = "rgb_array",
         render_width: int = 640,
         render_height: int = 640,
     ):
         super().__init__()
-        self.tiling_type = tiling
+        self.requested_tiling = tiling
+        self.tiling_type = tiling or "square"
         self.render_mode = render_mode
         self.render_width = render_width
         self.render_height = render_height
+        # Same default as MiniGridBackend: DROP is a legal action.
+        self.drop_available = True
 
         # Will be initialized on configure()
         self.env = None
         self._step_count = 0
         self._max_steps = 100
+
+        # Rulebook mode (square/hex) only
+        self._planning_ctx: Optional[TaskPlanningContext] = None
+        self._frame_renderer = None
+        self._key_objects: dict = {}
+        self._cell_by_xy: dict[tuple[int, int], str] = {}
+        self._xy_by_cell: dict[str, tuple[int, int]] = {}
+        self._native_facing: tuple[int, ...] = ()
+
+    @property
+    def uses_rulebook(self) -> bool:
+        """True when steps go through gridworld.world_model (square/hex)."""
+        return self._planning_ctx is not None
 
     def configure(self, task_spec: TaskSpecification) -> None:
         """
@@ -72,7 +116,31 @@ class MultiGridBackend(AbstractGridBackend):
 
         Args:
             task_spec: The task specification defining the puzzle
+
+        Raises:
+            ValueError: If the spec's tiling does not match the backend's, or
+                a legacy tiling meets a spec only the rulebook can run
         """
+        tiling = self.requested_tiling or task_spec.maze.tiling
+        if tiling in RULEBOOK_TILINGS:
+            if task_spec.maze.tiling != tiling:
+                raise ValueError(
+                    f"Task {task_spec.task_id!r} declares a {task_spec.maze.tiling} tiling "
+                    f"but this backend draws {tiling}; cells would not connect as the "
+                    "planner assumes"
+                )
+            is_valid, errors = task_spec.validate()
+            if not is_valid:
+                raise ValueError(f"Invalid task specification: {'; '.join(errors)}")
+        else:
+            needs_rulebook = _rulebook_only_mechanisms(task_spec)
+            if task_spec.maze.tiling != "square" or needs_rulebook:
+                raise ValueError(
+                    f"The {tiling} tiling runs multigrid's native rules, which have no "
+                    f"{task_spec.maze.tiling} cells or {', '.join(needs_rulebook) or 'PR #57 tiles'}; "
+                    f"run task {task_spec.task_id!r} on a {list(RULEBOOK_TILINGS)} backend"
+                )
+        self.tiling_type = tiling
         self.task_spec = task_spec
 
         # Convert TaskSpecification to multigrid task_spec dict
@@ -94,6 +162,17 @@ class MultiGridBackend(AbstractGridBackend):
             obs_radius=view_size // 2,
             observability_mode=obs_mode,
         )
+
+        if tiling in RULEBOOK_TILINGS:
+            from ..render2d import TilingFrameRenderer
+
+            self._planning_ctx = TaskPlanningContext(task_spec, drop_available=self.drop_available)
+            self._frame_renderer = TilingFrameRenderer(task_spec)
+            names = [name.lower() for name in DIRECTION_NAMES[tiling]]
+            self._native_facing = tuple(self.env.tiling.directions.index(name) for name in names)
+        else:
+            self._planning_ctx = None
+            self._frame_renderer = None
 
         self._max_steps = task_spec.max_steps
         self._configured = True
@@ -235,16 +314,40 @@ class MultiGridBackend(AbstractGridBackend):
             objects.append({
                 "id": a_id,
                 "type": "teleporter",
-                "color": "purple",
+                "color": teleporter.color,
                 "position": canonical_pos(teleporter.position_a.x, teleporter.position_a.y),
                 "linked_to": b_id,
             })
             objects.append({
                 "id": b_id,
                 "type": "teleporter",
-                "color": "purple",
+                "color": teleporter.color,
                 "position": canonical_pos(teleporter.position_b.x, teleporter.position_b.y),
                 "linked_to": a_id if teleporter.bidirectional else None,
+            })
+
+        # PR #57 tiles: storage for the rulebook (configure() keeps them off
+        # the legacy tilings, whose native rules would ignore them).
+        for i, cell in enumerate(spec.mechanisms.kill_cells):
+            objects.append({
+                "id": f"death_{i}",
+                "type": "death",
+                "position": canonical_pos(cell.x, cell.y),
+            })
+        for i, cell in enumerate(spec.mechanisms.frozen_tiles):
+            objects.append({
+                "id": f"frozen_{i}",
+                "type": "frozen",
+                "position": canonical_pos(cell.x, cell.y),
+            })
+        for i, (cell, direction) in enumerate(zip(
+            spec.mechanisms.rotating_tiles, spec.mechanisms.rotating_initial_directions
+        )):
+            objects.append({
+                "id": f"rotating_{i}",
+                "type": "rotating",
+                "position": canonical_pos(cell.x, cell.y),
+                "direction": direction,
             })
 
         goal_spec = {}
@@ -284,7 +387,9 @@ class MultiGridBackend(AbstractGridBackend):
             "scene": {
                 "agent": {
                     "position": canonical_pos(spec.maze.start.x, spec.maze.start.y),
-                    "facing": 0  # Default direction (right)
+                    # Native index 0 (north on square); reset() turns a
+                    # rulebook task east, as MiniGrid starts.
+                    "facing": 0
                 },
                 "objects": objects,
             },
@@ -317,6 +422,22 @@ class MultiGridBackend(AbstractGridBackend):
         obs, info = self.env.reset(seed=seed)
         self._step_count = 0
 
+        if self.uses_rulebook:
+            tiling = self.env.tiling
+            self._xy_by_cell = {cell_id: (cell.col, cell.row) for cell_id, cell in tiling.cells.items()}
+            self._cell_by_xy = {xy: cell_id for cell_id, xy in self._xy_by_cell.items()}
+            self._key_objects = {
+                obj.id: obj for obj in self.env.state.objects.values() if obj.obj_type == "key"
+            }
+            # The rulebook's start state is authoritative (facing east, gates
+            # opened by initially-on switches, one-shot switches spent), so
+            # visibility starts over from it.
+            self._write_planner_state(self._planning_ctx.initial_state())
+            self.env.state.explored_cells = set()
+            self.env.state.update_visibility()
+            obs = self.render()
+            info = {}  # as MiniGridBackend.reset under full observability
+
         state = self._build_grid_state()
 
         return obs, state, info
@@ -325,14 +446,9 @@ class MultiGridBackend(AbstractGridBackend):
         """
         Execute one action in the environment.
 
-        This method provides the bridge between the standard MiniGrid action space
-        (used for consistency across backends) and the MultiGrid-specific action
-        indices. The mapping ensures that the same agent policy can work with both
-        backends without modification.
-
-        Action Space Translation:
-        MiniGrid uses a 7-action discrete space (0-6), while MultiGrid has a
-        different internal action enumeration. This method translates between them:
+        Square and hex tasks apply the R1 rulebook (see ``_rulebook_step``).
+        The legacy tilings translate MiniGrid actions onto multigrid's native
+        action enumeration:
 
         MiniGrid Action → MultiGrid Action
         0: turn_left     → 2: TURN_LEFT
@@ -342,13 +458,6 @@ class MultiGridBackend(AbstractGridBackend):
         4: drop          → 5: DROP
         5: toggle        → 6: TOGGLE
         6: done/wait     → 8: WAIT
-
-        Design Rationale:
-        The action mapping allows evaluation code to use standard MiniGrid action
-        indices regardless of backend. This is critical for:
-        - Running the same agent policy on different backends
-        - Comparing results across backends
-        - Using pre-trained models that expect MiniGrid actions
 
         Args:
             action: The action to execute (0-6, standard MiniGrid action space)
@@ -366,6 +475,9 @@ class MultiGridBackend(AbstractGridBackend):
         """
         if not self._configured or self.env is None:
             raise RuntimeError("Backend must be configured before step")
+
+        if self.uses_rulebook:
+            return self._rulebook_step(action)
 
         # Map MiniGrid action to MultiGrid action
         # This translation ensures compatibility between backends
@@ -398,6 +510,147 @@ class MultiGridBackend(AbstractGridBackend):
 
         return obs, reward, terminated, truncated, state, info
 
+    def _rulebook_step(self, action: int) -> tuple[np.ndarray, float, bool, bool, GridState, dict]:
+        """CustomMiniGridEnv.step on the multigrid WorldState: same rulebook,
+        same invalid-action and mechanic info, same reward and termination."""
+        action = int(action)
+        ctx = self._planning_ctx
+        before = self._read_planner_state()
+        after = apply(ctx, before, action)
+        transition = next((t for t in successors(ctx, before) if t.action == action), None)
+        self._write_planner_state(after)
+
+        info: dict = {}
+        if transition is None and action != int(MiniGridActions.DONE):
+            # Turns are always legal. Everything else that apply treats as a
+            # no-op is an invalid action (bump wall, empty pickup, gated DROP).
+            if action not in (int(MiniGridActions.TURN_LEFT), int(MiniGridActions.TURN_RIGHT)):
+                info["invalid_action"] = True
+        if transition is not None:
+            mechanic = classify_mechanic(ctx, before, action, transition.label, after)
+            if mechanic is not None:
+                info["mechanic"] = mechanic
+
+        self._step_count += 1
+        truncated = self._step_count >= self._max_steps
+        reward, terminated = 0.0, False
+        if self._goal_reached(after):
+            # MiniGridEnv._reward()
+            reward = 1 - 0.9 * (self._step_count / self._max_steps)
+            terminated = True
+
+        self.env.state.update_visibility()
+        obs = self.render()
+        state = self._build_grid_state()
+        state.terminated = terminated
+        state.truncated = truncated
+        state.reward = reward
+        state.goal_reached = terminated and reward > 0
+        return obs, reward, terminated, truncated, state, info
+
+    def _read_planner_state(self) -> PlannerState:
+        ws = self.env.state
+        holding = ws.agent.holding
+        carrying_key = holding.id if holding is not None and holding.obj_type == "key" else None
+        key_positions = frozenset(
+            (obj.id, *self._xy_by_cell[obj.cell_id])
+            for obj in ws.objects.values()
+            if obj.obj_type == "key" and obj.cell_id is not None
+        )
+        by_type = self._objects_by_type()
+        return PlannerState(
+            agent_pos=self._xy_by_cell[ws.agent.cell_id],
+            agent_dir=self._native_facing.index(ws.agent.facing),
+            carrying_key=carrying_key,
+            collected_keys=frozenset(ws.collected_keys),
+            active_switches=frozenset(o.id for o in by_type["switch"] if o.is_active),
+            used_switches=frozenset(o.id for o in by_type["switch"] if o.used),
+            open_gates=frozenset(o.id for o in by_type["gate"] if o.is_open),
+            open_doors=frozenset(o.id for o in by_type["door"] if o.is_open or not o.is_locked),
+            key_positions=key_positions,
+            freeze_remaining=int(ws.freeze_remaining),
+            rotator_dirs=tuple(int(o.direction) for o in by_type["rotating"]),
+        )
+
+    def _write_planner_state(self, state: PlannerState) -> None:
+        ws = self.env.state
+        ws.agent.cell_id = self._cell_by_xy[tuple(state.agent_pos)]
+        ws.agent.facing = self._native_facing[state.agent_dir]
+        ws.collected_keys = set(state.collected_keys)
+        ws.freeze_remaining = int(state.freeze_remaining)
+
+        by_type = self._objects_by_type()
+        for tile, direction in zip(by_type["rotating"], state.rotator_dirs):
+            tile.direction = direction
+        for switch in by_type["switch"]:
+            switch.is_active = switch.id in state.active_switches
+            switch.used = switch.id in state.used_switches
+        for gate in by_type["gate"]:
+            gate.set_open(gate.id in state.open_gates)
+        for door in by_type["door"]:
+            is_open = door.id in state.open_doors
+            door.is_open = is_open
+            door.is_locked = not is_open
+
+        # Keys on the ground live in ws.objects; a held or consumed key does
+        # not (multigrid's own PICKUP convention).
+        for key_id in self._key_objects:
+            ws.objects.pop(key_id, None)
+        for key_id, x, y in state.key_positions:
+            key = self._key_objects[key_id]
+            key.cell_id = self._cell_by_xy[(x, y)]
+            ws.objects[key_id] = key
+        ws.agent.holding = None
+        if state.carrying_key is not None:
+            ws.agent.holding = self._key_objects[state.carrying_key]
+            ws.agent.holding.cell_id = None
+
+    def _objects_by_type(self) -> dict[str, list]:
+        """Rulebook objects by type, each list in spec order (ids sort as
+        written by _convert_task_spec, so rotating_i is the spec's i-th tile)."""
+        grouped: dict[str, list] = {t: [] for t in ("switch", "gate", "door", "rotating")}
+        for obj in self.env.state.objects.values():
+            if obj.obj_type in grouped:
+                grouped[obj.obj_type].append(obj)
+        grouped["rotating"].sort(key=lambda o: int(o.id.rsplit("_", 1)[1]))
+        return grouped
+
+    def _goal_reached(self, state: PlannerState) -> bool:
+        """CustomMiniGridEnv._check_goal_completion over a PlannerState."""
+        goal = self.task_spec.goal
+        if goal is None or goal.goal_type == "reach_position":
+            return tuple(state.agent_pos) == tuple(self._planning_ctx.goal)
+        on_ground = {key_id for key_id, _x, _y in state.key_positions}
+        if goal.goal_type in {"pickup_key", "collect_key"}:
+            return bool(goal.target_ids) and all(k not in on_ground for k in goal.target_ids)
+        if goal.goal_type == "activate_switch":
+            return bool(goal.target_ids) and all(s in state.active_switches for s in goal.target_ids)
+        if goal.goal_type == "collect_all":
+            key_ids = {key.id for key in self.task_spec.mechanisms.keys}
+            switch_ids = {switch.id for switch in self.task_spec.mechanisms.switches}
+            gate_ids = {gate.id for gate in self.task_spec.mechanisms.gates}
+
+            def done(target_id: str) -> bool:
+                if target_id in key_ids:
+                    return target_id not in on_ground
+                if target_id in switch_ids:
+                    return target_id in state.active_switches
+                if target_id in gate_ids:
+                    return target_id in state.open_gates
+                return False  # blocks never leave the grid under the rulebook
+
+            return bool(goal.target_ids) and all(done(t) for t in goal.target_ids)
+        if goal.goal_type == "push_block_to":
+            # Blocks are static obstacles under the rulebook (as in MiniGrid's).
+            blocks = {block.id: block.position.to_tuple() for block in self.task_spec.mechanisms.blocks}
+            return len(goal.target_ids) == len(goal.target_positions) and all(
+                blocks.get(block_id) == target.to_tuple()
+                for block_id, target in zip(goal.target_ids, goal.target_positions)
+            )
+        if goal.goal_type == "survive_steps":
+            return self._step_count >= self._max_steps
+        return False
+
     def render(self) -> np.ndarray:
         """
         Render the current environment state.
@@ -407,6 +660,15 @@ class MultiGridBackend(AbstractGridBackend):
         """
         if self.env is None:
             return np.zeros((self.render_height, self.render_width, 3), dtype=np.uint8)
+
+        if self.uses_rulebook:
+            visible = explored = None
+            if self.task_spec.rules.observability != "full":
+                visible = {self._xy_by_cell[c] for c in self.env.state.visible_cells}
+                explored = {self._xy_by_cell[c] for c in self.env.state.explored_cells}
+            return self._frame_renderer.render(
+                self._read_planner_state(), visible_cells=visible, explored_cells=explored
+            )
 
         return self.env.render()
 
@@ -419,6 +681,9 @@ class MultiGridBackend(AbstractGridBackend):
         """
         if self.task_spec is None:
             return "No mission"
+
+        if self.uses_rulebook:
+            return self.task_spec.get_mission_text()  # as MiniGrid's env.mission
 
         # Use task description or generate from goal
         if self.task_spec.description:
@@ -444,6 +709,16 @@ class MultiGridBackend(AbstractGridBackend):
         """
         return self._build_grid_state()
 
+    def rotator_directions(self) -> tuple[int, ...]:
+        if not self.uses_rulebook or self.env is None or self.env.state is None:
+            return ()
+        return tuple(int(o.direction) for o in self._objects_by_type()["rotating"])
+
+    def freeze_remaining(self) -> int:
+        if not self.uses_rulebook or self.env is None or self.env.state is None:
+            return 0
+        return int(self.env.state.freeze_remaining)
+
     def _build_grid_state(self) -> GridState:
         """
         Build a GridState from the current MultiGrid state.
@@ -458,6 +733,8 @@ class MultiGridBackend(AbstractGridBackend):
                 step_count=self._step_count,
                 max_steps=self._max_steps,
             )
+        if self.uses_rulebook and self._xy_by_cell:
+            return self._rulebook_grid_state()
 
         state = self.env.state
         tiling = self.env.tiling
@@ -540,6 +817,47 @@ class MultiGridBackend(AbstractGridBackend):
             explored_cells=explored_xy,
         )
 
+    def _rulebook_grid_state(self) -> GridState:
+        """MiniGridBackend._get_grid_state's shape, read off the planner state."""
+        planner = self._read_planner_state()
+        spec = self.task_spec
+        carrying = None
+        if planner.carrying_key is not None:
+            # The key's spec colour. MiniGrid reports its own palette name,
+            # which folds cyan into blue and brown into grey.
+            carrying = self._planning_ctx.keys_by_id[planner.carrying_key]["color"]
+        obs_mode = spec.rules.observability
+        visible_cells: set[tuple[int, int]] = set()
+        explored_cells: set[tuple[int, int]] = set()
+        if obs_mode != "full":
+            visible_cells = {self._xy_by_cell[c] for c in self.env.state.visible_cells}
+            explored_cells = {self._xy_by_cell[c] for c in self.env.state.explored_cells}
+        return GridState(
+            agent_position=tuple(planner.agent_pos),
+            agent_direction=int(planner.agent_dir),
+            agent_carrying=carrying,
+            step_count=self._step_count,
+            max_steps=self._max_steps,
+            open_doors=set(planner.open_doors),
+            collected_keys=set(planner.collected_keys),
+            active_switches=set(planner.active_switches),
+            open_gates=set(planner.open_gates),
+            # Blocks are static under the rulebook.
+            block_positions={block.id: block.position.to_tuple() for block in spec.mechanisms.blocks},
+            # The rulebook has no teleporter cooldown (MiniGrid reports 0 too).
+            teleporter_cooldowns={
+                f"{tp.id}_{end}": 0 for tp in spec.mechanisms.teleporters for end in ("a", "b")
+            },
+            key_positions={key_id: (x, y) for key_id, x, y in planner.key_positions},
+            freeze_remaining=int(planner.freeze_remaining),
+            rotator_dirs=tuple(planner.rotator_dirs),
+            goal_reached=self._goal_reached(planner),
+            observability_mode=obs_mode,
+            visible_cells=visible_cells,
+            explored_cells=explored_cells,
+            tiling=self.tiling_type,
+        )
+
     def close(self) -> None:
         """Clean up resources."""
         if self.env is not None:
@@ -550,4 +868,6 @@ class MultiGridBackend(AbstractGridBackend):
     @property
     def observation_shape(self) -> tuple[int, int, int]:
         """Shape of observations (H, W, C)."""
+        if self.uses_rulebook:
+            return self._frame_renderer.frame_shape
         return (64, 64, 3)

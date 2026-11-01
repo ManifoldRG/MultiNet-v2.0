@@ -1,8 +1,12 @@
 """R1 gridworld rulebook: pure (state, action) -> state.
 
-BFS searches this. MiniGrid ``step`` applies this then writes the result
-back onto the live env. The validator uses the same graph. Nothing here
-holds a MiniGrid instance.
+BFS searches this. MiniGrid ``step`` and the MultiGrid backend apply this
+then write the result back onto the live env. The validator uses the same
+graph. Nothing here holds a MiniGrid instance.
+
+Cells and directions come from the spec's tiling (``gridworld.tiling``):
+direction 0 is east and directions count clockwise, four on square and six
+on hex, so turns and rotating-tile spins wrap at the tiling's count.
 """
 
 from __future__ import annotations
@@ -13,14 +17,7 @@ from typing import Callable, Iterable
 
 from .actions import MiniGridActions
 from .task_spec import TaskSpecification
-
-
-DIRECTION_VECTORS: tuple[tuple[int, int], ...] = (
-    (1, 0),   # right
-    (0, 1),   # down
-    (-1, 0),  # left
-    (0, -1),  # up
-)
+from .tiling import direction_count, neighbor
 
 
 @dataclass(frozen=True)
@@ -56,6 +53,8 @@ class TaskPlanningContext:
         self.spec = spec
         self.drop_available = drop_available
         self.width, self.height = spec.maze.dimensions
+        self.tiling = spec.maze.tiling
+        self.direction_count = direction_count(self.tiling)
         self.goal = spec.resolved_goal()
         self.start = spec.maze.start.to_tuple()
         self.key_consumption = spec.rules.key_consumption
@@ -148,6 +147,10 @@ class TaskPlanningContext:
             rotator_dirs=tuple(self.spec.mechanisms.rotating_initial_directions),
         )
 
+    def neighbor(self, pos: tuple[int, int], direction: int) -> tuple[int, int]:
+        """The cell one step from ``pos`` in ``direction`` on this task's tiling."""
+        return neighbor(self.tiling, pos, direction)
+
     def recompute_open_gates(self, active_switches: frozenset[str]) -> frozenset[str]:
         """Open gates controlled by active switches, plus gates initially open."""
         open_gates = {
@@ -165,7 +168,7 @@ def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> Planner
     for transition in successors(ctx, state):
         if transition.action == action:
             return transition.next_state
-    return _settle(state)
+    return _settle(ctx, state)
 
 
 def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
@@ -174,7 +177,7 @@ def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transi
         thawed = replace(
             state,
             freeze_remaining=state.freeze_remaining - 1,
-            rotator_dirs=_spin(state.rotator_dirs),
+            rotator_dirs=_spin(ctx, state.rotator_dirs),
         )
         for action in MiniGridActions:
             yield Transition(int(action), "freeze", thawed)
@@ -186,9 +189,9 @@ def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transi
             if t.action == int(MiniGridActions.MOVE_FORWARD):
                 continue
             used.add(t.action)
-            ns = t.next_state if t.label == "kill_reset" else _settle(t.next_state)
+            ns = t.next_state if t.label == "kill_reset" else _settle(ctx, t.next_state)
             yield Transition(t.action, t.label, ns)
-        waited = _settle(state)
+        waited = _settle(ctx, state)
         for action in MiniGridActions:
             if int(action) not in used:
                 yield Transition(int(action), "rotate_wait", waited)
@@ -196,7 +199,7 @@ def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transi
         return
 
     for t in _idle_successors(ctx, state):
-        ns = t.next_state if t.label == "kill_reset" else _settle(t.next_state)
+        ns = t.next_state if t.label == "kill_reset" else _settle(ctx, t.next_state)
         yield Transition(t.action, t.label, ns)
 
 
@@ -204,15 +207,15 @@ def _idle_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[
     yield Transition(
         action=int(MiniGridActions.TURN_LEFT),
         label="turn_left",
-        next_state=replace(state, agent_dir=(state.agent_dir - 1) % len(DIRECTION_VECTORS)),
+        next_state=replace(state, agent_dir=(state.agent_dir - 1) % ctx.direction_count),
     )
     yield Transition(
         action=int(MiniGridActions.TURN_RIGHT),
         label="turn_right",
-        next_state=replace(state, agent_dir=(state.agent_dir + 1) % len(DIRECTION_VECTORS)),
+        next_state=replace(state, agent_dir=(state.agent_dir + 1) % ctx.direction_count),
     )
 
-    front = _front_pos(state)
+    front = _front_pos(ctx, state)
     key_id = _key_id_at(state, state.agent_pos)
     if key_id is not None and state.carrying_key is None:
         yield Transition(
@@ -302,10 +305,8 @@ def shortest_plan(
     return [], None, len(visited)
 
 
-def _front_pos(state: PlannerState) -> tuple[int, int]:
-    dx, dy = DIRECTION_VECTORS[state.agent_dir]
-    x, y = state.agent_pos
-    return x + dx, y + dy
+def _front_pos(ctx: TaskPlanningContext, state: PlannerState) -> tuple[int, int]:
+    return ctx.neighbor(state.agent_pos, state.agent_dir)
 
 
 def _key_id_at(state: PlannerState, pos: tuple[int, int]) -> str | None:
@@ -410,18 +411,17 @@ def _moved(ctx: TaskPlanningContext, state: PlannerState, next_pos: tuple[int, i
     )
 
 
-def _spin(dirs: tuple[int, ...]) -> tuple[int, ...]:
-    return tuple((d + 1) % len(DIRECTION_VECTORS) for d in dirs)
+def _spin(ctx: TaskPlanningContext, dirs: tuple[int, ...]) -> tuple[int, ...]:
+    return tuple((d + 1) % ctx.direction_count for d in dirs)
 
 
-def _settle(state: PlannerState) -> PlannerState:
-    return replace(state, rotator_dirs=_spin(state.rotator_dirs))
+def _settle(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
+    return replace(state, rotator_dirs=_spin(ctx, state.rotator_dirs))
 
 
 def _ride_target(ctx: TaskPlanningContext, state: PlannerState) -> tuple[int, int] | None:
     """The cell a turntable ride from ``state`` enters, or None if the arrow is blocked."""
-    dx, dy = DIRECTION_VECTORS[state.rotator_dirs[ctx.rotating_index[state.agent_pos]]]
-    dest = (state.agent_pos[0] + dx, state.agent_pos[1] + dy)
+    dest = ctx.neighbor(state.agent_pos, state.rotator_dirs[ctx.rotating_index[state.agent_pos]])
     if _blocked(ctx, state, dest):
         return None
     return dest
@@ -435,11 +435,11 @@ def _landing(ctx: TaskPlanningContext, entered: tuple[int, int]) -> tuple[int, i
 def _ride(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
     dest = _ride_target(ctx, state)
     if dest is None:
-        return _settle(state)
+        return _settle(ctx, state)
     next_pos = _landing(ctx, dest)
     if next_pos in ctx.kill_cells:
         return ctx.initial_state()
-    return _settle(_moved(ctx, state, next_pos))
+    return _settle(ctx, _moved(ctx, state, next_pos))
 
 
 def classify_mechanic(
@@ -467,7 +467,8 @@ def classify_mechanic(
       ``pointing`` is the arrow after this step's spin.
 
     The first that applies wins: died, teleported, froze, carried, rotating.
-    Positions are (x, y); directions are 0..3 (EAST, SOUTH, WEST, NORTH).
+    Positions are (x, y); directions count clockwise from east: 0..3 on square
+    (EAST, SOUTH, WEST, NORTH), 0..5 on hex (EAST, SOUTHEAST, ... NORTHEAST).
     ``action`` is accepted for symmetry with ``successors``; the label and the
     two states decide everything.
     """
@@ -475,7 +476,7 @@ def classify_mechanic(
         return {"kind": "frozen", "remaining": after.freeze_remaining}
     riding = transition_label == "rotate"
     if transition_label in ("move_forward", "kill_reset"):
-        entered = _front_pos(before)
+        entered = _front_pos(ctx, before)
     elif riding:
         entered = _ride_target(ctx, before)
         if entered is None:

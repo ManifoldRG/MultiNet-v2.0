@@ -1,0 +1,61 @@
+{
+  "description": "Mechanics-15 on hex, 2D: five of the 15 mechanics mazes (portals, death, rotating, frozen, and M10 with all four) converted to pointy-top hexes (scripts/make_hex_mechanics.py; same walls, chain and mechanic cells) on Claude Opus 5.5 and GPT-6 Astra. The mechanics_15_2d cell and model settings unchanged; only the tiling differs: render.backend=multigrid draws the hex frames in the MiniGrid look.",
+  "manifest": "gridworld/fixtures/manifest.mechanics_15_hex.json",
+  "render": {
+    "backend": "multigrid"
+  },
+  "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
+  "_note_render": "render.backend=multigrid: the MultiGrid backend, which steps square and hex tasks through the same R1 rulebook as MiniGrid (gridworld.world_model) and draws frames in the MiniGrid look (gridworld.render2d: same palette and icons, pointy-top hex cells of ~1039 px each against MiniGrid's 1024, 18x18 frames 641x550 against 576x576). The run label is multigrid_r<RENDER2D_VERSION>. Everything else is the 2D run's: the minimal prompt and its action list are unchanged, TURN_LEFT/TURN_RIGHT turn 60 degrees and MOVE_FORWARD enters the neighbouring hex. The minigrid and 3D backends refuse hex mazes and the cardinal action space is refused on hex (check_tasks_runnable, before Stage 2).",
+  "_note_launch": "Launch with difficulty_max_static_score = 20000 (--difficulty-max-static-score 20000): the largest static score of the five is the hex M10's, about 19,230 (rotating ~14,810, the others ~2,830-3,610). Hex scores run 2.3-2.5x their square originals because search_space_size (BFS states explored) grows with six facings and six-phase turntables, so composite run scores are not comparable to R2's (normalized by 8000): compare success, steps and optimality ratio. Stage 2 takes about 30 s for all five. Measured BFS (hex / square): portals 100 / 90, death 130 / 121, rotating 134 / 128, frozen 140 / 131, M10 83 / 75.",
+  "_note_model_params": "Copied from run_config.mechanics_15_2d.json for these two models: equal 64k output caps, thinking on, Opus 5.5 effort=xhigh (Message Batches via the lockstep worker on the fleet; the sync API locally), GPT-6 Astra reasoning_effort=xhigh on the flex tier with image_detail=high and spend_cap_usd=300 per worker process. Kimi K3 is left out of the hex smoke.",
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "image_only",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30,
+    "prompt_cache": true
+  },
+  "models": {
+    "claude_opus55": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "max_tokens": 64000,
+      "timeout": 600,
+      "enable_thinking": true,
+      "effort": "xhigh",
+      "enable_prompt_cache": true,
+      "group": "claude-api",
+      "worker_count": 1,
+      "worker_role": "lockstep-worker",
+      "worker_concurrency": 15,
+      "max_in_flight": 64,
+      "tasks": [
+        "all"
+      ]
+    },
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "image_detail": "high",
+      "enable_prompt_cache": true,
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 300,
+      "group": "openai-api",
+      "worker_count": 1,
+      "worker_role": "worker",
+      "worker_concurrency": 15,
+      "max_in_flight": 15,
+      "tasks": [
+        "all"
+      ]
+    }
+  }
+}

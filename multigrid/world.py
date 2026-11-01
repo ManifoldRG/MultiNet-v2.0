@@ -31,6 +31,11 @@ class WorldState:
         self.rules: dict = {}  # Game rules (key_consumption, etc.)
         self.hazard_hit: bool = False  # Track if agent hit a hazard
 
+        # R1 rulebook bookkeeping (MultiGridBackend on square/hex): keys ever
+        # picked up and not dropped, and actions still swallowed by ice.
+        self.collected_keys: set[str] = set()
+        self.freeze_remaining: int = 0
+
         # Partial observability state
         self.observability_mode: str = "full"  # "full", "view_cone", "fog_of_war"
         self.view_radius: int = 3
@@ -110,6 +115,9 @@ class WorldState:
 
         elif obj_type == "zone":
             kwargs["radius_hops"] = obj_spec.get("radius_hops", 1)
+
+        elif obj_type == "rotating":
+            kwargs["direction"] = obj_spec.get("direction", 0)
 
         try:
             obj = ObjectRegistry.create(obj_type, **kwargs)

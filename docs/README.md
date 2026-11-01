@@ -16,6 +16,7 @@ design references.
 | [gridworld_backends.md](gridworld_backends.md) | Backend overview |
 | [minigrid_backend.md](minigrid_backend.md) | MiniGrid backend reference |
 | [multigrid_backend.md](multigrid_backend.md) | MultiGrid backend reference (exotic tilings) |
+| [multigrid_hex_port.md](multigrid_hex_port.md) | Hex tiling on the R1 rulebook: spec, planner, MultiGrid backend, frames, hex mechanics panel |
 | [interfaces.md](interfaces.md) | Model-interface contracts (note: describes the legacy `ModelInterface` stack; the canonical agent contract is `interface/agents/` — `generate(messages) -> Reply`) |
 | [batch-api-lockstep-runner-design.md](batch-api-lockstep-runner-design.md) | Batch-API lockstep runner design |
 | [qwen-two-tier-rerun-design.md](qwen-two-tier-rerun-design.md) | Two-tier token-cap design for served-vLLM runs |
