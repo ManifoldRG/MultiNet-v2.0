@@ -96,7 +96,16 @@ backend.close()
 
 - Default observation: 64x64 RGB (configurable)
 - High-res render: Sprite-based, visually detailed
-- Partial observability: Shows only visible cells
+- Partial observability (`rules.observability`): the frame masks what the agent
+  cannot see. Cells in MiniGrid's view (a `view_size` square ahead, walls and
+  closed doors/gates occlude) show their live state and the agent is always
+  drawn. `fog_of_war` draws explored cells out of view as they looked when last
+  seen, at half brightness (a gate opened by a far switch, a rotator's turn or a
+  death reset of the world shows once the cell is seen again); memory survives
+  a death reset, as the explored set the stall watchdog counts does.
+  `view_cone` keeps no memory. Every other cell is the UNKNOWN tile: dark plum
+  with a lighter diagonal hatch (`custom_env.unknown_tile`), never floor black
+  or wall grey. `full` frames are unchanged.
 
 ### Limitations
 

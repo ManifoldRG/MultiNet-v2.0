@@ -55,7 +55,10 @@ def build_episode_runner(
     # opens a GL context, so it must not also run on the pre-seed spec.
     spec = TaskSpecification.from_json(str(task_source))
     backend = get_backend(render.backend, **render.backend_kwargs(spec))
-    spec = _spec_with_seed(spec, seed)
+    # A 2D render.observability override (fog_of_war / view_cone) lands on the
+    # spec's rules, so the backend, its GridState and the stall watchdog all
+    # run under it; the episode's recorded task_spec carries it too.
+    spec = render.apply_to_spec(_spec_with_seed(spec, seed))
     if max_steps is not None and spec.max_steps != max_steps:
         spec = dataclasses.replace(spec, max_steps=int(max_steps))
     backend.configure(spec)

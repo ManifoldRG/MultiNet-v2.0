@@ -157,3 +157,71 @@ def test_3d_only_keys_are_rejected_for_the_minigrid_backend(block):
     # the run never used.
     with pytest.raises(ValueError, match="3D setting"):
         RenderSettings.from_run_config({"render": block})
+
+
+# --- 2D observability override (run-config render.observability) ------------
+
+from gridworld.render_settings import FOG_RENDER_VERSION  # noqa: E402
+from interface.config import ExperimentConfig  # noqa: E402
+
+
+@pytest.mark.parametrize("block, mode, view", [
+    ({"observability": "fog_of_war"}, "fog_of_war", 7),  # MiniGrid's default view
+    ({"backend": "minigrid", "observability": "fog_of_war", "view_size": 5}, "fog_of_war", 5),
+    ({"observability": "view_cone", "view_size": 9}, "view_cone", 9),
+])
+def test_an_observability_block_imposes_its_rules_under_its_own_label(block, mode, view):
+    settings = RenderSettings.from_run_config({"render": block})
+    assert (settings.backend, settings.observability, settings.view_size) == ("minigrid", mode, view)
+    # its own artifact directory and run hash, versioned like a 3D render
+    assert settings.label == f"minigrid_{mode}_v{view}_r{FOG_RENDER_VERSION}"
+    assert settings.backend_kwargs(SPEC) == {}
+    assert settings.unit_block() == {"backend": "minigrid", "observability": mode, "view_size": view}
+    assert settings.provenance(SPEC) == {**settings.unit_block(), "fog_render_version": FOG_RENDER_VERSION}
+    assert RenderSettings.from_run_config({"render": settings.unit_block()}) == settings
+    fogged = settings.apply_to_spec(SPEC)
+    assert (fogged.rules.observability, fogged.rules.view_size) == (mode, view)
+    assert fogged.maze == SPEC.maze and fogged.mechanisms == SPEC.mechanisms
+    assert SPEC.rules.observability == "full"  # the task file's spec is untouched
+
+
+def test_without_the_key_2d_settings_change_nothing():
+    settings = RenderSettings.from_run_config({"render": {"backend": "minigrid"}})
+    assert settings == RenderSettings()
+    assert settings.provenance(SPEC) is None and settings.unit_block() is None
+    assert settings.apply_to_spec(SPEC) is SPEC
+
+
+def test_3d_unit_block_and_provenance_carry_no_observability_fields():
+    """The 3D records predate the 2D override; their keys (and hashes) stay put."""
+    settings = RenderSettings.from_run_config({"render": {"backend": "mujoco3d", "camera": "top_down"}})
+    assert settings.unit_block() == {
+        "backend": "mujoco3d", "camera": "top_down", "resolution": "grid", "start_map": False}
+
+
+@pytest.mark.parametrize("block, message", [
+    ({"observability": "full"}, "observability must be one of"),
+    ({"observability": "fog"}, "observability must be one of"),
+    ({"observability": None}, "observability must be one of"),
+    ({"view_size": 5}, "needs render observability"),
+    ({"observability": "fog_of_war", "view_size": 4}, "odd int >= 3"),
+    ({"observability": "fog_of_war", "view_size": 1}, "odd int >= 3"),
+    ({"observability": "fog_of_war", "view_size": True}, "odd int >= 3"),
+    ({"observability": "fog_of_war", "view_size": "7"}, "odd int >= 3"),
+    ({"backend": "mujoco3d", "camera": "top_down", "observability": "fog_of_war"}, "2D setting"),
+])
+def test_bad_observability_blocks_fail_before_any_paid_call(block, message):
+    with pytest.raises(ValueError, match=message):
+        RenderSettings.from_run_config({"render": block})
+
+
+def test_fog_needs_image_only_and_a_prompt_without_the_maze_text():
+    settings = RenderSettings.from_run_config({"render": {"observability": "fog_of_war"}})
+    settings.check_experiment(ExperimentConfig(observation="image_only", prompting="minimal"))
+    for observation in ("text_only", "image_text"):
+        with pytest.raises(ValueError, match="image_only"):
+            settings.check_experiment(ExperimentConfig(observation=observation))
+    with pytest.raises(ValueError, match="text_initial_maze"):
+        settings.check_experiment(ExperimentConfig(observation="image_only", prompting="text_initial_maze"))
+    # the plain 2D default accepts every cell, as before
+    RenderSettings().check_experiment(ExperimentConfig(observation="text_only", prompting="text_initial_maze"))
