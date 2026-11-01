@@ -27,7 +27,7 @@
       "enable_prompt_cache": true,
       "timeout": 1800,
       "max_attempts": 30,
-      "spend_cap_usd": 25,
+      "spend_cap_usd": 30,
       "group": "openai-api",
       "worker_count": 1,
       "worker_role": "worker",
@@ -42,5 +42,5 @@
       ]
     }
   },
-  "_note_cost": "R2's per-query cost fitted to these five mazes' BFS lengths: ~$5 at 1.14x BFS, ~$7 at 1.5x, ~$9 at 2x, ~$15 at 3x; with doubled reasoning output ~$8 / ~$11 / ~$15 / ~$23. Under the $25 cap in every case."
+  "_note_cost": "R2's per-query cost fitted to these five mazes' BFS lengths: ~$5 at 1.14x BFS, ~$7 at 1.5x, ~$9 at 2x, ~$15 at 3x; with doubled reasoning output ~$8 / ~$11 / ~$15 / ~$23. Under the $30 cap in every case. The cap matches the 15-maze config's because it enters the unit hash: equal caps let the full run reuse these five episodes from the same artifacts root."
 }

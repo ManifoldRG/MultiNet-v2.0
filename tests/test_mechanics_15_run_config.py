@@ -147,7 +147,7 @@ def test_nl_neutral_run_is_the_nl_run_for_astra_with_neutral_labels():
     assert _NEUTRAL["manifest"] == nl["manifest"]
     assert "render" not in _NEUTRAL and "conditions" not in _NEUTRAL
     assert list(_NEUTRAL["models"]) == ["gpt6_astra"]
-    assert _NEUTRAL["models"]["gpt6_astra"] == {**nl["models"]["gpt6_astra"], "spend_cap_usd": 25}
+    assert _NEUTRAL["models"]["gpt6_astra"] == {**nl["models"]["gpt6_astra"], "spend_cap_usd": 30}
     # Resolved the way the pipeline and the fleet units resolve it.
     [(_, cfg)] = _condition_configs(None, base_overrides=_NEUTRAL["experiment_config"])
     assert (cfg.tile_labels, cfg.tile_label_seed) == ("neutral", 0)
@@ -173,7 +173,7 @@ def test_nl_neutral_configs_build_a_capped_astra_on_one_sync_worker(monkeypatch)
         astra, _ = _build_agent_from_spec("gpt6_astra", cfg["models"]["gpt6_astra"])
         assert (astra.config.model, astra.config.reasoning_effort, astra.config.service_tier) == (
             "gpt-6-astra", "xhigh", "flex")
-        assert (astra.config.max_tokens, astra.config.spend_cap_usd) == (64000, 25)
+        assert (astra.config.max_tokens, astra.config.spend_cap_usd) == (64000, 30)
         topo = derive_topology(cfg, "neutral")
         assert [(w["model_group"], w["worker_role"]) for w in topo["workers"]] == [("openai-api", "worker")]
         assert topo["required_credentials"] == ["OPENAI_API_KEY"]
