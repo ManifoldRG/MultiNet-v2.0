@@ -120,7 +120,11 @@ goes into each 3D unit's hash, and the coordinator rejects an upload drawn by
 another version. `scripts/resume_from_archive.py` rebuilds a 3D archive's
 recorded backend and refuses one its worktree would draw differently.
 Text-only (NL) runs need nothing extra: set `"experiment_config":
-{"observation": "text_only"}` on the 2D backend.
+{"observation": "text_only"}` on the 2D backend. For the rule-learning arm
+add `"tile_labels": "neutral"` (and a `"tile_label_seed"`): each tile kind is
+then shown under a made-up word drawn per maze and the step feedback reports
+only what a step did (`interface/tile_labels.py`;
+`run_config.mechanics_15_nl_neutral.json` and its 5-maze subset).
 
 **Pre-scored Stage 2 (`PRESCORED_TASKS`).** Static scoring of the PR #57
 mechanics mazes takes minutes to tens of minutes per maze, and the coordinator

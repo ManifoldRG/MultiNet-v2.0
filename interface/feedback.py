@@ -257,6 +257,36 @@ def infer_step_outcome(
     return "INVALID", feedback_templates.UNKNOWN_ACTION.format(action=action)
 
 
+def _consequence_feedback(
+    action: str,
+    prev: GridState,
+    curr: GridState,
+    blind_type: str,
+    mechanic: dict | None,
+) -> str:
+    """Minimal feedback under neutral tile labels: what the step did, not why.
+
+    ``blind_type`` is the mechanic-blind event type of the step. A death says
+    the maze was reset; an action a frozen tile swallowed did NOTHING (not
+    BLOCKED, which would blame the cell ahead); a move that landed somewhere
+    other than the cell the agent faced (a portal, a turntable ride) names the
+    landing cell. Everything else is the mechanic-blind type, as in R2.
+    """
+    kind = (mechanic or {}).get("kind")
+    if blind_type == "DONE":
+        # Reaching the goal outranks the tile that delivered you there.
+        return blind_type
+    if kind == "died":
+        return feedback_templates.NEUTRAL_RESET
+    if kind == "frozen" and action != "DONE":
+        return feedback_templates.NEUTRAL_NO_EFFECT
+    if blind_type == "MOVED":
+        landed = agent_row_col(curr)
+        if landed != forward_cell(prev):
+            return feedback_templates.NEUTRAL_MOVED_TO.format(row=landed[0], col=landed[1])
+    return blind_type
+
+
 def format_step_feedback(
     action: str,
     prev: GridState,
@@ -266,15 +296,27 @@ def format_step_feedback(
     task_spec: TaskSpecification,
     level: Literal["minimal", "standard", "causal"] = "minimal",
     mechanic: dict | None = None,
+    neutral_tiles: bool = False,
 ) -> tuple[str, str]:
+    """(feedback text, event type) for one step.
+
+    ``neutral_tiles`` (minimal level only) swaps the text for
+    ``_consequence_feedback``; the event type stays the world model's, so
+    failure counting and metrics are the same as with named tiles.
+    """
     event_type, event_message = infer_step_outcome(
         action, prev, curr, reward, terminated, task_spec, level=level
     )
+    blind_type = event_type
     minimal_text = event_type
     if mechanic is not None:
         relabelled = _mechanic_outcome(action, event_type, level, mechanic)
         if relabelled is not None:
             event_type, event_message, minimal_text = relabelled
+    if neutral_tiles:
+        if level != "minimal":
+            raise ValueError("neutral tile labels only support feedback='minimal'")
+        return _consequence_feedback(action, prev, curr, blind_type, mechanic), event_type
     if level == "minimal":
         return minimal_text, event_type
     if event_type == "BLOCKED":

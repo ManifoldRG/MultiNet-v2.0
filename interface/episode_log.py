@@ -257,9 +257,11 @@ def flush_episode_log(result: dict[str, Any], out_dir: Path) -> Path:
     )
     # Phase provenance (Task B3): stamp the two-tier pass and the caps the
     # episode ran under when the caller set them on ``result``, plus the
-    # ``render`` block for a 3D run. Additive and optional — absent on
-    # non-two-tier / 2D runs — and never part of any input hash.
-    for key in ("pass", "max_tokens", "max_model_len", "phase_label", "render"):
+    # ``render`` block for a 3D run, and the neutral ``tile_labels`` mapping
+    # (label -> real effect and cells) of an NL rule-learning run. Additive and
+    # optional — absent on non-two-tier / 2D / named-tile runs. The run hash
+    # covers tile_labels through experiment_config, not through this copy.
+    for key in ("pass", "max_tokens", "max_model_len", "phase_label", "render", "tile_labels"):
         value = result.get(key)
         if value is not None:
             episode[key] = _json_safe(value)
