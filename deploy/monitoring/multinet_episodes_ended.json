@@ -1,6 +1,6 @@
 {
   "name": "multinet_episodes_ended",
-  "description": "MultiNet episode attempts that ended, by outcome: solved/unsolved (finished and verified), infra_killed (API, billing or process kill; resumable), failed, or stale (the worker stopped heartbeating). Written by scripts/run_events.py.",
+  "description": "MultiNet episode attempts that ended. outcome: solved/unsolved (finished and verified), infra_killed (API, billing or process kill; resumable), failed, or stale (the worker stopped heartbeating). end_kind: the episode's end_reason (agent_error:* as agent_error), else the outcome. Written by scripts/run_events.py.",
   "filter": "log_id(\"multinet-run-events\") AND jsonPayload.event=\"episode_ended\"",
   "metricDescriptor": {
     "metricKind": "DELTA",
@@ -9,12 +9,14 @@
     "labels": [
       {"key": "run_id", "valueType": "STRING", "description": "The run's RUN_ID (run_set_id)."},
       {"key": "model_id", "valueType": "STRING", "description": "The run-config model label."},
-      {"key": "outcome", "valueType": "STRING", "description": "solved, unsolved, infra_killed, failed or stale."}
+      {"key": "outcome", "valueType": "STRING", "description": "solved, unsolved, infra_killed, failed or stale."},
+      {"key": "end_kind", "valueType": "STRING", "description": "Why it ended: success, max_steps, stalled, parse_failed, agent_error, ..., or failed / stale when no episode was uploaded."}
     ]
   },
   "labelExtractors": {
     "run_id": "EXTRACT(jsonPayload.run_id)",
     "model_id": "EXTRACT(jsonPayload.model_id)",
-    "outcome": "EXTRACT(jsonPayload.outcome)"
+    "outcome": "EXTRACT(jsonPayload.outcome)",
+    "end_kind": "EXTRACT(jsonPayload.end_kind)"
   }
 }

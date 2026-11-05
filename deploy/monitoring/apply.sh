@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Create or update the run dashboard and its two log-based metrics in one GCP
-# project (deploy/MONITORING.md). Safe to re-run: existing metrics and the
-# dashboard named "MultiNet runs" are updated in place, never duplicated.
-# Nothing here touches a VM or a run, and none of it costs anything at rest.
+# Create or update the run dashboard and its log-based metric in one GCP
+# project (deploy/MONITORING.md). Safe to re-run: the metric and the dashboard
+# named "MultiNet runs" are updated in place, never duplicated. The progress
+# metrics (custom.googleapis.com/multinet/*) need no setup: a coordinator's
+# first write creates them. Nothing here touches a VM or a run, and none of it
+# costs anything at rest.
 #
 #   deploy/monitoring/apply.sh PROJECT_ID
 set -euo pipefail
@@ -11,13 +13,12 @@ PROJECT="${1:?usage: deploy/monitoring/apply.sh PROJECT_ID (deliberately not def
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DASHBOARD_NAME="MultiNet runs"
 
-for metric in multinet_episodes_started multinet_episodes_ended; do
-  if gcloud logging metrics describe "$metric" --project "$PROJECT" >/dev/null 2>&1; then
-    gcloud logging metrics update "$metric" --project "$PROJECT" --config-from-file "$HERE/$metric.json"
-  else
-    gcloud logging metrics create "$metric" --project "$PROJECT" --config-from-file "$HERE/$metric.json"
-  fi
-done
+METRIC=multinet_episodes_ended
+if gcloud logging metrics describe "$METRIC" --project "$PROJECT" >/dev/null 2>&1; then
+  gcloud logging metrics update "$METRIC" --project "$PROJECT" --config-from-file "$HERE/$METRIC.json"
+else
+  gcloud logging metrics create "$METRIC" --project "$PROJECT" --config-from-file "$HERE/$METRIC.json"
+fi
 
 existing="$(gcloud monitoring dashboards list --project "$PROJECT" \
   --filter="displayName=\"$DASHBOARD_NAME\"" --format='value(name)')"

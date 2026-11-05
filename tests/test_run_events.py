@@ -1,8 +1,9 @@
 """Run events for the dashboard (scripts/run_events.py, deploy/monitoring/).
 
-What the coordinator writes as episodes start and end, that writing it can never
-get in a run's way, and that the dashboard config reads the fields the events
-carry. Cloud Logging is faked: no network, no credentials.
+What the coordinator writes as episodes start and end and providers park, that
+writing it can never get in a run's way, and that the dashboard config reads
+the fields the events and the progress updates carry. Cloud Logging and Cloud
+Monitoring are faked: no network, no credentials.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import io
 import json
 import logging
 import os
+import re
 import subprocess
 import time
 import urllib.error
@@ -30,6 +32,8 @@ from scripts.distributed_run_pipeline import (
     prepare_job,
     run_assigned_unit,
 )
+from interface.agents.billing import BillingExhausted
+from scripts import run_progress
 from scripts.run_events import LOG_ID, RunEvents
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -38,8 +42,8 @@ _MONITORING = _REPO / "deploy" / "monitoring"
 
 
 class _Post:
-    """Fake Cloud Logging write: records each request; ``fail`` holds exceptions
-    to raise, one per call, before it starts succeeding."""
+    """Fake Cloud Logging / Cloud Monitoring write: records each request; ``fail``
+    holds exceptions to raise, one per call, before it starts succeeding."""
 
     def __init__(self, fail=()):
         self.fail = list(fail)
@@ -54,7 +58,11 @@ class _Post:
 
     @property
     def payloads(self) -> list[dict]:
-        return [e["jsonPayload"] for r in self.requests for e in r["body"]["entries"]]
+        return [e["jsonPayload"] for r in self.requests if "entries" in r["body"] for e in r["body"]["entries"]]
+
+    @property
+    def series(self) -> list[dict]:
+        return [s for r in self.requests if "timeSeries" in r["body"] for s in r["body"]["timeSeries"]]
 
     def events(self, name: str) -> list[dict]:
         return [p for p in self.payloads if p["event"] == name]
@@ -78,11 +86,11 @@ def _http_error(code: int) -> urllib.error.HTTPError:
 
 # --- a real coordinator lifecycle: prepare, assign, run, upload -------------
 
-def _prepare(tmp_path: Path) -> Path:
+def _prepare(tmp_path: Path, provider: str = "claude", model: str = "stub-model") -> Path:
     cfg = tmp_path / "rc.json"
     cfg.write_text(json.dumps({
         "experiment_config": {"progress_stall_k": 30},
-        "models": {"stub": {"provider": "claude", "model": "stub-model", "group": "stub",
+        "models": {"stub": {"provider": provider, "model": model, "group": "stub",
                             "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
     }), encoding="utf-8")
     artifacts = tmp_path / "coordinator"
@@ -112,7 +120,7 @@ def _run_and_upload(store: CoordinatorStore, tmp_path: Path, agent: _Agent, work
     store.register({"worker_id": worker, "hostname": f"{worker}-vm", "capabilities": {"model_group": "stub"}})
     unit = store.assign(worker)["unit"]
     root = tmp_path / f"worker_{worker}_{id(agent)}"
-    run_assigned_unit(unit, artifacts_root=root, agent_factory=lambda k, c: (agent, "stub-model"))
+    run_assigned_unit(unit, artifacts_root=root, agent_factory=lambda k, c: (agent, unit["model_id"]))
     store.upload(worker, unit["unit_id"], package_run_archive(unit, artifacts_root=root).read_bytes())
     return unit
 
@@ -140,8 +148,11 @@ def test_a_solved_episode_writes_a_start_and_a_solved_end(tmp_path):
     assert (ended["end_reason"], ended["steps_used"], ended["query_count"], ended["max_steps"]) == \
            (verified["end_reason"], steps, queries, max_steps)
     assert ended["wall_seconds"] is not None and ended["wall_seconds"] >= 0
+    assert ended["end_kind"] == "success"
+    # Tokens from each query's recorded usage (the stub reports 10); the stub model has no price.
+    assert ended["tokens"] == 10 * queries and ended["cost_usd"] is None
     assert ended["message"] == f"[dash-run] solved stub-model on {unit['task_id']}: " \
-                               f"{steps}/{max_steps} steps, {queries} queries"
+                               f"{steps}/{max_steps} steps, {queries} queries, {10 * queries} tokens"
 
     severities = [e["severity"] for r in post.requests for e in r["body"]["entries"]]
     assert severities == ["INFO", "INFO"]
@@ -158,6 +169,7 @@ def test_an_infra_kill_ends_as_infra_killed_and_its_resume_is_a_new_start(tmp_pa
     assert again["unit_id"] == unit["unit_id"]
     [ended] = post.events("episode_ended")
     assert ended["status"] == "resumable" and ended["outcome"] == "infra_killed"
+    assert ended["end_kind"] == "agent_error"
     assert ended["end_reason"].startswith("agent_error:RuntimeError: connection reset")
     assert ended["steps_used"] == 2 and ended["query_count"] == 2
     assert "(agent_error:RuntimeError: connection reset)" in ended["message"]
@@ -167,6 +179,67 @@ def test_an_infra_kill_ends_as_infra_killed_and_its_resume_is_a_new_start(tmp_pa
     assert resumed["message"].endswith("(resume 1)")
     warnings = [e for r in post.requests for e in r["body"]["entries"] if e["severity"] == "WARNING"]
     assert [e["jsonPayload"]["event"] for e in warnings] == ["episode_ended"]
+
+
+def test_a_billing_kill_parks_the_provider_and_the_unpark_is_reported(tmp_path):
+    post = _Post()
+    events = _events(post)
+    store = CoordinatorStore(_prepare(tmp_path, provider="openai", model="gpt-6-luna"), events=events)
+    _run_and_upload(store, tmp_path, _Agent(3, BillingExhausted("openai", "insufficient_quota")))
+    store.unpark("openai")
+    events.close()
+
+    [parked] = post.events("provider_parked")
+    assert (parked["run_id"], parked["provider"], parked["groups"]) == ("dash-run", "openai", ["stub"])
+    assert parked["reason"].startswith("agent_error:BillingExhausted: openai: insufficient_quota")
+    assert parked["message"] == f"[dash-run] openai parked on a billing limit ({parked['reason']}): " \
+                                "stub take no new episodes until it is unparked"
+    [unparked] = post.events("provider_unparked")
+    assert unparked["message"] == "[dash-run] openai unparked: stub take episodes again"
+    severity = {e["jsonPayload"]["event"]: e["severity"]
+                for r in post.requests if "entries" in r["body"] for e in r["body"]["entries"]}
+    assert severity["provider_parked"] == "WARNING" and severity["provider_unparked"] == "INFO"
+
+
+def test_a_priced_episode_is_costed_at_upload_and_shows_in_the_progress(tmp_path):
+    post = _Post()
+    events = _events(post)
+    artifacts = _prepare(tmp_path, provider="openai", model="gpt-6-luna")
+    store = CoordinatorStore(artifacts, events=events)
+    unit = _run_and_upload(store, tmp_path, _Agent())
+    events.close()
+
+    [ended] = post.events("episode_ended")
+    queries = ended["query_count"]
+    usd = queries * (8 * 0.10 + 2 * 0.50) / 1e6  # the stub's 8 in / 2 out per query at Luna's list price
+    assert ended["tokens"] == 10 * queries and ended["cost_usd"] == pytest.approx(usd)
+    assert ended["message"].endswith(f", {10 * queries} tokens, ${usd:.4f}")
+    state = json.loads(drp.state_path(artifacts).read_text(encoding="utf-8"))
+    assert state["units"][unit["unit_id"]]["api_cost"] == {"tokens": 10 * queries, "usd": pytest.approx(usd)}
+
+    progress = run_progress.RunProgress(plan_path(artifacts), drp.state_path(artifacts), max_attempts=3)
+    values = {(s["metric"]["type"].rsplit("/", 1)[1], s["metric"]["labels"].get("state") or
+               s["metric"]["labels"].get("kind")): s["points"][0]["value"] for s in progress()}
+    assert values[("episodes", "solved")] == {"int64Value": "1"}
+    assert values[("episodes", "waiting")] == {"int64Value": "0"}
+    assert values[("api_cost_usd", "spent")] == values[("api_cost_usd", "projected")] == \
+           {"doubleValue": round(usd, 6)}
+    assert values[("time_left_minutes", None)] == {"int64Value": "0"}
+
+
+def test_a_pricing_problem_leaves_the_episode_unpriced_and_the_upload_verified(tmp_path, monkeypatch):
+    def broken(*args):
+        raise ValueError("bad price table")
+    monkeypatch.setattr(drp, "episode_cost", broken)
+    post = _Post()
+    events = _events(post)
+    store = CoordinatorStore(_prepare(tmp_path, provider="openai", model="gpt-6-luna"), events=events)
+    unit = _run_and_upload(store, tmp_path, _Agent())
+    events.close()
+    assert store.status()["units"] == {"verified": 1}
+    [ended] = post.events("episode_ended")
+    assert ended["tokens"] is None and ended["cost_usd"] is None
+    assert "api_cost" not in store.load_state()["units"][unit["unit_id"]]
 
 
 # --- fail, stale and re-handouts on a minimal plan ---------------------------
@@ -337,6 +410,120 @@ def test_the_write_request_is_one_log_in_the_project():
     assert entry["jsonPayload"]["message"] == "[r] stale m on t (quiet)"
 
 
+# --- progress: written every 30s from the same thread ---------------------------
+
+def _series(n: int = 1) -> list[dict]:
+    return [{"metric": {"type": run_progress.METRIC_PREFIX + "episodes", "labels": {"run_id": "r", "state": str(i)}},
+             "points": [{"interval": {"endTime": "2026-11-04T10:00:00Z"}, "value": {"int64Value": "1"}}]}
+            for i in range(n)]
+
+
+def _progress_requests(post: _Post) -> list[dict]:
+    return [r for r in post.requests if "timeSeries" in r["body"]]
+
+
+def test_progress_is_written_on_watch_and_once_more_on_close(monkeypatch):
+    monkeypatch.setattr(run_events, "_MIN_POINT_GAP", 0.0)
+    post = _Post()
+    events = _events(post, progress_every=3600)
+    events.watch(lambda: _series())
+    _wait_for(lambda: _progress_requests(post))
+    events.close()
+    first, last = _progress_requests(post)
+    assert first["url"] == "https://monitoring.googleapis.com/v3/projects/proj/timeSeries"
+    assert first["token"] == "tok"
+    [series] = first["body"]["timeSeries"]
+    assert series["resource"] == {"type": "global", "labels": {"project_id": "proj"}}
+    assert series["metric"]["type"] == "custom.googleapis.com/multinet/episodes"
+    assert last["body"] == first["body"]
+
+
+def test_progress_repeats_and_a_stream_of_events_does_not_hold_it_back(monkeypatch):
+    monkeypatch.setattr(run_events, "_MIN_POINT_GAP", 0.0)
+    post = _Post()
+    events = _events(post, progress_every=0.05)
+    events.watch(lambda: _series())
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:  # events far more often than progress is due
+        events.episode_ended({}, {}, {"status": "failed"}, None, "w", reason="x")
+        time.sleep(0.005)
+    events.close()
+    assert len(_progress_requests(post)) >= 4 and post.events("episode_ended")
+
+
+def test_progress_points_are_never_closer_than_cloud_monitoring_accepts():
+    post = _Post()
+    events = _events(post, progress_every=0.01)
+    events.watch(lambda: _series())
+    _wait_for(lambda: _progress_requests(post))
+    time.sleep(0.1)  # many due times pass, as does close: all inside the gap
+    events.close()
+    assert len(_progress_requests(post)) == 1
+
+
+def test_progress_is_sent_in_requests_of_at_most_200_series(monkeypatch):
+    post = _Post()
+    events = _events(post, progress_every=3600)
+    events.watch(lambda: _series(450))
+    events.close()
+    assert [len(r["body"]["timeSeries"]) for r in _progress_requests(post)] == [200, 200, 50]
+
+
+def test_a_permission_error_turns_progress_off_and_events_carry_on(caplog):
+    post = _Post(fail=[_http_error(403)])
+    events = _events(post, progress_every=0.01)
+    calls = []
+    events.watch(lambda: calls.append(1) or _series())
+    with caplog.at_level(logging.WARNING, logger="scripts.run_events"):
+        _wait_for(lambda: events.progress_off)
+        events.episode_ended({}, {}, {"status": "failed"}, None, "w", reason="x")
+        events.close()
+    assert len(calls) == 1 and not _progress_requests(post)
+    assert not events.off and post.events("episode_ended")
+    [error] = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert "run progress: OFF" in error.getMessage()
+
+
+def test_failed_progress_writes_warn_once_and_recover(monkeypatch, caplog):
+    monkeypatch.setattr(run_events, "_MIN_POINT_GAP", 0.0)
+    post = _Post(fail=[_http_error(503), urllib.error.URLError("timeout")])
+    attempts = []
+
+    def progress():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise ValueError("state file mid-replace")  # the source failing is one more failed write
+        return _series()
+
+    events = _events(post, progress_every=0.01)
+    with caplog.at_level(logging.WARNING, logger="scripts.run_events"):
+        events.watch(progress)
+        _wait_for(lambda: _progress_requests(post))
+        events.close()
+    messages = [r.getMessage() for r in caplog.records]
+    assert sum("could not write" in m for m in messages) == 1
+    assert "state file mid-replace" in next(m for m in messages if "could not write" in m)
+    assert messages[-1] == "run progress: writing again" and not events.progress_off
+
+
+def test_a_coordinator_server_with_events_writes_the_runs_progress(tmp_path):
+    post = _Post()
+    events = _events(post, progress_every=3600)
+    server = drp.make_coordinator_server(_prepare(tmp_path), host="127.0.0.1", port=0, events=events)
+    try:
+        _wait_for(lambda: _progress_requests(post))
+    finally:
+        server.server_close()
+        events.close()
+    series = _progress_requests(post)[0]["body"]["timeSeries"]
+    states = {s["metric"]["labels"]["state"]: s["points"][0]["value"]["int64Value"]
+              for s in series if s["metric"]["type"].endswith("/episodes")}
+    assert states == {"solved": "0", "unsolved": "0", "running": "0", "waiting": "1", "parked": "0", "gave_up": "0"}
+    assert {s["metric"]["labels"]["run_id"] for s in series} == {"dash-run"}
+    # The stub model has no price and nothing has finished: no spend and no time left yet.
+    assert {s["metric"]["type"].rsplit("/", 1)[1] for s in series} == {"episodes"}
+
+
 # --- coordinator-serve wiring --------------------------------------------------
 
 def test_the_cloud_logging_flag_gives_coordinator_serve_an_event_writer(tmp_path, monkeypatch):
@@ -370,7 +557,7 @@ def test_serve_announces_the_run_and_flushes_on_exit(tmp_path, monkeypatch):
     post = _Post()
     with pytest.raises(KeyboardInterrupt):
         drp.serve_coordinator(artifacts, events=_events(post))
-    assert "Run events: writing episode starts and ends" in stdout.flushed
+    assert "Run dashboard: writing episode events to Cloud Logging" in stdout.flushed
     [started] = post.events("coordinator_started")  # sent by the close in serve's finally
     assert started["run_id"] == "dash-run" and started["unit_count"] == 1
     assert started["units"] == {"pending": 1} and started["models"] == ["stub-model"]
@@ -419,46 +606,94 @@ def test_cloud_logging_1_reaches_coordinator_serve(tmp_path, start, cloud_loggin
 
 # --- the dashboard reads what the events carry ---------------------------------
 
-def test_the_metrics_and_dashboard_read_the_fields_the_events_carry():
-    _, started = run_events.episode_started({}, {}, {}, None)
-    _, ended = run_events.episode_ended({}, {}, {"status": "verified"}, None, None)
-    payloads = {"episode_started": started, "episode_ended": ended}
-    metrics = {}
-    for name in ("multinet_episodes_started", "multinet_episodes_ended"):
-        metric = json.loads((_MONITORING / f"{name}.json").read_text(encoding="utf-8"))
-        assert metric["name"] == name
-        assert f'log_id("{LOG_ID}")' in metric["filter"]
-        event = metric["filter"].split('jsonPayload.event="')[1].split('"')[0]
-        declared = {label["key"] for label in metric["metricDescriptor"]["labels"]}
-        assert declared == set(metric["labelExtractors"])
-        for key, extractor in metric["labelExtractors"].items():
-            assert extractor == f"EXTRACT(jsonPayload.{key})" and key in payloads[event]
-        metrics[name] = declared
+def _dashboard() -> dict:
+    return json.loads((_MONITORING / "dashboard.json").read_text(encoding="utf-8"))
 
-    dashboard = json.loads((_MONITORING / "dashboard.json").read_text(encoding="utf-8"))
+
+def _chart_filters(dashboard: dict) -> list[dict]:
+    """Every metric query the dashboard runs (both halves of a ratio)."""
+    found = []
     for tile in dashboard["mosaicLayout"]["tiles"]:
         widget = tile["widget"]
-        if "logsPanel" in widget:
-            assert widget["logsPanel"]["filter"] == f'log_id("{LOG_ID}")'
-        data_sets = (widget.get("xyChart") or widget.get("timeSeriesTable") or {}).get("dataSets", [])
-        for data_set in data_sets:
-            flt = data_set["timeSeriesQuery"]["timeSeriesFilter"]
-            name = flt["filter"].split("logging.googleapis.com/user/")[1].rstrip('"')
-            groups = {g.removeprefix("metric.label.") for g in flt["aggregation"]["groupByFields"]}
-            assert groups <= metrics[name]
-    assert {f["labelKey"] for f in dashboard["dashboardFilters"]} <= metrics["multinet_episodes_ended"]
+        queries = [widget["scorecard"]["timeSeriesQuery"]] if "scorecard" in widget else []
+        for kind in ("xyChart", "timeSeriesTable", "pieChart"):
+            queries += [d["timeSeriesQuery"] for d in (widget.get(kind) or {}).get("dataSets", [])]
+        for query in queries:
+            ratio = query.get("timeSeriesFilterRatio")
+            found += [ratio["numerator"], ratio["denominator"]] if ratio else [query["timeSeriesFilter"]]
+    return found
 
 
-def test_every_outcome_is_named_in_the_metric_and_dashboard_text():
+def test_the_metric_and_dashboard_read_what_the_events_and_progress_carry():
+    _, ended = run_events.episode_ended({}, {}, {"status": "verified"}, None, None)
+    metric = json.loads((_MONITORING / "multinet_episodes_ended.json").read_text(encoding="utf-8"))
+    assert metric["filter"] == f'log_id("{LOG_ID}") AND jsonPayload.event="episode_ended"'
+    declared = {label["key"] for label in metric["metricDescriptor"]["labels"]}
+    assert declared == set(metric["labelExtractors"])
+    for key, extractor in metric["labelExtractors"].items():
+        assert extractor == f"EXTRACT(jsonPayload.{key})" and key in ended
+
+    # Each metric's labels and, for the progress metrics, every value a progress update writes.
+    unit = {"unit_id": "u", "model_id": "m", "model_group": "g", "priced": True}
+    unit_state = {"status": "verified", "end_reason": "success", "api_cost": {"usd": 1.0},
+                  "verified_at": "2026-11-04T10:00:00Z", "assigned_at": "2026-11-04T09:50:00Z"}
+    summary = run_progress.summarize([unit], {"units": {"u": unit_state}}, max_attempts=3, now=1.8e9)
+    labels: dict[str, dict[str, set]] = {"logging.googleapis.com/user/multinet_episodes_ended":
+                                         {key: set() for key in declared}}
+    for series in run_progress.time_series("r", summary, "2026-11-04T10:00:00Z"):
+        written = labels.setdefault(series["metric"]["type"], {})
+        for key, value in series["metric"]["labels"].items():
+            written.setdefault(key, set()).add(value)
+    assert labels["custom.googleapis.com/multinet/episodes"]["state"] == set(run_progress.STATES)
+    assert labels["custom.googleapis.com/multinet/api_cost_usd"]["kind"] == {"spent", "projected"}
+
+    dashboard = _dashboard()
+    variables = {f["templateVariable"]: f["labelKey"] for f in dashboard["dashboardFilters"]}
+    assert variables == {"run_id": "run_id", "model_id": "model_id"}
+    for query in _chart_filters(dashboard):
+        flt = query["filter"]
+        [name] = re.findall(r'metric\.type="([^"]+)"', flt)
+        known = labels[name]
+        for group in query["aggregation"].get("groupByFields", []):
+            assert group.removeprefix("metric.label.") in known, (flt, group)
+        for key, one, many in re.findall(r'metric\.label\.(\w+)=(?:"([^"]+)"|one_of\(([^)]*)\))', flt):
+            values = [one] if one else re.findall(r'"([^"]+)"', many)
+            assert key in known and (not known[key] or set(values) <= known[key]), (flt, key, values)
+        for variable in re.findall(r"\$\{(\w+)\}", flt):  # a variable only on metrics that carry its label
+            assert variables[variable] in known, (flt, variable)
+
+    [logs] = [t["widget"]["logsPanel"] for t in dashboard["mosaicLayout"]["tiles"] if "logsPanel" in t["widget"]]
+    assert f'log_id("{LOG_ID}")' in logs["filter"] and 'jsonPayload.run_id=~"${run_id.value}"' in logs["filter"]
+
+
+def test_every_event_carries_the_run_id_the_event_list_filters_on():
+    plan = {"run_set_id": "r", "job_id": "j"}
+    built = [
+        run_events.episode_started(plan, {}, {}, None),
+        run_events.episode_ended(plan, {}, {"status": "failed"}, None, "w", reason="x"),
+        run_events.provider_parked(plan, "openai", {"groups": ["g"], "reason": "agent_error:BillingExhausted: openai: x"}),
+        run_events.provider_unparked(plan, "openai", ["g"]),
+    ]
+    assert [payload["run_id"] for _, payload in built] == ["r"] * 4
+
+
+def test_the_about_text_names_every_state_outcome_and_end_kind():
     outcomes = {run_events._outcome("verified", True), run_events._outcome("verified", False),
                 run_events._outcome("resumable", None), run_events._outcome("failed", None),
                 run_events._outcome("stale", None)}
     assert outcomes == {"solved", "unsolved", "infra_killed", "failed", "stale"}
     metric = (_MONITORING / "multinet_episodes_ended.json").read_text(encoding="utf-8")
-    about = json.loads((_MONITORING / "dashboard.json").read_text(encoding="utf-8"))[
-        "mosaicLayout"]["tiles"][0]["widget"]["text"]["content"]
+    tiles = _dashboard()["mosaicLayout"]["tiles"]
+    [about] = [t for t in tiles if "text" in t["widget"]]
+    [group] = [t for t in tiles if "collapsibleGroup" in t["widget"]]
+    # Collapsed by default, with the text inside the group's area (that is what makes it a member).
+    assert group["widget"]["collapsibleGroup"]["collapsed"] is True
+    assert group["yPos"] <= about["yPos"] and about["yPos"] + about["height"] <= group["yPos"] + group["height"]
+    content = about["widget"]["text"]["content"]
+    for name in outcomes | set(run_progress.STATES) | {"success", "agent_error"}:
+        assert f"`{name}`" in content, name
     for outcome in outcomes:
-        assert outcome in metric and f"`{outcome}`" in about
+        assert outcome in metric
 
 
 # --- deploy/monitoring/apply.sh against a fake gcloud ---------------------------
@@ -484,7 +719,6 @@ def _apply(tmp_path: Path, *, metrics_exist: bool, dashboards: str) -> tuple[sub
 def test_apply_creates_the_metrics_and_dashboard_in_the_named_project(tmp_path):
     r, log = _apply(tmp_path, metrics_exist=False, dashboards="")
     assert r.returncode == 0, r.stderr
-    assert "logging metrics create multinet_episodes_started --project proj" in log
     assert "logging metrics create multinet_episodes_ended --project proj" in log
     assert "monitoring dashboards create --project proj --config-from-file" in log
     assert "update" not in log

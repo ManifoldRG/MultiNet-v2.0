@@ -42,6 +42,7 @@ from scorer.io import stable_hash
 from scripts import run_pipeline as pipeline
 from scripts.gcs_storage import StorageConfig, gcs_destination, mirror_to_bucket
 from scripts.run_events import RunEvents
+from scripts.run_progress import RunProgress, episode_cost
 
 logger = logging.getLogger(__name__)
 
@@ -859,6 +860,10 @@ class CoordinatorStore:
             episode = _read_json(self.artifacts_root / unit["run_dir"] / "episode.json")
             end_reason = str(episode.get("end_reason") or "")
             unit_state.pop("resume_pending", None)
+            parked: Optional[dict[str, Any]] = None
+            cost = self._episode_cost(unit, episode) if self.events else None
+            if cost is not None:
+                unit_state["api_cost"] = cost  # for the dashboard's spend (run_progress)
             if end_reason.startswith("agent_error:"):
                 kill = _infra_kill_summary(episode)
                 billing = billing_provider(end_reason) is not None
@@ -867,7 +872,7 @@ class CoordinatorStore:
                 unit_state.update({"infra_kill": kill, "infra_kills": kills})
                 if billing and not is_park_echo(end_reason):
                     provider = str(unit.get("provider") or billing_provider(end_reason))
-                    state.setdefault("parked_providers", {})[provider] = {
+                    state.setdefault("parked_providers", {})[provider] = parked = {
                         "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
                         "since": _iso(),
                         "unit_id": unit_id,
@@ -892,7 +897,9 @@ class CoordinatorStore:
             worker.pop("current_unit_id", None)
             self.save_state(state)
             if self.events:
-                self.events.episode_ended(plan, unit, unit_state, worker, worker_id, episode=episode)
+                self.events.episode_ended(plan, unit, unit_state, worker, worker_id, episode=episode, cost=cost)
+                if parked is not None:
+                    self.events.provider_parked(plan, provider, parked)
             run_dir = unit["run_dir"]
             run_set_id = plan.get("run_set_id", "")
 
@@ -911,7 +918,23 @@ class CoordinatorStore:
                 parked = sorted(state.get("parked_providers") or {})
                 raise KeyError(f"provider {provider!r} is not parked (parked: {parked})")
             self.save_state(state)
+            if self.events:
+                try:  # unpark() never reads the plan otherwise; the event must not fail it
+                    plan = self.load_plan()
+                except Exception as exc:
+                    logger.warning("run events: no provider_unparked event for %s: %s", provider, exc)
+                else:
+                    self.events.provider_unparked(plan, provider, info["groups"])
             return {"ok": True, "unparked": provider, "groups": info["groups"]}
+
+    def _episode_cost(self, unit: dict[str, Any], episode: dict[str, Any]) -> Optional[dict[str, Any]]:
+        """Tokens and API cost of an upload, for the run dashboard. Pricing must
+        never fail an upload: on any problem the episode is left unpriced."""
+        try:
+            return episode_cost(unit, episode, self.artifacts_root / unit["run_dir"])
+        except Exception as exc:
+            logger.warning("run progress: could not price unit %s: %s", unit.get("unit_id"), exc)
+            return None
 
     def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
         """Best-effort mirror of a verified run dir to the configured bucket.
@@ -1184,6 +1207,9 @@ def make_coordinator_server(
     storage: Optional[StorageConfig] = None,
 ) -> ThreadingHTTPServer:
     store = CoordinatorStore(artifacts_root, stale_after_seconds=stale_after_seconds, storage=storage, events=events)
+    if events:
+        events.watch(RunProgress(plan_path(artifacts_root), state_path(artifacts_root),
+                                 max_attempts=store.max_unit_attempts))
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -1280,8 +1306,9 @@ def serve_coordinator(
     )
     print(f"Coordinator serving {artifacts_root} on http://{host}:{port}")
     if events:
-        # Flushed: stdout is a file under nohup, and this line is how an operator checks events are on.
-        print("Run events: writing episode starts and ends to Cloud Logging (log multinet-run-events).", flush=True)
+        # Flushed: stdout is a file under nohup, and this line is how an operator checks the dashboard feed is on.
+        print("Run dashboard: writing episode events to Cloud Logging (log multinet-run-events) and run "
+              "progress to Cloud Monitoring every 30s.", flush=True)
         events.coordinator_started(plan_path(artifacts_root), state_path(artifacts_root))
     try:
         server.serve_forever()
