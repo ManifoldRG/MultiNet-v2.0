@@ -27,7 +27,10 @@ if [[ "$(printf '%s' "$existing" | grep -c .)" -gt 1 ]]; then
   printf '%s\n' "$existing" >&2
   exit 1
 elif [[ -n "$existing" ]]; then
-  gcloud monitoring dashboards update "$existing" --project "$PROJECT" --config-from-file "$HERE/dashboard.json"
+  # The API only takes an update that carries the dashboard's current etag.
+  etag="$(gcloud monitoring dashboards describe "$existing" --project "$PROJECT" --format='value(etag)')"
+  gcloud monitoring dashboards update "$existing" --project "$PROJECT" \
+    --config "$(sed "1s/^{/{\"etag\": \"$etag\",/" "$HERE/dashboard.json")"
 else
   gcloud monitoring dashboards create --project "$PROJECT" --config-from-file "$HERE/dashboard.json"
 fi

@@ -94,21 +94,27 @@ Nothing reads it any more; delete it once with
 - *Whoever runs `apply.sh`:* `roles/logging.configWriter` (log-based metrics)
   and `roles/monitoring.dashboardEditor`, or project Editor.
 - *The coordinator VM:* its service account needs `logging.logEntries.create`
-  (`roles/logging.logWriter`) and `monitoring.timeSeries.create`
-  (`roles/monitoring.metricWriter`); the default compute service account
-  usually has both through Editor. The VM needs the `cloud-platform` access
-  scope (or `logging.write` and `monitoring.write`). Coordinators are created
-  from the machine image `COORD_IMAGE` (`launch_distributed.sh`), which fixes
-  the account and scope. Check once:
+  (`roles/logging.logWriter`) for the events and `monitoring.timeSeries.create`
+  (`roles/monitoring.metricWriter`) for the progress. These are separate grants:
+  a project can have the first without the second. The VM needs the
+  `cloud-platform` access scope (or `logging.write` and `monitoring.write`).
+  Coordinators are created from the machine image `COORD_IMAGE`
+  (`launch_distributed.sh`), which fixes the account and scope. To see them,
+  and then what the account may do (the second needs IAM read access):
 
   ```bash
   gcloud compute machine-images describe multinet-coordinator-n2-20260629 \
     --project "$PROJECT" --format='yaml(sourceInstanceProperties.serviceAccounts)'
+  gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' \
+    --filter="bindings.members:serviceAccount:$SA" --format='value(bindings.role)'
   ```
 
-  Without them, the first write fails with HTTP 403, the coordinator logs
-  `run events: OFF ...` or `run progress: OFF ...` once, and the run carries
-  on without that half.
+  A project admin grants a missing role with
+  `gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role roles/monitoring.metricWriter`
+  (or `roles/logging.logWriter`). Without it, the first write fails with HTTP
+  403, the coordinator logs `run events: OFF ...` or `run progress: OFF ...`
+  once, and the run carries on without that half until the next coordinator
+  starts.
 - *Team members who view it:* `roles/monitoring.viewer` (charts) and
   `roles/logging.viewer` (event list). Project Viewer includes both. The
   dashboard is inside the Cloud console; it is not a public page.

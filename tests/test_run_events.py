@@ -707,6 +707,7 @@ def _apply(tmp_path: Path, *, metrics_exist: bool, dashboards: str) -> tuple[sub
         'case "$1 $2 $3" in\n'
         f'  "logging metrics describe") exit {0 if metrics_exist else 1} ;;\n'
         '  "monitoring dashboards list") printf "%b" "$DASHBOARDS" ;;\n'
+        '  "monitoring dashboards describe") echo etag-1 ;;\n'
         "esac\n"
     )
     fake.chmod(0o755)
@@ -728,7 +729,12 @@ def test_apply_updates_in_place_when_rerun(tmp_path):
     r, log = _apply(tmp_path, metrics_exist=True, dashboards="projects/1/dashboards/abc\\n")
     assert r.returncode == 0, r.stderr
     assert "logging metrics update multinet_episodes_ended --project proj" in log
-    assert "monitoring dashboards update projects/1/dashboards/abc --project proj" in log
+    assert "monitoring dashboards describe projects/1/dashboards/abc --project proj --format=value(etag)" in log
+    # the update carries the etag (the API refuses one without it) and the whole dashboard
+    update = log[log.index("monitoring dashboards update"):]
+    assert update.startswith('monitoring dashboards update projects/1/dashboards/abc --project proj --config {"etag": "etag-1",')
+    sent = json.loads(update.split(" --config ", 1)[1])
+    assert sent == {"etag": "etag-1", **_dashboard()}
     assert "create" not in log
 
 
