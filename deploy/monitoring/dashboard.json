@@ -1,0 +1,406 @@
+{
+  "displayName": "MultiNet runs",
+  "dashboardFilters": [
+    {
+      "labelKey": "run_id",
+      "templateVariable": "run_id",
+      "filterType": "METRIC_LABEL",
+      "valueType": "STRING"
+    },
+    {
+      "labelKey": "model_id",
+      "templateVariable": "model_id",
+      "filterType": "METRIC_LABEL",
+      "valueType": "STRING"
+    }
+  ],
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 8,
+        "height": 7,
+        "widget": {
+          "title": "Done",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" metric.label.state=one_of(\"solved\",\"unsolved\") ${run_id} ${model_id}",
+                "aggregation": {
+                  "alignmentPeriod": "60s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                  "crossSeriesReducer": "REDUCE_SUM",
+                  "groupByFields": []
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "xPos": 8,
+        "yPos": 0,
+        "width": 8,
+        "height": 7,
+        "widget": {
+          "title": "Planned",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" ${run_id} ${model_id}",
+                "aggregation": {
+                  "alignmentPeriod": "60s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                  "crossSeriesReducer": "REDUCE_SUM",
+                  "groupByFields": []
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "xPos": 16,
+        "yPos": 0,
+        "width": 8,
+        "height": 7,
+        "widget": {
+          "title": "Stuck (parked or gave up)",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" metric.label.state=one_of(\"parked\",\"gave_up\") ${run_id} ${model_id}",
+                "aggregation": {
+                  "alignmentPeriod": "60s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                  "crossSeriesReducer": "REDUCE_SUM",
+                  "groupByFields": []
+                }
+              }
+            },
+            "thresholds": [
+              {
+                "value": 0,
+                "color": "RED",
+                "direction": "ABOVE"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 0,
+        "width": 8,
+        "height": 7,
+        "widget": {
+          "title": "Time left (minutes, est.)",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/multinet/time_left_minutes\" ${run_id}",
+                "aggregation": {
+                  "alignmentPeriod": "60s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                  "crossSeriesReducer": "REDUCE_MAX",
+                  "groupByFields": []
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "xPos": 32,
+        "yPos": 0,
+        "width": 8,
+        "height": 7,
+        "widget": {
+          "title": "API spend so far (USD)",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/multinet/api_cost_usd\" metric.label.kind=\"spent\" ${run_id} ${model_id}",
+                "aggregation": {
+                  "alignmentPeriod": "60s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                  "crossSeriesReducer": "REDUCE_SUM",
+                  "groupByFields": []
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "xPos": 40,
+        "yPos": 0,
+        "width": 8,
+        "height": 7,
+        "widget": {
+          "title": "Projected API spend (USD)",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/multinet/api_cost_usd\" metric.label.kind=\"projected\" ${run_id} ${model_id}",
+                "aggregation": {
+                  "alignmentPeriod": "60s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                  "crossSeriesReducer": "REDUCE_SUM",
+                  "groupByFields": []
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 7,
+        "width": 32,
+        "height": 16,
+        "widget": {
+          "title": "Episodes by state over the run",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "STACKED_AREA",
+                "targetAxis": "Y1",
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" ${run_id} ${model_id}",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.state"
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "episodes",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 32,
+        "yPos": 7,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "Right now",
+          "pieChart": {
+            "chartType": "DONUT",
+            "showLabels": true,
+            "dataSets": [
+              {
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" ${run_id} ${model_id}",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.state"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 23,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "By model",
+          "timeSeriesTable": {
+            "metricVisualization": "NUMBER",
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" ${run_id} ${model_id}",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.model_id",
+                        "metric.label.state"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 16,
+        "yPos": 23,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "Solve rate by model, of episodes finished so far",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilterRatio": {
+                    "numerator": {
+                      "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" metric.label.state=\"solved\" ${run_id} ${model_id}",
+                      "aggregation": {
+                        "alignmentPeriod": "60s",
+                        "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "metric.label.model_id"
+                        ]
+                      }
+                    },
+                    "denominator": {
+                      "filter": "metric.type=\"custom.googleapis.com/multinet/episodes\" metric.label.state=one_of(\"solved\",\"unsolved\") ${run_id} ${model_id}",
+                      "aggregation": {
+                        "alignmentPeriod": "60s",
+                        "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "metric.label.model_id"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "solved / finished",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 32,
+        "yPos": 23,
+        "width": 16,
+        "height": 16,
+        "widget": {
+          "title": "API spend by model (USD)",
+          "timeSeriesTable": {
+            "metricVisualization": "NUMBER",
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"custom.googleapis.com/multinet/api_cost_usd\" ${run_id} ${model_id}",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_NEXT_OLDER",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.model_id",
+                        "metric.label.kind"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 39,
+        "width": 32,
+        "height": 24,
+        "widget": {
+          "title": "Events for this run, newest first (results, problems, parks)",
+          "logsPanel": {
+            "filter": "log_id(\"multinet-run-events\") AND jsonPayload.event!=\"episode_started\" AND jsonPayload.run_id=~\"${run_id.value}\""
+          }
+        }
+      },
+      {
+        "xPos": 32,
+        "yPos": 39,
+        "width": 16,
+        "height": 24,
+        "widget": {
+          "title": "Why episodes ended (per 5 min)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "STACKED_BAR",
+                "targetAxis": "Y1",
+                "minAlignmentPeriod": "300s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/multinet_episodes_ended\" ${run_id} ${model_id}",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_SUM",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.end_kind"
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "attempts",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 63,
+        "width": 48,
+        "height": 14,
+        "widget": {
+          "title": "About these numbers",
+          "collapsibleGroup": {
+            "collapsed": true
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 64,
+        "width": 48,
+        "height": 13,
+        "widget": {
+          "text": {
+            "format": "MARKDOWN",
+            "content": "**How to read it.** Pick a run at the top; the model filter narrows everything but the event list to one model. The tiles, the state charts and the model tables come from the run's coordinator, which writes where the run stands every 30 seconds. The event list and *Why episodes ended* come from its events, one per episode start and end. Runs launched without `CLOUD_LOGGING=1` do not appear.\n\n**States.** Every planned episode is in exactly one: `solved` / `unsolved` (finished and verified), `running` (with a worker), `waiting` (not started, or due a retry or a resume), `parked` (waiting on a provider parked on a billing limit; unpark it to continue) or `gave_up` (out of attempts, or a failure that is not retried; finalize reports it). *Stuck* is parked plus gave up.\n\n**Why episodes ended.** Each ended attempt, by its end reason: `success`, `max_steps`, `stalled`, `parse_failed`, ... for finished episodes; `agent_error` for an API, billing or process kill (`infra_killed`: the episode resumes); `failed` (the attempt failed; retried unless out of attempts) and `stale` (the worker went silent; handed out again) when nothing was uploaded. Retries and resumes count again.\n\n**Estimates.** *Time left*: the episodes not finished over the pace of the last 30 minutes. *Spent*: list price of the tokens in uploaded episodes (`scripts/run_progress.py`); episodes still running and attempts that died without uploading are not in it yet, and VM time is never in it. *Projected*: spent plus the episodes left at the model's average cost per finished episode so far; easy mazes tend to finish first, so it runs low early. Models with no price on record (self-hosted ones among them) show no spend. *Solve rate*: of the episodes finished so far.\n\n**What it does not know.** Progress inside an episode. If a coordinator stops writing, the last update stays on screen and the state chart stops at that time. Events are best effort: a gap shows as an `events_dropped` entry. The coordinator's `/status` and the finalized results are the source of truth. Setup, fields and cost: `deploy/MONITORING.md`."
+          }
+        }
+      }
+    ]
+  }
+}

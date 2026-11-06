@@ -164,6 +164,16 @@ artifacts root>`: the coordinator start ships its `tasks/` to the coordinator
 first. Stage 2 reuses a bundle only when its hash matches the current maze and
 scorer config, so a stale one is recomputed, never trusted.
 
+**Run dashboard (`CLOUD_LOGGING=1`).** Launch with `CLOUD_LOGGING=1`
+(`launch_distributed.sh`, `sweep_run.sh`) and the coordinator also feeds the
+"MultiNet runs" Cloud Monitoring dashboard: where the run stands every 30
+seconds (episodes by state, API spend so far and projected, time left) and one
+Cloud Logging entry per episode start and end (model, maze, outcome, steps,
+tokens, cost) and per billing park. It is off by default, best effort and
+read-only: a Google Cloud failure is logged in `coordinator-serve.log` and never
+blocks or fails the run. One-time project setup, access, cost and what the
+dashboard does not know: [deploy/MONITORING.md](./deploy/MONITORING.md).
+
 ## 6. Evaluate your own model
 
 Implement an agent in `interface/agents/` exposing

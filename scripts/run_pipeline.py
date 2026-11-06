@@ -1310,6 +1310,11 @@ def main(argv: Optional[list[str]] = None) -> None:
         "--storage-config",
         help="JSON storage config (gsutil bucket) for coordinator-serve/finalize bucket mirroring.",
     )
+    parser.add_argument(
+        "--cloud-logging", action="store_true",
+        help="coordinator-serve: also write episode start/end events to Cloud Logging for the run "
+             "dashboard (best effort, never blocks the run; needs a GCE VM; deploy/MONITORING.md).",
+    )
     parser.add_argument("--host", default="0.0.0.0", help="Coordinator bind host for coordinator-serve.")
     parser.add_argument("--port", type=int, default=8765, help="Coordinator bind port for coordinator-serve.")
     parser.add_argument("--coordinator-url", help="Coordinator base URL for worker mode.")
