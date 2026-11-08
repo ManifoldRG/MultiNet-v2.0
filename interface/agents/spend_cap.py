@@ -29,6 +29,14 @@ class SpendCapReached(BillingExhausted):
         super().__init__(self.provider_name, detail, model=model)
 
 
+class ClaudeSpendCapReached(SpendCapReached):
+    provider_name = "claude"
+
+
+class KimiSpendCapReached(SpendCapReached):
+    provider_name = "kimi"
+
+
 class SpendLedger:
     """Process-wide priced-usage totals, one per model name."""
 

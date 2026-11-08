@@ -21,7 +21,7 @@ from interface.agents.runner_messages import (
     parse_runner_content,
     split_system_prompt,
 )
-from interface.agents.spend_cap import SPEND, check_spend_cap
+from interface.agents.spend_cap import SPEND, ClaudeSpendCapReached, check_spend_cap
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -466,7 +466,7 @@ class ClaudeAnthropicAgent:
             )
 
     def generate(self, messages: List[dict]) -> Reply:
-        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd, ClaudeSpendCapReached)
         system, turns = self._prepared(messages, ttl=self.config.cache_ttl)
         reply = _post_messages(
             self.api_key,
@@ -541,7 +541,7 @@ class ClaudeAnthropicAgent:
         result in the returned ``Reply`` so N calls can be in flight at once.
         The spend cap is checked once per round, before it is submitted.
         """
-        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd, ClaudeSpendCapReached)
         requests = [
             {"custom_id": f"i{i}", "params": self._params_for(messages)}
             for i, messages in enumerate(batch)

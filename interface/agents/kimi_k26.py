@@ -17,7 +17,7 @@ from interface.agents.http_retry import call_with_retry
 from interface.agents.moonshot_batch import MoonshotBatchDeadline, run_moonshot_batch
 from interface.agents.reply import Reply, detect_token_truncated
 from interface.agents.runner_messages import strip_cache_markers
-from interface.agents.spend_cap import SPEND, check_spend_cap
+from interface.agents.spend_cap import SPEND, KimiSpendCapReached, check_spend_cap
 from interface.telemetry import normalize_token_usage
 
 logger = logging.getLogger(__name__)
@@ -310,7 +310,7 @@ class KimiK26Agent:
             )
 
     def generate(self, messages: List[dict]) -> Reply:
-        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd, KimiSpendCapReached)
         reply = _post_chat_completions(
             self.api_key,
             model=self.config.model,
@@ -346,7 +346,7 @@ class KimiK26Agent:
         The spend cap is checked once per round, before it is submitted (the sync
         transport checks and records per item through ``generate``).
         """
-        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd)
+        check_spend_cap(_AGENT_NAME, self.config.model, self.config.spend_cap_usd, KimiSpendCapReached)
         if os.environ.get("KIMI_BATCH_TRANSPORT", "batch") == "sync":
             from concurrent.futures import ThreadPoolExecutor
 

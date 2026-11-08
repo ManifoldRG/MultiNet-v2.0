@@ -411,3 +411,60 @@ def test_a_real_openai_cap_stop_parks_only_that_model(tmp_path, monkeypatch):
     assert up["status"] == "resumable" and up["parked"] is True
     assert list(store.status()["parked_models"]) == ["openai/gpt-6-astra"]
     assert store.assign("t1", {"model_group": "terra"})["unit"] is not None
+
+
+def test_the_claude_and_kimi_spend_caps_are_billing_errors_that_carry_their_model():
+    from interface.agents.spend_cap import SPEND, ClaudeSpendCapReached, KimiSpendCapReached, check_spend_cap
+
+    SPEND.reset()
+    for error, provider, model in ((ClaudeSpendCapReached, "claude", "claude-opus-5-5"),
+                                   (KimiSpendCapReached, "kimi", "kimi-k3")):
+        with pytest.raises(error) as exc:
+            check_spend_cap("agent", model, 0.0, error)
+        assert isinstance(exc.value, BillingExhausted)
+        assert exc.value.provider == provider and exc.value.model == model
+
+
+def test_a_real_claude_cap_stop_parks_only_that_model(tmp_path, monkeypatch):
+    """Through the agent the run config builds: Opus's cap stops Opus; Sonnet, on
+    the same provider, keeps taking units."""
+    import urllib.request
+
+    from interface.agents.spend_cap import SPEND
+
+    class _Message:  # ~$0.012 at Opus's price: over the cap after one query
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "content": [{"type": "text", "text": "FINAL_OUTPUT: MOVE_FORWARD"}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 1000, "output_tokens": 400},
+            }).encode()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-never-sent")
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Message())
+    SPEND.reset()
+    cfg = tmp_path / "rc.json"
+    task = str(default_maze_path("V01_empty_room.json"))
+    cfg.write_text(json.dumps({"models": {
+        "opus": {"provider": "claude", "model": "claude-opus-5-5", "group": "opus", "spend_cap_usd": 0.01,
+                 "tasks": [task]},
+        "sonnet": {"provider": "claude", "model": "claude-sonnet-5", "group": "sonnet", "tasks": [task]},
+    }}), encoding="utf-8")
+    artifacts = tmp_path / "coordinator"
+    prepare_job(run_config_path=cfg, manifest_path=_MANIFEST, seeds=[0], conditions=None,
+                artifacts_root=artifacts, run_set_id="park", difficulty_max_static_score=1000.0)
+    store = CoordinatorStore(artifacts)
+    unit = store.assign("o1", {"model_group": "opus"})["unit"]
+    drp.run_assigned_unit(unit, artifacts_root=tmp_path / "o1")  # the cap refuses the second request
+    up = store.upload("o1", unit["unit_id"], drp.package_run_archive(unit, artifacts_root=tmp_path / "o1").read_bytes())
+    assert up["status"] == "resumable" and up["parked"] is True
+    assert list(store.status()["parked_models"]) == ["claude/claude-opus-5-5"]
+    assert store.assign("s1", {"model_group": "sonnet"})["unit"] is not None
