@@ -53,6 +53,21 @@ require_difficulty_max() {
   fi
 }
 
+# Every API key and account a run-config uses must work before any VM starts: an
+# invalidated key or an empty account otherwise fails each episode after launch
+# (scripts/preflight_api.py). SKIP_API_PREFLIGHT=1 is for dev only and says so.
+# API_PREFLIGHT_CMD overrides the command (tests).
+require_api_preflight() {  # $@ run-config paths
+  if [[ "${SKIP_API_PREFLIGHT:-0}" == "1" ]]; then
+    echo "!!! API PREFLIGHT SKIPPED (SKIP_API_PREFLIGHT=1): dev only. An invalid key or an empty" >&2
+    echo "!!! account will not be caught before VMs start." >&2
+    return 0
+  fi
+  local args=() rc
+  for rc in "$@"; do args+=(--run-config "$rc"); done
+  ${API_PREFLIGHT_CMD:-python3 -m scripts.preflight_api} "${args[@]}"
+}
+
 require_max_run_duration() {
   if [[ -z "${MAX_RUN_DURATION:-}" ]]; then
     echo "MAX_RUN_DURATION is required (no default — a wrong default either kills a" >&2

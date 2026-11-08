@@ -573,3 +573,15 @@ def test_once_flag_single_tick(tmp_path):
            "SUPERVISOR_NOW_EPOCH": str(now)}
     r = bash(f'bash ./supervise_run.sh --once --manifest "{mf}" --dest "{tmp_path}/out"', env=env)
     assert r.returncode == 10, r.stderr
+
+
+def test_once_resumable_units_are_work_left_not_a_partial_end(tmp_path):
+    # Killed units waiting to resume (e.g. a provider parked on billing until
+    # coordinator-unpark) are not finished: no "partial" STOP while they wait.
+    status = json.dumps({"job_id": "j", "unit_count": 6, "worker_count": 2, "progress_total": 30,
+                         "units": {"verified": 4, "resumable": 1, "stale": 1},
+                         "parked_providers": {"claude": {"groups": ["claude-api"]}}})
+    snippet = _once_prelude(tmp_path) + 'supervise_once; echo RC=$?'
+    r = bash(snippet, env={"SUPERVISOR_TEST_STATUS": status, "SUPERVISOR_NOW_EPOCH": "1000"})
+    assert "RC=0" in r.stdout, r.stderr
+    assert "STOP" not in r.stdout

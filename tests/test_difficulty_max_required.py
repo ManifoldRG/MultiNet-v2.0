@@ -18,6 +18,7 @@ def bash(snippet: str, env: dict | None = None) -> subprocess.CompletedProcess:
     e = os.environ.copy()
     for key in ("MAX_RUN_DURATION", "DIFFICULTY_MAX", "BATCH_CAP"):
         e.pop(key, None)
+    e["API_PREFLIGHT_CMD"] = "true"  # no live API probe from tests (tests/test_api_preflight.py covers it)
     if env:
         e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, cwd=REPO, env=e)

@@ -17,6 +17,7 @@ def bash(snippet: str, env: dict | None = None, cwd: Path | None = None) -> subp
     e = os.environ.copy()
     e.pop("MAX_RUN_DURATION", None)
     e["DIFFICULTY_MAX"] = "3000"  # required, no default
+    e["API_PREFLIGHT_CMD"] = "true"  # no live API probe from tests (tests/test_api_preflight.py covers it)
     if env:
         e.update(env)
     return subprocess.run(["bash", "-c", snippet], capture_output=True, text=True,

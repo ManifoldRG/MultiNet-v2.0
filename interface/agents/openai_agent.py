@@ -29,6 +29,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Mapping, Optional, Tuple
 
+from interface.agents.billing import BillingExhausted
 from interface.agents.http_retry import call_with_retry
 from interface.agents.reply import Reply, detect_token_truncated
 from interface.agents.spend_cap import SPEND, SpendCapReached, check_spend_cap
@@ -96,7 +97,11 @@ def usage_cost_usd(usage: Optional[Mapping[str, int]], prices: Tuple[float, floa
 
 
 class OpenAISpendCapReached(SpendCapReached):
-    """Raised before a request once the model's spend cap is reached."""
+    """Raised before a request once the model's spend cap is reached. It names
+    the capped model, so the coordinator parks that model's groups rather than
+    every OpenAI group."""
+
+    provider_name = "openai"
 
 
 def _as_parts(content: object) -> List[object]:
@@ -319,8 +324,8 @@ class OpenAIAgent:
                 detail = exc.read().decode(errors="replace")
                 # Billing exhaustion is also a 429 but will never clear on retry.
                 if exc.code == 429 and "insufficient_quota" in detail:
-                    raise RuntimeError(
-                        f"OpenAI API quota exhausted (HTTP 429 insufficient_quota): {detail}"
+                    raise BillingExhausted(
+                        "openai", f"OpenAI API quota exhausted (HTTP 429 insufficient_quota): {detail}"
                     ) from exc
                 exc.detail = detail  # type: ignore[attr-defined]
                 raise

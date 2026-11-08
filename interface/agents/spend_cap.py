@@ -15,9 +15,18 @@ from __future__ import annotations
 import threading
 from typing import Dict, Optional
 
+from interface.agents.billing import BillingExhausted
 
-class SpendCapReached(RuntimeError):
-    """Raised before a request once the model's spend cap is reached."""
+
+class SpendCapReached(BillingExhausted):
+    """Raised before a request once the model's spend cap is reached. A billing
+    error scoped to the model: the episode ends resumable and the coordinator
+    parks that model's groups (interface.agents.billing)."""
+
+    provider_name = "api"
+
+    def __init__(self, detail: str, *, model: Optional[str] = None):
+        super().__init__(self.provider_name, detail, model=model)
 
 
 class SpendLedger:
@@ -57,5 +66,6 @@ def check_spend_cap(
     if spent >= cap:
         raise error(
             f"{agent_name} spend cap ${cap:.2f} for {model} reached "
-            f"(running total ${spent:.2f}); refusing request."
+            f"(running total ${spent:.2f}); refusing request.",
+            model=model,
         )

@@ -7,8 +7,10 @@ unit at a time against the same helpers used by the single-process pipeline.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import dataclasses
+import io
 import json
 import logging
 import shutil
@@ -32,6 +34,13 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Optional
 
 from gridworld.render_settings import RenderSettings
+from interface.agents.billing import (
+    BillingExhausted,
+    BillingParked,
+    billing_model,
+    billing_provider,
+    is_park_echo,
+)
 from pipeline import episode_metrics
 from scorer import compute_runtime_score, load_scorer_config
 from scorer.config import ScorerConfig
@@ -47,7 +56,75 @@ DISTRIBUTED_DIR = "distributed"
 PLAN_FILENAME = "job_plan.json"
 STATE_FILENAME = "job_state.json"
 EXPECTED_RUN_FILES = ("episode.json", "run_inputs.json", "run_score.json")
+# A lockstep unit's query-boundary checkpoint, in its run dir. It is worker-local:
+# finalize keeps it while it rewrites the run dir, and the upload archive leaves
+# it out.
+CHECKPOINT_FILENAME = "checkpoint.json"
+_CHECKPOINT_ENTRIES = (CHECKPOINT_FILENAME, f"{CHECKPOINT_FILENAME}.parts", f"{CHECKPOINT_FILENAME}.tmp")
 ACTIVE_STATUSES = {"assigned", "running"}
+# Resumes allowed per unit for kills that are not billing (a deterministic error,
+# e.g. a context-overflow 400, would otherwise loop forever).
+MAX_RESUMES = 2
+
+
+def _infra_kill_summary(episode: dict[str, Any]) -> dict[str, Any]:
+    """What a killed unit's report needs: where it stopped and how much a resume
+    can still spend (steps left; K minus the stall counter until it stops)."""
+    max_steps = (episode.get("task_spec") or {}).get("max_steps")
+    steps_used = episode.get("steps_used")
+    stall = episode.get("stall") or {}
+    k, remaining = stall.get("k"), stall.get("remaining")
+    return {
+        "end_reason": episode.get("end_reason"),
+        "steps_used": steps_used,
+        "max_steps": max_steps,
+        "steps_left": (int(max_steps) - int(steps_used)) if max_steps is not None and steps_used is not None else None,
+        "query_count": episode.get("query_count"),
+        "stall_k": k,
+        "stall_count": (int(k) - int(remaining)) if k is not None and remaining is not None else None,
+    }
+
+
+def _parked_groups(state: dict[str, Any]) -> set[str]:
+    """Model groups parked on a billing error: every group of a provider that ran
+    out of credit, and every group of a model that hit its spend cap."""
+    parks = [*(state.get("parked_providers") or {}).values(), *(state.get("parked_models") or {}).values()]
+    return {g for info in parks for g in info.get("groups", [])}
+
+
+class _Park:
+    """A worker's park signal, shared by its in-flight episodes: once set (its
+    provider hit a billing limit, or its model a spend cap), each episode raises
+    BillingParked at its next query and the worker takes no new units."""
+
+    def __init__(self) -> None:
+        self.event = threading.Event()
+
+
+def _infra_killed_rows(plan: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Units whose last upload was an infra kill and that have not since
+    verified: resumable, being resumed (assigned/running/stale), or failed after
+    MAX_RESUMES. Their run dir holds the killed partial, never a scored row."""
+    rows = []
+    for unit in plan["units"]:
+        unit_state = state["units"].get(unit["unit_id"], {})
+        kill = unit_state.get("infra_kill")
+        if not kill or unit_state.get("status") == "verified":
+            continue
+        count, k = kill.get("stall_count"), kill.get("stall_k")
+        rows.append({
+            "unit_id": unit["unit_id"],
+            "task_id": unit["task_id"],
+            "model_id": unit["model_id"],
+            "status": unit_state["status"],
+            "end_reason": kill.get("end_reason"),
+            "stall": f"{count}/{k}" if count is not None and k is not None else None,
+            "stall_count": count,
+            "steps_left": kill.get("steps_left"),
+            "queries": kill.get("query_count"),
+            "resumes": int(unit_state.get("resume_count", 0)),
+        })
+    return rows
 
 AgentFactory = Callable[[str, dict[str, Any]], tuple[pipeline.Agent, str]]
 
@@ -219,6 +296,13 @@ def _reset_state_for_rerun(
         prev = existing_units.get(uid)
         if prev is not None and prev.get("status") in _TERMINAL_OK_STATUSES:
             merged_units[uid] = prev
+        elif prev is not None and prev.get("infra_kill") and not prev.get("terminal"):
+            # A killed unit (resumable, or mid-resume when the coordinator
+            # restarted): its archive is still here, so it stays resumable with
+            # its kill counts, instead of re-paying the partial from scratch.
+            kept = {k: v for k, v in prev.items() if k not in ("resume_pending", "worker_id")}
+            kept.update({"status": "resumable", "updated_at": _iso()})
+            merged_units[uid] = kept
         else:
             merged_units[uid] = fresh_unit
     merged = dict(existing_state)
@@ -488,7 +572,9 @@ class CoordinatorStore:
     # Statuses a unit can be (re)handed out from. "failed"/"stale" units are
     # retried so a transient worker/upload failure does not strand a paid unit;
     # the attempt cap stops a poison unit from re-spending tokens forever.
-    REASSIGNABLE_STATUSES = frozenset({"pending", "stale", "failed"})
+    # "resumable" units ended on an infra kill (agent_error:*) and resume from
+    # their archive; handing one out burns no attempt (see MAX_RESUMES).
+    REASSIGNABLE_STATUSES = frozenset({"pending", "stale", "failed", "resumable"})
 
     def __init__(
         self,
@@ -496,8 +582,10 @@ class CoordinatorStore:
         stale_after_seconds: float = 300.0,
         storage: Optional[StorageConfig] = None,
         max_unit_attempts: int = 3,
+        max_resumes: int = MAX_RESUMES,
     ):
         self.artifacts_root = Path(artifacts_root)
+        self.max_resumes = int(max_resumes)
         self.stale_after_seconds = float(stale_after_seconds)
         self.storage = storage
         self.max_unit_attempts = int(max_unit_attempts)
@@ -563,6 +651,8 @@ class CoordinatorStore:
         _write_json_atomic(state_path(self.artifacts_root), state)
 
     def register(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Register a worker process. Each call opens a new session: a worker
+        that restarts under its old id gets its active units back (``assign``)."""
         with self._guard():
             state = self.load_state()
             worker_id = payload.get("worker_id") or f"worker_{uuid.uuid4().hex[:12]}"
@@ -573,6 +663,7 @@ class CoordinatorStore:
                     "capabilities": dict(payload.get("capabilities") or {}),
                     "hostname": payload.get("hostname") or socket.gethostname(),
                     "registered_at": worker.get("registered_at") or _iso(),
+                    "session_id": uuid.uuid4().hex[:12],
                     "heartbeat_at": _now(),
                     "status": "idle",
                 }
@@ -598,6 +689,11 @@ class CoordinatorStore:
             worker["heartbeat_at"] = _now()
             worker["status"] = "polling"
             self._mark_stale(plan, state)
+            parked_groups = _parked_groups(state)
+            if (worker.get("capabilities") or {}).get("model_group") in parked_groups:
+                worker["status"] = "parked"
+                self.save_state(state)
+                return {"unit": None, "parked": True, "job_id": plan["job_id"]}
 
             # A worker may hold up to its declared concurrency in active units at once
             # (served-vLLM workers run many episodes in parallel so the server batches
@@ -613,16 +709,45 @@ class CoordinatorStore:
             worker_concurrency = max(
                 int((worker.get("capabilities") or {}).get("worker_concurrency") or 1), 1
             )
+            # A restarted worker registers again under its old id (a new session)
+            # and has lost every unit it held: hand each one back, one per call and
+            # before any new work, instead of leaving them to go stale. A unit
+            # records the session it was handed to, so none is handed back twice.
+            session = worker.get("session_id")
+            for held in active_units:
+                held_state = state["units"][held["unit_id"]]
+                if held_state.get("session_id") != session:
+                    held_state.update({"session_id": session, "heartbeat_at": _now(), "updated_at": _iso()})
+                    worker["status"] = "assigned"
+                    worker["current_unit_id"] = held["unit_id"]
+                    self.save_state(state)
+                    return {"unit": self._assignment(plan, held, held_state), "job_id": plan["job_id"]}
             if active_units and len(active_units) >= worker_concurrency:
                 self.save_state(state)
-                return {"unit": self._unit_payload(plan, active_units[0]), "job_id": plan["job_id"]}
+                held = active_units[0]
+                return {"unit": self._assignment(plan, held, state["units"][held["unit_id"]]),
+                        "job_id": plan["job_id"]}
 
-            for unit in plan["units"]:
+            # Fresh/stale/failed work first, then resumable units.
+            ordered = sorted(
+                plan["units"],
+                key=lambda u: state["units"][u["unit_id"]].get("status") == "resumable",
+            )
+            for unit in ordered:
                 unit_state = state["units"][unit["unit_id"]]
-                if unit_state.get("status") not in self.REASSIGNABLE_STATUSES:
+                status = unit_state.get("status")
+                if status not in self.REASSIGNABLE_STATUSES or unit_state.get("terminal"):
                     continue
-                if int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
+                resuming = status == "resumable"
+                if resuming and not (_uploads_root(self.artifacts_root) / f"{unit['unit_id']}.tar.gz").exists():
+                    # The killed run's archive is gone (e.g. a coordinator restored
+                    # from the bucket mirror): rerun it fresh rather than strand it.
+                    logger.warning("unit %s: no archive to resume from; rerunning it fresh", unit["unit_id"])
+                    resuming = False
+                if not resuming and int(unit_state.get("attempts", 0)) >= self.max_unit_attempts:
                     continue  # attempt cap reached -> leave terminal, report at finalize
+                if unit.get("model_group") in parked_groups:
+                    continue
                 if not self._unit_matches_worker(unit, worker):
                     continue
                 if not self._below_max_in_flight(unit, state, plan):
@@ -631,16 +756,21 @@ class CoordinatorStore:
                     {
                         "status": "assigned",
                         "worker_id": worker_id,
+                        "session_id": session,
                         "assigned_at": _iso(),
                         "heartbeat_at": _now(),
-                        "attempts": int(unit_state.get("attempts", 0)) + 1,
                         "updated_at": _iso(),
                     }
                 )
+                if resuming:
+                    unit_state["resume_count"] = int(unit_state.get("resume_count", 0)) + 1
+                    unit_state["resume_pending"] = True
+                else:
+                    unit_state["attempts"] = int(unit_state.get("attempts", 0)) + 1
                 worker["status"] = "assigned"
                 worker["current_unit_id"] = unit["unit_id"]
                 self.save_state(state)
-                return {"unit": self._unit_payload(plan, unit), "job_id": plan["job_id"]}
+                return {"unit": self._assignment(plan, unit, unit_state), "job_id": plan["job_id"]}
 
             worker["status"] = "idle"
             worker.pop("current_unit_id", None)
@@ -665,8 +795,9 @@ class CoordinatorStore:
                         # Monotonic: a re-attempt that resets to 0 must not move it backwards.
                         unit_state["progress"] = max(int(unit_state.get("progress", 0)), int(progress))
                     worker["current_unit_id"] = unit_id
+            park = (worker.get("capabilities") or {}).get("model_group") in _parked_groups(state)
             self.save_state(state)
-            return {"ok": True}
+            return {"ok": True, "park": park}
 
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         with self._guard():
@@ -674,6 +805,12 @@ class CoordinatorStore:
             unit_state = state["units"].get(unit_id)
             if unit_state is None:
                 raise KeyError(f"Unknown unit_id: {unit_id}")
+            if unit_state.get("status") not in ACTIVE_STATUSES or unit_state.get("worker_id") != worker_id:
+                # A late report (the worker gave up on an upload that landed, or
+                # the unit went stale and moved on): it must not overwrite the
+                # unit's real state.
+                return {"ok": False, "ignored": f"unit is {unit_state.get('status')} "
+                                                f"(worker {unit_state.get('worker_id')})"}
             unit_state.update(
                 {
                     "status": "failed",
@@ -683,6 +820,10 @@ class CoordinatorStore:
                     "updated_at": _iso(),
                 }
             )
+            if "ResumeRefused" in reason:
+                # Another SHA, a diverged replay, an unsupported chat mode: the
+                # same resume would be refused again, so it is not retried.
+                unit_state["terminal"] = True
             worker = state["workers"].setdefault(worker_id, {"worker_id": worker_id})
             worker["status"] = "failed"
             worker.pop("current_unit_id", None)
@@ -725,10 +866,56 @@ class CoordinatorStore:
                 self.save_state(state)
                 raise
 
+            # A finished episode is verified. One that ended on an infra kill
+            # (agent_error:*) is a partial run: resumable, requeued, reported
+            # separately. Billing kills never count against MAX_RESUMES; after
+            # MAX_RESUMES other kills the unit fails with the last reason.
+            episode = _read_json(self.artifacts_root / unit["run_dir"] / "episode.json")
+            end_reason = str(episode.get("end_reason") or "")
+            unit_state.pop("resume_pending", None)
+            if end_reason.startswith("agent_error:"):
+                kill = _infra_kill_summary(episode)
+                billing = billing_provider(end_reason) is not None
+                kills = int(unit_state.get("infra_kills", 0)) + (0 if billing else 1)
+                status = "resumable" if billing or kills <= self.max_resumes else "failed"
+                unit_state.update({"infra_kill": kill, "infra_kills": kills})
+                if billing and not is_park_echo(end_reason):
+                    provider = str(unit.get("provider") or billing_provider(end_reason))
+                    model = billing_model(end_reason)
+                    if model is None:
+                        # The account is out of credit: every model on it stops.
+                        state.setdefault("parked_providers", {})[provider] = {
+                            "groups": sorted({u["model_group"] for u in plan["units"] if u.get("provider") == provider}),
+                            "since": _iso(),
+                            "unit_id": unit_id,
+                            "reason": end_reason,
+                        }
+                    else:
+                        # One model's spend cap: its groups stop, the provider's
+                        # other models run on.
+                        groups = {unit["model_group"]} | {
+                            u["model_group"] for u in plan["units"]
+                            if u.get("provider") == provider and (u.get("model_config") or {}).get("model") == model
+                        }
+                        state.setdefault("parked_models", {})[f"{provider}/{model}"] = {
+                            "provider": provider,
+                            "model": model,
+                            "groups": sorted(groups),
+                            "since": _iso(),
+                            "unit_id": unit_id,
+                            "reason": end_reason,
+                        }
+                if status == "failed":
+                    # Terminal: unlike a transient worker failure, it is not retried.
+                    unit_state.update({"failure_reason": end_reason, "terminal": True})
+            else:
+                status = "verified"
+                unit_state.pop("infra_kill", None)
             unit_state.update(
                 {
-                    "status": "verified",
-                    "verified_at": _iso(),
+                    "status": status,
+                    "end_reason": end_reason,
+                    f"{status}_at": _iso(),
                     "updated_at": _iso(),
                 }
             )
@@ -742,7 +929,25 @@ class CoordinatorStore:
         # Durable off-box copy happens outside the lock so a slow gsutil call does
         # not block other workers' heartbeats/uploads.
         self._mirror_unit(unit_id, run_dir, run_set_id)
-        return {"ok": True, "status": "verified"}
+        return {"ok": True, "status": status, "parked": unit.get("model_group") in _parked_groups(state)}
+
+    def unpark(self, provider: str, model: Optional[str] = None) -> dict[str, Any]:
+        """Release a provider parked on a billing error (after a top-up), or with
+        ``model`` one model parked on its spend cap (after raising it): their
+        groups take units again, resumable ones included. Each park is released
+        on its own: unparking the provider leaves a model's cap park in place."""
+        with self._guard():
+            state = self.load_state()
+            if model is None:
+                info = (state.get("parked_providers") or {}).pop(provider, None)
+            else:
+                info = (state.get("parked_models") or {}).pop(f"{provider}/{model}", None)
+            if info is None:
+                parked = sorted(state.get("parked_providers") or {}) + sorted(state.get("parked_models") or {})
+                what = f"provider {provider!r}" if model is None else f"model {model!r} on {provider!r}"
+                raise KeyError(f"{what} is not parked (parked: {parked})")
+            self.save_state(state)
+            return {"ok": True, "unparked": provider, "model": model, "groups": info["groups"]}
 
     def _mirror_unit(self, unit_id: str, run_dir: str, run_set_id: str) -> None:
         """Best-effort mirror of a verified run dir to the configured bucket.
@@ -785,6 +990,9 @@ class CoordinatorStore:
                 "units": counts,
                 "worker_count": len(state["workers"]),
                 "progress_total": progress_total,
+                "infra_killed": _infra_killed_rows(plan, state),
+                "parked_providers": state.get("parked_providers") or {},
+                "parked_models": state.get("parked_models") or {},
             }
 
     def _mark_stale(self, plan: dict[str, Any], state: dict[str, Any]) -> None:
@@ -853,6 +1061,18 @@ class CoordinatorStore:
             if other and other.get("model_group") == unit.get("model_group"):
                 active += 1
         return active < limit
+
+    def _assignment(self, plan: dict[str, Any], unit: dict[str, Any], unit_state: dict[str, Any]) -> dict[str, Any]:
+        payload = self._unit_payload(plan, unit)
+        if unit_state.get("resume_pending"):
+            # The killed run's own upload: the worker replay-verifies it and
+            # continues; its query images keep the resumed episode complete.
+            archive = _uploads_root(self.artifacts_root) / f"{unit['unit_id']}.tar.gz"
+            payload["resume"] = {
+                "archive_b64": base64.b64encode(archive.read_bytes()).decode("ascii"),
+                "resume_count": int(unit_state.get("resume_count", 1)),
+            }
+        return payload
 
     def _unit_payload(self, plan: dict[str, Any], unit: dict[str, Any]) -> dict[str, Any]:
         task_id = unit["task_id"]
@@ -955,6 +1175,9 @@ class CoordinatorClient:
     def fail(self, worker_id: str, unit_id: str, reason: str) -> dict[str, Any]:
         return self._json("POST", "/fail", {"worker_id": worker_id, "unit_id": unit_id, "reason": reason})
 
+    def unpark(self, provider: str, model: Optional[str] = None) -> dict[str, Any]:
+        return self._json("POST", "/unpark", {"provider": provider, "model": model})
+
     def upload(self, worker_id: str, unit_id: str, archive_path: Path) -> dict[str, Any]:
         query = urllib.parse.urlencode({"worker_id": worker_id, "unit_id": unit_id})
         req = urllib.request.Request(
@@ -1038,6 +1261,8 @@ def make_coordinator_server(
                             payload.get("progress"),
                         ),
                     )
+                elif parsed.path == "/unpark":
+                    self._send_json(200, store.unpark(str(payload["provider"]), payload.get("model")))
                 elif parsed.path == "/fail":
                     self._send_json(
                         200,
@@ -1131,13 +1356,21 @@ class _CountingAgent:
     silently drop usage telemetry for agents without a ``reset_usage()`` method
     (e.g. the Kimi/Claude agents)."""
 
-    def __init__(self, inner: Any, counter: ProgressCounter) -> None:
-        # Bypass our own __setattr__ for the two private fields; everything else
+    def __init__(self, inner: Any, counter: ProgressCounter,
+                 park: Optional["_Park"] = None, provider: str = "") -> None:
+        # Bypass our own __setattr__ for the private fields; everything else
         # must reach the inner agent.
         object.__setattr__(self, "_inner", inner)
         object.__setattr__(self, "_counter", counter)
+        object.__setattr__(self, "_park", park)
+        object.__setattr__(self, "_provider", provider)
+
+    def _check_park(self) -> None:
+        if self._park is not None and self._park.event.is_set():
+            raise BillingParked(self._provider)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        self._check_park()
         result = self._inner(*args, **kwargs)
         self._counter.count += 1
         return result
@@ -1145,7 +1378,7 @@ class _CountingAgent:
     def __getattr__(self, name: str) -> Any:
         # Only fires for names not found normally; guard the private fields so a
         # lookup before __init__ finishes cannot recurse forever.
-        if name in ("_inner", "_counter"):
+        if name in ("_inner", "_counter", "_park", "_provider"):
             raise AttributeError(name)
         attr = getattr(self._inner, name)
         if name == "generate" and callable(attr):
@@ -1157,6 +1390,7 @@ class _CountingAgent:
             # wrapper only when the inner actually HAS generate preserves the
             # runner's ``hasattr(agent, "generate")`` legacy-double check.
             def _counting_generate(*args: Any, **kwargs: Any) -> Any:
+                self._check_park()
                 result = attr(*args, **kwargs)
                 self._counter.count += 1
                 return result
@@ -1165,7 +1399,7 @@ class _CountingAgent:
         return attr
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("_inner", "_counter"):
+        if name in ("_inner", "_counter", "_park", "_provider"):
             object.__setattr__(self, name, value)
         else:
             setattr(self._inner, name, value)
@@ -1178,6 +1412,7 @@ def run_assigned_unit(
     agent_factory: Optional[AgentFactory] = None,
     force: bool = False,
     progress: Optional[ProgressCounter] = None,
+    park: Optional[_Park] = None,
 ) -> tuple[dict[str, Any], Optional[float]]:
     artifacts_root = Path(artifacts_root)
     render = _unit_render(unit)
@@ -1187,8 +1422,9 @@ def run_assigned_unit(
         unit["model_key"],
         pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
     )
-    if progress is not None:
-        agent = _CountingAgent(agent, progress)
+    if progress is not None or park is not None:
+        agent = _CountingAgent(agent, progress or ProgressCounter(), park=park,
+                               provider=str(unit.get("provider") or ""))
     from interface.config import ExperimentConfig
 
     if "experiment_config" not in unit:
@@ -1197,6 +1433,20 @@ def run_assigned_unit(
             "predates the resolved-config change; regenerate it with the coordinator-prepare role."
         )
 
+    resume_from = None
+    if unit.get("resume"):
+        # A resumable unit: continue the killed run from its archive (pipeline.resume).
+        from pipeline import resume
+
+        archive_dir = resume.unpack_archive(
+            unit["resume"]["archive_b64"], artifacts_root / DISTRIBUTED_DIR / "resume" / unit["unit_id"]
+        )
+        resume_from = {
+            "archive_dir": archive_dir,
+            "expected_inputs_hash": unit.get("episode_inputs_hash"),
+            "resume_count": int(unit["resume"].get("resume_count", 1)),
+            "label": unit["unit_id"],
+        }
     result = pipeline._run_one_unit(
         row,
         agent,
@@ -1213,6 +1463,7 @@ def run_assigned_unit(
         conditions=unit.get("condition_set"),
         render=render,
         force=force,
+        resume_from=resume_from,
     )
     if result is None:
         raise RuntimeError(f"Assigned unit {unit['unit_id']} is not runnable.")
@@ -1236,9 +1487,35 @@ def package_run_archive(
             raise FileNotFoundError(f"Run directory is missing expected file: {run_dir / name}")
     with tarfile.open(archive_path, "w:gz") as tar:
         for path in sorted(run_dir.rglob("*")):
-            if path.is_file():
+            if path.is_file() and path.relative_to(run_dir).parts[0] not in _CHECKPOINT_ENTRIES:
                 tar.add(path, arcname=str(path.relative_to(run_dir)))
     return archive_path
+
+
+def _applied_queries(record: Any) -> int:
+    """Query records in a checkpoint or an episode: one per applied query."""
+    transcript = record.get("transcript") if isinstance(record, dict) else None
+    return sum(1 for rec in transcript or [] if isinstance(rec, dict) and rec.get("kind") == "query")
+
+
+def _checkpoint_behind_archive(checkpoint: Path, resume_payload: dict[str, Any]) -> bool:
+    """True when a unit's local checkpoint is no further along than the resume
+    archive the coordinator sent. A checkpoint kept from a billing stop on this
+    worker can be older than the partial another worker uploaded since, and
+    resuming from it would re-pay (and diverge from) that worker's queries. A
+    checkpoint ahead of the archive is this worker's own progress past it before
+    a crash, and wins."""
+    try:
+        checkpointed = _applied_queries(_read_json(checkpoint))
+    except (OSError, ValueError):
+        return True  # unreadable: the archive is the only usable state
+    try:
+        raw = base64.b64decode(resume_payload["archive_b64"])
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tar:
+            archived = json.load(tar.extractfile("episode.json"))
+    except (AttributeError, KeyError, OSError, ValueError, tarfile.TarError):
+        return False  # the resume path refuses a bad archive itself
+    return checkpointed <= _applied_queries(archived)
 
 
 def _load_worker_state(path: Path) -> dict[str, Any]:
@@ -1247,16 +1524,20 @@ def _load_worker_state(path: Path) -> dict[str, Any]:
     return {}
 
 
-def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optional[int] = None) -> bool:
+def _safe_heartbeat(client: Any, worker_id: str, unit_id: str, progress: Optional[int] = None,
+                    park: Optional[_Park] = None) -> bool:
     """Send a heartbeat, swallowing transient errors so a brief coordinator
     outage cannot kill the heartbeat thread (which would let the unit go stale
-    and be double-assigned while this worker is still running it)."""
+    and be double-assigned while this worker is still running it). A response
+    saying the worker's provider is parked sets ``park``."""
     try:
-        client.heartbeat(worker_id, unit_id, progress)
-        return True
+        response = client.heartbeat(worker_id, unit_id, progress)
     except Exception as exc:
         logger.warning("Heartbeat failed for unit %s (will retry next interval): %s", unit_id, exc)
         return False
+    if park is not None and isinstance(response, dict) and response.get("park"):
+        park.event.set()
+    return True
 
 
 def _process_assigned_unit(
@@ -1267,6 +1548,7 @@ def _process_assigned_unit(
     artifacts_root: str | Path,
     agent_factory: Optional[AgentFactory],
     heartbeat_interval_seconds: float,
+    park: Optional[_Park] = None,
 ) -> bool:
     """Run one assigned unit end-to-end (heartbeat thread + episode + upload) or report
     it failed. Returns True on success, False on a *reported* failure. A unit failure
@@ -1279,17 +1561,19 @@ def _process_assigned_unit(
 
     def heartbeat_loop() -> None:
         while not stop_heartbeat.wait(heartbeat_interval_seconds):
-            _safe_heartbeat(client, worker_id, unit_id, progress.count)
+            _safe_heartbeat(client, worker_id, unit_id, progress.count, park=park)
 
     hb = threading.Thread(target=heartbeat_loop, daemon=True)
     try:
         client.heartbeat(worker_id, unit_id)
         hb.start()
         run_assigned_unit(
-            unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress
+            unit, artifacts_root=artifacts_root, agent_factory=agent_factory, progress=progress, park=park
         )
         archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
-        client.upload(worker_id, unit_id, archive_path)
+        response = client.upload(worker_id, unit_id, archive_path)
+        if park is not None and isinstance(response, dict) and response.get("parked"):
+            park.event.set()  # this episode (or another) hit the provider's billing limit
         return True
     except Exception as exc:
         client.fail(worker_id, unit_id, "".join(traceback.format_exception_only(type(exc), exc)).strip())
@@ -1340,17 +1624,33 @@ def run_worker_loop(
     local_state["worker_id"] = worker_id
     _write_json_atomic(state_file, local_state)
 
+    park = _Park()
+
     def _process(unit: dict[str, Any]) -> bool:
         if process_fn is not None:
             return process_fn(client, worker_id, unit)
         return _process_assigned_unit(
             client, worker_id, unit, artifacts_root=artifacts_root,
             agent_factory=agent_factory, heartbeat_interval_seconds=heartbeat_interval_seconds,
+            park=park,
         )
 
+    def _parked() -> bool:
+        if park.event.is_set():
+            logger.warning("worker %s parked: its provider hit a billing limit; taking no more units "
+                           "(coordinator-unpark after a top-up)", worker_id)
+            print(f"Worker {worker_id} parked: billing exhausted on its provider.")
+            return True
+        return False
+
     def _next_unit() -> Optional[dict[str, Any]]:
+        if park.event.is_set():
+            return None
         try:
-            return client.assign(worker_id, capabilities).get("unit")
+            response = client.assign(worker_id, capabilities)
+            if response.get("parked"):
+                park.event.set()
+            return response.get("unit")
         except Exception as exc:
             # A transient coordinator outage must not kill a long-running worker.
             logger.warning(
@@ -1360,14 +1660,18 @@ def run_worker_loop(
             return None
 
     if concurrency <= 1:
+        any_done = False
         while True:
             unit = _next_unit()
             if not unit:
+                if _parked():
+                    return any_done
                 if once or drain:
-                    return False
+                    return any_done
                 time.sleep(poll_interval_seconds)
                 continue
             ok = _process(unit)
+            any_done = any_done or ok
             if once:
                 return ok
 
@@ -1384,7 +1688,7 @@ def run_worker_loop(
                     break
                 in_flight.add(executor.submit(_process, unit))
             if not in_flight:
-                if once or drain:
+                if _parked() or once or drain:
                     return any_done
                 time.sleep(poll_interval_seconds)
                 continue
@@ -1410,7 +1714,7 @@ def _api_client_groups(
         if model_group is not None and unit.get("model_group") != model_group:
             continue
         unit_state = state["units"].get(unit["unit_id"], {})
-        if unit_state.get("status") not in {"pending", "stale", "assigned", "running"}:
+        if unit_state.get("status") not in {"pending", "stale", "assigned", "running", "resumable"}:
             continue
         groups.append(str(unit["model_group"]))
     return sorted(set(groups))
@@ -1521,20 +1825,22 @@ def run_lockstep_worker(
     the working set (<= ``max_batches``) topped up by ``client.assign`` refills.
 
     Per round the ``on_round`` hook heartbeats every still-active unit
-    (progress = the unit's stepper ``query_count``) AND finalizes any unit that
-    completed that round: a normal result is written (episode.json /
+    (progress = the unit's stepper ``query_count``). The runner's ``on_finish``
+    hook finalizes a unit the moment it leaves the working set, before the next
+    batch is submitted: a normal result is written (episode.json /
     run_inputs.json /run_score.json) through the same scoring path as
     ``run_assigned_unit`` and uploaded; an ``{"error": ...}`` result is
     ``client.fail``ed. Finalizing mid-run (not after ``run()``) frees the
     coordinator's per-worker concurrency slot so refill hands out fresh work,
-    keeping the batch saturated.
+    keeping the batch saturated, and puts a finished episode on the coordinator
+    instead of in memory while the next batch runs.
 
     ``worker_concurrency`` in ``capabilities`` MUST equal ``max_batches`` so the
     coordinator's assign never re-hands an already-held unit as new work.
     """
     from interface.batch_runner import LockstepBatchRunner, LockstepUnit
     from interface.config import ExperimentConfig
-    from interface.episode_checkpoint import resume_stepper
+    from interface.episode_checkpoint import discard_checkpoint, resume_stepper
     from interface.episode_log import flush_episode_log
     from interface.episode_step import EpisodeStepper
     from pipeline.run_stage3 import build_episode_runner
@@ -1563,12 +1869,14 @@ def run_lockstep_worker(
     handed_out: dict[str, dict[str, Any]] = {}   # unit_id -> assign payload
     lockstep_units: dict[str, Any] = {}          # unit_id -> LockstepUnit
     preps: dict[str, Any] = {}                    # unit_id -> _PreparedUnitRun
+    resumed: dict[str, dict[str, Any]] = {}       # unit_id -> resume provenance
     finalized: set[str] = set()
     completed: list[str] = []
     failed: list[str] = []
     group_model_key: dict[str, Optional[str]] = {"key": None}
     agent_box: dict[str, Any] = {}
-    runner_box: dict[str, Any] = {}
+    park = _Park()
+    parked: list[str] = []
 
     def _build_unit(unit: dict[str, Any]):
         unit_id = unit["unit_id"]
@@ -1582,10 +1890,11 @@ def run_lockstep_worker(
             return None
         if group_model_key["key"] is None:
             group_model_key["key"] = model_key
-            agent_box["agent"], _ = factory(
+            inner, _ = factory(
                 model_key,
                 pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
             )
+            agent_box["agent"] = _ParkingBatchAgent(inner, park, str(unit.get("provider") or ""))
         elif model_key != group_model_key["key"]:
             # One lockstep worker serves exactly one model group/key. A unit of a
             # different key would need a different agent, so fail it back to the
@@ -1615,14 +1924,37 @@ def run_lockstep_worker(
         )
         # The run dir must exist before the runner writes its per-round checkpoint.
         prep.run_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_path = prep.run_dir / "checkpoint.json"
+        checkpoint_path = prep.run_dir / CHECKPOINT_FILENAME
         runner = build_episode_runner(
             prep.source, prep.experiment_config, int(unit["seed"]),
             max_steps=prep.runtime_spec.max_steps, render=render,
         )
-        if checkpoint_path.exists():
-            # Crash resume: rebuild the stepper at the query boundary the previous
-            # attempt checkpointed instead of re-running from scratch.
+        resumed.pop(unit_id, None)
+        if unit.get("resume") and checkpoint_path.exists() and _checkpoint_behind_archive(
+            checkpoint_path, unit["resume"]
+        ):
+            discard_checkpoint(checkpoint_path)  # the coordinator's partial is at least as far along
+        if unit.get("resume") and not checkpoint_path.exists():
+            # A resumable unit: replay-verify the killed run, then continue it.
+            from pipeline import resume
+
+            try:
+                archive_dir = resume.unpack_archive(
+                    unit["resume"]["archive_b64"], artifacts_root / DISTRIBUTED_DIR / "resume" / unit_id
+                )
+                stepper, resumed[unit_id] = resume.resumed_stepper(
+                    runner, archive_dir, expected_inputs_hash=unit.get("episode_inputs_hash"),
+                    resume_count=int(unit["resume"].get("resume_count", 1)), label=unit_id,
+                )
+            except resume.ResumeRefused as exc:
+                _safe_fail(client, worker_id, unit_id, f"{type(exc).__name__}: {exc}")
+                failed.append(unit_id)
+                return None
+            stepper.maze_path = str(prep.source)
+        elif checkpoint_path.exists():
+            # Crash resume (or a billing stop's kept checkpoint): rebuild the stepper
+            # at the query boundary the previous attempt checkpointed instead of
+            # re-running from scratch.
             stepper = resume_stepper(checkpoint_path, runner=runner)
             stepper.maze_path = str(prep.source)
         else:
@@ -1634,24 +1966,40 @@ def run_lockstep_worker(
         finalized.discard(unit_id)  # allow a re-assigned (retried) unit to re-run
         return lsu
 
-    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> None:
+    def _finalize_unit(unit_id: str, result: dict[str, Any]) -> bool:
+        """Upload (or fail back) a unit's final result; True once it is on the
+        coordinator. The run dir keeps its checkpoint: the runner deletes it
+        only after a normal result is uploaded."""
         unit = handed_out[unit_id]
         try:
-            if isinstance(result, dict) and "error" in result:
+            if isinstance(result, dict) and "error" in result and result.get("billing"):
+                # Billing (or a park): upload the episode as it stood at its last
+                # query boundary, resumable; the coordinator parks the provider.
+                stepper = lockstep_units[unit_id].stepper
+                stepper.query_count -= 1  # the query in flight was never answered
+                partial = stepper.result()
+                partial["end_reason"] = f"agent_error:BillingExhausted: {result['error']}"[:200]
+                partial["success"] = False
+                result = partial
+                park.event.set()
+                parked.append(unit_id)
+            elif isinstance(result, dict) and "error" in result:
                 _safe_fail(client, worker_id, unit_id, str(result["error"]))
                 failed.append(unit_id)
-                return
+                return False
             prep = preps[unit_id]
             render = _unit_render(unit)
             if render.backend != "minigrid":                 # as run_episode stamps it
                 result["render"] = render.provenance(prep.runtime_spec)
-            flush_episode_log(result, prep.run_dir)          # episode.json (+frames)
-            prep.write_run_inputs(extras={"pricing_tier": "batch"})
+            result.update(resumed.get(unit_id, {}))           # resumed_from / resume
+            flush_episode_log(result, prep.run_dir, keep=_CHECKPOINT_ENTRIES)  # episode.json (+frames)
+            prep.write_run_inputs(extras={"pricing_tier": "batch", **resumed.get(unit_id, {})})
             episode = json.loads(prep.episode_path.read_text(encoding="utf-8"))
             prep.score_episode(episode)                      # run_score.json
             archive_path = package_run_archive(unit, artifacts_root=artifacts_root)
             _upload_archive(client, worker_id, unit_id, archive_path)
             completed.append(unit_id)
+            return True
         except Exception as exc:  # noqa: BLE001 - one bad unit must not kill the batch
             logger.warning("lockstep worker %s: finalize unit %s failed: %s", worker_id, unit_id, exc)
             _safe_fail(
@@ -1659,13 +2007,20 @@ def run_lockstep_worker(
                 "".join(traceback.format_exception_only(type(exc), exc)).strip(),
             )
             failed.append(unit_id)
+            return False
 
     def refill():
+        if park.event.is_set():
+            return None  # parked: take nothing new
         try:
-            unit = client.assign(worker_id, capabilities).get("unit")
+            response = client.assign(worker_id, capabilities)
         except Exception as exc:
             logger.warning("lockstep worker %s: assign failed: %s", worker_id, exc)
             return None
+        if response.get("parked"):
+            park.event.set()
+            return None
+        unit = response.get("unit")
         if not unit:
             return None
         unit_id = unit["unit_id"]
@@ -1676,33 +2031,33 @@ def run_lockstep_worker(
         return _build_unit(unit)
 
     def on_round(active) -> None:
-        active_ids = {u.unit_id for u in active}
         for u in active:
-            _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0))
-        # Finalize units that dropped out of the working set this round. Their
-        # results are already in the runner's results map (populated before this
-        # hook fires), including the ``{"error": ...}`` shape for failed steppers.
-        results = getattr(runner_box.get("runner"), "_results", {})
-        for unit_id in list(handed_out):
-            if unit_id in active_ids or unit_id in finalized:
-                continue
-            result = results.get(unit_id)
-            if result is None:
-                continue
-            finalized.add(unit_id)
-            _finalize_unit(unit_id, result)
+            _safe_heartbeat(client, worker_id, u.unit_id, getattr(u.stepper, "query_count", 0), park=park)
 
-    first_unit = None
-    try:
-        first_unit = client.assign(worker_id, capabilities).get("unit")
-    except Exception as exc:
-        logger.warning("lockstep worker %s: initial assign failed: %s", worker_id, exc)
-    if not first_unit:
-        return {"worker_id": worker_id, "model_key": None, "completed": 0, "failed": []}
+    def on_finish(lsu, result: dict[str, Any]) -> bool:
+        # The unit left the working set (finished, or the ``{"error": ...}``
+        # shape for a failed stepper): finalize it now, before the next batch.
+        finalized.add(lsu.unit_id)
+        return _finalize_unit(lsu.unit_id, result)
 
-    first_lsu = _build_unit(first_unit)
+    # Take units until one builds: a refused resume or a foreign model key is
+    # failed back by _build_unit, and the worker moves on to the next unit.
+    first_lsu = None
+    seen: set[str] = set()
+    while first_lsu is None:
+        try:
+            response = client.assign(worker_id, capabilities)
+        except Exception as exc:
+            logger.warning("lockstep worker %s: initial assign failed: %s", worker_id, exc)
+            break
+        first_unit = response.get("unit")
+        if not first_unit or first_unit["unit_id"] in seen:
+            break
+        seen.add(first_unit["unit_id"])
+        first_lsu = _build_unit(first_unit)
     if first_lsu is None:
-        return {"worker_id": worker_id, "model_key": group_model_key["key"], "completed": 0, "failed": failed}
+        return {"worker_id": worker_id, "model_key": group_model_key["key"], "completed": 0, "failed": failed,
+                "parked": parked}
 
     runner = LockstepBatchRunner(
         agent_box["agent"],
@@ -1710,17 +2065,38 @@ def run_lockstep_worker(
         round_deadline_s=round_deadline_s,
         refill=refill,
         on_round=on_round,
+        on_finish=on_finish,
     )
-    runner_box["runner"] = runner
     runner.add(first_lsu)
     runner.run()
 
+    if park.event.is_set():
+        print(f"Lockstep worker {worker_id} parked: billing exhausted on its provider "
+              f"({len(parked)} episode(s) parked resumable).")
     return {
         "worker_id": worker_id,
         "model_key": group_model_key["key"],
         "completed": len(completed),
         "failed": failed,
+        "parked": parked,
     }
+
+
+class _ParkingBatchAgent:
+    """The lockstep worker's batch agent: once its provider (or its model) is
+    parked, the next round raises BillingParked, so every in-flight episode
+    parks at that query boundary through the batch runner's billing path."""
+
+    def __init__(self, inner: Any, park: _Park, provider: str) -> None:
+        self._inner, self._park, self._provider = inner, park, provider
+
+    def generate_batch(self, batch):
+        if self._park.event.is_set():
+            raise BillingParked(self._provider)
+        return self._inner.generate_batch(batch)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 def _safe_fail(client: Any, worker_id: str, unit_id: str, reason: str) -> bool:
@@ -1761,7 +2137,11 @@ def finalize_job(
     run_rows: list[dict[str, Any]] = []
     composites: dict[tuple, Optional[float]] = {}
 
+    infra_killed = _infra_killed_rows(plan, state)
+    killed_ids = {row["unit_id"] for row in infra_killed}
     for unit in plan["units"]:
+        if unit["unit_id"] in killed_ids:
+            continue  # a partial run: resumable or failed, never a scored row
         missing_files = _validate_final_run_files(unit, artifacts_root)
         unit_state = state["units"].setdefault(unit["unit_id"], {})
         if missing_files:
@@ -1815,6 +2195,17 @@ def finalize_job(
         ] = run_score.get("composite")
         unit_state.update({"status": "verified", "finalized_at": _iso(), "updated_at": _iso()})
 
+    if infra_killed:
+        print(f"{len(infra_killed)} infra-killed unit(s), not in the rows:")
+        for row in infra_killed:
+            print(f"  {row['unit_id']} {row['task_id']} {row['model_id']} {row['status']} "
+                  f"stall={row['stall']} steps_left={row['steps_left']} queries={row['queries']} "
+                  f"resumes={row['resumes']} {row['end_reason']}")
+    if infra_killed and not allow_partial:
+        raise RuntimeError(
+            f"{len(infra_killed)} infra-killed unit(s) are not finished (resume them, or finalize with "
+            f"--allow-partial-finalize): {[row['unit_id'] for row in infra_killed]}"
+        )
     if missing and not allow_partial:
         raise RuntimeError(f"Missing distributed work units: {missing}")
 
@@ -1853,6 +2244,7 @@ def finalize_job(
         "job_id": plan["job_id"],
         "run_count": len(run_rows),
         "missing_units": missing,
+        "infra_killed": infra_killed,
         "payloads": payloads,
     }
 
@@ -1958,6 +2350,13 @@ def dispatch_distributed_role(args: Any) -> None:
             f"Coordinator API client completed {result['completed']} unit(s) "
             f"for groups={result['groups']}."
         )
+        return
+    if role == "coordinator-unpark":
+        if not args.provider:
+            raise SystemExit("--provider is required for coordinator-unpark.")
+        result = CoordinatorStore(args.artifacts_root).unpark(args.provider, getattr(args, "model", None))
+        what = f"model {result['model']} on {result['unparked']}" if result["model"] else f"provider {result['unparked']}"
+        print(f"Unparked {what}: groups {', '.join(result['groups'])} take units again.")
         return
     if role == "coordinator-finalize":
         result = finalize_job(
