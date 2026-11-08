@@ -69,12 +69,16 @@ def test_worker_role_fields_are_hash_invariant():
     assert _runtime_model_config(base) == _runtime_model_config(bare)
 
 
+def _without_spend_caps(models):
+    return {n: {k: v for k, v in m.items() if k != "spend_cap_usd"} for n, m in models.items()}
+
+
 def test_nl_run_is_the_2d_run_as_text():
     nl = json.loads((_FIX / "run_config.mechanics_15_nl.json").read_text())
     assert nl["experiment_config"] == {**_CFG["experiment_config"], "observation": "text_only"}
     assert "render" not in nl, "text_only cannot take a 3D render block"
     assert nl["manifest"] == _CFG["manifest"]
-    assert nl["models"] == _CFG["models"]
+    assert _without_spend_caps(nl["models"]) == _without_spend_caps(_CFG["models"])
 
 
 def test_3d_run_is_the_2d_run_in_mujoco_with_a_start_map():
@@ -84,7 +88,21 @@ def test_3d_run_is_the_2d_run_in_mujoco_with_a_start_map():
     rs = RenderSettings.from_run_config(d3)
     assert (rs.backend, rs.camera, rs.start_map, rs.resolution) == ("mujoco3d", "first_person", True, "grid")
     assert d3["manifest"] == _CFG["manifest"]
-    assert d3["models"] == _CFG["models"]
+    assert _without_spend_caps(d3["models"]) == _without_spend_caps(_CFG["models"])
+
+
+@pytest.mark.parametrize("mode", ["2d", "nl", "3d"])
+def test_every_model_has_its_own_spend_cap(mode, monkeypatch):
+    """Each modality is its own launch, so each sets a cap for every model. Caps are
+    per model (unlike the equal output caps) and reach the built agent."""
+    for var in ("MOONSHOT_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.setenv(var, "secret")
+    cfg = json.loads((_FIX / f"run_config.mechanics_15_{mode}.json").read_text())
+    for name, entry in cfg["models"].items():
+        cap = entry.get("spend_cap_usd")
+        assert isinstance(cap, (int, float)) and cap > 0, (mode, name)
+        agent, _ = _build_agent_from_spec(name, entry)
+        assert agent.config.spend_cap_usd == cap, (mode, name)
 
 
 @pytest.mark.parametrize("mode", ["2d", "nl", "3d"])

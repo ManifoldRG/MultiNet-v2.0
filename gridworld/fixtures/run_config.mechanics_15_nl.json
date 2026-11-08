@@ -3,7 +3,7 @@
   "manifest": "gridworld/fixtures/manifest.mechanics_15.json",
   "_note_no_conditions": "No conditions key => single (default) cell built from experiment_config overlay. Do NOT add conditions (that would re-enable the sweep).",
   "_note_requires": "context_window=full comes from PR #54 (R2 full context). Launching before it is on the launched SHA fails at config load. NL history caching comes from PR #75 (one text block per history step); without it Claude and OpenAI cache only the system prompt and resend the whole history uncached every query.",
-  "_note_model_params": "Equal 64k output caps (max_tokens; max_completion_tokens for OpenAI and Kimi K3). Thinking on for all three. Opus 5.5: effort=xhigh, no sampling params, Message Batches API via the lockstep worker (worker_role=lockstep-worker; coordinator STALE_AFTER_SECONDS >= 12600). Kimi K3: always thinks, reasoning_effort=max (Moonshot's default, set explicitly for provenance), no thinking object or sampling params; plain worker on the sync API (Moonshot Batch support for kimi-k3 unverified). GPT-6 Astra: reasoning_effort=xhigh, flex tier, image_detail=high, plain worker (the OpenAI agent has no batch path), spend_cap_usd=300 is a per-process hard stop on the Astra worker's running total (see _note_cost for where it stops the run; pair it with an OpenAI project budget). context_window=full resends every prior decision frame each query (history capped by max_history_tokens), so per-episode input grows quadratically with steps: estimate cost before launch.",
+  "_note_model_params": "Equal 64k output caps (max_tokens; max_completion_tokens for OpenAI and Kimi K3). Thinking on for all three. Opus 5.5: effort=xhigh, no sampling params, Message Batches API via the lockstep worker (worker_role=lockstep-worker; coordinator STALE_AFTER_SECONDS >= 12600). Kimi K3: always thinks, reasoning_effort=max (Moonshot's default, set explicitly for provenance), no thinking object or sampling params; plain worker on the sync API (Moonshot Batch support for kimi-k3 unverified). GPT-6 Astra: reasoning_effort=xhigh, flex tier, image_detail=high, plain worker (the OpenAI agent has no batch path). Spend caps are set per model and per modality, unlike the equal output caps: spend_cap_usd is a hard stop on that model's priced usage in its worker process (interface/agents/spend_cap.py), sized from _note_cost; it resets if the worker restarts, so pair each with a provider budget. context_window=full resends every prior decision frame each query (history capped by max_history_tokens), so per-episode input grows quadratically with steps: estimate cost before launch.",
   "experiment_config": {
     "prompting": "minimal",
     "observation": "text_only",
@@ -24,6 +24,7 @@
       "enable_thinking": true,
       "reasoning_effort": "max",
       "prompt_cache_ttl": "1h",
+      "spend_cap_usd": 1150,
       "group": "kimi-api",
       "worker_count": 1,
       "worker_role": "worker",
@@ -41,6 +42,7 @@
       "enable_thinking": true,
       "effort": "xhigh",
       "enable_prompt_cache": true,
+      "spend_cap_usd": 75,
       "group": "claude-api",
       "worker_count": 1,
       "worker_role": "lockstep-worker",
@@ -60,7 +62,7 @@
       "enable_prompt_cache": true,
       "timeout": 1800,
       "max_attempts": 30,
-      "spend_cap_usd": 300,
+      "spend_cap_usd": 100,
       "group": "openai-api",
       "worker_count": 1,
       "worker_role": "worker",
@@ -71,7 +73,7 @@
       ]
     }
   },
-  "_note_cost": "Projection for the 15 mazes with caching on, per model: the 2D projection's formula, maze lengths and prices (run_config.mechanics_15_2d.json's _note_cost) with NL's token sizes. NL input is small: ~52 tokens per history step (coords, count_tokens on M10), a ~1,240-token system prompt read from cache on every query, and a ~515-token uncached tail. Output per query: Opus 5.5 xhigh averaged ~580 on the NL rerun of r1_S4_10x10_dense_1 (2D: ~450); Kimi K3 and GPT-6 Astra were not run in NL, so their 2D figures are used (~10.5k, ~220). Total (input + output) over the 15 mazes if every episode runs 1x / 1.5x / 2x / 3x (the step cap) its shortest path: Opus 5.5 ~$12 / ~$19 / ~$26 / ~$42; Kimi K3 ~$246 / ~$370 / ~$495 / ~$746; Astra ~$16 / ~$26 / ~$37 / ~$62; panel ~$274 / ~$415 / ~$557 / ~$850. Kimi K3's output alone is 85-88% of the panel total. Without PR #75 Claude and OpenAI cache only the system prompt: Opus 5.5 input would be ~$11 / ~$23 / ~$40 / ~$87 instead of ~$3 / ~$6 / ~$8 / ~$15, and Astra ~$27 / ~$58 / ~$99 / ~$216 instead of ~$8 / ~$13 / ~$20 / ~$36. Astra's spend_cap_usd=300 is not reached within the step cap, even uncached (~$268 at 3x). Calibrate on M10 (run_config.mechanics_15_nl_calib.json) and re-project from its measured episode lengths and output tokens before launch.",
+  "_note_cost": "Projection for the 15 mazes with caching on, per model: the 2D projection's formula, maze lengths and prices (run_config.mechanics_15_2d.json's _note_cost) with NL's token sizes. NL input is small: ~52 tokens per history step (coords, count_tokens on M10), a ~1,240-token system prompt read from cache on every query, and a ~515-token uncached tail. Output per query: Opus 5.5 xhigh averaged ~580 on the NL rerun of r1_S4_10x10_dense_1 (2D: ~450); Kimi K3 and GPT-6 Astra were not run in NL, so their 2D figures are used (~10.5k, ~220). Total (input + output) over the 15 mazes if every episode runs 1x / 1.5x / 2x / 3x (the step cap) its shortest path: Opus 5.5 ~$12 / ~$19 / ~$26 / ~$42; Kimi K3 ~$246 / ~$370 / ~$495 / ~$746; Astra ~$16 / ~$26 / ~$37 / ~$62; panel ~$274 / ~$415 / ~$557 / ~$850. Kimi K3's output alone is 85-88% of the panel total. Without PR #75 Claude and OpenAI cache only the system prompt: Opus 5.5 input would be ~$11 / ~$23 / ~$40 / ~$87 instead of ~$3 / ~$6 / ~$8 / ~$15, and Astra ~$27 / ~$58 / ~$99 / ~$216 instead of ~$8 / ~$13 / ~$20 / ~$36. Spend caps (spend_cap_usd, per model), about 1.5x each model's step-cap projection as in 2D: Opus 5.5 $75, Kimi K3 $1,150, Astra $100. Calibrate on M10 (run_config.mechanics_15_nl_calib.json) and re-project from its measured episode lengths and output tokens before launch.",
   "_note_launch": "Launch with difficulty_max_static_score = 8000 (--difficulty-max-static-score 8000, fleet DIFFICULTY_MAX=8000), set for this panel: the largest static score is M10's, about 7,840. Stage 2 refuses the run if any selected maze scores above the cap. Stage 2 takes tens of minutes per maze on these 18x18 mechanics mazes: pre-score with a local coordinator-prepare and launch with PRESCORED_TASKS. Serve the coordinator with STALE_AFTER_SECONDS >= 12600 for the lockstep Opus group.",
   "_note_cache": "Prompt caching on: with context_window=full and text_only, the history goes out as one text block per step (PR #75) with breakpoints on the newest step and the previous request's newest step, so each query reads the system prompt and every earlier observation and action from cache and writes only the new step; the current state, budget/stall lines and question sit after the last breakpoint. Kimi and Qwen get the same text joined into one string (implicit prefix caching). Opus: Message Batches with batch_cache_ttl=1h on the fleet. Kimi K3: prompt_cache_ttl=1h (erratic max-effort latency). See run_config.mechanics_15_2d.json's _note_cache for the image-mode measurements."
 }

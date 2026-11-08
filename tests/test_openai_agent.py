@@ -184,8 +184,8 @@ def test_spend_cap_blocks_after_budget_spent(monkeypatch):
         {"input_tokens": 1000, "cached_input_tokens": 200, "output_tokens": 400},
         price_for("gpt-6-astra", "flex"),
     )
-    assert SPEND.usd == pytest.approx(expected)
-    # The ledger is process-wide: a fresh agent is blocked too, before any request.
+    assert SPEND.total("gpt-6-astra") == pytest.approx(expected)
+    # The ledger is per model and process-wide: a fresh agent is blocked too, before any request.
     with pytest.raises(OpenAISpendCapReached):
         OpenAIAgent(cfg, api_key="k").generate(_MESSAGES)
     assert seen["calls"] == 1
