@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 from gridworld.task_spec import TaskSpecification
-MAZES = sorted((Path(__file__).resolve().parents[1] / "mazes").glob("m1[1-4]/M1*.json"))
+MAZES = sorted((Path(__file__).resolve().parents[1] / "ogbench/ogbench/procgen/maze_jsons").glob("M1[1-4]/*.json"))
 @pytest.mark.parametrize("path", MAZES, ids=lambda p: p.stem)
 def test_maze_is_valid(path):
     ok, errors = TaskSpecification.from_json(str(path)).validate()
