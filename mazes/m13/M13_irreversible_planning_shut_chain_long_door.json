@@ -596,6 +596,10 @@
       ],
       [
         15,
+        4
+      ],
+      [
+        15,
         6
       ],
       [
@@ -974,7 +978,7 @@
         "id": "kB",
         "position": [
           15,
-          17
+          5
         ],
         "color": "blue"
       }
@@ -1131,7 +1135,8 @@
     "hidden_mechanisms": [],
     "observability": "full",
     "view_size": 7,
-    "shut_after": 36
+    "shut_after": 58,
+    "door_shut_after": 22
   },
   "goal": {
     "type": "reach_position",

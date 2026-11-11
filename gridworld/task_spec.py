@@ -225,6 +225,7 @@ class MechanismSet:
     rotating_tiles: list[Position] = field(default_factory=list)
     rotating_initial_directions: list[int] = field(default_factory=list)
     phased_patches: list[PhasedPatch] = field(default_factory=list)
+    stable_tiles: list[Position] = field(default_factory=list)  # Floor that never disappears
 
     @classmethod
     def from_dict(cls, d: dict) -> "MechanismSet":
@@ -242,6 +243,7 @@ class MechanismSet:
             rotating_tiles=[Position.from_list(p) for p in d.get("rotating_tiles", [])],
             rotating_initial_directions=list(d.get("rotating_initial_directions", [])),
             phased_patches=[PhasedPatch.from_dict(p) for p in d.get("phased_patches", [])],
+            stable_tiles=[Position.from_list(p) for p in d.get("stable_tiles", [])],
         )
 
 
@@ -250,7 +252,8 @@ class Rules:
     """Puzzle rule configuration."""
     key_consumption: bool = True  # Keys are consumed when used
     disappear_after: float = inf  # Actions after stepping on floor before that cell becomes a wall
-    shut_after: float = inf  # Actions after opening a door or switch before it shuts for good
+    shut_after: float = inf  # Actions after turning a switch on before it shuts for good
+    door_shut_after: float = inf  # Actions after opening a door before it shuts for good
     switch_type: Literal["toggle", "hold", "one_shot"] = "toggle"  # Default switch behavior
     hidden_mechanisms: list[str] = field(default_factory=list)  # IDs of mechanisms not visible initially
     observability: Literal["full", "view_cone", "fog_of_war"] = "full"
@@ -262,6 +265,7 @@ class Rules:
             key_consumption=d.get("key_consumption", True),
             disappear_after=d.get("disappear_after", inf),
             shut_after=d.get("shut_after", inf),
+            door_shut_after=d.get("door_shut_after", d.get("shut_after", inf)),
             switch_type=d.get("switch_type", "toggle"),
             hidden_mechanisms=d.get("hidden_mechanisms", []),
             observability=d.get("observability", "full"),
@@ -484,11 +488,13 @@ class TaskSpecification:
                     }
                     for patch in self.mechanisms.phased_patches
                 ],
+                **({"stable_tiles": [pos_to_list(p) for p in self.mechanisms.stable_tiles]} if self.mechanisms.stable_tiles else {}),
             },
             "rules": {
                 "key_consumption": self.rules.key_consumption,
                 **({"disappear_after": self.rules.disappear_after} if self.rules.disappear_after != inf else {}),
                 **({"shut_after": self.rules.shut_after} if self.rules.shut_after != inf else {}),
+                **({"door_shut_after": self.rules.door_shut_after} if self.rules.door_shut_after != self.rules.shut_after else {}),
                 "switch_type": self.rules.switch_type,
                 "hidden_mechanisms": self.rules.hidden_mechanisms,
                 "observability": self.rules.observability,

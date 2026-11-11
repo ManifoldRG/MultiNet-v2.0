@@ -304,6 +304,10 @@
       ],
       [
         8,
+        9
+      ],
+      [
+        8,
         10
       ],
       [
@@ -585,6 +589,10 @@
       [
         15,
         2
+      ],
+      [
+        15,
+        4
       ],
       [
         15,
@@ -957,8 +965,8 @@
       {
         "id": "kB",
         "position": [
-          16,
-          3
+          15,
+          5
         ],
         "color": "blue"
       }
@@ -1016,7 +1024,7 @@
         "id": "g1",
         "position": [
           9,
-          11
+          14
         ],
         "color": "black",
         "initial_state": "closed"
@@ -1024,8 +1032,8 @@
       {
         "id": "g2",
         "position": [
-          8,
-          9
+          7,
+          21
         ],
         "color": "black",
         "initial_state": "open"
@@ -1146,6 +1154,40 @@
         "closed_steps": 8,
         "offset": 8
       }
+    ],
+    "stable_tiles": [
+      [
+        7,
+        5
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        9,
+        5
+      ],
+      [
+        10,
+        5
+      ],
+      [
+        11,
+        5
+      ],
+      [
+        12,
+        5
+      ],
+      [
+        13,
+        5
+      ],
+      [
+        14,
+        5
+      ]
     ]
   },
   "rules": {
@@ -1155,7 +1197,8 @@
     "observability": "full",
     "view_size": 7,
     "disappear_after": 4,
-    "shut_after": 36
+    "shut_after": 62,
+    "door_shut_after": 22
   },
   "goal": {
     "type": "reach_position",

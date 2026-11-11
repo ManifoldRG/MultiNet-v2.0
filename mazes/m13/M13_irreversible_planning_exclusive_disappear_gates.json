@@ -304,6 +304,10 @@
       ],
       [
         8,
+        9
+      ],
+      [
+        8,
         10
       ],
       [
@@ -1027,8 +1031,8 @@
       {
         "id": "g1",
         "position": [
-          9,
-          11
+          19,
+          2
         ],
         "color": "black",
         "initial_state": "closed"
@@ -1036,8 +1040,8 @@
       {
         "id": "g2",
         "position": [
-          8,
-          9
+          7,
+          21
         ],
         "color": "black",
         "initial_state": "open"

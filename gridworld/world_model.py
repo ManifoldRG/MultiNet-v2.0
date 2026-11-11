@@ -69,6 +69,7 @@ class TaskPlanningContext:
         self.key_consumption = spec.rules.key_consumption
         self.disappear_after = spec.rules.disappear_after
         self.shut_after = spec.rules.shut_after
+        self.door_shut_after = spec.rules.door_shut_after
 
         self.walls = {(wall.x, wall.y) for wall in spec.maze.walls}
         for x in range(self.width):
@@ -114,6 +115,7 @@ class TaskPlanningContext:
         self.hazards = {hazard.position.to_tuple() for hazard in spec.mechanisms.hazards}
         self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
         self.frozen_tiles = {cell.to_tuple() for cell in spec.mechanisms.frozen_tiles}
+        self.stable_tiles = {cell.to_tuple() for cell in spec.mechanisms.stable_tiles}
         self.freeze_steps = spec.mechanisms.freeze_steps
         self.rotating_index = {
             cell.to_tuple(): i for i, cell in enumerate(spec.mechanisms.rotating_tiles)
@@ -191,7 +193,7 @@ def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> Planner
         if transition.action == action:
             return transition.next_state
     settled = _settle(state)
-    clocks = isfinite(ctx.disappear_after) or isfinite(ctx.shut_after) or bool(ctx.phased)
+    clocks = isfinite(ctx.disappear_after) or isfinite(ctx.shut_after) or isfinite(ctx.door_shut_after) or bool(ctx.phased)
     if clocks:
         return _tick(ctx, state, settled)
     return settled
@@ -199,7 +201,7 @@ def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> Planner
 
 def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
     """Generate legal R1 actions from a world state."""
-    clocks = isfinite(ctx.disappear_after) or isfinite(ctx.shut_after) or bool(ctx.phased)
+    clocks = isfinite(ctx.disappear_after) or isfinite(ctx.shut_after) or isfinite(ctx.door_shut_after) or bool(ctx.phased)
     fresh = ctx.initial_state()
     for transition in _raw_successors(ctx, state):
         if not clocks or transition.next_state == fresh:
@@ -348,7 +350,8 @@ def shortest_plan(
 def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
     """Flood-fill from the agent to the goal. A closed door counts as open once a
     key of its colour is held or reachable, a closed gate once a usable switch for
-    it is reachable, and a portal pad leads to every end of its portal."""
+    it is reachable or its switch is about to shut (gates then return to their
+    initial state), and a portal pad leads to every end of its portal."""
     key_cells = {(x, y): ctx.keys_by_id[key_id]["color"] for key_id, x, y in state.key_positions}
     usable = {
         pos: switch["controls"]
@@ -356,7 +359,13 @@ def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
         if switch["id"] not in state.shut_switches and switch["id"] not in state.used_switches
     }
     colors = set() if state.carrying_key is None else {ctx.keys_by_id[state.carrying_key]["color"]}
-    gates: set[str] = set()
+    timed = {switch_id for switch_id, _ in state.switch_timers}
+    gates = {
+        gate_id
+        for switch in ctx.switches_by_pos.values()
+        if switch["id"] in timed
+        for gate_id in switch["controls"]
+    }
 
     def passable(pos: tuple[int, int]) -> bool:
         if pos in ctx.walls or pos in state.sealed or pos in ctx.hazards or pos in ctx.blocks or pos in ctx.kill_cells:
@@ -654,7 +663,7 @@ def _phase_closed(ctx: TaskPlanningContext, tick: int, pos: tuple[int, int]) -> 
 
 
 def _can_vanish(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, int]) -> bool:
-    if pos == ctx.goal or pos in ctx.walls or pos in ctx.phased_cells:
+    if pos == ctx.goal or pos in ctx.walls or pos in ctx.phased_cells or pos in ctx.stable_tiles:
         return False
     if pos in ctx.doors_by_pos or pos in ctx.gates_by_pos or pos in ctx.switches_by_pos:
         return False
@@ -684,7 +693,8 @@ def _tick(ctx: TaskPlanningContext, prev: PlannerState, nxt: PlannerState) -> Pl
             continue
         left -= 1
         if left <= 0:
-            sealed.add((x, y))
+            if _key_id_at(nxt, (x, y)) is None:
+                sealed.add((x, y))
         else:
             armed.add((x, y, left))
 
@@ -694,12 +704,12 @@ def _tick(ctx: TaskPlanningContext, prev: PlannerState, nxt: PlannerState) -> Pl
     shut_switches = set(nxt.shut_switches)
     open_doors = set(nxt.open_doors)
     active = set(nxt.active_switches)
-    if isfinite(ctx.shut_after):
+    if isfinite(ctx.shut_after) or isfinite(ctx.door_shut_after):
         for door_id in nxt.open_doors - prev.open_doors:
-            if door_id not in shut_doors:
-                door_timers[door_id] = int(ctx.shut_after)
+            if door_id not in shut_doors and isfinite(ctx.door_shut_after):
+                door_timers[door_id] = int(ctx.door_shut_after)
         for switch_id in nxt.active_switches - prev.active_switches:
-            if switch_id not in shut_switches:
+            if switch_id not in shut_switches and isfinite(ctx.shut_after):
                 switch_timers[switch_id] = int(ctx.shut_after)
         for door_id, left in list(door_timers.items()):
             if door_id in nxt.open_doors - prev.open_doors:
