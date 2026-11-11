@@ -15,6 +15,7 @@ from .bootstrap import disable_gymnasium_env_plugins
 disable_gymnasium_env_plugins()
 
 # Import from gymnasium's minigrid package (no naming conflict after rename to gridworld/)
+from minigrid.core import constants as minigrid_constants
 from minigrid.core.constants import TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
@@ -23,8 +24,19 @@ from minigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
 from minigrid.minigrid_env import MiniGridEnv
 
 from .task_spec import TaskSpecification, Position
-from .world_model import PlannerState, TaskPlanningContext, apply, classify_mechanic, successors
+from .world_model import (
+    PlannerState,
+    TaskPlanningContext,
+    apply,
+    classify_mechanic,
+    goal_still_reachable,
+    successors,
+)
 
+# MiniGrid ships six key/door colours; pink is a seventh that clashes with no tile.
+minigrid_constants.COLORS["pink"] = np.array([255, 105, 180])
+minigrid_constants.COLOR_TO_IDX["pink"] = 6
+minigrid_constants.IDX_TO_COLOR[6] = "pink"
 
 # Color mapping for MiniGrid
 MINIGRID_COLORS = {
@@ -33,6 +45,7 @@ MINIGRID_COLORS = {
     "green": "green",
     "yellow": "yellow",
     "purple": "purple",
+    "pink": "pink",
     "grey": "grey",
     "gray": "grey",
     "cyan": "blue",
@@ -228,6 +241,24 @@ class RotatingTile(Floor):
         fill_coords(img, point_in_triangle(a, b, c), np.array([40, 28, 16]))
 
 
+class PhasedTile(Floor):
+    def __init__(self):
+        super().__init__()
+        self.closed = False
+
+    def encode(self):
+        obj_type, color_idx, _state = super().encode()
+        return (obj_type, color_idx, 9 if self.closed else 8)
+
+    def render(self, img):
+        if self.closed:
+            fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([90, 96, 110]))
+            fill_coords(img, point_in_rect(0.15, 0.85, 0.42, 0.58), np.array([40, 44, 54]))
+        else:
+            fill_coords(img, point_in_rect(0, 1, 0, 1), np.array([186, 214, 176]))
+            fill_coords(img, point_in_rect(0.2, 0.8, 0.45, 0.55), np.array([250, 252, 246]))
+
+
 class FrozenTile(Floor):
     def encode(self):
         obj_type, color_idx, _state = super().encode()
@@ -303,6 +334,14 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.teleporters: dict[str, TeleporterObj] = {}
         self.freeze_remaining = 0
         self.rotators: list[RotatingTile] = []
+        self.phase_tiles: list[tuple[PhasedTile, int, int, int]] = []
+        self.rule_tick = 0
+        self.sealed_cells: frozenset[tuple[int, int]] = frozenset()
+        self.vanish_at: frozenset[tuple[int, int, int]] = frozenset()
+        self.door_timers: frozenset[tuple[str, int]] = frozenset()
+        self.switch_timers: frozenset[tuple[str, int]] = frozenset()
+        self.shut_doors: frozenset[str] = frozenset()
+        self.shut_switches: frozenset[str] = frozenset()
         self.switch_gate_map: dict[str, list[str]] = {}  # switch_id -> [gate_ids]
         self.gate_initial_state: dict[str, bool] = {}
 
@@ -437,6 +476,16 @@ class CustomMiniGridEnv(MiniGridEnv):
 
     def place_frozen_tile(self, x: int, y: int):
         self.put_obj(FrozenTile(), x, y)
+
+    def place_portal_pad(self, x: int, y: int, color: str, teleporter_id: str):
+        obj = TeleporterObj(color=color, teleporter_id=teleporter_id)
+        self.teleporters[teleporter_id] = obj
+        self.put_obj(obj, x, y)
+
+    def place_phased_cell(self, x: int, y: int, open_steps: int, closed_steps: int, offset: int):
+        tile = PhasedTile()
+        self.phase_tiles.append((tile, open_steps, closed_steps, offset))
+        self.put_obj(tile, x, y)
 
     def place_rotating_tile(self, x: int, y: int, direction: int = 0):
         tile = RotatingTile(direction)
@@ -634,7 +683,14 @@ class CustomMiniGridEnv(MiniGridEnv):
             open_doors=frozenset(open_doors),
             key_positions=frozenset(key_positions),
             freeze_remaining=int(self.freeze_remaining),
-        rotator_dirs=tuple(tile.direction for tile in self.rotators),
+            rotator_dirs=tuple(tile.direction for tile in self.rotators),
+            tick=self.rule_tick,
+            sealed=self.sealed_cells,
+            vanish_at=self.vanish_at,
+            door_timers=self.door_timers,
+            switch_timers=self.switch_timers,
+            shut_doors=self.shut_doors,
+            shut_switches=self.shut_switches,
         )
 
     def _write_planner_state(self, ctx: TaskPlanningContext, state: PlannerState) -> None:
@@ -642,6 +698,19 @@ class CustomMiniGridEnv(MiniGridEnv):
         self.agent_dir = int(state.agent_dir)
         self.collected_keys = set(state.collected_keys)
         self.freeze_remaining = int(state.freeze_remaining)
+        self.rule_tick = state.tick
+        self.sealed_cells = state.sealed
+        self.vanish_at = state.vanish_at
+        self.door_timers = state.door_timers
+        self.switch_timers = state.switch_timers
+        self.shut_doors = state.shut_doors
+        self.shut_switches = state.shut_switches
+        for x, y in state.sealed:
+            cell = self.grid.get(x, y)
+            if cell is None or isinstance(cell, Floor):
+                self.grid.set(x, y, Wall())
+        for tile, open_steps, closed_steps, offset in self.phase_tiles:
+            tile.closed = (state.tick + offset) % (open_steps + closed_steps) >= open_steps
         for tile, direction in zip(self.rotators, state.rotator_dirs):
             tile.direction = direction
 
@@ -704,11 +773,15 @@ class CustomMiniGridEnv(MiniGridEnv):
             if mechanic is not None:
                 info["mechanic"] = mechanic
 
+        stuck = not goal_still_reachable(ctx, after)
+        if stuck:
+            info["stuck"] = True
+
         self.step_count += 1
         truncated = self.step_count >= self.max_steps
         obs = self.gen_obs()
         reward, terminated, truncated, info = self._finalize_step_result(
-            0, False, truncated, info
+            0, stuck, truncated, info
         )
         return obs, reward, terminated, truncated, info
 

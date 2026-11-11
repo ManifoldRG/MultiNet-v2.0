@@ -93,7 +93,7 @@ class TestTeleporterValidation:
         })
         is_valid, errors = spec.validate()
         assert not is_valid
-        assert any("Teleporter" in e and "endpoint A" in e for e in errors)
+        assert any("Teleporter" in e and "end 0" in e for e in errors)
 
     def test_oob_teleporter_b_fails(self):
         spec = TaskSpecification.from_dict({
@@ -109,7 +109,7 @@ class TestTeleporterValidation:
         })
         is_valid, errors = spec.validate()
         assert not is_valid
-        assert any("Teleporter" in e and "endpoint B" in e for e in errors)
+        assert any("Teleporter" in e and "end 1" in e for e in errors)
 
 
 class TestTeleporterPlacement:

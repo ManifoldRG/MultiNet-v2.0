@@ -1,0 +1,962 @@
+{
+  "task_id": "dense_maze_sk_1193",
+  "version": "2.0",
+  "seed": 1193,
+  "difficulty_tier": 3,
+  "description": "dense_maze sk",
+  "maze": {
+    "dimensions": [
+      14,
+      14
+    ],
+    "walls": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        2
+      ],
+      [
+        0,
+        3
+      ],
+      [
+        0,
+        4
+      ],
+      [
+        0,
+        5
+      ],
+      [
+        0,
+        6
+      ],
+      [
+        0,
+        7
+      ],
+      [
+        0,
+        8
+      ],
+      [
+        0,
+        9
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        11
+      ],
+      [
+        0,
+        12
+      ],
+      [
+        0,
+        13
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        1,
+        10
+      ],
+      [
+        1,
+        12
+      ],
+      [
+        1,
+        13
+      ],
+      [
+        2,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        2,
+        4
+      ],
+      [
+        2,
+        5
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        2,
+        7
+      ],
+      [
+        2,
+        8
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        2,
+        12
+      ],
+      [
+        2,
+        13
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        3,
+        8
+      ],
+      [
+        3,
+        12
+      ],
+      [
+        3,
+        13
+      ],
+      [
+        4,
+        0
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        4,
+        3
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        4,
+        9
+      ],
+      [
+        4,
+        10
+      ],
+      [
+        4,
+        12
+      ],
+      [
+        4,
+        13
+      ],
+      [
+        5,
+        0
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        5,
+        10
+      ],
+      [
+        5,
+        12
+      ],
+      [
+        5,
+        13
+      ],
+      [
+        6,
+        0
+      ],
+      [
+        6,
+        2
+      ],
+      [
+        6,
+        3
+      ],
+      [
+        6,
+        4
+      ],
+      [
+        6,
+        5
+      ],
+      [
+        6,
+        6
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        6,
+        9
+      ],
+      [
+        6,
+        10
+      ],
+      [
+        6,
+        12
+      ],
+      [
+        6,
+        13
+      ],
+      [
+        7,
+        0
+      ],
+      [
+        7,
+        4
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        7,
+        12
+      ],
+      [
+        7,
+        13
+      ],
+      [
+        8,
+        0
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        2
+      ],
+      [
+        8,
+        4
+      ],
+      [
+        8,
+        6
+      ],
+      [
+        8,
+        7
+      ],
+      [
+        8,
+        8
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        8,
+        11
+      ],
+      [
+        8,
+        12
+      ],
+      [
+        8,
+        13
+      ],
+      [
+        9,
+        0
+      ],
+      [
+        9,
+        4
+      ],
+      [
+        9,
+        12
+      ],
+      [
+        9,
+        13
+      ],
+      [
+        10,
+        0
+      ],
+      [
+        10,
+        2
+      ],
+      [
+        10,
+        3
+      ],
+      [
+        10,
+        4
+      ],
+      [
+        10,
+        6
+      ],
+      [
+        10,
+        7
+      ],
+      [
+        10,
+        8
+      ],
+      [
+        10,
+        9
+      ],
+      [
+        10,
+        10
+      ],
+      [
+        10,
+        12
+      ],
+      [
+        10,
+        13
+      ],
+      [
+        11,
+        0
+      ],
+      [
+        11,
+        6
+      ],
+      [
+        11,
+        12
+      ],
+      [
+        11,
+        13
+      ],
+      [
+        12,
+        0
+      ],
+      [
+        12,
+        1
+      ],
+      [
+        12,
+        2
+      ],
+      [
+        12,
+        3
+      ],
+      [
+        12,
+        4
+      ],
+      [
+        12,
+        5
+      ],
+      [
+        12,
+        6
+      ],
+      [
+        12,
+        7
+      ],
+      [
+        12,
+        8
+      ],
+      [
+        12,
+        9
+      ],
+      [
+        12,
+        10
+      ],
+      [
+        12,
+        13
+      ],
+      [
+        13,
+        0
+      ],
+      [
+        13,
+        1
+      ],
+      [
+        13,
+        2
+      ],
+      [
+        13,
+        3
+      ],
+      [
+        13,
+        4
+      ],
+      [
+        13,
+        5
+      ],
+      [
+        13,
+        6
+      ],
+      [
+        13,
+        7
+      ],
+      [
+        13,
+        8
+      ],
+      [
+        13,
+        9
+      ],
+      [
+        13,
+        10
+      ],
+      [
+        13,
+        11
+      ],
+      [
+        13,
+        12
+      ],
+      [
+        13,
+        13
+      ]
+    ],
+    "start": [
+      1,
+      1
+    ],
+    "goal": [
+      11,
+      1
+    ],
+    "floor": null
+  },
+  "mechanisms": {
+    "keys": [
+      {
+        "id": "kR",
+        "position": [
+          3,
+          6
+        ],
+        "color": "red"
+      },
+      {
+        "id": "kY",
+        "position": [
+          11,
+          8
+        ],
+        "color": "yellow"
+      }
+    ],
+    "doors": [
+      {
+        "id": "DR",
+        "position": [
+          7,
+          1
+        ],
+        "requires_key": "red",
+        "initial_state": "locked"
+      },
+      {
+        "id": "DY",
+        "position": [
+          11,
+          7
+        ],
+        "requires_key": "yellow",
+        "initial_state": "locked"
+      }
+    ],
+    "switches": [
+      {
+        "id": "s1",
+        "position": [
+          1,
+          9
+        ],
+        "controls": [
+          "g1"
+        ],
+        "color": "yellow",
+        "switch_type": "toggle",
+        "initial_state": "off"
+      }
+    ],
+    "gates": [
+      {
+        "id": "g1",
+        "position": [
+          7,
+          10
+        ],
+        "initial_state": "closed",
+        "color": "grey"
+      }
+    ],
+    "blocks": [],
+    "teleporters": [],
+    "hazards": [],
+    "death_portals": [],
+    "frozen_tiles": [],
+    "freeze_steps": 5,
+    "rotating_tiles": [],
+    "rotating_initial_directions": []
+  },
+  "rules": {
+    "key_consumption": true,
+    "switch_type": "toggle",
+    "hidden_mechanisms": [],
+    "observability": "full",
+    "view_size": 7
+  },
+  "goal": {
+    "type": "reach_position",
+    "target": [
+      11,
+      1
+    ],
+    "target_ids": [],
+    "target_positions": [],
+    "auxiliary_conditions": []
+  },
+  "max_steps": 1000,
+  "dependency_chain": {
+    "depth": 2,
+    "sequence": [
+      {
+        "step": 1,
+        "type": "switch-gate",
+        "element": "s1",
+        "unlocks": "g1"
+      },
+      {
+        "step": 2,
+        "type": "key-door",
+        "element": "kR",
+        "unlocks": "DR"
+      }
+    ],
+    "notation": "sk"
+  },
+  "distractors": [
+    {
+      "type": "distractor_chain",
+      "element_id": "distractor_kd",
+      "description": "unused yellow key-door in a dead end"
+    }
+  ],
+  "metadata": {
+    "backbone": "dense_maze",
+    "logic_chain": "sk",
+    "dense_maze_cells": [
+      6,
+      6
+    ],
+    "chain_pattern": "sk",
+    "distractor_chain": {
+      "type": "kd",
+      "color": "yellow",
+      "deadend_branch_leaf": [
+        11,
+        7
+      ],
+      "key": [
+        11,
+        8
+      ]
+    }
+  },
+  "validation": {
+    "is_valid": true,
+    "reasons": [],
+    "optimal_cost": 59,
+    "optimal_path": [
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        1,
+        4
+      ],
+      [
+        1,
+        5
+      ],
+      [
+        1,
+        6
+      ],
+      [
+        1,
+        7
+      ],
+      [
+        1,
+        8
+      ],
+      [
+        1,
+        9
+      ],
+      [
+        1,
+        9
+      ],
+      [
+        1,
+        9
+      ],
+      [
+        2,
+        9
+      ],
+      [
+        3,
+        9
+      ],
+      [
+        3,
+        9
+      ],
+      [
+        3,
+        10
+      ],
+      [
+        3,
+        11
+      ],
+      [
+        3,
+        11
+      ],
+      [
+        4,
+        11
+      ],
+      [
+        5,
+        11
+      ],
+      [
+        6,
+        11
+      ],
+      [
+        7,
+        11
+      ],
+      [
+        7,
+        11
+      ],
+      [
+        7,
+        10
+      ],
+      [
+        7,
+        9
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        7,
+        7
+      ],
+      [
+        7,
+        7
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        5,
+        7
+      ],
+      [
+        4,
+        7
+      ],
+      [
+        3,
+        7
+      ],
+      [
+        3,
+        7
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        5,
+        5
+      ],
+      [
+        5,
+        5
+      ],
+      [
+        5,
+        4
+      ],
+      [
+        5,
+        3
+      ],
+      [
+        5,
+        2
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        6,
+        1
+      ],
+      [
+        6,
+        1
+      ],
+      [
+        7,
+        1
+      ],
+      [
+        7,
+        1
+      ],
+      [
+        7,
+        2
+      ],
+      [
+        7,
+        3
+      ],
+      [
+        7,
+        3
+      ],
+      [
+        8,
+        3
+      ],
+      [
+        9,
+        3
+      ],
+      [
+        9,
+        3
+      ],
+      [
+        9,
+        2
+      ],
+      [
+        9,
+        1
+      ],
+      [
+        9,
+        1
+      ],
+      [
+        10,
+        1
+      ],
+      [
+        11,
+        1
+      ]
+    ],
+    "interactions": [
+      "turn_right",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "toggle:s1",
+      "move_forward",
+      "move_forward",
+      "turn_right",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "turn_right",
+      "move_forward",
+      "pickup:kR",
+      "move_forward",
+      "turn_right",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "move_forward",
+      "turn_right",
+      "move_forward",
+      "open_door:DR",
+      "move_forward",
+      "turn_right",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "move_forward",
+      "move_forward",
+      "turn_left",
+      "move_forward",
+      "move_forward",
+      "turn_right",
+      "move_forward",
+      "move_forward"
+    ]
+  }
+}

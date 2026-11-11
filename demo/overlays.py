@@ -188,7 +188,7 @@ def render_plain_result_overlay(ui: "MiniGridPlayerUI") -> None:
     gap = 18
 
     headline = "YOU SOLVED IT" if success else (
-        "STALLED" if session.end_reason == "stalled" else "OUT OF STEPS"
+        {"stalled": "STALLED", "stuck": "STUCK"}.get(session.end_reason, "OUT OF STEPS")
     )
     items.append((ui.font_overlay.render(headline, True, accent), gap + 6))
 
@@ -268,7 +268,7 @@ def render_r1_result_overlay(ui: "MiniGridPlayerUI", comparison: TaskComparison)
     gap = 18
 
     headline = "YOU SOLVED IT" if success else (
-        "STALLED" if session.end_reason == "stalled" else "OUT OF STEPS"
+        {"stalled": "STALLED", "stuck": "STUCK"}.get(session.end_reason, "OUT OF STEPS")
     )
     items.append((ui.font_overlay.render(headline, True, accent), gap + 6))
 

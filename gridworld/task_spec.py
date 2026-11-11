@@ -7,6 +7,7 @@ navigation, dependency, and hidden-information curriculum, but higher tiers are 
 """
 
 from dataclasses import dataclass, field
+from math import inf
 from typing import Literal, Optional, Any
 import json
 
@@ -34,7 +35,7 @@ class KeySpec:
     """Key object specification."""
     id: str
     position: Position
-    color: str  # "red", "blue", "green", "yellow", "purple", "grey"
+    color: str  # "red", "blue", "green", "yellow", "purple", "pink", "grey"
 
     @classmethod
     def from_dict(cls, d: dict) -> "KeySpec":
@@ -123,21 +124,51 @@ class BlockSpec:
 
 @dataclass
 class TeleporterSpec:
-    """Portal pair: stepping on A lands on B (and vice versa if bidirectional)."""
+    """Portal ends in order. Two ends is a pair. More ends is a chain."""
     id: str
     position_a: Position
     position_b: Position
     bidirectional: bool = True
     color: str = "purple"
+    positions: list[Position] = field(default_factory=list)
+
+    def ends(self) -> list[Position]:
+        return self.positions or [self.position_a, self.position_b]
 
     @classmethod
     def from_dict(cls, d: dict) -> "TeleporterSpec":
+        if "positions" in d:
+            positions = [Position.from_list(p) for p in d["positions"]]
+            position_a, position_b = positions[0], positions[-1]
+        else:
+            position_a = Position.from_list(d["position_a"])
+            position_b = Position.from_list(d["position_b"])
+            positions = [position_a, position_b]
         return cls(
             id=d["id"],
-            position_a=Position.from_list(d["position_a"]),
-            position_b=Position.from_list(d["position_b"]),
+            position_a=position_a,
+            position_b=position_b,
             bidirectional=d.get("bidirectional", True),
             color=d.get("color", "purple"),
+            positions=positions,
+        )
+
+
+@dataclass
+class PhasedPatch:
+    """Shortcut cells that alternate between floor and wall."""
+    cells: list[Position]
+    open_steps: int
+    closed_steps: int
+    offset: int = 0
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "PhasedPatch":
+        return cls(
+            cells=[Position.from_list(p) for p in d["cells"]],
+            open_steps=d["open_steps"],
+            closed_steps=d["closed_steps"],
+            offset=d.get("offset", 0),
         )
 
 
@@ -193,6 +224,7 @@ class MechanismSet:
     freeze_steps: int = 5
     rotating_tiles: list[Position] = field(default_factory=list)
     rotating_initial_directions: list[int] = field(default_factory=list)
+    phased_patches: list[PhasedPatch] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> "MechanismSet":
@@ -209,6 +241,7 @@ class MechanismSet:
             freeze_steps=d.get("freeze_steps", 5),
             rotating_tiles=[Position.from_list(p) for p in d.get("rotating_tiles", [])],
             rotating_initial_directions=list(d.get("rotating_initial_directions", [])),
+            phased_patches=[PhasedPatch.from_dict(p) for p in d.get("phased_patches", [])],
         )
 
 
@@ -216,6 +249,8 @@ class MechanismSet:
 class Rules:
     """Puzzle rule configuration."""
     key_consumption: bool = True  # Keys are consumed when used
+    disappear_after: float = inf  # Actions after stepping on floor before that cell becomes a wall
+    shut_after: float = inf  # Actions after opening a door or switch before it shuts for good
     switch_type: Literal["toggle", "hold", "one_shot"] = "toggle"  # Default switch behavior
     hidden_mechanisms: list[str] = field(default_factory=list)  # IDs of mechanisms not visible initially
     observability: Literal["full", "view_cone", "fog_of_war"] = "full"
@@ -225,6 +260,8 @@ class Rules:
     def from_dict(cls, d: dict) -> "Rules":
         return cls(
             key_consumption=d.get("key_consumption", True),
+            disappear_after=d.get("disappear_after", inf),
+            shut_after=d.get("shut_after", inf),
             switch_type=d.get("switch_type", "toggle"),
             hidden_mechanisms=d.get("hidden_mechanisms", []),
             observability=d.get("observability", "full"),
@@ -417,22 +454,41 @@ class TaskSpecification:
                 "switches": [{"id": s.id, "position": pos_to_list(s.position), "controls": s.controls, "color": s.color, "switch_type": s.switch_type, "initial_state": s.initial_state} for s in self.mechanisms.switches],
                 "gates": [{"id": g.id, "position": pos_to_list(g.position), "initial_state": g.initial_state, "color": g.color} for g in self.mechanisms.gates],
                 "blocks": [{"id": b.id, "position": pos_to_list(b.position), "pushable": b.pushable, "color": b.color} for b in self.mechanisms.blocks],
-                "teleporters": [{
-                    "id": t.id,
-                    "position_a": pos_to_list(t.position_a),
-                    "position_b": pos_to_list(t.position_b),
-                    "bidirectional": t.bidirectional,
-                    "color": t.color,
-                } for t in self.mechanisms.teleporters],
+                "teleporters": [
+                    {
+                        "id": t.id,
+                        "position_a": pos_to_list(t.position_a),
+                        "position_b": pos_to_list(t.position_b),
+                        "bidirectional": t.bidirectional,
+                        "color": t.color,
+                        **(
+                            {"positions": [pos_to_list(p) for p in t.ends()]}
+                            if len(t.ends()) != 2
+                            else {}
+                        ),
+                    }
+                    for t in self.mechanisms.teleporters
+                ],
                 "hazards": [{"id": h.id, "position": pos_to_list(h.position), "hazard_type": h.hazard_type} for h in self.mechanisms.hazards],
                 "death_portals": [pos_to_list(p) for p in self.mechanisms.kill_cells],
                 "frozen_tiles": [pos_to_list(p) for p in self.mechanisms.frozen_tiles],
                 "freeze_steps": self.mechanisms.freeze_steps,
                 "rotating_tiles": [pos_to_list(p) for p in self.mechanisms.rotating_tiles],
                 "rotating_initial_directions": list(self.mechanisms.rotating_initial_directions),
+                "phased_patches": [
+                    {
+                        "cells": [pos_to_list(c) for c in patch.cells],
+                        "open_steps": patch.open_steps,
+                        "closed_steps": patch.closed_steps,
+                        "offset": patch.offset,
+                    }
+                    for patch in self.mechanisms.phased_patches
+                ],
             },
             "rules": {
                 "key_consumption": self.rules.key_consumption,
+                **({"disappear_after": self.rules.disappear_after} if self.rules.disappear_after != inf else {}),
+                **({"shut_after": self.rules.shut_after} if self.rules.shut_after != inf else {}),
                 "switch_type": self.rules.switch_type,
                 "hidden_mechanisms": self.rules.hidden_mechanisms,
                 "observability": self.rules.observability,
@@ -597,10 +653,9 @@ class TaskSpecification:
 
         for teleporter in self.mechanisms.teleporters:
             register_id(teleporter.id, f"Teleporter {teleporter.id}")
-            check_position(teleporter.position_a, f"Teleporter {teleporter.id} endpoint A")
-            check_position(teleporter.position_b, f"Teleporter {teleporter.id} endpoint B")
-            register_position(teleporter.position_a, f"Teleporter {teleporter.id} endpoint A")
-            register_position(teleporter.position_b, f"Teleporter {teleporter.id} endpoint B")
+            for index, pos in enumerate(teleporter.ends()):
+                check_position(pos, f"Teleporter {teleporter.id} end {index}")
+                register_position(pos, f"Teleporter {teleporter.id} end {index}")
 
         for kill in self.mechanisms.kill_cells:
             check_position(kill, "Kill cell")
