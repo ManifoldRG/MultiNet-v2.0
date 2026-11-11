@@ -107,7 +107,7 @@ def _bfs_actions(spec: TaskSpecification) -> list[int]:
 def _bfs_actions_with_stats(
     spec: TaskSpecification, *, drop_available: bool = False
 ) -> tuple[list[int], int]:
-    ctx = TaskPlanningContext(spec, drop_available=drop_available)
+    ctx = TaskPlanningContext(spec, drop_available=drop_available, timers=False)
     actions, _, states_explored = shortest_plan(
         ctx,
         ctx.initial_state(),

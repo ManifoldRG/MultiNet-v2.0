@@ -25,7 +25,7 @@ class TaskValidator:
 
     def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
         self.spec = spec
-        self.ctx = TaskPlanningContext(spec, drop_available=drop_available)
+        self.ctx = TaskPlanningContext(spec, drop_available=drop_available, timers=False)
         self.goal = self.ctx.goal
         self.start = self.ctx.start
         self.switches_by_id = {

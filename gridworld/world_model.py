@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, replace
-from math import isfinite, lcm
+from math import inf, isfinite, lcm
 from typing import Callable, Iterable
 
 from .actions import MiniGridActions
@@ -60,16 +60,18 @@ class Transition:
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
+    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False, timers: bool = True):
+        """``timers=False`` ignores disappearing floor and shut doors/switches, which
+        blow up BFS; we assume they never change the shortest route."""
         self.spec = spec
         self.drop_available = drop_available
         self.width, self.height = spec.maze.dimensions
         self.goal = spec.resolved_goal()
         self.start = spec.maze.start.to_tuple()
         self.key_consumption = spec.rules.key_consumption
-        self.disappear_after = spec.rules.disappear_after
-        self.shut_after = spec.rules.shut_after
-        self.door_shut_after = spec.rules.door_shut_after
+        self.disappear_after = spec.rules.disappear_after if timers else inf
+        self.shut_after = spec.rules.shut_after if timers else inf
+        self.door_shut_after = spec.rules.door_shut_after if timers else inf
 
         self.walls = {(wall.x, wall.y) for wall in spec.maze.walls}
         for x in range(self.width):
