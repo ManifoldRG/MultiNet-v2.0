@@ -346,12 +346,17 @@ def shortest_plan(
 
 
 def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
-    """Flood-fill from the agent to the goal. A closed door counts as open while
-    a key of its colour still exists, a closed gate while one of its switches can
-    still be used, and a portal pad leads to every end of its portal."""
-    colors = {ctx.keys_by_id[key_id]["color"] for key_id, _, _ in state.key_positions}
-    if state.carrying_key is not None:
-        colors.add(ctx.keys_by_id[state.carrying_key]["color"])
+    """Flood-fill from the agent to the goal. A closed door counts as open once a
+    key of its colour is held or reachable, a closed gate once a usable switch for
+    it is reachable, and a portal pad leads to every end of its portal."""
+    key_cells = {(x, y): ctx.keys_by_id[key_id]["color"] for key_id, x, y in state.key_positions}
+    usable = {
+        pos: switch["controls"]
+        for pos, switch in ctx.switches_by_pos.items()
+        if switch["id"] not in state.shut_switches and switch["id"] not in state.used_switches
+    }
+    colors = set() if state.carrying_key is None else {ctx.keys_by_id[state.carrying_key]["color"]}
+    gates: set[str] = set()
 
     def passable(pos: tuple[int, int]) -> bool:
         if pos in ctx.walls or pos in state.sealed or pos in ctx.hazards or pos in ctx.blocks or pos in ctx.kill_cells:
@@ -361,28 +366,28 @@ def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
             return door["id"] not in state.shut_doors and door["color"] in colors
         gate = ctx.gates_by_pos.get(pos)
         if gate and gate["id"] not in state.open_gates:
-            return any(
-                gate["id"] in switch["controls"]
-                and switch["id"] not in state.shut_switches
-                and switch["id"] not in state.used_switches
-                for switch in ctx.switches_by_pos.values()
-            )
+            return gate["id"] in gates
         return True
 
-    queue = deque([state.agent_pos])
-    seen = {state.agent_pos}
-    while queue:
-        x, y = queue.popleft()
-        if (x, y) == ctx.goal:
-            return True
-        nxt = [(x + dx, y + dy) for dx, dy in DIRECTION_VECTORS]
-        if (x, y) in ctx.portal_at:
-            nxt += ctx.portal_at[(x, y)][0]
-        for pos in nxt:
-            if pos not in seen and passable(pos):
-                seen.add(pos)
-                queue.append(pos)
-    return False
+    while True:
+        queue = deque([state.agent_pos])
+        seen = {state.agent_pos}
+        while queue:
+            x, y = queue.popleft()
+            if (x, y) == ctx.goal:
+                return True
+            nxt = [(x + dx, y + dy) for dx, dy in DIRECTION_VECTORS]
+            if (x, y) in ctx.portal_at:
+                nxt += ctx.portal_at[(x, y)][0]
+            for pos in nxt:
+                if pos not in seen and passable(pos):
+                    seen.add(pos)
+                    queue.append(pos)
+        found_colors = colors | {key_cells[p] for p in seen if p in key_cells}
+        found_gates = gates | {g for p in seen if p in usable for g in usable[p]}
+        if found_colors == colors and found_gates == gates:
+            return False
+        colors, gates = found_colors, found_gates
 
 
 def _front_pos(state: PlannerState) -> tuple[int, int]:
