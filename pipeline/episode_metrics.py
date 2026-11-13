@@ -199,12 +199,12 @@ def _end_reason_flags(end_reason: Any) -> tuple[bool, bool]:
     """Map the runner's ``end_reason`` vocabulary to (terminated, truncated).
 
     Single source for both the aggregate jsonl row and the scorer-enriched run;
-    the two must never disagree. ``stalled`` (watchdog) counts as truncated,
-    ``terminated_failure`` (backend ended without the goal) as terminated;
+    the two must never disagree.     ``stalled`` (watchdog) counts as truncated. ``stuck`` and
+    ``terminated_failure`` (backend ended without the goal) count as terminated.
     ``max_steps``/``parse_failed``/``exhausted`` are neither.
     """
     return (
-        end_reason in ("success", "terminated_failure"),
+        end_reason in ("success", "stuck", "terminated_failure"),
         end_reason in ("truncated", "stalled"),
     )
 
