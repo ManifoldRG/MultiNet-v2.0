@@ -351,9 +351,11 @@ def shortest_plan(
 
 def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
     """Flood-fill from the agent to the goal. A closed door counts as open once a
-    key of its colour is held or reachable, a closed gate once a usable switch for
-    it is reachable or its switch is about to shut (gates then return to their
-    initial state), and a portal pad leads to every end of its portal."""
+    key of its colour is held or can be picked up. A key on the floor can be
+    picked up with empty hands, or while holding a key when a reachable cell
+    allows a drop. A closed gate counts once a usable switch for it is reachable
+    or its switch is about to shut (gates then return to their initial state),
+    and a portal pad leads to every end of its portal."""
     key_cells = {(x, y): ctx.keys_by_id[key_id]["color"] for key_id, x, y in state.key_positions}
     usable = {
         pos: switch["controls"]
@@ -394,7 +396,11 @@ def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
                 if pos not in seen and passable(pos):
                     seen.add(pos)
                     queue.append(pos)
-        found_colors = colors | {key_cells[p] for p in seen if p in key_cells}
+        ground = {key_cells[p] for p in seen if p in key_cells}
+        can_take = state.carrying_key is None or (
+            ctx.drop_available and any(_can_drop_on(ctx, state, pos) for pos in seen)
+        )
+        found_colors = colors | ground if can_take else colors
         found_gates = gates | {g for p in seen if p in usable for g in usable[p]}
         if found_colors == colors and found_gates == gates:
             return False
@@ -420,9 +426,8 @@ def _without_key(
     return frozenset(item for item in key_positions if item[0] != key_id)
 
 
-def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+def _can_drop_on(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, int]) -> bool:
     """DROP needs an empty floor cell (same rule as the old MiniGrid handler)."""
-    pos = state.agent_pos
     if pos in ctx.walls or pos in ctx.hazards or pos in ctx.blocks:
         return False
     if pos in ctx.switches_by_pos or pos in ctx.doors_by_pos or pos in ctx.gates_by_pos:
@@ -430,6 +435,10 @@ def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
     if pos in ctx.portal_at or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_index or pos == ctx.goal:
         return False
     return _key_id_at(state, pos) is None
+
+
+def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+    return _can_drop_on(ctx, state, state.agent_pos)
 
 
 def _apply_switch(

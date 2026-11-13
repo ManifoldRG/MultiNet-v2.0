@@ -1,9 +1,12 @@
 """Disappear, shut, n-end teleporters, and phased patches."""
 
+from dataclasses import replace
+
 from gridworld.actions import MiniGridActions
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.custom_env import Wall
 from gridworld.task_spec import TaskSpecification
+from gridworld.world_model import TaskPlanningContext, goal_still_reachable
 
 A = MiniGridActions
 
@@ -108,3 +111,28 @@ def test_phased_cell_blocks_only_while_closed():
     backend = _play(spec)
     _go(backend, A.TURN_LEFT, A.MOVE_FORWARD)
     assert backend.env.agent_pos == (1, 1)
+
+
+def test_holding_a_key_does_not_count_the_key_underfoot_without_a_drop():
+    spec = _spec(
+        maze={"dimensions": [6, 3], "walls": [], "start": [2, 1], "goal": [4, 1]},
+        goal={"type": "reach_position", "target": [4, 1]},
+        mechanisms={
+            "keys": [
+                {"id": "kB", "position": [1, 1], "color": "blue"},
+                {"id": "kP", "position": [2, 1], "color": "pink"},
+            ],
+            "doors": [{"id": "DP", "position": [3, 1], "requires_key": "pink"}],
+        },
+    )
+    ctx = TaskPlanningContext(spec, drop_available=True, timers=False)
+    full = replace(
+        ctx.initial_state(),
+        carrying_key="kB",
+        collected_keys=frozenset({"kB"}),
+        key_positions=frozenset({("kP", 2, 1)}),
+        sealed=frozenset({(1, 1)}),
+    )
+    assert goal_still_reachable(ctx, full) is False
+    assert goal_still_reachable(ctx, replace(full, sealed=frozenset())) is True
+    assert goal_still_reachable(ctx, replace(full, carrying_key=None, collected_keys=frozenset())) is True
