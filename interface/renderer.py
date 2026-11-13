@@ -78,6 +78,27 @@ def _static_layout_lines(task_spec: TaskSpecification) -> list[str]:
     ]
 
 
+def _rule_tick(state: GridState | None) -> int:
+    return 0 if state is None else state.rule_tick
+
+
+def _phased_open(patch, tick: int) -> bool:
+    return (tick + patch.offset) % (patch.open_steps + patch.closed_steps) < patch.open_steps
+
+
+def _sealed_row_cols(state: GridState | None) -> list[tuple[int, int]]:
+    if state is None:
+        return []
+    return sorted(to_row_col(cell) for cell in state.sealed)
+
+
+def _pad_list(ends) -> str:
+    pads = [f"({row},{col})" for row, col in (to_row_col(end) for end in ends)]
+    if len(pads) == 1:
+        return pads[0]
+    return ", ".join(pads[:-1]) + " and " + pads[-1]
+
+
 def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = None) -> list[str]:
     parts: list[str] = []
     collected = state.collected_keys if state else set()
@@ -152,8 +173,14 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
         )
 
     for teleporter in task_spec.mechanisms.teleporters:
-        row_a, col_a = to_row_col(teleporter.position_a)
-        row_b, col_b = to_row_col(teleporter.position_b)
+        ends = teleporter.ends()
+        if len(ends) > 2:
+            parts.append(observation_templates.TELEPORTER_PADS_LINE.format(
+                color=teleporter.color, pads=_pad_list(ends),
+            ))
+            continue
+        row_a, col_a = to_row_col(ends[0])
+        row_b, col_b = to_row_col(ends[-1])
         line = (
             observation_templates.TELEPORTER_LINE
             if teleporter.bidirectional
@@ -163,6 +190,15 @@ def _mechanism_lines(task_spec: TaskSpecification, state: GridState | None = Non
             color=teleporter.color,
             row_a=row_a, col_a=col_a, row_b=row_b, col_b=col_b,
         ))
+
+    tick = _rule_tick(state)
+    for patch in task_spec.mechanisms.phased_patches:
+        open_now = _phased_open(patch, tick)
+        for cell in patch.cells:
+            row, col = to_row_col(cell)
+            parts.append(observation_templates.PHASED_CELL_LINE.format(
+                row=row, col=col, state="open" if open_now else "closed",
+            ))
     return parts
 
 
@@ -260,19 +296,41 @@ def _mechanism_payload(task_spec: TaskSpecification, state: GridState | None = N
             for cell in task_spec.mechanisms.rotating_tiles
             for row, col in [to_row_col(cell)]
         ],
-        "teleporters": [
-            {
-                "color": teleporter.color,
-                "row_a": to_row_col(teleporter.position_a)[0],
-                "col_a": to_row_col(teleporter.position_a)[1],
-                "row_b": to_row_col(teleporter.position_b)[0],
-                "col_b": to_row_col(teleporter.position_b)[1],
-                "bidirectional": teleporter.bidirectional,
-            }
-            for teleporter in task_spec.mechanisms.teleporters
-        ],
+        "teleporters": [_teleporter_payload(teleporter) for teleporter in task_spec.mechanisms.teleporters],
     }
+    phased = _phased_payload(task_spec, state)
+    if phased:
+        payload["phased_cells"] = phased
     return payload
+
+
+def _teleporter_payload(teleporter) -> dict:
+    ends = teleporter.ends()
+    if len(ends) > 2:
+        return {
+            "color": teleporter.color,
+            "positions": [list(to_row_col(end)) for end in ends],
+            "bidirectional": teleporter.bidirectional,
+        }
+    row_a, col_a = to_row_col(ends[0])
+    row_b, col_b = to_row_col(ends[-1])
+    return {
+        "color": teleporter.color,
+        "row_a": row_a,
+        "col_a": col_a,
+        "row_b": row_b,
+        "col_b": col_b,
+        "bidirectional": teleporter.bidirectional,
+    }
+
+
+def _phased_payload(task_spec: TaskSpecification, state: GridState | None) -> list[dict]:
+    tick = _rule_tick(state)
+    return [
+        {"row": row, "col": col, "status": "open" if _phased_open(patch, tick) else "closed"}
+        for patch in task_spec.mechanisms.phased_patches
+        for row, col in (to_row_col(cell) for cell in patch.cells)
+    ]
 
 
 def _ascii_grid(
@@ -281,7 +339,7 @@ def _ascii_grid(
     include_facing: bool,
 ) -> tuple[list[str], list[tuple[str, str]], tuple[str, str] | None]:
     rows, cols = maze_rows_cols(task_spec)
-    walls = wall_cells(task_spec)
+    walls = wall_cells(task_spec) | set(_sealed_row_cols(state))
     gates, switches = compact_ids(task_spec)
     open_doors = state.open_doors if state else set()
     open_gates = state.open_gates if state else set()
@@ -354,9 +412,16 @@ def _ascii_grid(
     for teleporter in task_spec.mechanisms.teleporters:
         color = teleporter.color
         token = "t" if color.lower() in ("grey", "gray") else f"t{color[0].upper()}"
-        for end in (teleporter.position_a, teleporter.position_b):
+        for end in teleporter.ends():
             row, col = to_row_col(end)
             place(row, col, token, f"{color} teleporter")
+
+    tick = _rule_tick(state)
+    for patch in task_spec.mechanisms.phased_patches:
+        open_now = _phased_open(patch, tick)
+        for cell in patch.cells:
+            row, col = to_row_col(cell)
+            place(row, col, "op" if open_now else "cl", "open" if open_now else "closed")
 
     agent_token = _FACING[facing] if include_facing else "A"
     agent_desc = f"you, facing {facing}" if include_facing else "you"
@@ -499,6 +564,9 @@ def render_user_observation_text(
             payload["stall"] = observation_templates.STALL_REMAINING_LINE.format(
                 n=stall_remaining
             )
+        sealed = _sealed_row_cols(state)
+        if sealed:
+            payload["walls"] = [list(cell) for cell in sealed]
         return _dumps(payload)
     if observation_text_format == "ascii":
         return _ascii_block(
@@ -522,6 +590,11 @@ def render_user_observation_text(
     spent = _spent_key_colors(task_spec, state)
     if spent:
         head.append(observation_templates.CURRENT_KEYS_USED_UP_LINE.format(keys=", ".join(spent)))
+    sealed = _sealed_row_cols(state)
+    if sealed:
+        head.append(observation_templates.WALLS_LINE.format(
+            walls=", ".join(f"({row},{col})" for row, col in sealed)
+        ))
     head += ["", observation_templates.CURRENT_MAP_CONTENTS_HEADER]
     head += _mechanism_lines(task_spec, state) or [observation_templates.NO_MECHANISMS_LINE]
     return "\n".join(head)

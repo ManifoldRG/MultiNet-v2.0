@@ -140,6 +140,10 @@ class GridState:
     # Live arrow direction of each rotating tile, same order as the task spec.
     # 0=east, 1=south, 2=west, 3=north. Every action advances these.
     rotator_dirs: tuple[int, ...] = ()
+    # Floor cells that have disappeared, as (x, y). Empty for old snapshots.
+    sealed: set[tuple[int, int]] = field(default_factory=set)
+    # Phased-cell clock. 0 at the start and in old snapshots.
+    rule_tick: int = 0
 
     # Goal state
     goal_reached: bool = False
@@ -169,6 +173,8 @@ class GridState:
             "key_positions": {k: list(v) for k, v in self.key_positions.items()},
             "freeze_remaining": self.freeze_remaining,
             "rotator_dirs": list(self.rotator_dirs),
+            "sealed": [list(p) for p in sorted(self.sealed)],
+            "rule_tick": self.rule_tick,
             "goal_reached": self.goal_reached,
             "observability_mode": self.observability_mode,
             "visible_cells": [list(c) for c in self.visible_cells],
@@ -197,6 +203,8 @@ class GridState:
             key_positions={k: tuple(v) for k, v in d.get("key_positions", {}).items()},
             freeze_remaining=d.get("freeze_remaining", 0),
             rotator_dirs=tuple(int(d) for d in d.get("rotator_dirs", ())),
+            sealed={tuple(p) for p in d.get("sealed", [])},
+            rule_tick=int(d.get("rule_tick", 0)),
             goal_reached=d.get("goal_reached", False),
             observability_mode=d.get("observability_mode", "full"),
             visible_cells={tuple(c) for c in d.get("visible_cells", [])},
