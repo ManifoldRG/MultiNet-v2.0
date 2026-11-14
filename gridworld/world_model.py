@@ -60,11 +60,20 @@ class Transition:
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False, timers: bool = True):
+    def __init__(
+        self,
+        spec: TaskSpecification,
+        *,
+        drop_available: bool = False,
+        timers: bool = True,
+        drop_beside_key_only: bool = False,
+    ):
         """``timers=False`` ignores disappearing floor and shut doors/switches, which
-        blow up BFS; we assume they never change the shortest route."""
+        blow up BFS; we assume they never change the shortest route.
+        ``drop_beside_key_only`` limits DROP to the cell beside the pink key."""
         self.spec = spec
         self.drop_available = drop_available
+        self.drop_beside_key_only = drop_beside_key_only
         self.width, self.height = spec.maze.dimensions
         self.goal = spec.resolved_goal()
         self.start = spec.maze.start.to_tuple()
@@ -273,7 +282,12 @@ def _idle_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[
             ),
         )
 
-    if ctx.drop_available and state.carrying_key is not None and _can_drop_here(ctx, state):
+    if (
+        ctx.drop_available
+        and state.carrying_key is not None
+        and _can_drop_here(ctx, state)
+        and (not ctx.drop_beside_key_only or _beside_pink_key(ctx, state))
+    ):
         key_id = state.carrying_key
         x, y = state.agent_pos
         yield Transition(
@@ -439,6 +453,16 @@ def _can_drop_on(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, 
 
 def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
     return _can_drop_on(ctx, state, state.agent_pos)
+
+
+def _beside_pink_key(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+    """The pink key is on a neighboring cell, so this is the cell just before it."""
+    x, y = state.agent_pos
+    neighbors = {(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)}
+    return any(
+        ctx.keys_by_id[key_id]["color"] == "pink" and (kx, ky) in neighbors
+        for key_id, kx, ky in state.key_positions
+    )
 
 
 def _apply_switch(

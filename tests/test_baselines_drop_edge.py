@@ -53,6 +53,80 @@ def test_no_drop_edge_with_empty_hands():
     assert not any(l.startswith("drop:") for l in labels)
 
 
+def _two_key_spec():
+    """Blue door first, so the blue key is still in hand beside the pink key."""
+    return TaskSpecification.from_dict({
+        "task_id": "beside_drop",
+        "seed": 1,
+        "difficulty_tier": 1,
+        "maze": {"dimensions": [10, 3], "walls": [], "start": [1, 1], "goal": [8, 1]},
+        "mechanisms": {
+            "keys": [
+                {"id": "kB", "position": [2, 1], "color": "blue"},
+                {"id": "kP", "position": [5, 1], "color": "pink"},
+            ],
+            "doors": [
+                {"id": "DB", "position": [3, 1], "requires_key": "blue"},
+                {"id": "DP", "position": [6, 1], "requires_key": "pink"},
+            ],
+        },
+        "rules": {"key_consumption": False},
+    })
+
+
+def test_default_bfs_drops_only_beside_the_next_key():
+    from gridworld.baselines import plan_bfs_path
+
+    spec = _two_key_spec()
+    path = plan_bfs_path(spec)
+    assert path.success
+    drops = [path.positions[i] for i, label in enumerate(path.action_labels) if label == "drop:kB"]
+    assert (4, 1) in drops
+
+    without = plan_bfs_path(spec, drop_beside_key_only=False)
+    assert not without.success
+
+
+def test_beside_key_constraint_blocks_a_drop_in_the_open():
+    spec = _two_key_spec()
+    ctx = TaskPlanningContext(spec, drop_available=True, drop_beside_key_only=True)
+    holding_blue = replace(
+        ctx.initial_state(),
+        agent_pos=(1, 1),
+        carrying_key="kB",
+        collected_keys=frozenset({"kB"}),
+        key_positions=frozenset(item for item in ctx.initial_state().key_positions if item[0] != "kB"),
+    )
+    assert not any(t.label.startswith("drop:") for t in _successors(ctx, holding_blue))
+
+    beside_pink = replace(holding_blue, agent_pos=(4, 1))
+    drops = [t for t in _successors(ctx, beside_pink) if t.label.startswith("drop:")]
+    assert len(drops) == 1
+    assert ("kB", 4, 1) in drops[0].next_state.key_positions
+
+    beside_red = replace(
+        holding_blue,
+        agent_pos=(2, 1),
+        key_positions=holding_blue.key_positions | {("kR", 3, 1)},
+    )
+    ctx.keys_by_id["kR"] = {"id": "kR", "position": (3, 1), "color": "red"}
+    assert not any(t.label.startswith("drop:") for t in _successors(ctx, beside_red))
+
+
+def test_greedy_interaction_search_stops_at_the_state_cap():
+    from gridworld.baselines import _shortest_plan_to_interaction, plan_greedy_path
+
+    spec = _two_key_spec()
+    ctx = TaskPlanningContext(spec, timers=False)
+    actions, end = _shortest_plan_to_interaction(ctx, ctx.initial_state(), max_states=1)
+    assert actions == []
+    assert end is None
+
+    path = plan_greedy_path(spec)
+    assert path.success
+    assert any(label.startswith("drop:") for label in path.action_labels)
+
+
 def test_optimal_cost_is_unchanged_by_the_drop_edge():
     """The regression gate: DROP must never shorten the optimal solution, or
     every difficulty number in the corpus shifts."""

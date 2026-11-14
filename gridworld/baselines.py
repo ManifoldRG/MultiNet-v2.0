@@ -39,9 +39,15 @@ class PlannedPath:
     states_explored: int = 0
 
 
+# Beside-key BFS needs about 730k states on mix_all. Greedy uses the same
+# ceiling so a floor-countdown search cannot grow without a limit.
+_SEARCH_STATE_CAP = 1_000_000
+
+
 def _shortest_plan_to_interaction(
     ctx: TaskPlanningContext,
     start: PlannerState,
+    max_states: int = _SEARCH_STATE_CAP,
 ) -> tuple[list[int], PlannerState | None]:
     """Find the nearest useful key, door, switch, or goal interaction."""
     queue = deque([start])
@@ -49,6 +55,8 @@ def _shortest_plan_to_interaction(
     visited = {start}
 
     while queue:
+        if len(visited) >= max_states:
+            return [], None
         state = queue.popleft()
         for transition in successors(ctx, state):
             if transition.next_state in visited:
@@ -100,24 +108,37 @@ def _reconstruct_actions(
 
 
 def _bfs_actions(spec: TaskSpecification) -> list[int]:
-    actions, _ = _bfs_actions_with_stats(spec)
+    actions, _ = _bfs_actions_with_stats(spec, drop_beside_key_only=True)
     return actions
 
 
 def _bfs_actions_with_stats(
-    spec: TaskSpecification, *, drop_available: bool = False
+    spec: TaskSpecification,
+    *,
+    drop_available: bool = False,
+    drop_beside_key_only: bool = False,
 ) -> tuple[list[int], int]:
-    ctx = TaskPlanningContext(spec, drop_available=drop_available, timers=False)
+    ctx = TaskPlanningContext(
+        spec,
+        drop_available=drop_available or drop_beside_key_only,
+        drop_beside_key_only=drop_beside_key_only,
+        timers=False,
+    )
     actions, _, states_explored = shortest_plan(
         ctx,
         ctx.initial_state(),
         lambda st: st.agent_pos == ctx.goal,
+        max_states=_SEARCH_STATE_CAP if drop_beside_key_only else 500_000,
     )
     return actions, states_explored
 
 
 def _greedy_actions(spec: TaskSpecification) -> list[int]:
-    ctx = TaskPlanningContext(spec)
+    # Floor countdowns are left out of the search, same as BFS. Replay still
+    # applies them.
+    ctx = TaskPlanningContext(
+        spec, drop_available=True, drop_beside_key_only=True, timers=False,
+    )
     state = ctx.initial_state()
     actions: list[int] = []
 
@@ -130,6 +151,7 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
                 ctx,
                 state,
                 lambda st: st.agent_pos == ctx.goal,
+                max_states=_SEARCH_STATE_CAP,
             )
         if next_state is None or not chunk:
             break
@@ -140,10 +162,18 @@ def _greedy_actions(spec: TaskSpecification) -> list[int]:
 
 
 def trace_planned_actions(
-    spec: TaskSpecification, actions: list[int], *, drop_available: bool = False
+    spec: TaskSpecification,
+    actions: list[int],
+    *,
+    drop_available: bool = False,
+    drop_beside_key_only: bool = False,
 ) -> PlannedPath:
     """Replay planner actions through the R1 graph without running a backend."""
-    ctx = TaskPlanningContext(spec, drop_available=drop_available)
+    ctx = TaskPlanningContext(
+        spec,
+        drop_available=drop_available,
+        drop_beside_key_only=drop_beside_key_only,
+    )
     state = ctx.initial_state()
     positions = [state.agent_pos]
     executed_actions: list[int] = []
@@ -187,10 +217,29 @@ def plan_greedy_actions(spec: TaskSpecification) -> list[int]:
     return _greedy_actions(spec)
 
 
-def plan_bfs_path(spec: TaskSpecification, *, drop_available: bool = False) -> PlannedPath:
-    """Return the BFS baseline plan plus replayed positions."""
-    actions, states_explored = _bfs_actions_with_stats(spec, drop_available=drop_available)
-    path = trace_planned_actions(spec, actions, drop_available=drop_available)
+def plan_bfs_path(
+    spec: TaskSpecification,
+    *,
+    drop_available: bool = False,
+    drop_beside_key_only: bool = True,
+) -> PlannedPath:
+    """Return the BFS baseline plan plus replayed positions.
+
+    The default search drops only beside the pink key. ``drop_available=True``
+    keeps the unrestricted drop edge.
+    """
+    beside = drop_beside_key_only and not drop_available
+    actions, states_explored = _bfs_actions_with_stats(
+        spec,
+        drop_available=drop_available,
+        drop_beside_key_only=beside,
+    )
+    path = trace_planned_actions(
+        spec,
+        actions,
+        drop_available=drop_available or beside,
+        drop_beside_key_only=beside,
+    )
     return PlannedPath(
         success=path.success,
         actions=path.actions,
@@ -202,7 +251,12 @@ def plan_bfs_path(spec: TaskSpecification, *, drop_available: bool = False) -> P
 
 def plan_greedy_path(spec: TaskSpecification) -> PlannedPath:
     """Return the greedy baseline plan plus replayed positions."""
-    return trace_planned_actions(spec, plan_greedy_actions(spec))
+    return trace_planned_actions(
+        spec,
+        plan_greedy_actions(spec),
+        drop_available=True,
+        drop_beside_key_only=True,
+    )
 
 
 class PlannedBaselineModel(ModelInterface):
