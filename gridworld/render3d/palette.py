@@ -46,6 +46,11 @@ ROTATOR_ARROW: RGBA = _rgb255(40, 28, 16)
 FROZEN_TILE: RGBA = _rgb255(214, 232, 246)
 FROZEN_SPOT: RGBA = _rgb255(255, 255, 255)
 FROZEN_FLECK: RGBA = _rgb255(245, 252, 255)
+# PhasedTile in custom_env.py: grey barrier with a dark bar, or a pale floor with a light stripe.
+PHASED_CLOSED: RGBA = _rgb255(90, 96, 110)
+PHASED_BAR: RGBA = _rgb255(40, 44, 54)
+PHASED_OPEN: RGBA = _rgb255(186, 214, 176)
+PHASED_STRIPE: RGBA = _rgb255(250, 252, 246)
 
 
 def normalize(name: str) -> str:

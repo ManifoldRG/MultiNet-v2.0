@@ -71,6 +71,14 @@ class SceneState:
         }
         self._skulls = {i: mocap(body) for i, body in index.kill_bodies.items()}
         self._agent = mocap(index.agent_body)
+        self._sealed = {
+            cell: (ids((index.sealed_floor[cell],)), ids((index.sealed_wall[cell],)))
+            for cell in index.sealed_floor
+        }
+        self._phased = [
+            (open_steps, closed_steps, offset, ids(closed), ids(opened))
+            for open_steps, closed_steps, offset, closed, opened in index.phased
+        ]
 
     def _show(self, geom_ids, visible: bool) -> None:
         for gid in geom_ids:
@@ -113,6 +121,17 @@ class SceneState:
             is_open = gate_id in state.open_gates
             self._show(closed, not is_open)
             self._show(opened, is_open)
+        sealed = {tuple(int(v) for v in cell) for cell in state.sealed}
+        for cell, (floor_ids, wall_ids) in self._sealed.items():
+            gone = cell in sealed
+            self._show(floor_ids, not gone)
+            self._show(wall_ids, gone)
+        tick = int(state.rule_tick)
+        for open_steps, closed_steps, offset, closed_ids, open_ids in self._phased:
+            period = open_steps + closed_steps
+            is_closed = period > 0 and (tick + offset) % period >= open_steps
+            self._show(closed_ids, is_closed)
+            self._show(open_ids, not is_closed)
         for key_id, (mocap_id, geom_ids) in self._keys.items():
             position = state.key_positions.get(key_id)
             self._show(geom_ids, position is not None)  # held or consumed: hidden in place
