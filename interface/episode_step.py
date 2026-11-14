@@ -52,11 +52,13 @@ logger = logging.getLogger(__name__)
 # response, NOT that the model produced an unparseable move. These must not
 # consume the per-episode parse-retry budget (they'd terminate a valid episode
 # on provider flakiness). Set by the batch/sync agents (moonshot_batch, the
-# sync-transport path) and by provider overload responses. Token-cap truncation
-# is intentionally NOT here — exhausting the output budget is a real model
-# outcome the run enforces.
+# sync-transport path) and by provider overload responses. A request canceled
+# with its batch (a round past its deadline, or an operator cancel) never reached
+# the model, so ``batch_canceled`` is infra too. Token-cap truncation is
+# intentionally NOT here — exhausting the output budget is a real model outcome
+# the run enforces.
 _INFRA_STOP_REASONS = frozenset(
-    {"sync_error", "batch_expired", "batch_errored", "engine_overloaded"}
+    {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
 )
 
 

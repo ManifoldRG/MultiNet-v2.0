@@ -11,17 +11,23 @@ import pytest
 
 from scripts.resume_from_archive import (
     IN_PROGRESS_END_REASON,
+    INFRA_STOP_REASONS,
     build_checkpoint_payload,
     build_live_agent,
     drive_continue_loop,
     rehydrate_agent_messages,
     scripted_action_from_spec,
     trailing_parse_failures,
+    unit_payload,
+    with_prompt_cache_default,
 )
 
 
-def _query(idx: int, parse_ok: bool) -> dict:
-    return {"kind": "query", "query_index": idx, "parse_ok": parse_ok, "agent_messages": []}
+def _query(idx: int, parse_ok: bool, stop_reason: str | None = None) -> dict:
+    rec = {"kind": "query", "query_index": idx, "parse_ok": parse_ok, "agent_messages": []}
+    if stop_reason is not None:
+        rec["stop_reason"] = stop_reason
+    return rec
 
 
 def _step(idx: int, failures_after: int = 0) -> dict:
@@ -35,6 +41,38 @@ def test_trailing_parse_failures_counts_only_the_trailing_run():
     # earlier mid-episode outage blips (queries 13/15/68 in the R1 archive).
     assert trailing_parse_failures([_query(1, False), _query(2, True)]) == 0
     assert trailing_parse_failures([]) == 0
+
+
+def test_trailing_parse_failures_skips_infra_replies():
+    # The 3D Opus run: three deadline-canceled batch rounds in a row, counted as
+    # parse failures by code that predated batch_canceled being infra, ended a
+    # healthy episode parse_failed. Infra replies neither count nor reset.
+    canceled = [_query(i, False, "batch_canceled") for i in (2, 3, 4)]
+    assert trailing_parse_failures([_query(1, True), *canceled]) == 0
+    assert trailing_parse_failures([_query(1, False), *canceled]) == 1
+    assert trailing_parse_failures(
+        [_query(1, True), _query(2, False), _query(3, False, "batch_expired"), _query(4, False)]
+    ) == 2
+
+
+def test_infra_stop_reasons_match_the_stepper():
+    from interface.episode_step import _INFRA_STOP_REASONS
+
+    assert INFRA_STOP_REASONS == _INFRA_STOP_REASONS
+
+
+def test_build_checkpoint_payload_clears_a_batch_canceled_kill():
+    episode = {
+        "end_reason": "parse_failed",
+        "task_spec": {"seed": 0},
+        "transcript": [
+            {"kind": "reset"}, _query(1, True), _step(1),
+            *[_query(i, False, "batch_canceled") for i in (2, 3, 4)],
+        ],
+    }
+    payload = build_checkpoint_payload(episode)
+    assert payload["query_count"] == 4
+    assert payload["parse_failures"] == 0
 
 
 def test_build_checkpoint_payload_clears_the_infra_kill():
@@ -141,6 +179,66 @@ def test_build_live_agent_kimi_path_unchanged(monkeypatch):
 def test_build_live_agent_rejects_unknown_provider():
     with pytest.raises(SystemExit, match="provider"):
         build_live_agent({"provider": "qwen_vllm_api"}, log=lambda _m: None)
+
+
+_CLAUDE_RUN_CFG = {
+    "provider": "claude", "model": "claude-opus-5-5", "max_tokens": 64000, "effort": "xhigh",
+    "enable_thinking": True, "enable_prompt_cache": True, "timeout": 600, "spend_cap_usd": 200,
+    "group": "claude-api", "worker_role": "lockstep-worker", "worker_concurrency": 15,
+    "max_in_flight": 64, "tasks": ["all"],
+}
+
+
+def test_build_live_agent_claude_keeps_archived_params_and_overrides_the_cap(monkeypatch):
+    from interface.agents.claude import ClaudeAnthropicAgent
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    agent = build_live_agent(_CLAUDE_RUN_CFG, spend_cap_usd=12.5, timeout=1200, log=lambda _m: None)
+    assert isinstance(agent, ClaudeAnthropicAgent)
+    c = agent.config
+    assert (c.model, c.max_tokens, c.effort, c.enable_thinking, c.enable_prompt_cache) == (
+        "claude-opus-5-5", 64000, "xhigh", True, True,
+    )
+    # The sync path's cache TTL; the batch knobs are unused by generate().
+    assert c.cache_ttl == "5m"
+    assert c.timeout == 1200
+    assert c.spend_cap_usd == 12.5
+
+
+def test_build_live_agent_claude_requires_a_spend_cap(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    with pytest.raises(SystemExit, match="spend-cap-usd"):
+        build_live_agent(_CLAUDE_RUN_CFG, spend_cap_usd=None, log=lambda _m: None)
+
+
+def test_build_live_agent_refuses_an_agent_without_a_cap_field(monkeypatch):
+    import dataclasses
+
+    from interface.agents import claude
+
+    @dataclasses.dataclass
+    class _Uncapped:
+        model: str = "m"
+
+    monkeypatch.setattr(claude, "ClaudeAnthropicConfig", _Uncapped)
+    with pytest.raises(SystemExit, match="no spend_cap_usd"):
+        build_live_agent(_CLAUDE_RUN_CFG, spend_cap_usd=5, log=lambda _m: None)
+
+
+@pytest.mark.parametrize("provider", ["claude", "openai"])
+def test_prompt_cache_defaults_from_the_experiment(provider):
+    assert with_prompt_cache_default({"provider": provider}, {"prompt_cache": True})[
+        "enable_prompt_cache"
+    ] is True
+    assert with_prompt_cache_default({"provider": provider}, {})["enable_prompt_cache"] is False
+    # An explicit entry wins.
+    assert with_prompt_cache_default(
+        {"provider": provider, "enable_prompt_cache": False}, {"prompt_cache": True}
+    )["enable_prompt_cache"] is False
+
+
+def test_prompt_cache_default_leaves_kimi_alone():
+    assert "enable_prompt_cache" not in with_prompt_cache_default({"provider": "kimi"}, {"prompt_cache": True})
 
 
 def test_rehydrate_restores_present_images_and_placeholders_missing(tmp_path: Path):
@@ -270,6 +368,190 @@ def test_continue_loop_stops_when_a_scripted_agent_reports_exhausted():
     )
     assert (new_queries, stopped_early) == (0, "scripted_agent_exhausted")
     assert stepper.query_count == 0
+
+
+def test_continue_loop_checkpoints_before_every_query_it_sends():
+    stepper, agent = _FakeStepper(rounds=10), _FakeAgent(raises_on=3)
+    seen: list[tuple[int, int]] = []
+    drive_continue_loop(
+        stepper, agent, max_new_queries=10, log=lambda _m: None,
+        checkpoint=lambda s: seen.append((s.query_count, agent.calls)),
+    )
+    # Taken with the query's index reserved and before it is sent, including the
+    # one whose send failed; never after the loop stopped.
+    assert seen == [(1, 0), (2, 1), (3, 2)]
+
+
+def test_continue_loop_skips_the_checkpoint_for_a_round_it_does_not_send():
+    stepper, seen = _FakeStepper(rounds=10), []
+    drive_continue_loop(
+        stepper, _FakeAgent(), max_new_queries=2, log=lambda _m: None,
+        checkpoint=lambda s: seen.append(s.query_count),
+    )
+    assert seen == [1, 2]
+
+
+# --------------------------------------------------------------------------
+# --unit-id: resume an in-flight lockstep unit from its live checkpoint.
+# --------------------------------------------------------------------------
+
+def _plan_with_task_files(tmp_path: Path) -> tuple[dict, Path]:
+    import json
+
+    root = tmp_path / "worker"
+    task_dir = root / "tasks" / "t1"
+    task_dir.mkdir(parents=True)
+    (task_dir / "canonical_paths.json").write_text(json.dumps({"paths": [1]}))
+    (task_dir / "scored_static.json").write_text(json.dumps({"score": 2}))
+    plan = {
+        "scorer_config": {"s": 1},
+        "difficulty_max_static_score": 99.0,
+        "units": [{"unit_id": "u1", "task_id": "t1", "task_payload": {"maze": 3}}],
+    }
+    return plan, root
+
+
+def test_unit_payload_rebuilds_the_assign_payload(tmp_path: Path):
+    plan, root = _plan_with_task_files(tmp_path)
+    unit = unit_payload(plan, "u1", root)
+    assert unit["scorer_config"] == {"s": 1}
+    assert unit["difficulty_max_static_score"] == 99.0
+    assert unit["task_artifacts"] == {
+        "canonical_paths": {"paths": [1]}, "scored_static": {"score": 2}, "task_payload": {"maze": 3},
+    }
+    assert "task_artifacts" not in plan["units"][0]  # the plan is not mutated
+
+
+def test_unit_payload_refuses_unknown_units_and_missing_task_files(tmp_path: Path):
+    plan, root = _plan_with_task_files(tmp_path)
+    with pytest.raises(SystemExit, match="not in the job plan"):
+        unit_payload(plan, "nope", root)
+    with pytest.raises(SystemExit, match="task artifacts"):
+        unit_payload(plan, "u1", tmp_path / "empty")
+
+
+def _seed_lockstep_checkpoint(tmp_path: Path):
+    """A coordinator plan plus the live checkpoint a lockstep worker leaves at
+    corr_c's first query boundary, built through the worker's own setup path."""
+    import json
+
+    import scripts.distributed_run_pipeline as drp
+    from interface.config import ExperimentConfig
+    from interface.episode_checkpoint import save_checkpoint
+    from interface.episode_step import EpisodeStepper
+    from pipeline.run_stage3 import build_episode_runner
+    from scorer.config import ScorerConfig
+    from tests.test_lockstep_worker import _write_job
+
+    artifacts, plan = _write_job(tmp_path)
+    store = drp.CoordinatorStore(artifacts)
+    unit_raw = next(u for u in plan["units"] if u["task_id"] == "corr_c")
+    unit = store._unit_payload(plan, unit_raw)
+    worker_root = tmp_path / "worker_root"
+    row = drp.materialize_worker_inputs(unit, worker_root)
+    prep = drp.pipeline._prepare_unit_run(
+        row,
+        unit["model_id"],
+        model_config=unit["model_config"],
+        manifest_path=worker_root / "distributed" / "worker_manifest.json",
+        artifacts_root=worker_root,
+        scored_static=unit["task_artifacts"]["scored_static"],
+        difficulty_max=float(unit["difficulty_max_static_score"]),
+        config=ScorerConfig.from_dict(unit["scorer_config"]),
+        seed=int(unit["seed"]),
+        prompt_variant=str(unit["prompt_variant"]),
+        experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
+        conditions=unit.get("condition_set"),
+    )
+    prep.run_dir.mkdir(parents=True, exist_ok=True)
+    runner = build_episode_runner(
+        prep.source, prep.experiment_config, int(unit["seed"]), max_steps=prep.runtime_spec.max_steps,
+    )
+    stepper = EpisodeStepper(runner, maze_path=str(prep.source))
+    stepper.start()
+    stepper.next_query()  # the first query boundary (empty buffers)
+    save_checkpoint(prep.run_dir / "checkpoint.json", stepper)
+    plan_path = artifacts / "distributed" / "job_plan.json"
+    assert json.loads(plan_path.read_text())["units"]  # prepare_job wrote the plan here
+    return store, unit, plan_path, worker_root
+
+
+def _resume_unit(plan_path: Path, unit_id: str, worker_root: Path, out_dir: Path, *extra: str):
+    import subprocess
+    import sys
+
+    repo = Path(__file__).resolve().parents[1]
+    return subprocess.run(
+        [sys.executable, str(repo / "scripts" / "resume_from_archive.py"), "--unit-id", unit_id,
+         "--job-plan", str(plan_path), "--worker-root", str(worker_root), "--repo-root", str(repo),
+         "--out-dir", str(out_dir), *extra],
+        capture_output=True, text=True, timeout=300,
+    )
+
+
+def test_unit_resume_replays_a_live_lockstep_checkpoint(tmp_path: Path):
+    _store, unit, plan_path, worker_root = _seed_lockstep_checkpoint(tmp_path)
+    result = _resume_unit(plan_path, unit["unit_id"], worker_root, tmp_path / "out", "--mode", "replay-verify")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "replay-verify: PASS" in result.stdout
+    assert f"inputs_hash: {unit['episode_inputs_hash']}" in result.stdout
+
+
+def test_unit_resume_continues_checkpoints_and_finishes_into_a_verified_upload(tmp_path: Path):
+    """corr_c needs three MOVE_FORWARDs; the scripted agent sends two per process.
+    The first resume stops with a checkpoint under --out-dir, the second continues
+    from it, finishes, and packages an archive the coordinator verifies."""
+    import json
+
+    store, unit, plan_path, worker_root = _seed_lockstep_checkpoint(tmp_path)
+    out = tmp_path / "out"
+    resumable = out / unit["run_dir"] / "checkpoint.json"
+    live = worker_root / unit["run_dir"] / "checkpoint.json"
+    live_before = live.read_text()
+
+    first = _resume_unit(plan_path, unit["unit_id"], worker_root, out,
+                         "--mode", "continue", "--agent", "scripted:MOVE_FORWARD")
+    assert first.returncode == 3, first.stdout + first.stderr
+    assert "scripted_agent_exhausted" in first.stdout
+    assert json.loads(resumable.read_text())["query_count"] == 2
+    assert live.read_text() == live_before  # the worker's checkpoint is never written
+
+    second = _resume_unit(plan_path, unit["unit_id"], worker_root, out, "--mode", "continue",
+                          "--agent", "scripted:MOVE_FORWARD", "--checkpoint", str(resumable))
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "success: True" in second.stdout
+    assert not resumable.exists()
+    run_dir = out / unit["run_dir"]
+    run_inputs = json.loads((run_dir / "run_inputs.json").read_text())
+    assert run_inputs["inputs_hash"] == unit["episode_inputs_hash"]
+    assert (run_inputs["pricing_tier"], run_inputs["resumed_from_query"]) == ("standard", 2)
+    assert (run_dir / "run_score.json").is_file()
+
+    archive = out / "distributed" / f"{unit['unit_id']}.tar.gz"
+    store.upload("w-resume", unit["unit_id"], archive.read_bytes())
+    state = json.loads((store.artifacts_root / "distributed" / "job_state.json").read_text())
+    assert state["units"][unit["unit_id"]]["status"] == "verified"
+
+
+def test_unit_resume_refuses_a_worktree_that_moves_the_inputs_hash(tmp_path: Path):
+    import json
+
+    _store, unit, plan_path, worker_root = _seed_lockstep_checkpoint(tmp_path)
+    plan = json.loads(plan_path.read_text())
+    for u in plan["units"]:
+        if u["unit_id"] == unit["unit_id"]:
+            u["episode_inputs_hash"] = "0" * 64
+    plan_path.write_text(json.dumps(plan))
+    result = _resume_unit(plan_path, unit["unit_id"], worker_root, tmp_path / "out", "--mode", "replay-verify")
+    assert result.returncode != 0
+    assert "refusing to resume" in result.stderr and "inputs_hash" in result.stderr
+
+
+def test_unit_resume_refuses_an_out_dir_inside_the_worker_root(tmp_path: Path):
+    _store, unit, plan_path, worker_root = _seed_lockstep_checkpoint(tmp_path)
+    result = _resume_unit(plan_path, unit["unit_id"], worker_root, worker_root / "out", "--mode", "replay-verify")
+    assert result.returncode != 0
+    assert "--out-dir must not point into --worker-root" in result.stderr
 
 
 # --------------------------------------------------------------------------

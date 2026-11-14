@@ -24,14 +24,26 @@ this driver:
    ``_progress_signature``;
 4. ``--mode replay-verify``: prints a verification report and exits 0 only if
    the replayed final state matches the archive's last recorded state;
-5. ``--mode continue``: keeps running the live query loop (the Kimi or OpenAI
-   agent rebuilt from ``run_inputs.json``'s model config verbatim, OpenAI taking
-   ``enable_prompt_cache`` from the experiment when the entry leaves it unset;
-   OpenAI also needs ``--spend-cap-usd`` because its spend ledger is per process) and
-   flushes full episode artifacts to ``--out-dir`` via the old code's
-   ``flush_episode_log``.
+5. ``--mode continue``: keeps running the live query loop (the Kimi, OpenAI or
+   Claude agent rebuilt from ``run_inputs.json``'s model config verbatim, OpenAI
+   and Claude taking ``enable_prompt_cache`` from the experiment when the entry
+   leaves it unset; OpenAI and Claude also need ``--spend-cap-usd`` because their
+   spend ledgers are per process) and flushes full episode artifacts to
+   ``--out-dir`` via the old code's ``flush_episode_log``.
 
-The archive directory is never written to; the worktree is never modified.
+A second source, ``--unit-id`` with ``--job-plan`` and ``--worker-root``, resumes a
+unit that is still in flight on a lockstep (batch API) worker from its live
+query-boundary ``checkpoint.json``. Each query is sent on its own through the
+agent's standard ``generate``, so the episode no longer waits on batch rounds.
+The unit is rebuilt through the same setup path the lockstep worker uses and must
+reproduce the plan's ``inputs_hash``. Continue mode checkpoints every query under
+``--out-dir``; an interrupted run resumes from there with ``--checkpoint``. A
+finished run writes the same artifacts the worker would (episode.json,
+run_inputs.json, run_score.json) plus the upload archive, and with
+``--coordinator-url`` uploads it. Stop the lockstep worker before resuming its
+units: both would otherwise drive the same episodes.
+
+Sources are never written to; the worktree is never modified.
 """
 
 from __future__ import annotations
@@ -49,6 +61,17 @@ ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
 INFRA_KILL_PREFIXES = ("agent_error:",)
 # The stepper's in-progress default (see EpisodeStepper.start()).
 IN_PROGRESS_END_REASON = "max_steps"
+# Mirrors interface/episode_step._INFRA_STOP_REASONS (a test keeps them equal):
+# replies the provider failed to deliver, which never spend the parse-retry budget.
+INFRA_STOP_REASONS = frozenset(
+    {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
+)
+# Providers whose resumes must pass their own spend cap: the agent's ledger is per
+# process, so the archived per-run cap would not bound a resume.
+_PER_PROCESS_SPEND_PROVIDERS = ("openai", "claude")
+# Providers that take enable_prompt_cache from the experiment when the entry leaves
+# it unset (run_pipeline._agent_model_config).
+_PROMPT_CACHE_PROVIDERS = ("openai", "claude")
 
 
 # --------------------------------------------------------------------------
@@ -56,13 +79,16 @@ IN_PROGRESS_END_REASON = "max_steps"
 # --------------------------------------------------------------------------
 
 def trailing_parse_failures(query_records: list[dict]) -> int:
-    """parse_failures resets to 0 on any successfully parsed reply, so the
-    live counter equals the number of TRAILING consecutive parse_ok=False
-    query records."""
+    """parse_failures resets to 0 on any successfully parsed reply and an infra
+    reply (see INFRA_STOP_REASONS) leaves it unchanged, so the live counter
+    equals the number of TRAILING parse_ok=False query records that were not
+    infra replies."""
     n = 0
     for rec in reversed(query_records):
         if rec.get("parse_ok"):
             break
+        if rec.get("stop_reason") in INFRA_STOP_REASONS:
+            continue
         n += 1
     return n
 
@@ -139,7 +165,8 @@ def rehydrate_agent_messages(transcript: list[dict], archive_dir: Path) -> int:
     return missing
 
 
-def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, reset_usage=None):
+def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, reset_usage=None,
+                        checkpoint=None):
     """Run live query rounds until the stepper finishes, the cap is hit, or the
     agent dies. Returns ``(new_queries, stopped_early)``; a non-None
     ``stopped_early`` becomes a ``resume_interrupted:`` end_reason.
@@ -148,6 +175,10 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
     HTTP status) is caught rather than propagated: crashing here would discard
     every paid query of a multi-hour resume, since artifacts are only flushed
     after this loop returns.
+
+    ``checkpoint(stepper)``, when given, runs before each query is sent: that is
+    the query boundary ``save_checkpoint`` accepts, so a killed process loses at
+    most the query in flight.
 
     Duck-typed on the as-run code's stepper/agent so it stays importable (and
     testable) from the main checkout.
@@ -165,6 +196,8 @@ def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, rese
             # convention resume_stepper uses for an in-flight round).
             stepper.query_count -= 1
             break
+        if checkpoint is not None:
+            checkpoint(stepper)
         if reset_usage is not None:
             reset_usage(agent)
         try:
@@ -216,6 +249,18 @@ def scripted_action_from_spec(spec: str) -> str:
     return spec[len(prefix):]
 
 
+def _capped_fields(config_cls, provider: str) -> set[str]:
+    """The config fields the agent accepts. An as-run worktree whose agent has no
+    spend_cap_usd field would drop the cap silently, so refuse instead."""
+    allowed = set(config_cls.__dataclass_fields__)
+    if "spend_cap_usd" not in allowed:
+        raise SystemExit(
+            f"the as-run {provider} agent has no spend_cap_usd field, so this resume "
+            "could not be capped; use a worktree whose agent enforces one"
+        )
+    return allowed
+
+
 def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
                      spend_cap_usd: float | None = None, log=print):
     """Rebuild the live agent from the archived run_inputs model config.
@@ -229,18 +274,28 @@ def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
         log(f"  timeout override: {cfg.get('timeout')} -> {timeout}s")
         cfg["timeout"] = timeout
     provider = str(cfg.get("provider") or "kimi").lower()
-    if provider == "openai":
-        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
-
+    if provider in _PER_PROCESS_SPEND_PROVIDERS:
         if spend_cap_usd is None:
             raise SystemExit(
-                "--spend-cap-usd is required to resume an OpenAI episode: the agent's "
+                f"--spend-cap-usd is required to resume a {provider} episode: the agent's "
                 "spend ledger is per process and starts at $0 here, so the archived "
                 f"per-run cap (${cfg.get('spend_cap_usd')}) would not bound this resume"
             )
         cfg["spend_cap_usd"] = float(spend_cap_usd)
-        allowed = set(OpenAIConfig.__dataclass_fields__)
+    if provider == "openai":
+        from interface.agents.openai_agent import OpenAIAgent, OpenAIConfig
+
+        allowed = _capped_fields(OpenAIConfig, provider)
         return OpenAIAgent(config=OpenAIConfig(**{k: v for k, v in cfg.items() if k in allowed}))
+    if provider == "claude":
+        # Queries go through the agent's standard (sync) generate, never the
+        # Message Batches path, whatever worker_role the run config named.
+        from interface.agents.claude import ClaudeAnthropicAgent, ClaudeAnthropicConfig
+
+        allowed = _capped_fields(ClaudeAnthropicConfig, provider)
+        return ClaudeAnthropicAgent(
+            config=ClaudeAnthropicConfig(**{k: v for k, v in cfg.items() if k in allowed})
+        )
     if provider == "kimi":
         from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
 
@@ -249,13 +304,49 @@ def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
     raise SystemExit(f"resume does not support provider {provider!r}")
 
 
+def with_prompt_cache_default(model_cfg: dict, experiment_config: dict) -> dict:
+    """The pipeline derives Claude's and OpenAI's enable_prompt_cache from the
+    experiment's prompt_cache when the entry leaves it unset
+    (run_pipeline._agent_model_config); inlined because this module imports
+    from the as-run worktree."""
+    cfg = dict(model_cfg)
+    if str(cfg.get("provider") or "").lower() in _PROMPT_CACHE_PROVIDERS:
+        cfg.setdefault("enable_prompt_cache", bool(experiment_config.get("prompt_cache", False)))
+    return cfg
+
+
+def unit_payload(plan: dict, unit_id: str, task_artifacts_root: Path) -> dict:
+    """The payload the coordinator's assign hands a worker for ``unit_id``
+    (distributed_run_pipeline.CoordinatorStore._unit_payload), rebuilt from the
+    job plan and the task artifacts under ``<task_artifacts_root>/tasks/<task_id>/``
+    (a worker's artifacts root holds the copies it materialized on assign)."""
+    matches = [u for u in plan["units"] if u["unit_id"] == unit_id]
+    if not matches:
+        raise SystemExit(f"unit {unit_id!r} is not in the job plan")
+    unit = dict(matches[0])
+    task_dir = Path(task_artifacts_root) / "tasks" / unit["task_id"]
+    try:
+        canonical_paths = json.loads((task_dir / "canonical_paths.json").read_text(encoding="utf-8"))
+        scored_static = json.loads((task_dir / "scored_static.json").read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise SystemExit(f"task artifacts for {unit['task_id']} missing under {task_dir}: {exc}")
+    unit["scorer_config"] = plan["scorer_config"]
+    unit["difficulty_max_static_score"] = plan["difficulty_max_static_score"]
+    unit["task_artifacts"] = {
+        "canonical_paths": canonical_paths,
+        "scored_static": scored_static,
+        "task_payload": unit["task_payload"],
+    }
+    return unit
+
+
 # --------------------------------------------------------------------------
 # Driver.
 # --------------------------------------------------------------------------
 
 def _install_repo_root(repo_root: Path) -> None:
     """Make the as-run worktree the ONLY source of harness modules."""
-    already = {"interface", "gridworld", "prompting_experiments", "scorer"}
+    already = {"interface", "gridworld", "prompting_experiments", "scorer", "pipeline", "scripts"}
     loaded = [m for m in sys.modules if m.split(".")[0] in already]
     if loaded:
         raise SystemExit(f"harness modules imported before path setup: {loaded}")
@@ -289,14 +380,171 @@ class _ScriptedAgent:
         )
 
 
+def _main_unit(args) -> int:
+    """Resume an in-flight lockstep unit from its query-boundary checkpoint.
+
+    The setup and the finalize steps follow run_lockstep_worker's _build_unit and
+    _finalize_unit, inlined because this module imports from the as-run worktree.
+    """
+    if args.job_plan is None or args.worker_root is None:
+        raise SystemExit("--unit-id needs --job-plan and --worker-root")
+    if bool(args.coordinator_url) != bool(args.worker_id):
+        raise SystemExit("--coordinator-url and --worker-id go together")
+    plan = json.loads(args.job_plan.read_text(encoding="utf-8"))
+    worker_root: Path = args.worker_root.resolve()
+    out_root: Path = args.out_dir.resolve()
+    unit = unit_payload(plan, args.unit_id, worker_root)
+    checkpoint = (args.checkpoint or worker_root / unit["run_dir"] / "checkpoint.json").resolve()
+    if not checkpoint.is_file():
+        raise SystemExit(f"no checkpoint at {checkpoint}")
+    if out_root == worker_root or worker_root in out_root.parents:
+        raise SystemExit("--out-dir must not point into --worker-root")
+    if not (args.repo_root / "interface" / "episode_checkpoint.py").is_file():
+        raise SystemExit(f"{args.repo_root} does not look like a harness worktree")
+
+    _install_repo_root(args.repo_root)
+
+    # Old-code imports — only AFTER the worktree owns sys.path[0].
+    import scripts.distributed_run_pipeline as drp
+    from interface.config import ExperimentConfig
+    from interface.episode_checkpoint import discard_checkpoint, resume_stepper, save_checkpoint
+    from interface.episode_log import flush_episode_log
+    from interface.runner import _reset_agent_usage
+    from pipeline.run_stage3 import build_episode_runner
+
+    render = drp._unit_render(unit)
+    row = drp.materialize_worker_inputs(unit, out_root)
+    prep = drp.pipeline._prepare_unit_run(
+        row,
+        unit["model_id"],
+        model_config=unit["model_config"],
+        manifest_path=out_root / drp.DISTRIBUTED_DIR / "worker_manifest.json",
+        artifacts_root=out_root,
+        scored_static=unit["task_artifacts"]["scored_static"],
+        difficulty_max=float(unit["difficulty_max_static_score"]),
+        config=drp.ScorerConfig.from_dict(unit["scorer_config"]),
+        seed=int(unit["seed"]),
+        prompt_variant=str(unit["prompt_variant"]),
+        experiment_config=ExperimentConfig.from_dict(unit["experiment_config"]),
+        conditions=unit.get("condition_set"),
+        render=render,
+    )
+    # The hash the coordinator checks an upload's run_inputs.json against.
+    if prep.expected_hash != unit["episode_inputs_hash"]:
+        raise SystemExit(
+            f"refusing to resume: this worktree computes inputs_hash {prep.expected_hash} "
+            f"for {unit['unit_id']}, but the plan recorded {unit['episode_inputs_hash']}"
+        )
+    print(f"backend: {render.label}")
+    runner = build_episode_runner(
+        prep.source, prep.experiment_config, int(unit["seed"]),
+        max_steps=prep.runtime_spec.max_steps, render=render,
+    )
+    try:
+        stepper = resume_stepper(checkpoint, runner=runner)
+    except ValueError as exc:
+        print("REPLAY DIVERGED — the worktree SHA does not reproduce the "
+              "as-run env semantics:")
+        print(f"  {exc}")
+        return 1
+    stepper.maze_path = str(prep.source)
+    resumed_at_query = stepper.query_count
+
+    report = {
+        "unit_id": unit["unit_id"],
+        "task_id": unit["task_id"],
+        "checkpoint": str(checkpoint),
+        "inputs_hash": prep.expected_hash,
+        "steps_replayed": stepper.step_index,
+        "env_step_count": stepper.state.step_count,
+        "max_steps": prep.runtime_spec.max_steps,
+        "queries_counted": stepper.query_count,
+        "parse_failures_pending": stepper.parse_failures,
+        "stall_count": stepper._stall_watchdog.stall_count if stepper._stall_watchdog else 0,
+        "finished": stepper.finished,
+    }
+    print("=== replay verification ===")
+    for key, value in report.items():
+        print(f"  {key}: {value}")
+    if args.mode == "replay-verify":
+        out_root.mkdir(parents=True, exist_ok=True)
+        (out_root / f"{unit['unit_id']}.replay_verification.json").write_text(
+            json.dumps(report, indent=2), encoding="utf-8"
+        )
+        print("replay-verify: PASS")
+        return 0
+
+    # ---- continue mode ------------------------------------------------------
+    if args.agent:
+        from interface.agents.reply import Reply
+        agent = _ScriptedAgent(scripted_action_from_spec(args.agent), Reply)
+    else:
+        agent = build_live_agent(
+            with_prompt_cache_default(unit["model_config"], unit["experiment_config"]),
+            timeout=args.timeout,
+            spend_cap_usd=args.spend_cap_usd,
+        )
+    prep.run_dir.mkdir(parents=True, exist_ok=True)
+    resumable = prep.run_dir / "checkpoint.json"
+    new_queries, stopped_early = drive_continue_loop(
+        stepper,
+        agent,
+        max_new_queries=args.max_new_queries,
+        reset_usage=_reset_agent_usage,
+        checkpoint=lambda s: save_checkpoint(resumable, s),
+    )
+    if stopped_early:
+        save_checkpoint(resumable, stepper)
+        print("=== continue interrupted ===")
+        print(f"  reason: {stopped_early}")
+        print(f"  queries: {stepper.query_count} (+{new_queries} new)")
+        print(f"  resume with: --checkpoint {resumable}")
+        return 3
+
+    result = stepper.result()
+    if render.backend != "minigrid":  # as run_episode stamps it
+        result["render"] = render.provenance(prep.runtime_spec)
+    flush_episode_log(result, prep.run_dir)
+    # Provenance only (never enters inputs_hash): queries before resumed_from_query
+    # went through the batch API at batch prices.
+    prep.write_run_inputs(extras={"pricing_tier": "standard", "resumed_from_query": resumed_at_query})
+    prep.score_episode(json.loads(prep.episode_path.read_text(encoding="utf-8")))
+    discard_checkpoint(resumable)
+    archive = drp.package_run_archive(unit, artifacts_root=out_root)
+    print("=== continue outcome ===")
+    print(f"  end_reason: {result['end_reason']}")
+    print(f"  success: {result['success']}")
+    print(f"  steps_used: {result['steps_used']}")
+    print(f"  query_count: {result['query_count']} (+{new_queries} new)")
+    print(f"  archive: {archive}")
+    if args.coordinator_url:
+        drp._upload_archive(
+            drp.CoordinatorClient(args.coordinator_url), args.worker_id, unit["unit_id"], archive
+        )
+        print(f"  uploaded to {args.coordinator_url} as {args.worker_id}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("--archive-dir", required=True, type=Path,
+    ap.add_argument("--archive-dir", type=Path,
                     help="the archived seed_<n>/<variant> episode dir (read-only)")
+    ap.add_argument("--unit-id", help="resume this in-flight lockstep unit from its checkpoint "
+                                      "instead of an archive (needs --job-plan, --worker-root)")
+    ap.add_argument("--job-plan", type=Path, help="the coordinator's distributed/job_plan.json")
+    ap.add_argument("--worker-root", type=Path,
+                    help="the lockstep worker's --artifacts-root (read-only): its tasks/ "
+                         "copies and, by default, the unit's checkpoint")
+    ap.add_argument("--checkpoint", type=Path,
+                    help="checkpoint to resume the unit from (default: the worker's; pass "
+                         "the one under --out-dir to continue an interrupted resume)")
+    ap.add_argument("--coordinator-url", help="upload the finished unit's archive here")
+    ap.add_argument("--worker-id", help="worker id to upload under (the unit's assignee)")
     ap.add_argument("--repo-root", required=True, type=Path,
                     help="worktree of the as-run SHA; inserted at sys.path[0]")
     ap.add_argument("--out-dir", required=True, type=Path,
-                    help="fresh dir for resumed-episode artifacts")
+                    help="fresh dir for resumed-episode artifacts (the artifacts root, "
+                         "for a unit)")
     ap.add_argument("--mode", required=True, choices=["replay-verify", "continue"])
     ap.add_argument("--max-new-queries", type=int, default=200,
                     help="safety cap on NEW model queries in continue mode")
@@ -307,13 +555,22 @@ def main() -> int:
                          "predates the run_config default for 64k thinking runs "
                          "(the as-run process had the KIMI_TIMEOUT_OVERRIDE hack).")
     ap.add_argument("--spend-cap-usd", type=float, default=None,
-                    help="hard spend cap for THIS process; required for OpenAI agents. "
-                         "Their ledger is per process and starts at $0, so pass this "
+                    help="hard spend cap for THIS process; required for OpenAI and Claude "
+                         "agents. Their ledger is per process and starts at $0, so pass this "
                          "resume's share of the remaining budget, not the archived cap.")
     ap.add_argument("--agent", default=None,
                     help="override: scripted:<ACTION> emits that action for 2 "
                          "queries then stops (no API key / spend)")
     args = ap.parse_args()
+
+    if (args.archive_dir is None) == (args.unit_id is None):
+        raise SystemExit("pass exactly one source: --archive-dir or --unit-id")
+    if args.unit_id is not None:
+        return _main_unit(args)
+    if bool(args.coordinator_url) != bool(args.worker_id):
+        raise SystemExit("--coordinator-url and --worker-id go together")
+    if args.coordinator_url or args.checkpoint:
+        raise SystemExit("--checkpoint and --coordinator-url apply to --unit-id resumes only")
 
     archive_dir: Path = args.archive_dir.resolve()
     out_dir: Path = args.out_dir.resolve()
@@ -435,15 +692,10 @@ def main() -> int:
         from interface.agents.reply import Reply
         agent = _ScriptedAgent(scripted_action_from_spec(args.agent), Reply)
     else:
-        model_cfg = {**run_inputs["model_config"], **(run_inputs.get("runtime_model_config") or {})}
-        # The pipeline derives OpenAI's enable_prompt_cache from the experiment's
-        # prompt_cache when the entry leaves it unset (run_pipeline._agent_model_config);
-        # inlined because this module imports from the as-run worktree.
-        if str(model_cfg.get("provider") or "").lower() == "openai":
-            model_cfg.setdefault(
-                "enable_prompt_cache",
-                bool(run_inputs["experiment_config"].get("prompt_cache", False)),
-            )
+        model_cfg = with_prompt_cache_default(
+            {**run_inputs["model_config"], **(run_inputs.get("runtime_model_config") or {})},
+            run_inputs["experiment_config"],
+        )
         agent = build_live_agent(model_cfg, timeout=args.timeout, spend_cap_usd=args.spend_cap_usd)
 
     new_queries, stopped_early = drive_continue_loop(
