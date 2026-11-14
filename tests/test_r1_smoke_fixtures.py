@@ -75,7 +75,7 @@ def test_expected_mechanisms_match_on_path_bfs_events():
     from gridworld.task_spec import TaskSpecification
 
     def on_path_mechanisms(spec) -> list[str]:
-        ctx = B.TaskPlanningContext(spec)
+        ctx = B.TaskPlanningContext(spec, drop_available=True, drop_beside_key_only=True)
         state = ctx.initial_state()
         open_doors = set(state.open_doors)
         open_gates = set(state.open_gates)

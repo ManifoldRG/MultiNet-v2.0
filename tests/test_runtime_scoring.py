@@ -1,6 +1,6 @@
 """Regression coverage for scorer/runtime.py::compute_runtime_score.
 
-Locks in that new early-termination failure reasons (``stalled`` and
+Locks in that early-termination failure reasons (``stalled``, ``stuck``, and
 ``terminated_failure``) can never accidentally earn success credit: the
 scorer keys success credit off the ``success`` boolean alone, and these
 end_reason values must always co-occur with ``success=False``.
@@ -37,7 +37,7 @@ def make_spec(**overrides):
     return TaskSpecification.from_dict(data)
 
 
-@pytest.mark.parametrize("end_reason", ["stalled", "terminated_failure"])
+@pytest.mark.parametrize("end_reason", ["stalled", "stuck", "terminated_failure"])
 def test_stalled_and_terminated_failure_score_zero_success_credit(end_reason):
     spec = make_spec()
     canonical = compute_canonical_paths(spec)

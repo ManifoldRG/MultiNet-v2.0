@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, replace
+from math import inf, isfinite, lcm
 from typing import Callable, Iterable
 
 from .actions import MiniGridActions
@@ -38,6 +39,13 @@ class PlannerState:
     key_positions: frozenset[tuple[str, int, int]] = frozenset()
     freeze_remaining: int = 0
     rotator_dirs: tuple[int, ...] = ()
+    tick: int = 0
+    sealed: frozenset[tuple[int, int]] = frozenset()
+    vanish_at: frozenset[tuple[int, int, int]] = frozenset()
+    door_timers: frozenset[tuple[str, int]] = frozenset()
+    switch_timers: frozenset[tuple[str, int]] = frozenset()
+    shut_doors: frozenset[str] = frozenset()
+    shut_switches: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -52,13 +60,27 @@ class Transition:
 class TaskPlanningContext:
     """Fast lookup tables derived from a ``TaskSpecification``."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
+    def __init__(
+        self,
+        spec: TaskSpecification,
+        *,
+        drop_available: bool = False,
+        timers: bool = True,
+        drop_beside_key_only: bool = False,
+    ):
+        """``timers=False`` ignores disappearing floor and shut doors/switches, which
+        blow up BFS; we assume they never change the shortest route.
+        ``drop_beside_key_only`` limits DROP to the cell beside the pink key."""
         self.spec = spec
         self.drop_available = drop_available
+        self.drop_beside_key_only = drop_beside_key_only
         self.width, self.height = spec.maze.dimensions
         self.goal = spec.resolved_goal()
         self.start = spec.maze.start.to_tuple()
         self.key_consumption = spec.rules.key_consumption
+        self.disappear_after = spec.rules.disappear_after if timers else inf
+        self.shut_after = spec.rules.shut_after if timers else inf
+        self.door_shut_after = spec.rules.door_shut_after if timers else inf
 
         self.walls = {(wall.x, wall.y) for wall in spec.maze.walls}
         for x in range(self.width):
@@ -104,17 +126,29 @@ class TaskPlanningContext:
         self.hazards = {hazard.position.to_tuple() for hazard in spec.mechanisms.hazards}
         self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
         self.frozen_tiles = {cell.to_tuple() for cell in spec.mechanisms.frozen_tiles}
+        self.stable_tiles = {cell.to_tuple() for cell in spec.mechanisms.stable_tiles}
         self.freeze_steps = spec.mechanisms.freeze_steps
         self.rotating_index = {
             cell.to_tuple(): i for i, cell in enumerate(spec.mechanisms.rotating_tiles)
         }
-        self.teleporters = {}
+        self.portal_at: dict[tuple[int, int], tuple[tuple[tuple[int, int], ...], int, bool]] = {}
         for teleporter in spec.mechanisms.teleporters:
-            pos_a = teleporter.position_a.to_tuple()
-            pos_b = teleporter.position_b.to_tuple()
-            self.teleporters[pos_a] = pos_b
-            if teleporter.bidirectional:
-                self.teleporters[pos_b] = pos_a
+            ends = tuple(pos.to_tuple() for pos in teleporter.ends())
+            for index, pos in enumerate(ends):
+                self.portal_at[pos] = (ends, index, teleporter.bidirectional)
+        self.phased = [
+            (
+                frozenset(cell.to_tuple() for cell in patch.cells),
+                patch.open_steps,
+                patch.closed_steps,
+                patch.offset,
+            )
+            for patch in spec.mechanisms.phased_patches
+        ]
+        self.phased_cells = frozenset().union(*(cells for cells, *_ in self.phased)) if self.phased else frozenset()
+        self.phase_period = 1
+        for _, open_steps, closed_steps, _ in self.phased:
+            self.phase_period = lcm(self.phase_period, open_steps + closed_steps)
 
         self.initial_open_doors = frozenset(
             door["id"] for door in self.doors_by_pos.values() if not door["locked"]
@@ -149,14 +183,18 @@ class TaskPlanningContext:
         )
 
     def recompute_open_gates(self, active_switches: frozenset[str]) -> frozenset[str]:
-        """Open gates controlled by active switches, plus gates initially open."""
-        open_gates = {
-            gate["id"] for gate in self.gates_by_pos.values() if gate["open"]
+        """An active switch flips each gate it controls from its initial state."""
+        flipped = {
+            gate_id
+            for switch in self.switches_by_pos.values()
+            if switch["id"] in active_switches
+            for gate_id in switch["controls"]
         }
-        for switch in self.switches_by_pos.values():
-            if switch["id"] in active_switches:
-                open_gates.update(switch["controls"])
-        return frozenset(open_gates)
+        return frozenset(
+            gate["id"]
+            for gate in self.gates_by_pos.values()
+            if gate["open"] != (gate["id"] in flipped)
+        )
 
 
 def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> PlannerState:
@@ -165,11 +203,29 @@ def apply(ctx: TaskPlanningContext, state: PlannerState, action: int) -> Planner
     for transition in successors(ctx, state):
         if transition.action == action:
             return transition.next_state
-    return _settle(state)
+    settled = _settle(state)
+    clocks = isfinite(ctx.disappear_after) or isfinite(ctx.shut_after) or isfinite(ctx.door_shut_after) or bool(ctx.phased)
+    if clocks:
+        return _tick(ctx, state, settled)
+    return settled
 
 
 def successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
     """Generate legal R1 actions from a world state."""
+    clocks = isfinite(ctx.disappear_after) or isfinite(ctx.shut_after) or isfinite(ctx.door_shut_after) or bool(ctx.phased)
+    fresh = ctx.initial_state()
+    for transition in _raw_successors(ctx, state):
+        if not clocks or transition.next_state == fresh:
+            yield transition
+        else:
+            yield Transition(
+                transition.action,
+                transition.label,
+                _tick(ctx, state, transition.next_state),
+            )
+
+
+def _raw_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[Transition]:
     if state.freeze_remaining > 0:
         thawed = replace(
             state,
@@ -226,7 +282,12 @@ def _idle_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[
             ),
         )
 
-    if ctx.drop_available and state.carrying_key is not None and _can_drop_here(ctx, state):
+    if (
+        ctx.drop_available
+        and state.carrying_key is not None
+        and _can_drop_here(ctx, state)
+        and (not ctx.drop_beside_key_only or _beside_pink_key(ctx, state))
+    ):
         key_id = state.carrying_key
         x, y = state.agent_pos
         yield Transition(
@@ -252,7 +313,7 @@ def _idle_successors(ctx: TaskPlanningContext, state: PlannerState) -> Iterable[
 
     if switch is None:
         door = ctx.doors_by_pos.get(front)
-        if door and door["id"] not in state.open_doors and state.carrying_key is not None:
+        if door and door["id"] not in state.open_doors and door["id"] not in state.shut_doors and state.carrying_key is not None:
             held_color = ctx.keys_by_id[state.carrying_key]["color"]
             if held_color == door["color"]:
                 yield Transition(
@@ -302,6 +363,64 @@ def shortest_plan(
     return [], None, len(visited)
 
 
+def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+    """Flood-fill from the agent to the goal. A closed door counts as open once a
+    key of its colour is held or can be picked up. A key on the floor can be
+    picked up with empty hands, or while holding a key when a reachable cell
+    allows a drop. A closed gate counts once a usable switch for it is reachable
+    or its switch is about to shut (gates then return to their initial state),
+    and a portal pad leads to every end of its portal."""
+    key_cells = {(x, y): ctx.keys_by_id[key_id]["color"] for key_id, x, y in state.key_positions}
+    usable = {
+        pos: switch["controls"]
+        for pos, switch in ctx.switches_by_pos.items()
+        if switch["id"] not in state.shut_switches and switch["id"] not in state.used_switches
+    }
+    colors = set() if state.carrying_key is None else {ctx.keys_by_id[state.carrying_key]["color"]}
+    timed = {switch_id for switch_id, _ in state.switch_timers}
+    gates = {
+        gate_id
+        for switch in ctx.switches_by_pos.values()
+        if switch["id"] in timed
+        for gate_id in switch["controls"]
+    }
+
+    def passable(pos: tuple[int, int]) -> bool:
+        if pos in ctx.walls or pos in state.sealed or pos in ctx.hazards or pos in ctx.blocks or pos in ctx.kill_cells:
+            return False
+        door = ctx.doors_by_pos.get(pos)
+        if door and door["id"] not in state.open_doors:
+            return door["id"] not in state.shut_doors and door["color"] in colors
+        gate = ctx.gates_by_pos.get(pos)
+        if gate and gate["id"] not in state.open_gates:
+            return gate["id"] in gates
+        return True
+
+    while True:
+        queue = deque([state.agent_pos])
+        seen = {state.agent_pos}
+        while queue:
+            x, y = queue.popleft()
+            if (x, y) == ctx.goal:
+                return True
+            nxt = [(x + dx, y + dy) for dx, dy in DIRECTION_VECTORS]
+            if (x, y) in ctx.portal_at:
+                nxt += ctx.portal_at[(x, y)][0]
+            for pos in nxt:
+                if pos not in seen and passable(pos):
+                    seen.add(pos)
+                    queue.append(pos)
+        ground = {key_cells[p] for p in seen if p in key_cells}
+        can_take = state.carrying_key is None or (
+            ctx.drop_available and any(_can_drop_on(ctx, state, pos) for pos in seen)
+        )
+        found_colors = colors | ground if can_take else colors
+        found_gates = gates | {g for p in seen if p in usable for g in usable[p]}
+        if found_colors == colors and found_gates == gates:
+            return False
+        colors, gates = found_colors, found_gates
+
+
 def _front_pos(state: PlannerState) -> tuple[int, int]:
     dx, dy = DIRECTION_VECTORS[state.agent_dir]
     x, y = state.agent_pos
@@ -321,16 +440,29 @@ def _without_key(
     return frozenset(item for item in key_positions if item[0] != key_id)
 
 
-def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+def _can_drop_on(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, int]) -> bool:
     """DROP needs an empty floor cell (same rule as the old MiniGrid handler)."""
-    pos = state.agent_pos
     if pos in ctx.walls or pos in ctx.hazards or pos in ctx.blocks:
         return False
     if pos in ctx.switches_by_pos or pos in ctx.doors_by_pos or pos in ctx.gates_by_pos:
         return False
-    if pos in ctx.teleporters or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_index or pos == ctx.goal:
+    if pos in ctx.portal_at or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_index or pos == ctx.goal:
         return False
     return _key_id_at(state, pos) is None
+
+
+def _can_drop_here(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+    return _can_drop_on(ctx, state, state.agent_pos)
+
+
+def _beside_pink_key(ctx: TaskPlanningContext, state: PlannerState) -> bool:
+    """The pink key is on a neighboring cell, so this is the cell just before it."""
+    x, y = state.agent_pos
+    neighbors = {(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)}
+    return any(
+        ctx.keys_by_id[key_id]["color"] == "pink" and (kx, ky) in neighbors
+        for key_id, kx, ky in state.key_positions
+    )
 
 
 def _apply_switch(
@@ -339,6 +471,8 @@ def _apply_switch(
     switch: dict,
 ) -> PlannerState | None:
     switch_id = switch["id"]
+    if switch_id in state.shut_switches:
+        return None
     active = set(state.active_switches)
     used = set(state.used_switches)
     switch_type = switch["switch_type"]
@@ -373,7 +507,7 @@ def _forward_successor(
     if _blocked(ctx, state, front):
         return
 
-    next_pos = _landing(ctx, front)
+    next_pos = _landing(ctx, front, state.agent_dir)
     if next_pos in ctx.kill_cells:
         yield Transition(
             action=int(MiniGridActions.MOVE_FORWARD),
@@ -392,10 +526,12 @@ def _forward_successor(
 def _blocked(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, int]) -> bool:
     return (
         pos in ctx.walls
+        or pos in state.sealed
         or pos in ctx.hazards
         or pos in ctx.blocks
         or _has_closed_door(ctx, state, pos)
         or _has_closed_gate(ctx, state, pos)
+        or _phase_closed(ctx, state.tick, pos)
     )
 
 
@@ -427,16 +563,32 @@ def _ride_target(ctx: TaskPlanningContext, state: PlannerState) -> tuple[int, in
     return dest
 
 
-def _landing(ctx: TaskPlanningContext, entered: tuple[int, int]) -> tuple[int, int]:
-    """Where the agent ends up after entering ``entered`` (a portal pad sends it on)."""
-    return ctx.teleporters.get(entered, entered)
+def _landing(ctx: TaskPlanningContext, entered: tuple[int, int], direction: int) -> tuple[int, int]:
+    """Where the agent ends up after entering ``entered``. A portal pad sends it on."""
+    info = ctx.portal_at.get(entered)
+    if info is None:
+        return entered
+    ends, index, bidirectional = info
+    if len(ends) == 2:
+        if index == 0:
+            return ends[1]
+        return ends[0] if bidirectional else entered
+    x, y = ends[index]
+    dx, dy = DIRECTION_VECTORS[direction]
+    for other in (index - 1, index + 1):
+        if 0 <= other < len(ends):
+            ox, oy = ends[other]
+            if (ox - x) * dx + (oy - y) * dy > 0:
+                return ox, oy
+    return entered
 
 
 def _ride(ctx: TaskPlanningContext, state: PlannerState) -> PlannerState:
     dest = _ride_target(ctx, state)
     if dest is None:
         return _settle(state)
-    next_pos = _landing(ctx, dest)
+    direction = state.rotator_dirs[ctx.rotating_index[state.agent_pos]]
+    next_pos = _landing(ctx, dest, direction)
     if next_pos in ctx.kill_cells:
         return ctx.initial_state()
     return _settle(_moved(ctx, state, next_pos))
@@ -483,7 +635,11 @@ def classify_mechanic(
     else:
         return None
 
-    landed = _landing(ctx, entered)
+    if riding:
+        direction = before.rotator_dirs[ctx.rotating_index[before.agent_pos]]
+    else:
+        direction = before.agent_dir
+    landed = _landing(ctx, entered, direction)
     if landed in ctx.kill_cells:
         return {
             "kind": "died",
@@ -529,9 +685,101 @@ def _rotating_label(
 
 def _teleporter_color(ctx: TaskPlanningContext, pad: tuple[int, int]) -> str:
     for teleporter in ctx.spec.mechanisms.teleporters:
-        if pad in (teleporter.position_a.to_tuple(), teleporter.position_b.to_tuple()):
+        if pad in {pos.to_tuple() for pos in teleporter.ends()}:
             return teleporter.color
     raise KeyError(f"no teleporter at {pad}")
+
+
+def _phase_closed(ctx: TaskPlanningContext, tick: int, pos: tuple[int, int]) -> bool:
+    for cells, open_steps, closed_steps, offset in ctx.phased:
+        if pos in cells and (tick + offset) % (open_steps + closed_steps) >= open_steps:
+            return True
+    return False
+
+
+def _can_vanish(ctx: TaskPlanningContext, state: PlannerState, pos: tuple[int, int]) -> bool:
+    if pos == ctx.goal or pos in ctx.walls or pos in ctx.phased_cells or pos in ctx.stable_tiles:
+        return False
+    if pos in ctx.doors_by_pos or pos in ctx.gates_by_pos or pos in ctx.switches_by_pos:
+        return False
+    if pos in ctx.portal_at or pos in ctx.kill_cells or pos in ctx.frozen_tiles or pos in ctx.rotating_index:
+        return False
+    if pos in ctx.hazards or pos in ctx.blocks or _key_id_at(state, pos) is not None:
+        return False
+    return True
+
+
+def _tick(ctx: TaskPlanningContext, prev: PlannerState, nxt: PlannerState) -> PlannerState:
+    sealed = set(nxt.sealed)
+    vanish = {(x, y): left for x, y, left in nxt.vanish_at}
+    if isfinite(ctx.disappear_after) and nxt.agent_pos != prev.agent_pos:
+        pos = nxt.agent_pos
+        if _can_vanish(ctx, nxt, pos) and pos not in sealed and pos not in vanish:
+            vanish[pos] = int(ctx.disappear_after)
+    armed = set()
+    for (x, y), left in list(vanish.items()):
+        just = (
+            (x, y) == nxt.agent_pos
+            and (x, y) not in {(px, py) for px, py, _ in prev.vanish_at}
+            and (x, y) not in prev.sealed
+        )
+        if just:
+            armed.add((x, y, left))
+            continue
+        left -= 1
+        if left <= 0:
+            if _key_id_at(nxt, (x, y)) is None:
+                sealed.add((x, y))
+        else:
+            armed.add((x, y, left))
+
+    door_timers = dict(nxt.door_timers)
+    switch_timers = dict(nxt.switch_timers)
+    shut_doors = set(nxt.shut_doors)
+    shut_switches = set(nxt.shut_switches)
+    open_doors = set(nxt.open_doors)
+    active = set(nxt.active_switches)
+    if isfinite(ctx.shut_after) or isfinite(ctx.door_shut_after):
+        for door_id in nxt.open_doors - prev.open_doors:
+            if door_id not in shut_doors and isfinite(ctx.door_shut_after):
+                door_timers[door_id] = int(ctx.door_shut_after)
+        for switch_id in nxt.active_switches - prev.active_switches:
+            if switch_id not in shut_switches and isfinite(ctx.shut_after):
+                switch_timers[switch_id] = int(ctx.shut_after)
+        for door_id, left in list(door_timers.items()):
+            if door_id in nxt.open_doors - prev.open_doors:
+                continue
+            left -= 1
+            if left <= 0:
+                door_timers.pop(door_id)
+                open_doors.discard(door_id)
+                shut_doors.add(door_id)
+            else:
+                door_timers[door_id] = left
+        for switch_id, left in list(switch_timers.items()):
+            if switch_id in nxt.active_switches - prev.active_switches:
+                continue
+            left -= 1
+            if left <= 0:
+                switch_timers.pop(switch_id)
+                active.discard(switch_id)
+                shut_switches.add(switch_id)
+            else:
+                switch_timers[switch_id] = left
+
+    return replace(
+        nxt,
+        tick=(prev.tick + 1) % ctx.phase_period if ctx.phased else prev.tick,
+        sealed=frozenset(sealed),
+        vanish_at=frozenset(armed),
+        door_timers=frozenset(door_timers.items()),
+        switch_timers=frozenset(switch_timers.items()),
+        shut_doors=frozenset(shut_doors),
+        shut_switches=frozenset(shut_switches),
+        open_doors=frozenset(open_doors),
+        active_switches=frozenset(active),
+        open_gates=ctx.recompute_open_gates(frozenset(active)),
+    )
 
 
 def _active_switches_after_move(

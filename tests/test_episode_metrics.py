@@ -169,6 +169,7 @@ def test_build_run_row_fields_and_optimality():
     "end_reason,terminated,truncated,success",
     [
         ("success", True, False, True),
+        ("stuck", True, False, False),
         ("terminated_failure", True, False, False),
         ("truncated", False, True, False),
         ("stalled", False, True, False),

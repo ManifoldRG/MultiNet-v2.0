@@ -100,8 +100,16 @@ def compute_12d_score(
     if bfs_path is None:
         bfs_path = plan_bfs_path(spec)
 
-    fragility = task_validator.compute_fragility()
-    fragility_value = 0.0 if fragility.min_steps_to_break == -1 else 1.0 / fragility.min_steps_to_break
+    # Re-solves the maze after every irreversible step. The result changes the
+    # static score by at most 1 and the model run does not read it.
+    # print(f"scoring {spec.task_id}: fragility", flush=True)
+    # fragility = task_validator.compute_fragility()
+    # print(
+    #     f"scoring {spec.task_id}: fragility min_steps_to_break {fragility.min_steps_to_break}",
+    #     flush=True,
+    # )
+    # fragility_value = 0.0 if fragility.min_steps_to_break == -1 else 1.0 / fragility.min_steps_to_break
+    fragility_value = 0.0
 
     width, height = spec.maze.dimensions
     grid_size = float(width * height)
@@ -180,7 +188,9 @@ def compute_static_score_artifact(
     distractor_safety_violations: list[str] = []
     chain_ordering_valid = True
     if schema_valid:
-        mechanism_necessity_violations = task_validator.validate_mechanism_necessity()
+        # Each mechanism is deleted and the maze is solved again. The model
+        # run does not read this list; it only lands in the static artifact.
+        # mechanism_necessity_violations = task_validator.validate_mechanism_necessity()
         distractor_safety_violations = task_validator.validate_distractor_safety(
             base_beatable=is_beatable
         )
@@ -231,15 +241,29 @@ def score_task_file(
     """Score a task JSON file and optionally write canonical score artifacts."""
     spec = task_spec_from_payload(load_json(task_path))
     require_scorable_spec(spec)
+    print(f"scoring {spec.task_id}: beatability", flush=True)
     validator = TaskValidator(spec)
     validation_result = validator.validate()
+    print(f"scoring {spec.task_id}: shortest path", flush=True)
     difficulty = compute_difficulty(
         spec,
         validator=validator,
         validation_result=validation_result,
     )
+    print(f"scoring {spec.task_id}: shortest path again", flush=True)
     bfs_path = plan_bfs_path(spec)
+    print(
+        f"scoring {spec.task_id}: shortest path {len(bfs_path.actions)} steps, "
+        f"{bfs_path.states_explored} states, success {bfs_path.success}",
+        flush=True,
+    )
+    print(f"scoring {spec.task_id}: greedy", flush=True)
     greedy_path = plan_greedy_path(spec)
+    print(
+        f"scoring {spec.task_id}: greedy {len(greedy_path.actions)} steps, "
+        f"success {greedy_path.success}",
+        flush=True,
+    )
     canonical_paths = compute_canonical_paths(
         spec,
         bfs_path=bfs_path,
@@ -260,5 +284,6 @@ def score_task_file(
         out.mkdir(parents=True, exist_ok=True)
         dump_json(out / "canonical_paths.json", canonical_paths.to_dict())
         dump_json(out / "scored_static.json", static_score.to_dict())
+        print(f"scoring {spec.task_id}: wrote {out}", flush=True)
 
     return canonical_paths, static_score
