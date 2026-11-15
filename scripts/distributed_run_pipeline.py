@@ -331,7 +331,7 @@ def prepare_job(
                 # orphan already-paid units. The cap change (max_tokens) already
                 # differentiates the phases via each unit's episode_inputs_hash.
                 "run_config": {k: v for k, v in run_config.items() if k != "phase"},
-                "manifest_path": str(manifest_path),
+                "manifest_path": Path(manifest_path).as_posix(),
                 "seeds": [int(s) for s in seeds],
                 "conditions": conditions,
                 "run_set_id": run_set_id,
