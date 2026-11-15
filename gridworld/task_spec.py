@@ -479,15 +479,21 @@ class TaskSpecification:
                 "freeze_steps": self.mechanisms.freeze_steps,
                 "rotating_tiles": [pos_to_list(p) for p in self.mechanisms.rotating_tiles],
                 "rotating_initial_directions": list(self.mechanisms.rotating_initial_directions),
-                "phased_patches": [
+                **(
                     {
-                        "cells": [pos_to_list(c) for c in patch.cells],
-                        "open_steps": patch.open_steps,
-                        "closed_steps": patch.closed_steps,
-                        "offset": patch.offset,
+                        "phased_patches": [
+                            {
+                                "cells": [pos_to_list(c) for c in patch.cells],
+                                "open_steps": patch.open_steps,
+                                "closed_steps": patch.closed_steps,
+                                "offset": patch.offset,
+                            }
+                            for patch in self.mechanisms.phased_patches
+                        ]
                     }
-                    for patch in self.mechanisms.phased_patches
-                ],
+                    if self.mechanisms.phased_patches
+                    else {}
+                ),
                 **({"stable_tiles": [pos_to_list(p) for p in self.mechanisms.stable_tiles]} if self.mechanisms.stable_tiles else {}),
             },
             "rules": {

@@ -123,6 +123,12 @@ class TaskPlanningContext:
             for gate in spec.mechanisms.gates
         }
         self.blocks = {block.position.to_tuple() for block in spec.mechanisms.blocks}
+        # A pushable block can still be moved, so it must not end the episode as stuck.
+        self.solid_blocks = {
+            block.position.to_tuple()
+            for block in spec.mechanisms.blocks
+            if not block.pushable
+        }
         self.hazards = {hazard.position.to_tuple() for hazard in spec.mechanisms.hazards}
         self.kill_cells = {cell.to_tuple() for cell in spec.mechanisms.kill_cells}
         self.frozen_tiles = {cell.to_tuple() for cell in spec.mechanisms.frozen_tiles}
@@ -386,7 +392,7 @@ def goal_still_reachable(ctx: TaskPlanningContext, state: PlannerState) -> bool:
     }
 
     def passable(pos: tuple[int, int]) -> bool:
-        if pos in ctx.walls or pos in state.sealed or pos in ctx.hazards or pos in ctx.blocks or pos in ctx.kill_cells:
+        if pos in ctx.walls or pos in state.sealed or pos in ctx.hazards or pos in ctx.solid_blocks or pos in ctx.kill_cells:
             return False
         door = ctx.doors_by_pos.get(pos)
         if door and door["id"] not in state.open_doors:

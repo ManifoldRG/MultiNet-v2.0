@@ -13,6 +13,7 @@ _MINIGRID_COLORS = {
     "yellow": (255, 255, 0),
     "grey": (100, 100, 100),
     "pink": (255, 105, 180),
+    "darkgreen": (0, 105, 40),
 }
 
 
