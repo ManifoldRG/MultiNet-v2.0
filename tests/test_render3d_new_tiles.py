@@ -570,7 +570,7 @@ def test_2d_tiles_share_a_cache_key_only_when_they_draw_the_same_picture():
 
     tiles = {"floor": Floor(), "frozen": FrozenTile(), "kill": KillCell()}
     tiles.update({f"turntable {d}": RotatingTile(d) for d in range(4)})
-    for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "white", "cyan", "brown"):
+    for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "white", "cyan", "brown", "darkgreen"):
         for state in ("off", "on"):
             tiles[f"{state} {c} switch"] = Switch(color=c, initial_state=state)
     for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "cyan"):
