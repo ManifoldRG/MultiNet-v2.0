@@ -33,10 +33,15 @@ from .world_model import (
     successors,
 )
 
-# MiniGrid ships six key/door colours; pink is a seventh that clashes with no tile.
+# MiniGrid ships six key/door colours. Pink is a seventh. Dark green is an
+# eighth, darker than the goal green, so a switch can match its gate without
+# looking like the goal.
 minigrid_constants.COLORS["pink"] = np.array([255, 105, 180])
 minigrid_constants.COLOR_TO_IDX["pink"] = 6
 minigrid_constants.IDX_TO_COLOR[6] = "pink"
+minigrid_constants.COLORS["darkgreen"] = np.array([0, 105, 40])
+minigrid_constants.COLOR_TO_IDX["darkgreen"] = 7
+minigrid_constants.IDX_TO_COLOR[7] = "darkgreen"
 
 # Color mapping for MiniGrid
 MINIGRID_COLORS = {
@@ -50,6 +55,7 @@ MINIGRID_COLORS = {
     "gray": "grey",
     "cyan": "blue",
     "brown": "grey",
+    "darkgreen": "darkgreen",
 }
 
 SWITCH_RENDER_COLORS = {
@@ -62,6 +68,7 @@ SWITCH_RENDER_COLORS = {
     "gray": np.array([100, 100, 100]),
     "white": np.array([255, 255, 255]),
     "cyan": np.array([0, 220, 220]),
+    "darkgreen": np.array([0, 105, 40]),
 }
 
 

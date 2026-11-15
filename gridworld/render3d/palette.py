@@ -19,6 +19,7 @@ _SPEC_RGB: dict[str, tuple[float, float, float]] = {
     "black": (0.10, 0.10, 0.12),
     "white": (0.95, 0.95, 0.95),
     "cyan": (0.0, 0.86, 0.86),  # MiniGrid's SWITCH_RENDER_COLORS cyan
+    "darkgreen": (0.0, 105 / 255, 40 / 255),  # darker than the goal green
 }
 
 # Scene fixtures (not spec colours).
