@@ -342,7 +342,7 @@ class MiniGridPlaySession:
         """Human-facing efficiency score for the end screen (0..1)."""
         if not self.episode_done:
             return 0.0
-        if self.end_reason == "stalled":
+        if self.end_reason in ("stalled", "stuck"):
             return 0.0
         return efficiency_score(
             self.state.step_count,
@@ -438,7 +438,7 @@ class MiniGridPlaySession:
         elif terminated or truncated:
             self.episode_done = True
             self.episode_success = self.state.goal_reached
-            self.end_reason = "truncated" if truncated else "success"
+            self.end_reason = "truncated" if truncated else ("success" if self.state.goal_reached else "stuck")
 
     def _step_token(self, token: str, cardinal_source: Optional[str] = None) -> None:
         """Execute a single egocentric primitive action."""

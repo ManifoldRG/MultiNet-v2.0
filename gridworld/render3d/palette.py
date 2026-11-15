@@ -13,11 +13,13 @@ _SPEC_RGB: dict[str, tuple[float, float, float]] = {
     "green": (0.18, 0.68, 0.28),
     "blue": (0.18, 0.38, 0.90),
     "purple": (0.55, 0.24, 0.80),
+    "pink": (1.0, 0.41, 0.71),
     "yellow": (0.96, 0.80, 0.12),
     "grey": (0.58, 0.58, 0.62),
     "black": (0.10, 0.10, 0.12),
     "white": (0.95, 0.95, 0.95),
     "cyan": (0.0, 0.86, 0.86),  # MiniGrid's SWITCH_RENDER_COLORS cyan
+    "darkgreen": (0.0, 105 / 255, 40 / 255),  # darker than the goal green
 }
 
 # Scene fixtures (not spec colours).
@@ -45,6 +47,11 @@ ROTATOR_ARROW: RGBA = _rgb255(40, 28, 16)
 FROZEN_TILE: RGBA = _rgb255(214, 232, 246)
 FROZEN_SPOT: RGBA = _rgb255(255, 255, 255)
 FROZEN_FLECK: RGBA = _rgb255(245, 252, 255)
+# PhasedTile in custom_env.py: grey barrier with a dark bar, or a pale floor with a light stripe.
+PHASED_CLOSED: RGBA = _rgb255(90, 96, 110)
+PHASED_BAR: RGBA = _rgb255(40, 44, 54)
+PHASED_OPEN: RGBA = _rgb255(186, 214, 176)
+PHASED_STRIPE: RGBA = _rgb255(250, 252, 246)
 
 
 def normalize(name: str) -> str:

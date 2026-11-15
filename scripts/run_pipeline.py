@@ -782,6 +782,11 @@ def _run_one_unit(
             episode = _load_json_object_if_valid(prep.episode_path)
 
     if episode is None:
+        print(
+            f"running {task_id} model {model_name} seed {seed} "
+            f"max_steps {prep.runtime_spec.max_steps}",
+            flush=True,
+        )
         episode = run_episode(
             prep.source,
             prep.experiment_config,

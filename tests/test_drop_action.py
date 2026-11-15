@@ -435,7 +435,7 @@ class TestPlannerIgnoresDrop:
         assert int(MiniGridActions.DROP) not in path.actions
 
     def test_no_fixture_maze_needs_a_drop_to_solve(self):
-        """Exposing DROP must not shift any difficulty number."""
+        """With the beside-key drop edge off, BFS still leaves DROP out."""
         import json
 
         from gridworld.baselines import plan_bfs_path
@@ -464,7 +464,7 @@ class TestPlannerIgnoresDrop:
                 continue
             if not ok:
                 continue
-            plan = plan_bfs_path(spec)
+            plan = plan_bfs_path(spec, drop_beside_key_only=False)
             if plan.success:
                 assert int(MiniGridActions.DROP) not in plan.actions, path
                 checked += 1

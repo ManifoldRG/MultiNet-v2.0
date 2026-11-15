@@ -399,8 +399,11 @@ class EpisodeStepper:
                 print(f"  Step {state.step_count}/{self.max_steps}: {action} -> {event_type}")
 
             if terminated:
-                # Backend ended the episode without reaching the goal (e.g. a hazard).
-                self.end_reason = "terminated_failure"
+                # stuck: the goal can no longer be reached. Anything else the
+                # backend ends without the goal stays terminated_failure.
+                self.end_reason = (
+                    "stuck" if isinstance(info, dict) and info.get("stuck") else "terminated_failure"
+                )
                 self._finished = True
                 return None
 

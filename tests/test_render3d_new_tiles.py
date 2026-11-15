@@ -570,7 +570,7 @@ def test_2d_tiles_share_a_cache_key_only_when_they_draw_the_same_picture():
 
     tiles = {"floor": Floor(), "frozen": FrozenTile(), "kill": KillCell()}
     tiles.update({f"turntable {d}": RotatingTile(d) for d in range(4)})
-    for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "white", "cyan", "brown"):
+    for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "white", "cyan", "brown", "darkgreen"):
         for state in ("off", "on"):
             tiles[f"{state} {c} switch"] = Switch(color=c, initial_state=state)
     for c in ("red", "green", "blue", "purple", "yellow", "grey", "gray", "cyan"):
@@ -600,3 +600,49 @@ def test_compare_script_starts_from_the_reset_state():
 
     state = initial_state(TaskSpecification.from_dict(MECHANISMS))
     assert state.key_positions == {"k1": (2, 1)}
+
+
+def test_chain_portal_draws_every_pad_and_leaves_it_off_the_wall_set():
+    d = copy.deepcopy(TILES)
+    d["mechanisms"]["teleporters"] = [
+        {"id": "chain", "color": "cyan", "positions": [[2, 1], [4, 1], [6, 1]]},
+    ]
+    spec = _spec(d)
+    xml, _index = build_scene(spec, wall_height=0.6, resolution=64)
+    for end in ("0", "1", "2"):
+        assert f'name="portal:chain:{end}:ring"' in xml
+    assert "portal:chain:1:sign:" not in xml
+    walls = wall_cells(spec)
+    assert (2, 1) not in walls and (4, 1) not in walls and (6, 1) not in walls
+
+
+def test_phased_cell_and_sealed_floor_follow_the_live_state():
+    mujoco = pytest.importorskip("mujoco")
+    from gridworld.render3d.scene import HIDDEN_GROUP
+    from gridworld.render3d.sync import SceneState
+
+    d = copy.deepcopy(TILES)
+    d["mechanisms"]["phased_patches"] = [
+        {"cells": [[2, 2]], "open_steps": 4, "closed_steps": 8, "offset": 0},
+    ]
+    spec = _spec(d)
+    xml, index = build_scene(spec, wall_height=0.6, resolution=64)
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    scene = SceneState(model, index)
+
+    def group(name: str) -> int:
+        gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+        return int(model.geom_group[gid])
+
+    scene.apply(data, _state(rule_tick=0), NO_DOORS)
+    assert group("phase:0:0:closed") == HIDDEN_GROUP
+    assert group("phase:0:0:open") != HIDDEN_GROUP
+    assert group("floor:8:2") != HIDDEN_GROUP
+    assert group("sealed:8:2") == HIDDEN_GROUP
+
+    scene.apply(data, _state(rule_tick=4, sealed={(8, 2)}), NO_DOORS)
+    assert group("phase:0:0:closed") != HIDDEN_GROUP
+    assert group("phase:0:0:open") == HIDDEN_GROUP
+    assert group("floor:8:2") == HIDDEN_GROUP
+    assert group("sealed:8:2") != HIDDEN_GROUP

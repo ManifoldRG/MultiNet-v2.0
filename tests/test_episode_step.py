@@ -102,6 +102,21 @@ def _scrub(transcript):
     return scrubbed
 
 
+def test_unreachable_goal_ends_stuck():
+    spec = {
+        "task_id": "stuck",
+        "seed": 0,
+        "difficulty_tier": 1,
+        "maze": {"dimensions": [5, 3], "walls": [[2, 1]], "start": [1, 1], "goal": [3, 1]},
+        "mechanisms": {},
+        "goal": {"type": "reach_position", "target": [3, 1]},
+        "max_steps": 10,
+    }
+    result = _drive_by_hand(_build(spec), ScriptedAgent(["MOVE_EAST"]))
+    assert result["success"] is False
+    assert result["end_reason"] == "stuck"
+
+
 def test_stepper_serial_equivalence():
     # Same scripted cardinal episode via runner.run vs a hand-driven stepper.
     runner_a = _build(_MECHANICS_SPEC)

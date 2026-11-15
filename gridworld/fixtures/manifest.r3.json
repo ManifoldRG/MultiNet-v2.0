@@ -1,0 +1,113 @@
+{
+  "description": "M11-M14. M11 is the base maze. M12 adds one factor. M13 combines factors. M14 mixes them. One list for 2D, NL, and 3D; the run config picks the view.",
+  "tasks": [
+    {
+      "task_id": "25x25_dense_kr_sg_kb_0",
+      "level": "M11",
+      "factors": [],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M11/25x25_dense_kr_sg_kb_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_dynamic_phased_0",
+      "level": "M12",
+      "factors": ["dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_dynamic_phased_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_disappear_0",
+      "level": "M12",
+      "factors": ["irreversible_disappear"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_irreversible_disappear_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_exclusive_key_0",
+      "level": "M12",
+      "factors": ["irreversible_exclusive_key"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_irreversible_exclusive_key_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_shut_0",
+      "level": "M12",
+      "factors": ["irreversible_shut"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_irreversible_shut_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_planning_drop_0",
+      "level": "M12",
+      "factors": ["planning_drop"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_planning_drop_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_planning_long_door_0",
+      "level": "M12",
+      "factors": ["planning_long_door"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_planning_long_door_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_planning_portal_chain_0",
+      "level": "M12",
+      "factors": ["planning_portal_chain"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_planning_portal_chain_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_planning_two_gates_0",
+      "level": "M12",
+      "factors": ["planning_two_gates"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_planning_two_gates_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_dynamic_disappear_shut_phased_0",
+      "level": "M13",
+      "factors": ["irreversible_disappear", "irreversible_shut", "dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M13/25x25_dense_kr_sg_kb_irreversible_dynamic_disappear_shut_phased_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_dynamic_exclusive_phased_0",
+      "level": "M13",
+      "factors": ["irreversible_exclusive_key", "dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M13/25x25_dense_kr_sg_kb_irreversible_dynamic_exclusive_phased_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_planning_exclusive_disappear_gates_0",
+      "level": "M13",
+      "factors": ["irreversible_exclusive_key", "irreversible_disappear", "planning_two_gates"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M13/25x25_dense_kr_sg_kb_irreversible_planning_exclusive_disappear_gates_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_irreversible_planning_shut_chain_long_door_0",
+      "level": "M13",
+      "factors": ["irreversible_shut", "planning_portal_chain", "planning_long_door"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M13/25x25_dense_kr_sg_kb_irreversible_planning_shut_chain_long_door_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_planning_dynamic_chain_long_door_phased_0",
+      "level": "M13",
+      "factors": ["planning_portal_chain", "planning_long_door", "dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M13/25x25_dense_kr_sg_kb_planning_dynamic_chain_long_door_phased_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_planning_dynamic_drop_gates_phased_0",
+      "level": "M13",
+      "factors": ["planning_drop", "planning_two_gates", "dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M13/25x25_dense_kr_sg_kb_planning_dynamic_drop_gates_phased_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_mix_all_0",
+      "level": "M14",
+      "factors": ["irreversible_exclusive_key", "irreversible_disappear", "irreversible_shut", "planning_drop", "planning_two_gates", "planning_portal_chain", "dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M14/25x25_dense_kr_sg_kb_mix_all_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_mix_commitment_0",
+      "level": "M14",
+      "factors": ["irreversible_exclusive_key", "irreversible_disappear", "irreversible_shut", "planning_two_gates", "dynamic_phased"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M14/25x25_dense_kr_sg_kb_mix_commitment_0.json"
+    },
+    {
+      "task_id": "25x25_dense_kr_sg_kb_mix_recoverable_0",
+      "level": "M14",
+      "factors": ["planning_portal_chain", "planning_drop", "planning_two_gates", "planning_long_door", "dynamic_phased", "irreversible_shut"],
+      "source": "ogbench/ogbench/procgen/maze_jsons/M14/25x25_dense_kr_sg_kb_mix_recoverable_0.json"
+    }
+  ]
+}

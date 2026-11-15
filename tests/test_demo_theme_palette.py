@@ -7,6 +7,7 @@ import pytest
 
 def test_inlined_palette_matches_minigrid_colors():
     constants = pytest.importorskip("minigrid.core.constants")
+    import gridworld.custom_env  # noqa: F401  registers pink
     from demo.theme import _MINIGRID_COLORS
 
     expected = {k: tuple(int(x) for x in v) for k, v in constants.COLORS.items()}
