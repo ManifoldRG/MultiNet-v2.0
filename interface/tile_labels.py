@@ -19,8 +19,9 @@ effect from what happens when it steps on one.
   alphabetical order (the label draw, not the kind, sets the order), cells in
   row-major order. The rotating kind keeps its current direction ("pointing
   EAST"): the user-facing rule needs it and it names no effect.
-* Portal pads are listed like any other cell. Which pad leads where is not
-  shown: one step onto a pad shows it (the landing cell is reported).
+* Portal pads are listed like any other cell, every pad of an R3 portal chain
+  (3+ pads) included. Which pad leads where is not shown: one step onto a pad
+  shows it (the landing cell is reported).
 * Keys, doors, the switch and the gate keep their R2 names. Only the tile kinds
   are relabelled; the world model and the maze are untouched, so every maze is
   exactly as solvable as in R2.
@@ -51,11 +52,9 @@ KINDS: tuple[str, ...] = ("death", "frozen", "rotating", "portal")
 def _kind_cells(task_spec: TaskSpecification) -> dict[str, list[tuple[int, int]]]:
     """(row, col) cells of each tile kind the maze has, row-major."""
     mech = task_spec.mechanisms
-    pads = [
-        pad
-        for teleporter in mech.teleporters
-        for pad in (teleporter.position_a, teleporter.position_b)
-    ]
+    # ends(): both pads of a pair, every pad of a chain (position_a/position_b
+    # are only a chain's first and last pads).
+    pads = [pad for teleporter in mech.teleporters for pad in teleporter.ends()]
     cells = {
         "death": [to_row_col(c) for c in mech.kill_cells],
         "frozen": [to_row_col(c) for c in mech.frozen_tiles],
@@ -84,9 +83,10 @@ class TileLabeling:
     task_id: str
     label_by_kind: dict[str, str]
     cells_by_kind: dict[str, list[tuple[int, int]]]
-    # (spec colour, pad a, pad b, bidirectional) per teleporter, (row, col):
-    # recorded for grading, never rendered.
-    portal_links: tuple[tuple[str, tuple[int, int], tuple[int, int], bool], ...] = ()
+    # (spec colour, pads in spec order, bidirectional) per teleporter, (row,
+    # col): two pads for a pair, 3+ for a chain. Recorded for grading, never
+    # rendered.
+    portal_links: tuple[tuple[str, tuple[tuple[int, int], ...], bool], ...] = ()
 
     @classmethod
     def for_task(cls, task_spec: TaskSpecification, seed: int) -> TileLabeling:
@@ -97,12 +97,7 @@ class TileLabeling:
             label_by_kind=draw_labels(seed, task_spec.task_id, list(cells)),
             cells_by_kind=cells,
             portal_links=tuple(
-                (
-                    t.color,
-                    to_row_col(t.position_a),
-                    to_row_col(t.position_b),
-                    bool(t.bidirectional),
-                )
+                (t.color, tuple(to_row_col(p) for p in t.ends()), bool(t.bidirectional))
                 for t in task_spec.mechanisms.teleporters
             ),
         )
@@ -130,7 +125,10 @@ class TileLabeling:
 
     def to_dict(self) -> dict:
         """The mapping for ``episode.json``: what each label really was, where
-        its cells are, and how the portal pads are wired (row, col)."""
+        its cells are, and how the portal pads are wired (row, col). A pair is
+        recorded as ``a``/``b``; a chain as its ``pads`` in order (stepping
+        onto a chain pad sends the agent on to the pad next to it in that
+        order that lies ahead in its direction of travel, if there is one)."""
         return {
             "mode": "neutral",
             "seed": self.seed,
@@ -144,10 +142,13 @@ class TileLabeling:
                 {
                     "label": self.label_by_kind["portal"],
                     "spec_color": color,
-                    "a": list(pad_a),
-                    "b": list(pad_b),
+                    **(
+                        {"a": list(pads[0]), "b": list(pads[1])}
+                        if len(pads) == 2
+                        else {"pads": [list(p) for p in pads]}
+                    ),
                     "bidirectional": bidirectional,
                 }
-                for color, pad_a, pad_b, bidirectional in self.portal_links
+                for color, pads, bidirectional in self.portal_links
             ],
         }
