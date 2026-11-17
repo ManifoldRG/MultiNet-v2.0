@@ -366,6 +366,11 @@ class ExperimentRunner:
                 prompt_question or user_templates.NEXT_ACTION_QUESTION,
             )
         if last_feedback.startswith("Could not parse"):
+            if self.config.scratchpad:
+                # The stepper (and a resumed checkpoint) hold the default text.
+                last_feedback = scratchpad_mod.parse_failure_feedback(
+                    action_space_mod.actions_hint(self.config.action_space)
+                )
             question = prompt_question or user_templates.NEXT_ACTION_QUESTION
             before, match, after = prompt_text.rpartition(question)
             prompt_text = (

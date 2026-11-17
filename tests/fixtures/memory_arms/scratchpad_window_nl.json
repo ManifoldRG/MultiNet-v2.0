@@ -57,14 +57,14 @@
     "role": "system"
    },
    {
-    "content": "Recent history (last 2 steps, oldest first):\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+    "content": "Recent history (last 2 steps, oldest first):\nPosition before: (1, 1), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED\nPosition before: (1, 2), facing EAST\nFINAL_OUTPUT: MOVE_FORWARD\nFeedback: MOVED\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as your notes between <scratchpad> and </scratchpad>, then one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
     "role": "user"
    }
   ],
   "provider_body_sha256": {
-   "claude": "627e1ee0f7af1c590f181a911952f5b004c5c8140ef317af8f2b45d203859efc",
-   "kimi": "10ddc20ff46b43864e74c1eda9b31c584c29678527521910f154eba25df69706",
-   "openai": "b83c459cf959e1a16c378b43e377f5133865dd9ba1cca4a633d0c972dcf68af9"
+   "claude": "817ca5d4e7228a558757fc19e41d71c93f1b52c4dde8daf8f727d04b5804a9e2",
+   "kimi": "4bfab628f307a820e7d1074784d0dd3faff2ae62791050238bb833e96b383d98",
+   "openai": "2a9dbef75b4e7dfb283abcc147386c6b35388c4dda58f54fe32f69a79c7f469a"
   }
  },
  {

@@ -21,6 +21,15 @@ SCRATCHPAD_TRUNCATED_NOTE = (
     "Your last notes had {chars} characters; only the first {max_chars} were kept."
 )
 
+# Replaces feedback.PARSE_FAILURE_FEEDBACK in the scratchpad arms, whose reply
+# is the block and then the FINAL_OUTPUT line, not "exactly one line". Keeps
+# its "Could not parse" opening (the runner places the feedback by it).
+SCRATCHPAD_PARSE_FAILURE_FEEDBACK = (
+    "Could not parse FINAL_OUTPUT. Do not explain. Reply exactly as your notes "
+    "between <scratchpad> and </scratchpad>, then one line: "
+    "FINAL_OUTPUT: <one of {actions_hint}>."
+)
+
 # Opens the reply format: inserted after OUTPUT_FORMAT_LEAD, the opening line
 # of every querying mode's instruction (prompt_templates/querying.py).
 OUTPUT_FORMAT_LEAD = "Output exactly:\n"

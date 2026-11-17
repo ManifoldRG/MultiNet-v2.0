@@ -160,7 +160,7 @@
       "type": "image_url"
      },
      {
-      "text": "Your inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "text": "Your inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as your notes between <scratchpad> and </scratchpad>, then one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
       "type": "text"
      }
     ],
@@ -168,9 +168,9 @@
    }
   ],
   "provider_body_sha256": {
-   "claude": "3e2cbea2dc4c114c13daaae7e258c63b89cd3021e164311a3773bd49b85b96ea",
-   "kimi": "78428e921e099a6e13897799ff031507d1ff8e98f9ce3d36421faac542a39894",
-   "openai": "759375ef83d6a4745a877153246b95897d920a99bcd22b904e6a0cb4d3883c2a"
+   "claude": "2a7ff71345766b017373d34b959480298b9f97deb46f041b1a346b625ecb7730",
+   "kimi": "b17d8809f3188a98b476bff0682a3294e8fdcfcd433919ec399ae1ae393e458f",
+   "openai": "87625e4a455c01c5e974cfe02c0cbd09c8d6284cdf37747c143441fbee9784f1"
   }
  },
  {

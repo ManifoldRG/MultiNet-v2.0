@@ -113,7 +113,7 @@
       "type": "text"
      },
      {
-      "text": "\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
+      "text": "\n\nYou are at (1, 3) facing EAST.\nYour inventory: empty.\nMoves remaining: 10.\nMoves remaining until stall: 30. If you make no progress and there is no state change in the environment for that many steps, the episode will be terminated due to a stall.\n\nMap contents as of this step (keys on the ground, doors, switches, gates, death portals, frozen tiles, rotating tiles, teleporters):\nThere is a toggle switch (s1) at (1,3) (currently off).\nThere is a gate (g1) at (3,3). It is currently closed (initially closed).\n\nYour scratchpad:\n<scratchpad>\nFINAL_OUTPUT: TURN_LEFT was a bad idea; do not turn left yet.\n</scratchpad>\n\nCould not parse FINAL_OUTPUT. Do not explain. Reply exactly as your notes between <scratchpad> and </scratchpad>, then one line: FINAL_OUTPUT: <one of TURN_LEFT, TURN_RIGHT, MOVE_FORWARD, PICKUP, DROP, TOGGLE, DONE>.\n\nWhat is your next action?\n\nOutput exactly:\n<scratchpad>\n<your notes>\n</scratchpad>\nFINAL_OUTPUT: <action>",
       "type": "text"
      }
     ],
@@ -121,9 +121,9 @@
    }
   ],
   "provider_body_sha256": {
-   "claude": "e2d1fd410c5a6b0b94e94313c0162e9f45d6c4ace3f35479dde4fe67583021dd",
-   "kimi": "64b713e7064b5fae19ec624c1b49010ae2c318b401ddb3fa1b9fabaaa73751f3",
-   "openai": "0efaaa0c6e62552e50d3a2e5fabeea5097e2b3dfb921394a1000ce364b733a4a"
+   "claude": "92b04b7ba000c1ecbed58b4d59ee57cd24859e90f02beea0ce3cc73af55e0b28",
+   "kimi": "b2e17a73bb751616f12179e9242158d37de105925c30c058379ca863eb0edce9",
+   "openai": "02bfa43976584df05f20f00b36be8c952c32c8a0ae0e8feee18894fb1b7e202e"
   }
  },
  {

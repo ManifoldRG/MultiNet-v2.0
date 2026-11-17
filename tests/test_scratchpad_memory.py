@@ -13,6 +13,7 @@ from gridworld.backends.minigrid_backend import MiniGridBackend
 from interface.agents.claude import _resolve_cache_markers, _to_anthropic_turns
 from interface.agents.kimi_k26 import _to_openai_messages as kimi_messages
 from interface.agents.openai_agent import _to_openai_messages as openai_messages
+from interface.action_space import actions_hint
 from interface.agents.reply import Reply
 from interface.batch_runner import LockstepBatchRunner, LockstepUnit
 from interface.config import ExperimentConfig
@@ -266,6 +267,22 @@ def test_parse_failure_keeps_the_notes_and_feedback_follows_them(arm):
     assert stepper.transcript.index(records[3]) - stepper.transcript.index(records[2]) == 1
 
 
+@pytest.mark.parametrize("arm", SCRATCHPAD_ARMS)
+def test_parse_failure_feedback_asks_for_the_scratchpad_reply_format(arm):
+    """The retry must not ask for "exactly one line", which would drop the
+    notes; it asks for the arm's own format. The default arm keeps its text
+    (tests/test_memory_arms_default.py)."""
+    _, requests = drive(_runner(arm))
+    [feedback] = [
+        line for line in _user_text(requests[3]).splitlines() if line.startswith("Could not parse")
+    ]
+    assert "<scratchpad>" in feedback and "</scratchpad>" in feedback, feedback
+    assert "exactly as one line" not in feedback
+    assert feedback == memory_templates.SCRATCHPAD_PARSE_FAILURE_FEEDBACK.format(
+        actions_hint=actions_hint("egocentric")
+    )
+
+
 def test_notes_never_reach_the_action_parser():
     stepper, _ = drive(_runner("full_context_scratchpad"))
     parsed = [r["parsed_actions"] for r in _queries(stepper)]
@@ -339,7 +356,7 @@ def test_full_context_records_carry_no_scratchpad_fields():
 
 
 @pytest.mark.parametrize("arm", SCRATCHPAD_ARMS)
-@pytest.mark.parametrize("at", [4, 5, 6])
+@pytest.mark.parametrize("at", [3, 4, 5, 6])
 def test_checkpoint_resume_restores_the_notes(arm, at, tmp_path):
     _, uninterrupted = drive(_runner(arm))
     stepper = EpisodeStepper(_runner(arm), verbose=False)

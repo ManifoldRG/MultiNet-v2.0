@@ -22,8 +22,10 @@ Both scratchpad arms require ``chat_history="stateless"``.
 
 Prompt: one sentence after the Valid actions line of the system prompt
 (``SCRATCHPAD_SYSTEM_LINE``), the current notes as a section of the current
-turn right before the question, and the reply format opening with the
-scratchpad block. Nothing else changes; no maze rules or hints.
+turn right before the question, the reply format opening with the scratchpad
+block, and, after a reply with no valid action, parse-failure feedback that
+asks for that format (``SCRATCHPAD_PARSE_FAILURE_FEEDBACK``) instead of
+"exactly one line". Nothing else changes; no maze rules or hints.
 
 Reply format::
 
@@ -170,6 +172,11 @@ def with_system_line(system_prompt: str, max_chars: int) -> str:
     line = memory_templates.SCRATCHPAD_SYSTEM_LINE.format(max_chars=max_chars)
     head, maze, tail = system_prompt.partition("\n\n" + system_templates.INITIAL_MAZE_SECTION)
     return f"{head}\n{line}{maze}{tail}"
+
+
+def parse_failure_feedback(actions_hint: str) -> str:
+    """The parse-failure feedback in the reply format of the scratchpad arms."""
+    return memory_templates.SCRATCHPAD_PARSE_FAILURE_FEEDBACK.format(actions_hint=actions_hint)
 
 
 def with_output_format(instruction: str) -> str:
