@@ -100,6 +100,49 @@ def _pad_list(ends) -> str:
     return ", ".join(pads[:-1]) + " and " + pads[-1]
 
 
+def _named_tile_lines(task_spec: TaskSpecification, state: GridState | None) -> list[str]:
+    """The R2 names of the tile kinds neutral labels relabel: death portals,
+    frozen tiles, rotating tiles and teleporters (pairs and chains)."""
+    parts: list[str] = []
+    for cell in task_spec.mechanisms.kill_cells:
+        row, col = to_row_col(cell)
+        parts.append(observation_templates.DEATH_PORTAL_LINE.format(row=row, col=col))
+
+    for cell in task_spec.mechanisms.frozen_tiles:
+        row, col = to_row_col(cell)
+        parts.append(observation_templates.FROZEN_TILE_LINE.format(row=row, col=col))
+
+    for cell in task_spec.mechanisms.rotating_tiles:
+        row, col = to_row_col(cell)
+        parts.append(
+            observation_templates.ROTATING_TILE_LINE.format(
+                row=row,
+                col=col,
+                direction=rotating_pointing(task_spec, state, row, col),
+            )
+        )
+
+    for teleporter in task_spec.mechanisms.teleporters:
+        ends = teleporter.ends()
+        if len(ends) > 2:
+            parts.append(observation_templates.TELEPORTER_PADS_LINE.format(
+                color=teleporter.color, pads=_pad_list(ends),
+            ))
+            continue
+        row_a, col_a = to_row_col(ends[0])
+        row_b, col_b = to_row_col(ends[-1])
+        line = (
+            observation_templates.TELEPORTER_LINE
+            if teleporter.bidirectional
+            else observation_templates.TELEPORTER_ONE_WAY_LINE
+        )
+        parts.append(line.format(
+            color=teleporter.color,
+            row_a=row_a, col_a=col_a, row_b=row_b, col_b=col_b,
+        ))
+    return parts
+
+
 def _mechanism_lines(
     task_spec: TaskSpecification,
     state: GridState | None = None,
@@ -159,46 +202,13 @@ def _mechanism_lines(
             )
         )
 
-    if labeling is not None:
-        # Neutral labels: the tiles under made-up words, no effect named.
-        return parts + labeling.tile_lines(task_spec, state)
-
-    for cell in task_spec.mechanisms.kill_cells:
-        row, col = to_row_col(cell)
-        parts.append(observation_templates.DEATH_PORTAL_LINE.format(row=row, col=col))
-
-    for cell in task_spec.mechanisms.frozen_tiles:
-        row, col = to_row_col(cell)
-        parts.append(observation_templates.FROZEN_TILE_LINE.format(row=row, col=col))
-
-    for cell in task_spec.mechanisms.rotating_tiles:
-        row, col = to_row_col(cell)
-        parts.append(
-            observation_templates.ROTATING_TILE_LINE.format(
-                row=row,
-                col=col,
-                direction=rotating_pointing(task_spec, state, row, col),
-            )
-        )
-
-    for teleporter in task_spec.mechanisms.teleporters:
-        ends = teleporter.ends()
-        if len(ends) > 2:
-            parts.append(observation_templates.TELEPORTER_PADS_LINE.format(
-                color=teleporter.color, pads=_pad_list(ends),
-            ))
-            continue
-        row_a, col_a = to_row_col(ends[0])
-        row_b, col_b = to_row_col(ends[-1])
-        line = (
-            observation_templates.TELEPORTER_LINE
-            if teleporter.bidirectional
-            else observation_templates.TELEPORTER_ONE_WAY_LINE
-        )
-        parts.append(line.format(
-            color=teleporter.color,
-            row_a=row_a, col_a=col_a, row_b=row_b, col_b=col_b,
-        ))
+    if labeling is None:
+        parts += _named_tile_lines(task_spec, state)
+    else:
+        # Neutral labels replace exactly the tile kinds they relabel
+        # (tile_labels.KINDS). The phased-cell lines below only say whether a
+        # cell is open or closed now, so they are shown as with named tiles.
+        parts += labeling.tile_lines(task_spec, state)
 
     tick = _rule_tick(state)
     for patch in task_spec.mechanisms.phased_patches:

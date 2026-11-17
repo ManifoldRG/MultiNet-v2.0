@@ -25,6 +25,11 @@ effect from what happens when it steps on one.
 * Keys, doors, the switch and the gate keep their R2 names. Only the tile kinds
   are relabelled; the world model and the maze are untouched, so every maze is
   exactly as solvable as in R2.
+* R3's other rules are shown exactly as with named tiles, because that text
+  says what a cell is now, never why: a phased cell is "open" or "closed", a
+  floor cell that disappeared joins the walls, a door or switch that shut reads
+  as its initial state, a gate that starts open is a gate. Their step feedback
+  is the mechanic-blind event (BLOCKED, NOTHING, TOGGLED, DROP, ...).
 """
 
 from __future__ import annotations
