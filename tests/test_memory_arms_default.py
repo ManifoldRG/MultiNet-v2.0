@@ -23,13 +23,21 @@ from start_map_test_utils import r1_spec
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# Billing keys of a model config: what a run may spend and what a token costs,
+# never what the model sees or emits. Their place in the run hash and their
+# values change outside the memory arms (one PR drops both from the hash,
+# another re-sizes the mechanics-15 spend caps), so the pins leave them out.
+# The memory fields are experiment_config fields, which the pins cover in full.
+_BILLING_KEYS = ("spend_cap_usd", "service_tier")
+
 # _expected_run_hash(r1_spec(12), "gpt6_astra", 0, "minigrid", ...) for each
-# mechanics-15 run config's experiment_config and gpt6_astra model config,
-# computed before the memory arms existed.
+# mechanics-15 run config's experiment_config and gpt6_astra model config minus
+# _BILLING_KEYS, computed before the memory arms existed (main at 4b8b54d). With
+# the billing keys in, main gave 52bb8852... (2d, 3d) and 91acbde4... (nl).
 _PINNED_R2_RUN_HASHES = {
-    "nl": "91acbde4aa7d42e7edc08dffbd6cd92169f79bf3056d19048d29f588ceddb7fb",
-    "2d": "52bb8852af4ddb068142da38fd783adcd97261adca73d5ec4c29e8d953ac1013",
-    "3d": "52bb8852af4ddb068142da38fd783adcd97261adca73d5ec4c29e8d953ac1013",
+    "nl": "32f59c64483048796b7a0112acbc847bc0120c5d3e4b0e9728950d5a66eeca4a",
+    "2d": "cff9adca355e855ae805c2c701da40a16a5a480a965297bd3da13d5303d91ab3",
+    "3d": "cff9adca355e855ae805c2c701da40a16a5a480a965297bd3da13d5303d91ab3",
 }
 
 
@@ -59,8 +67,11 @@ def test_r2_run_hashes_are_unchanged(domain):
         (REPO_ROOT / f"gridworld/fixtures/run_config.mechanics_15_{domain}.json").read_text()
     )
     exp = ExperimentConfig.from_dict(cfg["experiment_config"])
+    model_config = {
+        k: v for k, v in cfg["models"]["gpt6_astra"].items() if k not in _BILLING_KEYS
+    }
     got = _expected_run_hash(
         r1_spec(12), "gpt6_astra", 0, "minigrid",
-        experiment_config=exp, model_config=cfg["models"]["gpt6_astra"],
+        experiment_config=exp, model_config=model_config,
     )
     assert got == _PINNED_R2_RUN_HASHES[domain]
