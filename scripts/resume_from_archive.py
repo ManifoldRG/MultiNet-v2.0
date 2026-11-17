@@ -50,9 +50,11 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import json
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 ARCHIVED_END_REASONS_TO_CLEAR = {"parse_failed"}
@@ -167,6 +169,36 @@ def rehydrate_agent_messages(transcript: list[dict], archive_dir: Path) -> int:
                         blk["type"] = "text"
                         blk["text"] = f"[image {name} missing from source archive]"
     return missing
+
+
+@contextlib.contextmanager
+def heartbeat_while(client, worker_id: str, unit_id: str, progress, *, every: float = 60.0, log=print):
+    """Heartbeat ``unit_id`` as ``worker_id`` (now, then every ``every`` seconds)
+    while the block runs, so the coordinator does not mark the unit stale and
+    hand it out again mid-resume. ``progress()`` is the query count it reports. A
+    failed heartbeat is logged, never raised: it must not stop a paid resume.
+
+    This covers the stale reclaim only. A lockstep worker restarted under the same
+    id still gets the unit handed back, so keep that group's workers down until
+    this resume has uploaded."""
+    stop = threading.Event()
+
+    def beat() -> None:
+        while True:
+            try:
+                client.heartbeat(worker_id, unit_id, progress())
+            except Exception as exc:  # noqa: BLE001 - any coordinator failure
+                log(f"  heartbeat for {unit_id} failed (the resume goes on): {exc}")
+            if stop.wait(every):
+                return
+
+    thread = threading.Thread(target=beat, name=f"heartbeat-{unit_id}", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=max(every, 1.0))
 
 
 def drive_continue_loop(stepper, agent, *, max_new_queries: int, log=print, reset_usage=None,
@@ -493,13 +525,20 @@ def _main_unit(args) -> int:
         )
     prep.run_dir.mkdir(parents=True, exist_ok=True)
     resumable = prep.run_dir / "checkpoint.json"
-    new_queries, stopped_early = drive_continue_loop(
-        stepper,
-        agent,
-        max_new_queries=args.max_new_queries,
-        reset_usage=_reset_agent_usage,
-        checkpoint=lambda s: save_checkpoint(resumable, s),
+    heartbeats = (
+        heartbeat_while(drp.CoordinatorClient(args.coordinator_url), args.worker_id, unit["unit_id"],
+                        lambda: stepper.query_count)
+        if args.coordinator_url
+        else contextlib.nullcontext()
     )
+    with heartbeats:
+        new_queries, stopped_early = drive_continue_loop(
+            stepper,
+            agent,
+            max_new_queries=args.max_new_queries,
+            reset_usage=_reset_agent_usage,
+            checkpoint=lambda s: save_checkpoint(resumable, s),
+        )
     if stopped_early:
         save_checkpoint(resumable, stepper)
         print("=== continue interrupted ===")
