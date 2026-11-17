@@ -269,14 +269,14 @@ class MultiGridBackend(AbstractGridBackend):
             objects.append({
                 "id": a_id,
                 "type": "teleporter",
-                "color": "purple",
+                "color": teleporter.color,
                 "position": canonical_pos(teleporter.position_a.x, teleporter.position_a.y),
                 "linked_to": b_id,
             })
             objects.append({
                 "id": b_id,
                 "type": "teleporter",
-                "color": "purple",
+                "color": teleporter.color,
                 "position": canonical_pos(teleporter.position_b.x, teleporter.position_b.y),
                 "linked_to": a_id if teleporter.bidirectional else None,
             })

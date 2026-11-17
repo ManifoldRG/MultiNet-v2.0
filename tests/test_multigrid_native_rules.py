@@ -1,13 +1,15 @@
 """MultiGridBackend under multigrid's native rules (``execute_action``).
 
 Salvaged from PR #82: the native rules have no death, frozen or rotating
-tiles, so the backend refuses a spec that has them instead of dropping them.
+tiles, so the backend refuses a spec that has them instead of dropping them;
+and portals keep their spec colour.
 """
 
 import pytest
 
 from gridworld.backends.multigrid_backend import MultiGridBackend
 from gridworld.task_spec import TaskSpecification
+from multigrid.rendering import COLORS
 
 
 def _spec(**mechanisms) -> TaskSpecification:
@@ -60,3 +62,17 @@ def test_native_mechanisms_still_configure():
         freeze_steps=7,  # a parameter, not a tile: nothing to refuse
     ))
     assert backend.is_configured
+
+
+def test_portals_keep_their_spec_colour():
+    backend = MultiGridBackend(tiling="square", render_mode="rgb_array")
+    backend.configure(_spec(teleporters=[
+        {"id": "tp1", "position_a": [1, 1], "position_b": [5, 1], "color": "cyan"},
+        {"id": "tp2", "position_a": [1, 5], "position_b": [5, 3]},  # spec default
+    ]))
+    frame, _state, _info = backend.reset(seed=1)
+    objects = backend.env.state.objects
+    assert objects["tp1_a"].color == objects["tp1_b"].color == "cyan"
+    assert objects["tp2_a"].color == objects["tp2_b"].color == "purple"
+    pixels = {tuple(p) for p in frame.reshape(-1, 3)}
+    assert COLORS["cyan"] in pixels and COLORS["purple"] in pixels
