@@ -2,11 +2,14 @@
 
 Salvaged from PR #82: the native rules have no death, frozen or rotating
 tiles, so the backend refuses a spec that has them instead of dropping them;
-and portals keep their spec colour.
+portals keep their spec colour; and the legacy square renderer's agent arrow
+points where MOVE_FORWARD goes.
 """
 
+import numpy as np
 import pytest
 
+from gridworld.actions import MiniGridActions
 from gridworld.backends.multigrid_backend import MultiGridBackend
 from gridworld.task_spec import TaskSpecification
 from multigrid.rendering import COLORS
@@ -76,3 +79,32 @@ def test_portals_keep_their_spec_colour():
     assert objects["tp2_a"].color == objects["tp2_b"].color == "purple"
     pixels = {tuple(p) for p in frame.reshape(-1, 3)}
     assert COLORS["cyan"] in pixels and COLORS["purple"] in pixels
+
+
+def _agent_centroid(frame: np.ndarray) -> np.ndarray:
+    ys, xs = np.nonzero(np.all(frame == np.array(COLORS["agent"], dtype=frame.dtype), axis=-1))
+    assert len(xs), "no agent pixels in the frame"
+    return np.array([xs.mean(), ys.mean()])
+
+
+def test_square_agent_arrow_points_where_forward_moves():
+    backend = MultiGridBackend(tiling="square", render_mode="rgb_array")
+    backend.configure(_spec())
+    n_dirs = len(backend.env.tiling.directions)
+    centroids, moves = [], []
+    for facing in range(n_dirs):
+        backend.reset(seed=1)
+        backend.env.state.agent.facing = facing
+        centroids.append(_agent_centroid(backend.render()))
+        start = np.array(backend.get_state().agent_position)
+        *_, state, _info = backend.step(int(MiniGridActions.MOVE_FORWARD))
+        moves.append(np.array(state.agent_position) - start)
+    # The four arrows share a cell, so their mean is its centre; each arrow
+    # leans towards its tip, along the step forward takes ((x, y), y down).
+    centre = np.mean(centroids, axis=0)
+    for facing, (centroid, move) in enumerate(zip(centroids, moves)):
+        assert np.abs(move).sum() == 1, (facing, move)
+        lean = centroid - centre
+        assert np.dot(lean, move) > 0.8 * np.linalg.norm(lean), (
+            f"facing {backend.env.tiling.directions[facing]}: arrow leans {lean}, forward moves {move}"
+        )
