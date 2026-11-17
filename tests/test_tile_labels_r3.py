@@ -174,6 +174,31 @@ def test_r3_portal_chain_route_under_neutral_labels():
         assert f"There is a {label} tile at ({row},{col})." in first
 
 
+@pytest.mark.slow  # ~90 s of BFS over the 18 mazes; run with -m slow
+@pytest.mark.parametrize("task", R3_TASKS, ids=[t["task_id"] for t in R3_TASKS])
+def test_r3_planner_route_under_neutral_labels(task):
+    """Every R3 rule on the planner's route, through the whole NL pipeline:
+    neutral and named walk the same states to the same end, every request
+    shows every cell its named twin shows, and none names a tile's effect."""
+    spec = _spec(task)
+    plan = plan_bfs_path(spec)
+    assert plan.success
+    route = [ACTION_ORDER[a] for a in plan.actions]
+    named, named_requests = _run(spec, NAMED_R3, route)
+    neutral, requests = _run(spec, NEUTRAL_R3, route)
+    for result in (named, neutral):
+        assert (result["end_reason"], result["steps_used"]) == ("success", len(route))
+    n_steps = [r for r in named["transcript"] if r.get("kind") == "step"]
+    x_steps = [r for r in neutral["transcript"] if r.get("kind") == "step"]
+    assert [s["state_after"] for s in x_steps] == [s["state_after"] for s in n_steps]
+    assert [s["event_type"] for s in x_steps] == [s["event_type"] for s in n_steps]
+    assert len(requests) == len(named_requests)
+    for i, (named_text, neutral_text) in enumerate(zip(_texts(named_requests), _texts(requests))):
+        missing = _coords(named_text) - _coords(neutral_text)
+        assert not missing, f"message {i}: neutral drops {sorted(missing)}"
+    assert not _leaks(_texts(requests)), _leaks(_texts(requests))
+
+
 # --------------------------------------------------------------------------- fail closed
 
 
