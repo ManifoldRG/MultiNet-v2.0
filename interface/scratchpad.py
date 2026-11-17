@@ -167,7 +167,9 @@ def section(notes: str, truncated_from: Optional[int], max_chars: int) -> str:
     """The current-turn text showing the notes (and the cut, if any)."""
     # The runner later expands this placeholder into the current image; notes
     # must never trigger that.
-    notes = notes.replace(user_templates.CURRENT_IMAGE_PLACEHOLDER, "(current_image)")
+    notes = notes.replace(
+        user_templates.CURRENT_IMAGE_PLACEHOLDER, memory_templates.NOTES_IMAGE_PLACEHOLDER_STAND_IN
+    )
     text = memory_templates.SCRATCHPAD_SECTION.format(notes=f"{notes}\n" if notes else "")
     if truncated_from is not None:
         text += "\n" + memory_templates.SCRATCHPAD_TRUNCATED_NOTE.format(

@@ -283,6 +283,23 @@ def test_parse_failure_feedback_asks_for_the_scratchpad_reply_format(arm):
     )
 
 
+@pytest.mark.parametrize("arm", SCRATCHPAD_ARMS)
+def test_notes_naming_the_image_placeholder_add_no_image(arm):
+    """The runner expands {current_image} into the current frame after the
+    notes are in the prompt; notes that spell it must stay text."""
+    replies = [notes("look at {current_image} here") + "FINAL_OUTPUT: MOVE_FORWARD"] * 2
+    _, plain = drive(_runner(arm, IMAGE_CELL), [notes("look here") + "FINAL_OUTPUT: MOVE_FORWARD"] * 2)
+    _, requests = drive(_runner(arm, IMAGE_CELL), replies)
+
+    def images(messages):
+        content = next(m["content"] for m in messages if m["role"] == "user")
+        return sum(1 for block in content if block["type"] == "image_url")
+
+    assert images(requests[1]) == images(plain[1])
+    stand_in = memory_templates.NOTES_IMAGE_PLACEHOLDER_STAND_IN
+    assert _shown(_user_text(requests[1])) == f"look at {stand_in} here"
+
+
 def test_notes_never_reach_the_action_parser():
     stepper, _ = drive(_runner("full_context_scratchpad"))
     parsed = [r["parsed_actions"] for r in _queries(stepper)]

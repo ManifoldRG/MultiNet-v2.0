@@ -16,6 +16,9 @@ SCRATCHPAD_SYSTEM_LINE = (
 
 # The current notes, in the current turn right before the question.
 SCRATCHPAD_SECTION = "Your scratchpad:\n<scratchpad>\n{notes}</scratchpad>"
+# Shown in place of user.CURRENT_IMAGE_PLACEHOLDER when the notes spell it: the
+# runner expands that placeholder into the current image after the notes are in.
+NOTES_IMAGE_PLACEHOLDER_STAND_IN = "(current_image)"
 # After the section, at the step after the model's notes were cut to the cap.
 SCRATCHPAD_TRUNCATED_NOTE = (
     "Your last notes had {chars} characters; only the first {max_chars} were kept."
