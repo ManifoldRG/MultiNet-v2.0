@@ -107,8 +107,11 @@ Query records in `episode.json` carry `scratchpad_before`, `scratchpad`,
 `scratchpad_status` and `scratchpad_written_chars`.
 
 `run_config.mechanics_15_nl_memory_{full_context,scratchpad_window,full_context_scratchpad}.json`
-run GPT-6 Astra on five mechanics-15 NL mazes, one config per arm. Give each arm
-its own artifacts root (run directories are not keyed by arm):
+run GPT-6 Astra on five mechanics-15 NL mazes, one config per arm. A scratchpad
+arm's run directory ends in `<variant>__memory_<arm>` (the default arm keeps
+`<variant>`), so arms run one after another into one artifacts root keep their
+own episodes. The commands below still give each arm its own root: they run side
+by side, and each run rewrites its root's `episode_runs.jsonl`.
 
 ```bash
 python -m scripts.run_pipeline --distributed-role coordinator-prepare \

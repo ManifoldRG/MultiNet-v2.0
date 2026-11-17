@@ -79,38 +79,53 @@ def test_arms_hash_apart():
     assert len(hashes) == 3
 
 
+class _NotesAgent:
+    """Scripted V01 solver that keeps a scratchpad."""
+
+    def __init__(self):
+        from interface.smoke_tests.plans import v01_empty_room_trajectory
+
+        self._actions = iter(v01_empty_room_trajectory())
+        self.last_usage = None
+
+    def __call__(self, messages):
+        self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
+        action = next(self._actions, "DONE")
+        return f"<scratchpad>\nnext: {action.lower()}\n</scratchpad>\nFINAL_OUTPUT: {action}"
+
+
+def _stub_run_config(tmp_path: Path, arm: str) -> Path:
+    """The arm's cell with one stub model on the V01 maze."""
+    from interface.loader import default_maze_path
+
+    cfg_path = tmp_path / f"run_config_{arm}.json"
+    cfg_path.write_text(json.dumps({
+        "experiment_config": CONFIGS[arm]["experiment_config"],
+        "models": {"stub": {"provider": "openai", "model": "stub-model", "group": "stub",
+                            "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
+    }))
+    return cfg_path
+
+
+def _run_arm(tmp_path: Path, arm: str, root: str = "artifacts") -> None:
+    from scripts.run_pipeline import run_from_config
+    from test_run_pipeline import _MANIFEST, _STABLE_DIFFICULTY_MAX
+
+    run_from_config(
+        run_config_path=_stub_run_config(tmp_path, arm), manifest_path=_MANIFEST, seeds=[0],
+        artifacts_root=tmp_path / root, run_set_id="memory",
+        agent_factory=lambda name, cfg: (_NotesAgent(), cfg["model"]),
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+
+
 @pytest.mark.parametrize("arm", ARMS)
 def test_pipeline_records_the_arm_end_to_end(arm, tmp_path):
     """run_from_config on one NL maze with a scripted agent: the arm reaches the
     sidecar and the hash, and episode.json carries the notes per query."""
-    from interface.loader import default_maze_path
-    from interface.smoke_tests.plans import v01_empty_room_trajectory
     from scorer.io import load_json
-    from scripts.run_pipeline import run_from_config
-    from test_run_pipeline import _MANIFEST, _STABLE_DIFFICULTY_MAX
 
-    actions = iter(v01_empty_room_trajectory())
-
-    class _NotesAgent:
-        last_usage = None
-
-        def __call__(self, messages):
-            self.last_usage = {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
-            action = next(actions, "DONE")
-            return f"<scratchpad>\nnext: {action.lower()}\n</scratchpad>\nFINAL_OUTPUT: {action}"
-
-    cfg_path = tmp_path / "run_config.json"
-    cfg_path.write_text(json.dumps({
-        "experiment_config": CONFIGS[arm]["experiment_config"],
-        "models": {"stub": {"provider": "openai", "model": "stub-model",
-                            "tasks": [str(default_maze_path("V01_empty_room.json"))]}},
-    }))
-    run_from_config(
-        run_config_path=cfg_path, manifest_path=_MANIFEST, seeds=[0],
-        artifacts_root=tmp_path / "artifacts", run_set_id="memory",
-        agent_factory=lambda name, cfg: (_NotesAgent(), cfg["model"]),
-        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
-    )
+    _run_arm(tmp_path, arm)
     [run_dir] = [p.parent for p in (tmp_path / "artifacts").rglob("episode.json")]
     sidecar = load_json(run_dir / "run_inputs.json")
     episode = load_json(run_dir / "episode.json")
@@ -127,3 +142,62 @@ def test_pipeline_records_the_arm_end_to_end(arm, tmp_path):
         assert all(r["scratchpad_status"] == "updated" for r in queries)
         assert queries[0]["scratchpad"].startswith("next: ")
         assert queries[1]["scratchpad_before"] == queries[0]["scratchpad"]
+
+
+# The run directory's last component: the prompt variant, plus the arm for a
+# scratchpad arm. The default arm's directory is the one it always had.
+RUN_DIR_NAMES = {
+    "full_context": "default",
+    "scratchpad_window": "default__memory_scratchpad_window",
+    "full_context_scratchpad": "default__memory_full_context_scratchpad",
+}
+
+
+def test_the_arms_keep_their_own_run_dirs_in_one_artifacts_root(tmp_path):
+    """Run one after another into one root, no arm overwrites another."""
+    from scorer.io import load_json
+
+    for arm in ARMS:
+        _run_arm(tmp_path, arm)
+    episodes = {
+        path.parent.name: load_json(path)
+        for path in (tmp_path / "artifacts").rglob("episode.json")
+    }
+    assert set(episodes) == set(RUN_DIR_NAMES.values())
+    for arm, name in RUN_DIR_NAMES.items():
+        assert episodes[name]["config"].get("memory", "full_context") == arm
+        assert episodes[name]["success"] is True
+    [default_dir] = [p.parent for p in (tmp_path / "artifacts").rglob("default/episode.json")]
+    assert default_dir.relative_to(tmp_path / "artifacts").parts[-2:] == ("seed_0", "default")
+
+
+@pytest.mark.parametrize("arm", ARMS)
+def test_a_fleet_unit_plans_and_writes_the_same_run_dir(arm, tmp_path):
+    """coordinator-prepare's unit run_dir is where the worker writes and where
+    the archive is packed from."""
+    from scripts.distributed_run_pipeline import (
+        CoordinatorStore,
+        package_run_archive,
+        prepare_job,
+        run_assigned_unit,
+    )
+    from test_run_pipeline import _MANIFEST, _STABLE_DIFFICULTY_MAX
+
+    prepare_job(
+        run_config_path=_stub_run_config(tmp_path, arm), manifest_path=_MANIFEST, seeds=[0],
+        conditions=None, artifacts_root=tmp_path / "coordinator", run_set_id="memory",
+        difficulty_max_static_score=_STABLE_DIFFICULTY_MAX,
+    )
+    store = CoordinatorStore(tmp_path / "coordinator")
+    worker_id = store.register({"worker_id": "w", "capabilities": {"model_group": "stub"}})["worker_id"]
+    unit = store.assign(worker_id)["unit"]
+    assert Path(unit["run_dir"]).name == RUN_DIR_NAMES[arm]
+    worker_root = tmp_path / "worker"
+    run_assigned_unit(
+        unit, artifacts_root=worker_root,
+        agent_factory=lambda name, cfg: (_NotesAgent(), cfg["model"]),
+    )
+    assert (worker_root / unit["run_dir"] / "episode.json").exists()
+    archive = package_run_archive(unit, artifacts_root=worker_root)
+    store.upload(worker_id, unit["unit_id"], archive.read_bytes())  # raises unless the hash matches
+    assert store.load_state()["units"][unit["unit_id"]]["status"] == "verified"

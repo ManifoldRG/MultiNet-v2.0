@@ -511,6 +511,19 @@ def _run_dir(
     return artifacts_root / "runs" / task_id / backend / model / f"seed_{seed}" / condition
 
 
+def _run_variant_dir(prompt_variant: str, experiment_config: Any) -> str:
+    """A run dir's last component: the prompt variant, plus the memory arm for
+    a scratchpad arm (interface/scratchpad.py), so the arms of one cell never
+    share a run dir. The default arm keeps the plain variant."""
+    if isinstance(experiment_config, dict):
+        memory = experiment_config.get("memory")
+    else:
+        memory = getattr(experiment_config, "memory", None)
+    if memory in (None, "full_context"):
+        return prompt_variant
+    return f"{prompt_variant}__memory_{memory}"
+
+
 def _run_one_model(
     rows: list[dict[str, Any]],
     agent: Agent,
@@ -633,7 +646,10 @@ def _prepare_unit_run(
     )
     runtime_spec = _runtime_capped_spec(spec, canonical)
     render = render or RenderSettings()
-    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant, render.label)
+    run_dir = _run_dir(
+        artifacts_root, task_id, model_name, seed,
+        _run_variant_dir(prompt_variant, experiment_config), render.label,
+    )
     episode_path = run_dir / "episode.json"
     sidecar_path = run_dir / "run_inputs.json"
     run_score_path = run_dir / "run_score.json"

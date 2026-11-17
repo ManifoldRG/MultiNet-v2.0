@@ -362,7 +362,7 @@ def prepare_job(
                         / render.label
                         / model_id
                         / f"seed_{int(seed)}"
-                        / variant
+                        / pipeline._run_variant_dir(variant, variant_configs[variant])
                     )
                     unit = {
                         "job_id": job_id,
