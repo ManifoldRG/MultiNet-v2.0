@@ -17,6 +17,7 @@ Usage:
     obs, reward, terminated, truncated, state, info = backend.step(action)
 """
 
+import dataclasses
 import sys
 from pathlib import Path
 from typing import Optional
@@ -24,12 +25,35 @@ from typing import Optional
 import numpy as np
 
 from .base import AbstractGridBackend, GridState
-from ..task_spec import TaskSpecification
+from ..task_spec import MechanismSet, TaskSpecification
 
 # Add parent directory to path for multigrid imports
 _multigrid_path = Path(__file__).parent.parent.parent / "multigrid"
 if str(_multigrid_path.parent) not in sys.path:
     sys.path.insert(0, str(_multigrid_path.parent))
+
+# Spec mechanisms that multigrid's native rules (execute_action) implement.
+# Any other mechanism list in the spec (today the PR #57 death, frozen and
+# rotating tiles) has no meaning there, so configure() refuses the spec rather
+# than drop the tiles and run a different maze under the same task id. A new
+# mechanism list added to MechanismSet is refused until someone ports it.
+NATIVE_MECHANISMS = ("keys", "doors", "switches", "gates", "blocks", "teleporters", "hazards")
+# Lists that parameterize another mechanism rather than place tiles.
+_MECHANISM_PARAMETERS = ("rotating_initial_directions",)
+# Spec (JSON) names where they differ from the MechanismSet field.
+_SPEC_NAMES = {"kill_cells": "death_portals"}
+
+
+def unsupported_mechanisms(spec: TaskSpecification) -> list[str]:
+    """The spec's mechanisms the native multigrid rules lack, by spec name."""
+    found = []
+    for f in dataclasses.fields(MechanismSet):
+        if f.name in NATIVE_MECHANISMS or f.name in _MECHANISM_PARAMETERS:
+            continue
+        value = getattr(spec.mechanisms, f.name)
+        if isinstance(value, list) and value:
+            found.append(_SPEC_NAMES.get(f.name, f.name))
+    return found
 
 
 class MultiGridBackend(AbstractGridBackend):
@@ -72,7 +96,17 @@ class MultiGridBackend(AbstractGridBackend):
 
         Args:
             task_spec: The task specification defining the puzzle
+
+        Raises:
+            ValueError: If the spec has mechanisms the native rules lack
+                (see ``unsupported_mechanisms``)
         """
+        missing = unsupported_mechanisms(task_spec)
+        if missing:
+            raise ValueError(
+                f"Task {task_spec.task_id!r} has {', '.join(missing)}, which multigrid's "
+                "native rules do not implement; run it on the minigrid backend"
+            )
         self.task_spec = task_spec
 
         # Convert TaskSpecification to multigrid task_spec dict
