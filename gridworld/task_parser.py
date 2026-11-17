@@ -261,13 +261,22 @@ class TaskParser:
             env.place_hazard(hazard.position.x, hazard.position.y, hazard.hazard_type)
 
         for teleporter in spec.mechanisms.teleporters:
-            env.place_teleporter(
-                teleporter.id,
-                teleporter.position_a.x, teleporter.position_a.y,
-                teleporter.position_b.x, teleporter.position_b.y,
-                teleporter.bidirectional,
-                color=teleporter.color,
-            )
+            ends = teleporter.ends()
+            if len(ends) == 2:
+                env.place_teleporter(
+                    teleporter.id,
+                    ends[0].x, ends[0].y,
+                    ends[1].x, ends[1].y,
+                    teleporter.bidirectional,
+                    color=teleporter.color,
+                )
+            else:
+                for index, pos in enumerate(ends):
+                    env.place_portal_pad(pos.x, pos.y, teleporter.color, f"{teleporter.id}_{index}")
+
+        for patch in spec.mechanisms.phased_patches:
+            for cell in patch.cells:
+                env.place_phased_cell(cell.x, cell.y, patch.open_steps, patch.closed_steps, patch.offset)
 
         for kill in spec.mechanisms.kill_cells:
             env.place_kill_cell(kill.x, kill.y)

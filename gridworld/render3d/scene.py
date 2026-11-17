@@ -117,7 +117,9 @@ def wall_cells(spec: TaskSpecification) -> frozenset[tuple[int, int]]:
     for group in (mech.keys, mech.doors, mech.gates, mech.switches):
         occupied |= {(m.position.x, m.position.y) for m in group}
     for tp in mech.teleporters:
-        occupied |= {(tp.position_a.x, tp.position_a.y), (tp.position_b.x, tp.position_b.y)}
+        occupied |= {(p.x, p.y) for p in tp.ends()}
+    for patch in mech.phased_patches:
+        occupied |= {(p.x, p.y) for p in patch.cells}
     for group in (mech.kill_cells, mech.frozen_tiles, mech.rotating_tiles):
         occupied |= {(p.x, p.y) for p in group}
     return frozenset(walls - occupied)
@@ -144,6 +146,11 @@ class SceneIndex:
     rotator_arrows: dict[int, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
     rotator_initial: tuple[int, ...] = ()
     rotator_cells: tuple[tuple[int, int], ...] = ()
+    # Floor cells that can disappear: floor geom, and the wall geom shown once sealed.
+    sealed_floor: dict[tuple[int, int], str] = field(default_factory=dict)
+    sealed_wall: dict[tuple[int, int], str] = field(default_factory=dict)
+    # (open_steps, closed_steps, offset, closed geom names, open geom names)
+    phased: tuple[tuple[int, int, int, tuple[str, ...], tuple[str, ...]], ...] = ()
 
 
 def _fmt(values) -> str:
@@ -321,13 +328,19 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
 
     # Floor: a grid-line base under one inset tile per non-wall cell.
     world.append(_geom("floor:base", "box", (width / 2, -height / 2, -0.01), (width / 2, height / 2, 0.01), palette.GRID_LINE))
+    sealed_floor: dict[tuple[int, int], str] = {}
+    sealed_wall: dict[tuple[int, int], str] = {}
     for x in range(width):
         for y in range(height):
             cx, cy, _ = cell_center(x, y)
             if (x, y) in walls:
                 world.append(_geom(f"wall:{x}:{y}", "box", (cx, cy, hz), (0.5, 0.5, hz), palette.WALL))
             else:
-                world.append(_geom(f"floor:{x}:{y}", "box", (cx, cy, 0.0), (0.46, 0.46, 0.005), palette.FLOOR))
+                floor_name, sealed_name = f"floor:{x}:{y}", f"sealed:{x}:{y}"
+                world.append(_geom(floor_name, "box", (cx, cy, 0.0), (0.46, 0.46, 0.005), palette.FLOOR))
+                world.append(_geom(sealed_name, "box", (cx, cy, hz), (0.5, 0.5, hz), palette.WALL))
+                sealed_floor[(x, y)] = floor_name
+                sealed_wall[(x, y)] = sealed_name
     gx, gy, _ = cell_center(*spec.resolved_goal())
     world.append(_geom("goal", "box", (gx, gy, 0.012), (0.40, 0.40, 0.012), palette.GOAL))
 
@@ -386,12 +399,30 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
 
     for tp in mech.teleporters:
         colour = palette.rgba(tp.color)
-        for end, pos in (("a", tp.position_a), ("b", tp.position_b)):
+        ends = tp.ends()
+        paired = len(ends) == 2
+        for i, pos in enumerate(ends):
+            # A pair keeps the a/b names the signs and tests use. A chain pad
+            # has no single landing, so it gets the pool and no destination sign.
+            end = ("a", "b")[i] if paired else str(i)
             cx, cy, _ = cell_center(pos.x, pos.y)
             world += _portal_end(f"portal:{tp.id}:{end}", cx, cy, colour)
-            label = portal_sign_label(spec, tp, end)
-            if label is not None:
-                world += _sign(f"portal:{tp.id}:{end}", cx, cy, label)
+            if paired:
+                label = portal_sign_label(spec, tp, end)
+                if label is not None:
+                    world += _sign(f"portal:{tp.id}:{end}", cx, cy, label)
+    phased: list[tuple[int, int, int, tuple[str, ...], tuple[str, ...]]] = []
+    for i, patch in enumerate(mech.phased_patches):
+        for j, cell in enumerate(patch.cells):
+            cx, cy, _ = cell_center(cell.x, cell.y)
+            prefix = f"phase:{i}:{j}"
+            closed = (f"{prefix}:closed", f"{prefix}:bar")
+            opened = (f"{prefix}:open", f"{prefix}:stripe")
+            world.append(_geom(closed[0], "box", (cx, cy, hz * 0.85), (0.46, 0.46, hz * 0.85), palette.PHASED_CLOSED))
+            world.append(_geom(closed[1], "box", (cx, cy, hz * 0.9), (0.34, 0.08, 0.06), palette.PHASED_BAR))
+            world.append(_geom(opened[0], "box", (cx, cy, 0.02), (0.46, 0.46, 0.02), palette.PHASED_OPEN))
+            world.append(_geom(opened[1], "box", (cx, cy, 0.045), (0.30, 0.05, 0.015), palette.PHASED_STRIPE))
+            phased.append((patch.open_steps, patch.closed_steps, patch.offset, closed, opened))
     kill_bodies: dict[int, str] = {}
     skull_bodies: list[str] = []
     for i, cell in enumerate(mech.kill_cells):
@@ -492,5 +523,8 @@ def build_scene(spec: TaskSpecification, *, wall_height: float, resolution: int)
         rotator_cells=tuple((p.x, p.y) for p in mech.rotating_tiles),
         kill_bodies=kill_bodies,
         kill_cells=tuple((p.x, p.y) for p in mech.kill_cells),
+        sealed_floor=sealed_floor,
+        sealed_wall=sealed_wall,
+        phased=tuple(phased),
     )
     return xml, index

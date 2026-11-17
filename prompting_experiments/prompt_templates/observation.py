@@ -57,6 +57,8 @@ FROZEN_STATUS_LINE = "You are frozen, wait for freeze to end."
 ROTATING_TILE_LINE = "There is a rotating tile at ({row},{col}) pointing {direction}."
 TELEPORTER_LINE = "There is a {color} teleporter between ({row_a},{col_a}) and ({row_b},{col_b})."
 TELEPORTER_ONE_WAY_LINE = "There is a {color} teleporter from ({row_a},{col_a}) to ({row_b},{col_b})."
+TELEPORTER_PADS_LINE = "There is a {color} teleporter at {pads}."
+PHASED_CELL_LINE = "Cell ({row},{col}) is {state}."
 
 CURRENT_AGENT_LINE = "You are at {position} facing {facing}."
 CURRENT_AGENT_POSITION_LINE = "You are at {position}."

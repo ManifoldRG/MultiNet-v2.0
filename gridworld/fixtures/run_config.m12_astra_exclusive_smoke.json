@@ -1,0 +1,29 @@
+{
+  "experiment_config": {
+    "prompting": "minimal",
+    "observation": "text_only",
+    "observation_text_format": "coords",
+    "context_window": "full",
+    "chat_history": "stateless",
+    "in_context_learning": "zero_shot",
+    "action_space": "egocentric",
+    "querying": "step_by_step",
+    "progress_stall_k": 30,
+    "prompt_cache": true
+  },
+  "models": {
+    "gpt6_astra": {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "max_tokens": 64000,
+      "reasoning_effort": "xhigh",
+      "service_tier": "flex",
+      "timeout": 1800,
+      "max_attempts": 30,
+      "spend_cap_usd": 20,
+      "tasks": [
+        "ogbench/ogbench/procgen/maze_jsons/M12/25x25_dense_kr_sg_kb_irreversible_exclusive_key_0.json"
+      ]
+    }
+  }
+}

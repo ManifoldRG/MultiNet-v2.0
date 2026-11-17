@@ -23,16 +23,30 @@ from .world_model import (
 class TaskValidator:
     """Validate that a task is beatable by BFS over the R1 action graph."""
 
-    def __init__(self, spec: TaskSpecification, *, drop_available: bool = False):
+    def __init__(
+        self,
+        spec: TaskSpecification,
+        *,
+        drop_available: bool = False,
+        drop_beside_key_only: bool = True,
+    ):
         self.spec = spec
-        self.ctx = TaskPlanningContext(spec, drop_available=drop_available)
+        # Same drop the shortest path uses: only on the cell beside the next key.
+        # drop_available=True keeps the unrestricted drop edge.
+        beside = drop_beside_key_only and not drop_available
+        self.ctx = TaskPlanningContext(
+            spec,
+            drop_available=drop_available or beside,
+            drop_beside_key_only=beside,
+            timers=False,
+        )
         self.goal = self.ctx.goal
         self.start = self.ctx.start
         self.switches_by_id = {
             sw["id"]: sw for sw in self.ctx.switches_by_pos.values()
         }
 
-    def validate(self, max_states: int = 500_000) -> tuple[bool, Optional[list[tuple[int, int]]], str]:
+    def validate(self, max_states: int = 1_000_000) -> tuple[bool, Optional[list[tuple[int, int]]], str]:
         beatable, path, states_explored = self._find_solution(
             self.ctx.initial_state(), max_states=max_states
         )
@@ -51,7 +65,7 @@ class TaskValidator:
         self,
         initial_state: PlannerState,
         goal: Optional[tuple[int, int]] = None,
-        max_states: int = 500_000,
+        max_states: int = 1_000_000,
     ) -> tuple[bool, Optional[list[tuple[int, int]]], int]:
         target = self.goal if goal is None else goal
         actions, end, states_explored = shortest_plan(

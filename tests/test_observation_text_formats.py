@@ -7,6 +7,8 @@ import json
 
 import pytest
 
+from gridworld.backends.base import GridState
+from gridworld.task_spec import TaskSpecification
 from interface.config import ExperimentConfig
 from interface.coords import agent_row_col, goal_row_col, maze_rows_cols, wall_cells
 from interface.loader import load_task
@@ -214,6 +216,53 @@ def test_json_payload(spec_state, mid):
     assert '"start": [1, 1]' in init
     walls_line = next(line for line in init.split("\n") if '"walls"' in line)
     assert walls_line.rstrip().endswith("],")
+
+
+def test_visible_new_tiles_match_the_picture():
+    spec = TaskSpecification.from_dict({
+        "task_id": "nl_visible",
+        "seed": 1,
+        "difficulty_tier": 1,
+        "maze": {"dimensions": [10, 6], "walls": [], "start": [1, 1], "goal": [8, 1]},
+        "mechanisms": {
+            "teleporters": [{
+                "id": "portal_cyan",
+                "color": "cyan",
+                "bidirectional": True,
+                "positions": [[2, 2], [3, 2], [4, 2]],
+            }],
+            "phased_patches": [{
+                "cells": [[5, 2]],
+                "open_steps": 4,
+                "closed_steps": 8,
+                "offset": 8,
+            }],
+        },
+        "rules": {},
+        "goal": {"type": "reach_position", "target": [8, 1]},
+        "max_steps": 40,
+    })
+    state = GridState(agent_position=(1, 1), agent_direction=0, max_steps=40, sealed={(6, 2)})
+    coords = render_user_observation_text(spec, state)
+    assert "There is a cyan teleporter at (2,2), (2,3) and (2,4)." in coords
+    assert "Cell (2,5) is closed." in coords
+    assert "The following cells are walls: (2,6)." in coords
+    assert "facing" not in coords.split("teleporter")[1].split("\n")[0]
+
+    grid, legend = _grid(_ascii(spec, state)), _legend(_ascii(spec, state))
+    assert grid[1][1] == grid[1][2] == grid[1][3] == "tC"
+    assert legend["tC"] == "cyan teleporter"
+    assert grid[1][4] == "cl" and legend["cl"] == "closed"
+    assert grid[1][5] == "#"
+
+    payload = _json(spec, state)
+    assert payload["map_contents"]["teleporters"] == [{
+        "color": "cyan",
+        "positions": [[2, 2], [2, 3], [2, 4]],
+        "bidirectional": True,
+    }]
+    assert payload["map_contents"]["phased_cells"] == [{"row": 2, "col": 5, "status": "closed"}]
+    assert payload["walls"] == [[2, 6]]
 
 
 def test_observation_wiring(spec_state):
