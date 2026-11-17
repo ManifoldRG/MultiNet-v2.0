@@ -49,7 +49,10 @@ class ExperimentConfig:
         "scratchpad_window",
         "full_context_scratchpad",
     ] = "full_context"
-    # The scratchpad is cut to this many characters; the model is told.
+    # The notes are cut to this many characters (2000 by default, about 500
+    # tokens), so every request resends a bounded amount; the model is told the
+    # cap. Characters, not tokens: the same for every tokenizer. Only with a
+    # scratchpad arm.
     scratchpad_max_chars: int = DEFAULT_SCRATCHPAD_MAX_CHARS
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
     chat_history: Literal["stateless", "rolling", "full"] = "stateless"

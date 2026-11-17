@@ -53,15 +53,25 @@ Carry-over (``scratchpad_status`` on the query record):
 * ``kept_parse_failure``: no valid action (including an infrastructure stub):
   the previous notes stay, whatever the reply wrote.
 
-The cap is in characters, not tokens: it is the same for every provider's
-tokenizer and the model can count it.
+The cap (``scratchpad_max_chars``, default 2000) is in characters, not
+tokens: it is the same for every provider's tokenizer, the model can count it,
+and the harness cuts at it exactly. It bounds what every request resends: at
+most 2000 characters of notes, about 500 tokens, uncached (about the size of
+R2 NL's uncached tail of current state, budget lines and question). It does not
+bound output: a longer block is billed as output when written, then cut; the
+system line states the cap and the next request says when notes were cut.
 
-Caching: the notes change every step, so they sit in the current turn after
-the last cache breakpoint, where the current state already is. The long prefix
-(system prompt with the one-line addition, then every history step) is the same
-from one request to the next, so the full_context_scratchpad arm reads it from
-cache exactly as full_context does. The window arm's history slides every step,
-so only its system prompt is cached.
+Caching: the notes are treated like the inventory. They change every step, so
+they sit in the current turn, after the current state's inventory line and
+after the last cache breakpoint (Claude ``cache_control``, OpenAI
+``prompt_cache_breakpoint``); for Kimi's implicit prefix caching they come
+after everything a request shares with the one before. New notes therefore
+never re-write the cache. The long prefix (system prompt with the one-line
+addition, then every history step) is the same from one request to the next,
+so the full_context_scratchpad arm caches exactly what full_context caches.
+The window arm's history slides every step, so only its system prompt is
+cached. tests/test_scratchpad_cache_payloads.py checks both on the body each
+agent would POST.
 
 Recording: each query record carries ``scratchpad_before`` (the notes the
 request showed), ``scratchpad`` (the notes carried to the next request),

@@ -97,14 +97,23 @@ Every config carries a `spend_cap_usd` hard stop.
 
 | `memory` | history | scratchpad |
 |---|---|---|
-| `full_context` (default) | as `context_window` says (R2: `full`) | none; requests and run hashes as before |
+| `full_context` (default) | as `context_window` says (R2: `full`) | none; requests, `episode.json`, `run_inputs.json` and run hashes as before |
 | `scratchpad_window` | last `context_n` steps (needs `context_window: last_n`) | yes |
 | `full_context_scratchpad` | full (needs `context_window: full`) | yes |
 
 The model writes `<scratchpad>...</scratchpad>` before its `FINAL_OUTPUT` line
-and sees the notes at the next step, capped at `scratchpad_max_chars` (2000).
-Query records in `episode.json` carry `scratchpad_before`, `scratchpad`,
-`scratchpad_status` and `scratchpad_written_chars`.
+and sees the notes at the next step. `scratchpad_max_chars` caps them (default
+2000 characters, about 500 tokens; characters, so the cap is the same for every
+tokenizer). The cap bounds what each request resends; a longer block is still
+billed as output when written, then cut, and the next request says so. Query
+records in `episode.json` carry `scratchpad_before`, `scratchpad`,
+`scratchpad_status` (`truncated` when cut) and `scratchpad_written_chars`.
+
+Caching: like the inventory, the notes sit in the current turn, after the last
+cache breakpoint (and after the prefix Kimi reuses), so changing notes never
+re-write the cache; `full_context_scratchpad` caches exactly what
+`full_context` caches. `scratchpad_window`'s history slides, so it caches only
+the system prompt.
 
 `run_config.mechanics_15_nl_memory_{full_context,scratchpad_window,full_context_scratchpad}.json`
 run GPT-6 Astra on five mechanics-15 NL mazes, one config per arm. A scratchpad
