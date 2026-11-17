@@ -66,9 +66,13 @@ IN_PROGRESS_END_REASON = "max_steps"
 INFRA_STOP_REASONS = frozenset(
     {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
 )
-# Providers whose resumes must pass their own spend cap: the agent's ledger is per
-# process, so the archived per-run cap would not bound a resume.
-_PER_PROCESS_SPEND_PROVIDERS = ("openai", "claude")
+# Providers whose agents keep a per-process spend ledger. This script's process
+# starts that ledger at $0 (it does not see the run's other episodes), so the
+# archived per-run cap would not bound a resume: a capped run resumes only under
+# its own --spend-cap-usd. Claude and OpenAI resumes need one even when the run
+# was uncapped; an uncapped Kimi run (K2.6 has no price on record) resumes as it ran.
+_PER_PROCESS_SPEND_PROVIDERS = ("openai", "claude", "kimi")
+_ALWAYS_CAPPED_RESUME_PROVIDERS = ("openai", "claude")
 # Providers that take enable_prompt_cache from the experiment when the entry leaves
 # it unset (run_pipeline._agent_model_config).
 _PROMPT_CACHE_PROVIDERS = ("openai", "claude")
@@ -274,7 +278,10 @@ def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
         log(f"  timeout override: {cfg.get('timeout')} -> {timeout}s")
         cfg["timeout"] = timeout
     provider = str(cfg.get("provider") or "kimi").lower()
-    if provider in _PER_PROCESS_SPEND_PROVIDERS:
+    needs_cap = provider in _ALWAYS_CAPPED_RESUME_PROVIDERS or (
+        provider in _PER_PROCESS_SPEND_PROVIDERS and cfg.get("spend_cap_usd") is not None
+    )
+    if needs_cap:
         if spend_cap_usd is None:
             raise SystemExit(
                 f"--spend-cap-usd is required to resume a {provider} episode: the agent's "
@@ -299,7 +306,7 @@ def build_live_agent(model_cfg: dict, *, timeout: float | None = None,
     if provider == "kimi":
         from interface.agents.kimi_k26 import KimiK26Agent, KimiK26Config
 
-        allowed = set(KimiK26Config.__dataclass_fields__)
+        allowed = _capped_fields(KimiK26Config, provider)
         return KimiK26Agent(config=KimiK26Config(**{k: v for k, v in cfg.items() if k in allowed}))
     raise SystemExit(f"resume does not support provider {provider!r}")
 

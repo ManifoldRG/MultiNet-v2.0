@@ -1405,6 +1405,32 @@ class _CountingAgent:
             setattr(self._inner, name, value)
 
 
+def _restore_capped_spend(unit: dict[str, Any], artifacts_root: Path, *, batch: bool) -> None:
+    """The first time this process builds a capped model's agent, restore the
+    model's running total from this worker's run dirs, so a restart (after a
+    crash, or after an unpark: parked workers exit) does not hand the cap back.
+    A worker's artifacts root holds one run (``.../multinet-worker-artifacts/
+    <RUN_ID>``); the model's dirs are ``runs/<task>/<backend>/<model>/seed_<n>/
+    <condition>``."""
+    from interface.agents.spend_cap import restore_spend_once
+
+    cfg = unit.get("model_config") or {}
+    if cfg.get("spend_cap_usd") is None or not cfg.get("model"):
+        return
+    parts = PurePosixPath(str(unit.get("run_dir") or "")).parts
+    if len(parts) != 6 or parts[0] != "runs":
+        logger.warning("spend cap: unexpected run_dir %r; %s's total is not restored", unit.get("run_dir"),
+                       cfg.get("model"))
+        return
+    model_dir = parts[3]
+    runs = Path(artifacts_root) / "runs"
+    total = restore_spend_once(
+        cfg, lambda: sorted(p for p in runs.glob(f"*/*/{model_dir}/seed_*/*") if p.is_dir()), batch=batch
+    )
+    logger.info("spend cap: %s has spent $%.4f of $%.2f (restored from %s)",
+                cfg["model"], total, float(cfg["spend_cap_usd"]), runs)
+
+
 def run_assigned_unit(
     unit: dict[str, Any],
     *,
@@ -1422,6 +1448,7 @@ def run_assigned_unit(
         unit["model_key"],
         pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
     )
+    _restore_capped_spend(unit, artifacts_root, batch=False)
     if progress is not None or park is not None:
         agent = _CountingAgent(agent, progress or ProgressCounter(), park=park,
                                provider=str(unit.get("provider") or ""))
@@ -1895,6 +1922,7 @@ def run_lockstep_worker(
                 pipeline._agent_model_config(unit["model_config"], unit.get("experiment_config")),
             )
             agent_box["agent"] = _ParkingBatchAgent(inner, park, str(unit.get("provider") or ""))
+            _restore_capped_spend(unit, artifacts_root, batch=True)
         elif model_key != group_model_key["key"]:
             # One lockstep worker serves exactly one model group/key. A unit of a
             # different key would need a different agent, so fail it back to the

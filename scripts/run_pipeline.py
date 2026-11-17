@@ -953,6 +953,7 @@ def run_from_config(
     instead of keeping them as-is."""
     manifest_path = Path(manifest_path)
     artifacts_root = Path(artifacts_root)
+    seeds = list(seeds)  # iterated once per model below
     config = scorer_config or load_scorer_config()
     factory = agent_factory or _build_agent_from_spec
 
@@ -994,6 +995,24 @@ def run_from_config(
         rows = resolve_task_rows(entries, catalog, manifest_path)
         agent, label = factory(name, _agent_model_config(model_cfg, exp_overlay))
         plans.append((_sanitize(label), agent, dict(model_cfg), rows))
+        if model_cfg.get("spend_cap_usd") is not None and not force:
+            # A rerun (``--resume-killed``, or after a crash) is a new process with an
+            # empty spend ledger: restore what this run's dirs already spent, so the
+            # cap is not handed back. ``--force`` discards those runs and their spend.
+            from interface.agents.spend_cap import restore_spend
+
+            restore_spend(
+                model_cfg,
+                [
+                    _run_dir(artifacts_root, row["task_id"], _sanitize(label), seed, variant, render.label)
+                    for row in rows
+                    for seed in seeds
+                    for variant, _cfg in _condition_configs(
+                        conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay
+                    )
+                ],
+                batch=False,
+            )
         for r in rows:
             union.setdefault(r["task_id"], r)
 

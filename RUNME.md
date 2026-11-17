@@ -152,6 +152,22 @@ Text-only (NL) runs need nothing extra: set `"experiment_config":
   group's workers again after the unpark (`start_worker`, or `sweep_run.sh
   next-batch`). While units wait, the supervisor counts them as work left (no
   "partial" stop) until its stall timeout.
+- *Spend caps.* `spend_cap_usd` caps what one model may spend in a run: the
+  worker process (or the local run) keeps a running total of each request's
+  priced usage and refuses the next request once the total reaches the cap.
+  A restart does not hand the cap back. When a worker starts (after a crash,
+  or after an unpark: parked workers exit), it restores the model's total from
+  the usage its run dirs record: finished episodes, and for a partial the
+  larger of its crash checkpoint and its `queries.jsonl`. A local rerun
+  (`--resume-killed`, or after a crash) restores from the run dirs it is about
+  to run. To let a capped model spend more, raise its cap; the restored total
+  counts against the new cap. Limits: with `worker_count` > 1 each worker
+  process enforces the cap on its own episodes; a worker on a fresh disk, a
+  request in flight when the process died and a discarded attempt are not
+  restored; `--force` discards a local run's episodes and their spend. Keep a
+  provider-side budget limit as well. `scripts/resume_from_archive.py` runs a
+  resume in its own process, so it takes its own `--spend-cap-usd` (Claude and
+  OpenAI always; Kimi when the run was capped).
 - *Local runs.* `run_pipeline` keeps a cached killed episode as-is; pass
   `--resume-killed` to resume it. A serial episode checkpoints every query
   (`checkpoint.json`, `queries.jsonl` in its run dir), so a process killed
