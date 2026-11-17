@@ -95,7 +95,13 @@ class ExperimentConfig:
             )
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        if not self.scratchpad:
+            # No scratchpad (the cap is then the default): left out, so a config
+            # serialized before the memory arms existed, and every run hash, job
+            # plan and episode.json built from one, stays byte-identical.
+            del d["memory"], d["scratchpad_max_chars"]
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentConfig":
@@ -126,15 +132,21 @@ class ExperimentConfig:
                 "scratchpad_max_chars must be a positive int, "
                 f"got {self.scratchpad_max_chars!r}"
             )
-        if self.scratchpad:
-            window = MEMORY_ARM_CONTEXT_WINDOW[self.memory]
-            if self.context_window != window:
+        if not self.scratchpad:
+            if self.scratchpad_max_chars != DEFAULT_SCRATCHPAD_MAX_CHARS:
                 raise ValueError(
-                    f"memory={self.memory!r} needs context_window={window!r}, "
-                    f"got {self.context_window!r}"
+                    "scratchpad_max_chars only applies with a scratchpad memory arm "
+                    f"({', '.join(MEMORY_ARM_CONTEXT_WINDOW)}), got memory={self.memory!r}"
                 )
-            if self.chat_history != "stateless":
-                raise ValueError(
-                    f"memory={self.memory!r} needs chat_history='stateless', "
-                    f"got {self.chat_history!r}"
-                )
+            return
+        window = MEMORY_ARM_CONTEXT_WINDOW[self.memory]
+        if self.context_window != window:
+            raise ValueError(
+                f"memory={self.memory!r} needs context_window={window!r}, "
+                f"got {self.context_window!r}"
+            )
+        if self.chat_history != "stateless":
+            raise ValueError(
+                f"memory={self.memory!r} needs chat_history='stateless', "
+                f"got {self.chat_history!r}"
+            )

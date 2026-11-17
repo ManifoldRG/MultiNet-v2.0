@@ -32,6 +32,26 @@ def test_defaults_are_the_harness_without_a_scratchpad():
 def test_round_trips_through_dict():
     config = ExperimentConfig(**{**WINDOW, "scratchpad_max_chars": 1500})
     assert ExperimentConfig.from_dict(config.to_dict()) == config
+    assert ExperimentConfig.from_dict(ExperimentConfig().to_dict()) == ExperimentConfig()
+
+
+def test_default_arm_serializes_as_before_the_arms_existed():
+    """Omitted when off, as tile_labels does: what a default run persists
+    (episode.json config, run_inputs.json, a job plan's units) stays the bytes
+    it was before the memory arms."""
+    for cell in (ExperimentConfig(), ExperimentConfig(**NL_CELL)):
+        assert {"memory", "scratchpad_max_chars"}.isdisjoint(cell.to_dict())
+    for cell in (WINDOW, FULL_SCRATCHPAD):
+        d = ExperimentConfig(**cell).to_dict()
+        assert (d["memory"], d["scratchpad_max_chars"]) == (cell["memory"], 2000)
+
+
+def test_a_cap_without_a_scratchpad_is_an_error():
+    # It would change nothing and be dropped from to_dict, so a config that
+    # sets it most likely forgot the memory arm.
+    with pytest.raises(ValueError, match="scratchpad_max_chars only applies"):
+        ExperimentConfig(**{**NL_CELL, "scratchpad_max_chars": 99})
+    ExperimentConfig(**{**NL_CELL, "scratchpad_max_chars": 2000})
 
 
 def test_unknown_arm_is_rejected():
@@ -74,12 +94,12 @@ def test_full_context_accepts_any_window():
 def test_default_arm_leaves_the_memory_fields_out_of_the_hash():
     payload = _experiment_config_hash_payload(ExperimentConfig(**NL_CELL))
     assert "memory" not in payload and "scratchpad_max_chars" not in payload
-    # A cap set on the default arm changes nothing the model sees.
-    assert _hash({**NL_CELL, "scratchpad_max_chars": 99}) == _hash(NL_CELL)
-    # A plain dict overlay (no memory key) hashes like the dataclass.
-    raw = {k: v for k, v in ExperimentConfig(**NL_CELL).to_dict().items()
-           if k not in ("memory", "scratchpad_max_chars")}
+    # A plain dict (a job plan's unit) hashes like the dataclass, with or
+    # without the default arm spelled out.
+    raw = ExperimentConfig(**NL_CELL).to_dict()
     assert _experiment_config_hash_payload(raw) == payload
+    spelled = {**raw, "memory": "full_context", "scratchpad_max_chars": 2000}
+    assert _experiment_config_hash_payload(spelled) == payload
 
 
 def test_scratchpad_arms_hash_their_arm_cap_and_window():

@@ -113,13 +113,17 @@ def test_pipeline_records_the_arm_end_to_end(arm, tmp_path):
     )
     [run_dir] = [p.parent for p in (tmp_path / "artifacts").rglob("episode.json")]
     sidecar = load_json(run_dir / "run_inputs.json")
-    assert sidecar["experiment_config"]["memory"] == arm
     episode = load_json(run_dir / "episode.json")
     assert episode["success"] is True
     queries = [r for r in episode["transcript"] if r["kind"] == "query"]
     if arm == "full_context":
+        # Persisted as before the memory arms existed.
+        for persisted in (sidecar["experiment_config"], episode["config"]):
+            assert {"memory", "scratchpad_max_chars"}.isdisjoint(persisted)
         assert not any(k.startswith("scratchpad") for r in queries for k in r)
     else:
+        for persisted in (sidecar["experiment_config"], episode["config"]):
+            assert (persisted["memory"], persisted["scratchpad_max_chars"]) == (arm, 2000)
         assert all(r["scratchpad_status"] == "updated" for r in queries)
         assert queries[0]["scratchpad"].startswith("next: ")
         assert queries[1]["scratchpad_before"] == queries[0]["scratchpad"]

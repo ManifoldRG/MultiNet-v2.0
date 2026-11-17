@@ -7,8 +7,10 @@ the model one piece of text it carries forward itself.
 Arms (``memory``):
 
 * ``full_context`` (default): no scratchpad. The requests are byte-identical to
-  the harness before the arms existed, and the run hash leaves the memory
-  fields out (scripts/run_pipeline.py).
+  the harness before the arms existed, and ``ExperimentConfig.to_dict`` leaves
+  the memory fields out, so episode.json, run_inputs.json, job plans and the run
+  hash are too. ``scratchpad_max_chars`` is then rejected unless it is the
+  default.
 * ``scratchpad_window``: the scratchpad plus only the last K steps of history.
   K is ``context_n`` and the arm requires ``context_window="last_n"``: the
   per-step history lines are the full history's, under the header "Recent
