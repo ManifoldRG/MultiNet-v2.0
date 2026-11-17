@@ -30,10 +30,14 @@ effect from what happens when it steps on one.
   floor cell that disappeared joins the walls, a door or switch that shut reads
   as its initial state, a gate that starts open is a gate. Their step feedback
   is the mechanic-blind event (BLOCKED, NOTHING, TOGGLED, DROP, ...).
+* Fail closed: a maze that uses a mechanism ``NEUTRAL_MECHANISMS`` refuses, or
+  does not list, is refused before the first query, rather than run with that
+  mechanism left out of the text.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -52,6 +56,47 @@ LABEL_POOL: tuple[str, ...] = ("blicket", "dax", "fep", "modi", "pilk", "toma", 
 # World-model tile kinds, in assignment order: kill_cells, frozen_tiles,
 # rotating_tiles, teleporter pads.
 KINDS: tuple[str, ...] = ("death", "frozen", "rotating", "portal")
+
+# How neutral mode shows each MechanismSet field. A maze that uses (sets away
+# from its default) a field marked "refused", or a field missing here, is
+# refused by TileLabeling.for_task. A new mechanism needs a decision here first.
+#   labelled   a tile kind in KINDS (or its live direction), under a made-up word
+#   named      keeps its R2 name, like keys, doors, switches and gates
+#   as_named   shown exactly as with named tiles: that text names no effect
+#   not_shown  in neither mode's NL text
+#   refused    no neutral rendering
+NEUTRAL_MECHANISMS: dict[str, str] = {
+    "keys": "named",  # R3's pink key too
+    "doors": "named",
+    "switches": "named",
+    "gates": "named",  # R3's gates that start open too
+    "kill_cells": "labelled",
+    "frozen_tiles": "labelled",
+    "rotating_tiles": "labelled",
+    "rotating_initial_directions": "labelled",  # "pointing EAST" on the tile's line
+    "teleporters": "labelled",  # pairs and R3 chains alike
+    "phased_patches": "as_named",  # "Cell (r,c) is open." / "... closed."
+    "freeze_steps": "not_shown",
+    "stable_tiles": "not_shown",  # R3 floor that never disappears: plain floor
+    # Neither has an NL rendering with named tiles either; no R2 or R3 maze has one.
+    "hazards": "refused",
+    "blocks": "refused",
+}
+
+
+def _refuse_unrendered(task_spec: TaskSpecification) -> None:
+    mech = task_spec.mechanisms
+    for f in dataclasses.fields(mech):
+        default = f.default_factory() if f.default_factory is not dataclasses.MISSING else f.default
+        if getattr(mech, f.name) == default:
+            continue
+        if NEUTRAL_MECHANISMS.get(f.name, "refused") == "refused":
+            raise ValueError(
+                f"neutral tile labels have no rendering for mechanism {f.name!r} "
+                f"(maze {task_spec.task_id}): it would be left out of the NL text. "
+                "Run this maze with tile_labels='named', or decide how neutral mode "
+                "shows it in interface/tile_labels.py NEUTRAL_MECHANISMS."
+            )
 
 
 def _kind_cells(task_spec: TaskSpecification) -> dict[str, list[tuple[int, int]]]:
@@ -95,6 +140,7 @@ class TileLabeling:
 
     @classmethod
     def for_task(cls, task_spec: TaskSpecification, seed: int) -> TileLabeling:
+        _refuse_unrendered(task_spec)
         cells = _kind_cells(task_spec)
         return cls(
             seed=int(seed),

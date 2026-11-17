@@ -4,11 +4,13 @@ R3 adds portal chains (3+ pads), phased cells, disappearing floor, doors and
 switches that shut, a pink key and gates that start open. Under neutral labels
 none of them may vanish from what the model reads: on every R3 maze, the
 neutral observation must show every cell the named observation shows, and must
-not name what a neutral-labelled tile does.
+not name what a neutral-labelled tile does. A maze with a mechanism neutral mode
+has no rendering for is refused before the first query.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import random
 import re
@@ -19,13 +21,14 @@ import pytest
 from gridworld.actions import MiniGridActions
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.baselines import plan_bfs_path
-from gridworld.task_spec import TaskSpecification
+from gridworld.task_spec import BlockSpec, HazardSpec, MechanismSet, Position, TaskSpecification
 from interface.config import ExperimentConfig
 from interface.coords import to_row_col
 from interface.parser import ACTION_ORDER
 from interface.renderer import render_initial_maze_text, render_user_observation_text
+from interface.runner import build_runner
 from interface.tile_labels import TileLabeling
-from tests.test_tile_labels import _leaks, _run, _texts
+from tests.test_tile_labels import _Replay, _leaks, _run, _texts
 
 REPO = Path(__file__).resolve().parents[1]
 R3_RUN_CONFIG = json.loads((REPO / "gridworld" / "fixtures" / "run_config.r3_nl.json").read_text())
@@ -169,3 +172,53 @@ def test_r3_portal_chain_route_under_neutral_labels():
     first = _texts(requests)[0] + _texts(requests)[1]
     for row, col in (to_row_col(p) for p in chain.ends()):
         assert f"There is a {label} tile at ({row},{col})." in first
+
+
+# --------------------------------------------------------------------------- fail closed
+
+
+def _m11() -> TaskSpecification:
+    return _spec(R3_TASKS[0])
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("hazards", [HazardSpec(id="lava_0", position=Position(1, 1), hazard_type="lava")]),
+        ("blocks", [BlockSpec(id="block_0", position=Position(1, 1))]),
+    ],
+)
+def test_neutral_labels_refuse_a_mechanism_they_do_not_render(field, value):
+    spec = _m11()
+    spec = dataclasses.replace(spec, mechanisms=dataclasses.replace(spec.mechanisms, **{field: value}))
+    with pytest.raises(ValueError, match=f"neutral tile labels.*{field}"):
+        TileLabeling.for_task(spec, 0)
+    backend = MiniGridBackend(render_mode=None)
+    backend.configure(_m11())
+    agent = _Replay(["DONE"])
+    with pytest.raises(ValueError, match=field):
+        build_runner(NEUTRAL_R3, backend, spec).run(agent, verbose=False)
+    assert agent.requests == []  # refused before the first query
+
+
+def test_neutral_labels_refuse_a_mechanism_field_they_have_never_seen():
+    """A mechanism added to MechanismSet later is refused until someone decides
+    how neutral mode shows it, instead of being left out of the text."""
+
+    @dataclasses.dataclass
+    class FutureMechanisms(MechanismSet):
+        lava_rivers: list = dataclasses.field(default_factory=list)
+
+    spec = _m11()
+    future = FutureMechanisms(**{f.name: getattr(spec.mechanisms, f.name) for f in dataclasses.fields(MechanismSet)})
+    TileLabeling.for_task(dataclasses.replace(spec, mechanisms=future), 0)  # empty: nothing to show
+    future.lava_rivers = [Position(1, 1)]
+    with pytest.raises(ValueError, match="lava_rivers"):
+        TileLabeling.for_task(dataclasses.replace(spec, mechanisms=future), 0)
+
+
+def test_every_mechanism_field_has_a_neutral_decision():
+    from interface.tile_labels import NEUTRAL_MECHANISMS
+
+    assert set(NEUTRAL_MECHANISMS) == {f.name for f in dataclasses.fields(MechanismSet)}
+    assert set(NEUTRAL_MECHANISMS.values()) <= {"labelled", "named", "as_named", "not_shown", "refused"}
