@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from interface import action_space as action_space_mod
+from interface import scratchpad as scratchpad_mod
 from interface.actions_map import nlu_action_to_int
 from interface.coords import agent_facing, agent_row_col
 from interface.episode_log import state_snapshot
@@ -419,7 +420,13 @@ class EpisodeStepper:
         agent_messages = self._pending_agent_messages
         has_image = self._pending_has_image
         state = self.state
-        self.action_queue = self.querying.parse_actions(model_text)
+        scratchpad_reply = None
+        action_text = model_text
+        if self.config.scratchpad:
+            # The notes may name actions; the parser never sees them.
+            scratchpad_reply = scratchpad_mod.split_reply(model_text)
+            action_text = scratchpad_reply.action_text
+        self.action_queue = self.querying.parse_actions(action_text)
         if self.chat_history != "stateless":
             # Keep successful action history in the same canonical form
             # required for the next reply. In particular, do not let a
@@ -483,6 +490,15 @@ class EpisodeStepper:
             "agent_message_count": len(logged_agent_messages),
             "actions_remaining_before_step": len(self.action_queue),
         }
+        if scratchpad_reply is not None:
+            query_record.update(
+                scratchpad_mod.record_fields(
+                    scratchpad_mod.current(self.transcript)[0],
+                    scratchpad_reply,
+                    parse_ok=bool(self.action_queue),
+                    max_chars=self.config.scratchpad_max_chars,
+                )
+            )
         usage = reply.usage
         if isinstance(usage, dict):
             query_record["usage"] = dict(usage)

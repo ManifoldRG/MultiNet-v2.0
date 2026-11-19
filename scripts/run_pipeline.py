@@ -190,21 +190,34 @@ def _condition_configs(
     prompt_variant: Optional[str] = None,
     base_overrides: Optional[dict] = None,
 ) -> list[tuple[str, ExperimentConfig]]:
+    """A run's (variant, config) cells: each variant of ``conditions`` over the
+    run config's shared ``experiment_config`` block (``base_overrides``).
+
+    The shared block is the sweep's. A ``scratchpad_max_chars`` there is set
+    once for every scratchpad arm among the sweep's cells (a variant's own cap
+    wins) and is inert on default-arm cells, which then persist and hash as if
+    no cap were set. If no cell of the whole sweep has a scratchpad (a run with
+    no conditions has one cell: the block itself), the cap is the cells' own
+    and ExperimentConfig rejects it (interface/scratchpad.py)."""
     from interface.config import ExperimentConfig
 
+    shared = dict(base_overrides or {})
+    sweep_cap = shared.pop("scratchpad_max_chars", None)
     # from_dict, not the raw constructor: it resolves renamed values (last3 ->
     # last_n), as the run-config validation does, so a legacy overlay that
     # validates also runs.
-    base = ExperimentConfig.from_dict(base_overrides or {})
+    base = ExperimentConfig.from_dict(shared)
     if not conditions:
         if prompt_variant not in (None, "default"):
             raise ValueError("The default condition set only supports prompt_variant='default'.")
-        return [("default", base)]
+        return _with_sweep_cap([("default", base)], sweep_cap, conditions)
     if conditions not in CONDITION_SETS:
         raise ValueError(
             f"Unknown --conditions {conditions!r}; available: {sorted(CONDITION_SETS)}."
         )
-    pairs = list(iter_condition_configs(conditions, base))
+    # The whole sweep, before one variant is picked: a batch that runs only the
+    # default arm still takes the cap as the sweep's.
+    pairs = _with_sweep_cap(list(iter_condition_configs(conditions, base)), sweep_cap, conditions)
     if prompt_variant is not None:
         pairs = [(name, cfg) for name, cfg in pairs if name == prompt_variant]
         if not pairs:
@@ -212,6 +225,28 @@ def _condition_configs(
                 f"Unknown prompt variant {prompt_variant!r} for --conditions {conditions!r}."
             )
     return pairs
+
+
+def _with_sweep_cap(
+    pairs: list[tuple[str, ExperimentConfig]], cap: Any, conditions: Optional[str]
+) -> list[tuple[str, ExperimentConfig]]:
+    """``pairs`` with the shared block's scratchpad cap applied (see
+    ``_condition_configs``); unchanged when the block sets none."""
+    if cap is None:
+        return pairs
+    if not any(cfg.scratchpad for _, cfg in pairs):
+        return [(name, dataclasses.replace(cfg, scratchpad_max_chars=cap)) for name, cfg in pairs]
+    own_cap = {
+        variant.name
+        for variant in (CONDITION_SETS[conditions].variants.values() if conditions else ())
+        if "scratchpad_max_chars" in (variant.config_overrides or {})
+    }
+    return [
+        (name, dataclasses.replace(cfg, scratchpad_max_chars=cap))
+        if cfg.scratchpad and name not in own_cap
+        else (name, cfg)
+        for name, cfg in pairs
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -330,6 +365,12 @@ def _experiment_config_payload(experiment_config: Any | None) -> dict[str, Any]:
 def _experiment_config_hash_payload(experiment_config: Any | None) -> dict[str, Any]:
     payload = _experiment_config_payload(experiment_config)
     payload.pop("prompt_cache", None)
+    # The memory arms (interface/scratchpad.py) came after many cached runs.
+    # The default arm (no scratchpad) leaves its fields out, so those run
+    # hashes stay as they were; a scratchpad arm hashes its arm and its cap.
+    if payload.get("memory", "full_context") == "full_context":
+        payload.pop("memory", None)
+        payload.pop("scratchpad_max_chars", None)
     return payload
 
 
@@ -505,6 +546,19 @@ def _run_dir(
     return artifacts_root / "runs" / task_id / backend / model / f"seed_{seed}" / condition
 
 
+def _run_variant_dir(prompt_variant: str, experiment_config: Any) -> str:
+    """A run dir's last component: the prompt variant, plus the memory arm for
+    a scratchpad arm (interface/scratchpad.py), so the arms of one cell never
+    share a run dir. The default arm keeps the plain variant."""
+    if isinstance(experiment_config, dict):
+        memory = experiment_config.get("memory")
+    else:
+        memory = getattr(experiment_config, "memory", None)
+    if memory in (None, "full_context"):
+        return prompt_variant
+    return f"{prompt_variant}__memory_{memory}"
+
+
 def _run_one_model(
     rows: list[dict[str, Any]],
     agent: Agent,
@@ -627,7 +681,10 @@ def _prepare_unit_run(
     )
     runtime_spec = _runtime_capped_spec(spec, canonical)
     render = render or RenderSettings()
-    run_dir = _run_dir(artifacts_root, task_id, model_name, seed, prompt_variant, render.label)
+    run_dir = _run_dir(
+        artifacts_root, task_id, model_name, seed,
+        _run_variant_dir(prompt_variant, experiment_config), render.label,
+    )
     episode_path = run_dir / "episode.json"
     sidecar_path = run_dir / "run_inputs.json"
     run_score_path = run_dir / "run_score.json"
@@ -916,12 +973,11 @@ def run_from_config(
     check_run_config_expectations(run_config, manifest_path, conditions)
     catalog = load_manifest(manifest_path)
 
-    from interface.config import ExperimentConfig
-
     exp_overlay = run_config.get("experiment_config") or {}
     if exp_overlay:
-        # Fail fast on unknown keys / invalid values before any paid model call.
-        ExperimentConfig.from_dict({**ExperimentConfig().to_dict(), **exp_overlay})
+        # Fail fast on unknown keys / invalid values before any paid model call,
+        # with every variant over the block (its scratchpad cap is the sweep's).
+        _condition_configs(conditions, prompt_variant=prompt_variant, base_overrides=exp_overlay)
 
     # Optional top-level two-tier phase block (Task B3): {"pass": int,
     # "label": str}. Pure provenance — stamped onto artifacts, excluded from

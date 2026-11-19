@@ -90,6 +90,62 @@ Every config carries a `spend_cap_usd` hard stop.
 3. Launch: `launch_distributed.sh` with `RUN_CONFIG=gridworld/fixtures/run_config.r1_frontier.json`
    (one coordinator + one API VM; `API_WORKER_CONCURRENCY` sized to the tier).
 
+### Memory arms: a model-written scratchpad (paid)
+
+`experiment_config.memory` picks how the stateless harness remembers
+(`interface/scratchpad.py` has the design):
+
+| `memory` | history | scratchpad |
+|---|---|---|
+| `full_context` (default) | as `context_window` says (R2: `full`) | none; requests, `episode.json`, `run_inputs.json` and run hashes as before |
+| `scratchpad_window` | last `context_n` steps (needs `context_window: last_n`) | yes |
+| `full_context_scratchpad` | full (needs `context_window: full`) | yes |
+
+The model writes `<scratchpad>...</scratchpad>` before its `FINAL_OUTPUT` line
+and sees the notes at the next step. `scratchpad_max_chars` caps them (default
+2000 characters, about 500 tokens; characters, so the cap is the same for every
+tokenizer). The cap bounds what each request resends; a longer block is still
+billed as output when written, then cut, and the next request says so. Query
+records in `episode.json` carry `scratchpad_before`, `scratchpad`,
+`scratchpad_status` (`truncated` when cut) and `scratchpad_written_chars`.
+
+Setting the cap: on a scratchpad arm, put `scratchpad_max_chars` in its config.
+For a sweep (a condition set whose variants pick the arm), put it once in the
+run config's shared `experiment_config` block: every scratchpad arm takes it (a
+variant's own cap wins), and the `full_context` arm ignores it and persists and
+hashes as with no cap, also when a batch runs that arm alone. A cap that can
+reach no scratchpad arm is an error: on a `full_context` config or variant, or
+in the shared block of a run without conditions, or of a sweep without a
+scratchpad arm.
+
+Caching: like the inventory, the notes sit in the current turn, after the last
+cache breakpoint (and after the prefix Kimi reuses), so changing notes never
+re-write the cache; `full_context_scratchpad` caches exactly what
+`full_context` caches. `scratchpad_window`'s history slides, so it caches only
+the system prompt.
+
+`run_config.mechanics_15_nl_memory_{full_context,scratchpad_window,full_context_scratchpad}.json`
+run GPT-6 Astra on five mechanics-15 NL mazes, one config per arm. A scratchpad
+arm's run directory ends in `<variant>__memory_<arm>` (the default arm keeps
+`<variant>`), so arms run one after another into one artifacts root keep their
+own episodes. The commands below still give each arm its own root: they run side
+by side, and each run rewrites its root's `episode_runs.jsonl`.
+
+```bash
+python -m scripts.run_pipeline --distributed-role coordinator-prepare \
+  --run-config gridworld/fixtures/run_config.mechanics_15_nl_memory_full_context.json \
+  --manifest gridworld/fixtures/manifest.mechanics_15.json --seeds 0 \
+  --difficulty-max-static-score 8000 --artifacts-root artifacts-memory/prescored
+for arm in full_context scratchpad_window full_context_scratchpad; do
+  mkdir -p artifacts-memory/$arm && cp -r artifacts-memory/prescored/tasks artifacts-memory/$arm/
+  python -m scripts.run_pipeline \
+    --run-config gridworld/fixtures/run_config.mechanics_15_nl_memory_$arm.json \
+    --manifest gridworld/fixtures/manifest.mechanics_15.json --seeds 0 \
+    --difficulty-max-static-score 8000 --artifacts-root artifacts-memory/$arm \
+    > artifacts-memory/$arm.log 2>&1 &
+done
+```
+
 ## 4. Scoring
 
 Scoring runs inside the pipeline (`scorer/`): static maze/difficulty scores
