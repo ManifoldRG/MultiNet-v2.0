@@ -52,11 +52,13 @@ logger = logging.getLogger(__name__)
 # response, NOT that the model produced an unparseable move. These must not
 # consume the per-episode parse-retry budget (they'd terminate a valid episode
 # on provider flakiness). Set by the batch/sync agents (moonshot_batch, the
-# sync-transport path) and by provider overload responses. Token-cap truncation
-# is intentionally NOT here — exhausting the output budget is a real model
-# outcome the run enforces.
+# sync-transport path) and by provider overload responses. A request canceled
+# with its batch (a round past its deadline, or an operator cancel) never reached
+# the model, so ``batch_canceled`` is infra too. Token-cap truncation is
+# intentionally NOT here — exhausting the output budget is a real model outcome
+# the run enforces.
 _INFRA_STOP_REASONS = frozenset(
-    {"sync_error", "batch_expired", "batch_errored", "engine_overloaded"}
+    {"sync_error", "batch_expired", "batch_errored", "batch_canceled", "engine_overloaded"}
 )
 
 
@@ -548,7 +550,7 @@ class EpisodeStepper:
 
     def result(self) -> dict:
         success = self.end_reason == "success"
-        return self._runner._result(
+        result = self._runner._result(
             success,
             self.state,
             self.transcript,
@@ -557,3 +559,8 @@ class EpisodeStepper:
             self.initial_state,
             self.maze_path,
         )
+        if self._stall_watchdog is not None:
+            # Where the stall counter stood when the episode ended, so a killed
+            # unit's report can say how soon a resume would stop.
+            result["stall"] = {"k": self.stall_k, "remaining": self._stall_watchdog.remaining}
+        return result

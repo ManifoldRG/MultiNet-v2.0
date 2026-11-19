@@ -122,6 +122,57 @@ recorded backend and refuses one its worktree would draw differently.
 Text-only (NL) runs need nothing extra: set `"experiment_config":
 {"observation": "text_only"}` on the 2D backend.
 
+**Infra kills, resume and billing.**
+- *Preflight.* Before any VM, the launcher (and `sweep_run.sh next-batch` /
+  `run-massive`) sends one tiny request per API model in the run-config and
+  checks Moonshot's balance against the model's spend cap. An invalid key or an
+  empty account stops the launch. `SKIP_API_PREFLIGHT=1` skips it (dev only,
+  with a loud warning).
+- *Killed units resume.* An episode that ends on `agent_error:*` (transport,
+  billing, an API 400) is uploaded as **resumable**, not verified, and handed
+  out again: the worker replays every recorded action against a fresh backend,
+  refuses on any divergence, and continues, so only the rest of the episode is
+  paid for. Automatic resume needs the same code SHA (replay checks the
+  environment, not the prompts); a cross-SHA resume is a manual
+  `scripts/resume_from_archive.py` job. After `MAX_RESUMES` (2) non-billing
+  kills a unit fails. Resumed episodes record `resumed_from` and `resume`
+  (as-run SHA, replay-verified, resume query index).
+- *Reports.* `/status` lists `infra_killed` units with their stall counter
+  (`s/K`) and steps left (`max_steps - steps_used`), and `parked_providers`.
+  `coordinator-finalize` refuses while killed units remain, unless
+  `--allow-partial-finalize`.
+- *Billing.* A billing error parks every model group on that provider: no new
+  units, and in-flight episodes park at their next query as resumable. Other
+  providers keep running. A spend cap (`spend_cap_usd`) parks only the capped
+  model's groups (`/status` lists them under `parked_models`); the provider's
+  other models keep running. After topping up, on the coordinator:
+  `python -m scripts.run_pipeline --distributed-role coordinator-unpark
+  --artifacts-root artifacts/<RUN_ID> --provider <claude|kimi|openai>`; after
+  raising a cap, add `--model <model>`. Parked workers exit, so start that
+  group's workers again after the unpark (`start_worker`, or `sweep_run.sh
+  next-batch`). While units wait, the supervisor counts them as work left (no
+  "partial" stop) until its stall timeout.
+- *Spend caps.* `spend_cap_usd` caps what one model may spend in a run: the
+  worker process (or the local run) keeps a running total of each request's
+  priced usage and refuses the next request once the total reaches the cap.
+  A restart does not hand the cap back. When a worker starts (after a crash,
+  or after an unpark: parked workers exit), it restores the model's total from
+  the usage its run dirs record: finished episodes, and for a partial the
+  larger of its crash checkpoint and its `queries.jsonl`. A local rerun
+  (`--resume-killed`, or after a crash) restores from the run dirs it is about
+  to run. To let a capped model spend more, raise its cap; the restored total
+  counts against the new cap. Limits: with `worker_count` > 1 each worker
+  process enforces the cap on its own episodes; a worker on a fresh disk, a
+  request in flight when the process died and a discarded attempt are not
+  restored; `--force` discards a local run's episodes and their spend. Keep a
+  provider-side budget limit as well. `scripts/resume_from_archive.py` runs a
+  resume in its own process, so it takes its own `--spend-cap-usd` (Claude and
+  OpenAI always; Kimi when the run was capped).
+- *Local runs.* `run_pipeline` keeps a cached killed episode as-is; pass
+  `--resume-killed` to resume it. A serial episode checkpoints every query
+  (`checkpoint.json`, `queries.jsonl` in its run dir), so a process killed
+  mid-episode resumes from its last query on the next run.
+
 **Pre-scored Stage 2 (`PRESCORED_TASKS`).** Static scoring of the PR #57
 mechanics mazes takes minutes to tens of minutes per maze, and the coordinator
 runs it for every task before any unit exists. Score them ahead of time with a

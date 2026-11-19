@@ -21,6 +21,7 @@ import pytest
 
 from gridworld.backends.minigrid_backend import MiniGridBackend
 from gridworld.task_spec import TaskSpecification
+from interface.agents.billing import BillingExhausted
 from interface.agents.reply import Reply
 from interface.batch_runner import LockstepBatchRunner, LockstepUnit
 from interface.config import ExperimentConfig
@@ -500,6 +501,46 @@ def test_batch_exception_errors_round_but_keeps_prior_results():
     assert "batch tick blew up" in results["BAD"]["error"]
 
 
+class FailOnRoundBatchAgent:
+    """Answers through ``inner`` until round ``fail_on_call``, which raises ``error``."""
+
+    def __init__(self, inner, *, fail_on_call, error):
+        self._inner, self._fail_on_call, self._error = inner, fail_on_call, error
+        self._calls = 0
+
+    def generate_batch(self, batch):
+        self._calls += 1
+        if self._calls == self._fail_on_call:
+            raise self._error
+        return self._inner.generate_batch(batch)
+
+
+@pytest.mark.parametrize(
+    "error,kept",
+    [(BillingExhausted("claude", "credit balance too low"), True), (RuntimeError("HTTP 500"), False)],
+)
+def test_a_billing_stop_keeps_the_checkpoint_and_other_errors_drop_it(tmp_path, error, kept):
+    """A billing (or spend-cap) stop is resumable: the unit's checkpoint at the
+    refused round's query boundary survives, so a continuation re-pays nothing.
+    Any other error drops it, as before."""
+    from interface.episode_checkpoint import resume_stepper
+
+    spec = _spec("u", [7, 3], [1, 1], [5, 1])                         # "1 by 5"
+    ckpt = tmp_path / "unit.json"
+    unit = _make_unit("U", spec, checkpoint_path=ckpt)
+    inner = ScriptedBatchAgent({"1 by 5": ["MOVE_FORWARD"] * 4})
+    runner = LockstepBatchRunner(FailOnRoundBatchAgent(inner, fail_on_call=2, error=error), max_batches=1)
+    runner.add(unit)
+    results = runner.run()
+
+    assert results["U"]["error"] == str(error)
+    assert results["U"].get("billing", False) is kept
+    assert ckpt.exists() is kept
+    if kept:
+        resumed = resume_stepper(ckpt, runner=_make_unit("FRESH", spec).stepper._runner)
+        assert resumed.query_count == 1 and resumed.step_index == 1  # round 1 applied, round 2 refused
+
+
 # --------------------------------------------------------------------------- #
 # Guardrails
 # --------------------------------------------------------------------------- #
@@ -519,3 +560,49 @@ def test_deadline_kwarg_forwarded_only_when_accepted():
 
     assert _accepts_deadline_kwarg(with_deadline) is True
     assert _accepts_deadline_kwarg(without) is False
+
+
+# --------------------------------------------------------------------------- #
+# A finished unit is handed off before the next batch, then its checkpoint goes
+# --------------------------------------------------------------------------- #
+class RecordingBatchAgent:
+    def __init__(self, inner, events):
+        self._inner, self._events = inner, events
+
+    def generate_batch(self, batch):
+        self._events.append(("batch", len(batch)))
+        return self._inner.generate_batch(batch)
+
+
+def test_a_finished_unit_goes_to_on_finish_before_the_next_batch(tmp_path):
+    """The next round's batch can run for hours; a crash during it must not lose
+    a unit that finished at the top of that round. on_finish persists it first,
+    and its checkpoint is deleted only after that."""
+    events = []
+    short_ckpt, long_ckpt = tmp_path / "short.json", tmp_path / "long.json"
+    short = _make_unit("SHORT", _spec("s", [6, 3], [1, 1], [2, 1]), checkpoint_path=short_ckpt)  # "1 by 4", 1 move
+    long_ = _make_unit("LONG", _spec("l", [7, 3], [1, 1], [5, 1]), checkpoint_path=long_ckpt)   # "1 by 5", 4 moves
+    inner = ScriptedBatchAgent({"1 by 4": ["MOVE_FORWARD"], "1 by 5": ["MOVE_FORWARD"] * 4})
+
+    def on_finish(unit, result):
+        events.append(("finish", unit.unit_id, result["success"], unit.checkpoint_path.exists()))
+
+    runner = LockstepBatchRunner(RecordingBatchAgent(inner, events), max_batches=2, on_finish=on_finish)
+    for u in (short, long_):
+        runner.add(u)
+    results = runner.run()
+
+    assert events[:3] == [("batch", 2), ("finish", "SHORT", True, True), ("batch", 1)]
+    assert events[-1] == ("finish", "LONG", True, True)
+    assert results["SHORT"]["success"] and results["LONG"]["success"]
+    assert not short_ckpt.exists() and not long_ckpt.exists()
+
+
+def test_a_finish_that_was_not_persisted_keeps_the_checkpoint(tmp_path):
+    ckpt = tmp_path / "unit.json"
+    unit = _make_unit("U", _spec("u", [6, 3], [1, 1], [2, 1]), checkpoint_path=ckpt)  # "1 by 4"
+    runner = LockstepBatchRunner(ScriptedBatchAgent({"1 by 4": ["MOVE_FORWARD"]}), max_batches=1,
+                                 on_finish=lambda unit, result: False)  # e.g. the upload failed
+    runner.add(unit)
+    assert runner.run()["U"]["success"] is True
+    assert ckpt.exists()  # a retry re-pays the last query, not the episode

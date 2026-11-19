@@ -257,6 +257,7 @@ main() {
   : "${MANIFEST:?MANIFEST is required (path to a task manifest JSON)}"
   require_max_run_duration
   require_difficulty_max || exit 1
+  require_api_preflight "$RUN_CONFIG" || exit 1
   validate_run_id
   require_gcloud
   python3 -m scripts.distributed_topology "$RUN_CONFIG" "$RUN_ID" --check-credentials >/dev/null

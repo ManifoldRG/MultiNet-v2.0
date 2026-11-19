@@ -163,6 +163,7 @@ cmd_next_batch() {
   require_difficulty_max || return 1
   local name run_id art_id run_config manifest conditions prompt_variant zone coord
   name="$(batch_field "$n" name)"; run_id="$(batch_field "$n" run_id)"
+  require_api_preflight "$(batch_field "$n" run_config)" || return 1
   art_id="$(_artifacts_run_id "$n")"   # artifacts namespace (batch 0 -> $SWEEP_ID)
   run_config="$(batch_field "$n" run_config)"; manifest="$(batch_field "$n" manifest)"
   conditions="$(batch_field "$n" conditions)"; prompt_variant="$(batch_field "$n" prompt_variant)"
@@ -239,6 +240,9 @@ cmd_run_massive() {
   require_batch_cap || return 1
   require_difficulty_max || return 1
   [[ "$#" -ge 1 ]] || { echo "usage: sweep_run.sh run-massive N [N ...]" >&2; return 2; }
+  local n_pf configs_pf=()
+  for n_pf in "$@"; do configs_pf+=("$(batch_field "$n_pf" run_config)"); done
+  require_api_preflight "${configs_pf[@]}" || return 1
   local run_id="cond_massive" first="$1" run_config manifest zone coord vm
   run_config="$(batch_field "$first" run_config)"   # topo identical across qwen batches
   manifest="$(batch_field "$first" manifest)"
