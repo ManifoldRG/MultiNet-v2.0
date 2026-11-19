@@ -6,6 +6,19 @@ from typing import Literal, Optional, get_args, get_origin, get_type_hints
 
 DEFAULT_MAX_HISTORY_TOKENS = 1_000_000
 
+# What neutral tile labels need: every other path names the tile kinds (the
+# json/ascii formats, the standard/verbose prompts, the one-shot example, the
+# text summary, the image renders) or explains the effects (standard/causal
+# feedback).
+_NEUTRAL_TILE_REQUIREMENTS = {
+    "observation": ("text_only",),
+    "observation_text_format": ("coords",),
+    "prompting": ("minimal",),
+    "in_context_learning": ("zero_shot",),
+    "feedback": ("minimal",),
+    "context_window": ("current", "last_n", "full"),
+}
+
 
 @dataclass
 class ExperimentConfig:
@@ -40,6 +53,12 @@ class ExperimentConfig:
     action_space: Literal["egocentric", "cardinal"] = "egocentric"
     feedback: Literal["minimal", "standard", "causal"] = "minimal"
     progress_stall_k: Optional[int] = None
+    # "named" (R2): tiles are called death portals, frozen tiles, rotating
+    # tiles and teleporters. "neutral": each tile kind goes by a made-up word
+    # drawn per maze from tile_label_seed, and the step feedback reports what a
+    # step did, never which tile did it (interface/tile_labels.py).
+    tile_labels: Literal["named", "neutral"] = "named"
+    tile_label_seed: int = 0
 
     def __post_init__(self) -> None:
         hints = get_type_hints(type(self))
@@ -73,9 +92,27 @@ class ExperimentConfig:
             raise ValueError(
                 f"context_n must be a positive int, got {self.context_n!r}"
             )
+        seed = self.tile_label_seed
+        if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+            raise ValueError(f"tile_label_seed must be a non-negative int, got {seed!r}")
+        if self.tile_labels == "named" and seed != 0:
+            raise ValueError("tile_label_seed only applies with tile_labels='neutral'")
+        if self.tile_labels == "neutral":
+            for name, allowed in _NEUTRAL_TILE_REQUIREMENTS.items():
+                if getattr(self, name) not in allowed:
+                    raise ValueError(
+                        f"tile_labels='neutral' needs {name} in {allowed}, got {getattr(self, name)!r}: "
+                        "that path names the tile kinds or their effects"
+                    )
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        if self.tile_labels == "named":
+            # Off (the seed is then 0): left out, so a config serialized before
+            # tile_labels existed, and every run hash, job plan and
+            # episode.json built from one, stays byte-identical.
+            del d["tile_labels"], d["tile_label_seed"]
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentConfig":
