@@ -52,7 +52,8 @@ class ExperimentConfig:
     # The notes are cut to this many characters (2000 by default, about 500
     # tokens), so every request resends a bounded amount; the model is told the
     # cap. Characters, not tokens: the same for every tokenizer. Only with a
-    # scratchpad arm.
+    # scratchpad arm; a sweep sets it once in its shared block instead
+    # (scripts/run_pipeline.py _condition_configs).
     scratchpad_max_chars: int = DEFAULT_SCRATCHPAD_MAX_CHARS
     querying: Literal["step_by_step", "subgoal", "full_trajectory"] = "step_by_step"
     chat_history: Literal["stateless", "rolling", "full"] = "stateless"

@@ -109,6 +109,15 @@ billed as output when written, then cut, and the next request says so. Query
 records in `episode.json` carry `scratchpad_before`, `scratchpad`,
 `scratchpad_status` (`truncated` when cut) and `scratchpad_written_chars`.
 
+Setting the cap: on a scratchpad arm, put `scratchpad_max_chars` in its config.
+For a sweep (a condition set whose variants pick the arm), put it once in the
+run config's shared `experiment_config` block: every scratchpad arm takes it (a
+variant's own cap wins), and the `full_context` arm ignores it and persists and
+hashes as with no cap, also when a batch runs that arm alone. A cap that can
+reach no scratchpad arm is an error: on a `full_context` config or variant, or
+in the shared block of a run without conditions, or of a sweep without a
+scratchpad arm.
+
 Caching: like the inventory, the notes sit in the current turn, after the last
 cache breakpoint (and after the prefix Kimi reuses), so changing notes never
 re-write the cache; `full_context_scratchpad` caches exactly what

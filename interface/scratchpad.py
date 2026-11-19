@@ -9,8 +9,8 @@ Arms (``memory``):
 * ``full_context`` (default): no scratchpad. The requests are byte-identical to
   the harness before the arms existed, and ``ExperimentConfig.to_dict`` leaves
   the memory fields out, so episode.json, run_inputs.json, job plans and the run
-  hash are too. ``scratchpad_max_chars`` is then rejected unless it is the
-  default.
+  hash are too. A ``scratchpad_max_chars`` set on this arm itself is rejected
+  unless it is the default; one set once for a sweep is inert here (below).
 * ``scratchpad_window``: the scratchpad plus only the last K steps of history.
   K is ``context_n`` and the arm requires ``context_window="last_n"``: the
   per-step history lines are the full history's, under the header "Recent
@@ -60,6 +60,15 @@ most 2000 characters of notes, about 500 tokens, uncached (about the size of
 R2 NL's uncached tail of current state, budget lines and question). It does not
 bound output: a longer block is billed as output when written, then cut; the
 system line states the cap and the next request says when notes were cut.
+
+A sweep sets the cap once: a ``scratchpad_max_chars`` in a run config's shared
+``experiment_config`` block applies to every scratchpad arm its condition
+variants produce (a variant's own cap wins) and is inert on the full_context
+arm, which then persists and hashes as with no cap. Only when no cell of the
+sweep has a scratchpad (a run without conditions has one cell, the block
+itself) is it the default arm's own cap, and an error
+(scripts/run_pipeline.py ``_condition_configs``, used by local runs and the
+fleet's prepare_job alike).
 
 Caching: the notes are treated like the inventory. They change every step, so
 they sit in the current turn, after the current state's inventory line and
