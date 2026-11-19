@@ -340,6 +340,11 @@ Internal method that converts MiniGrid TaskSpecification to MultiGrid format.
 **Conversion note**: border cells are emitted as explicit wall objects so square
 MultiGrid tasks match MiniGrid border-wall semantics.
 
+**Refused**: `death_portals`, `frozen_tiles` and `rotating_tiles` (and any other
+mechanism list not mapped above) have no meaning under the native rules, so
+`configure()` raises `ValueError` instead of dropping them. Run such tasks on the
+MiniGrid backend.
+
 ### Method: `_build_grid_state()`
 
 Internal method that extracts GridState from MultiGrid environment.

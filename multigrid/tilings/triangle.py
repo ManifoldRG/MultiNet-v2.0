@@ -4,13 +4,27 @@ import math
 from ..base import Tiling
 from ..core import Cell
 from typing import Optional
-from .hex import HexTiling, offset_to_axial, axial_to_offset, OffsetCoord, AxialCoord, DIR_VECTORS_AXIAL
-from .hex import DIRECTIONS as HEX_DIRECTIONS
+from .hex import HexTiling, offset_to_axial, axial_to_offset, OffsetCoord, AxialCoord
 
 
 # Direction labels for triangular tiling
 # Each triangle has 3 edges
 DIRECTIONS = ["edge0", "edge1", "edge2"]
+
+# Triangle i spans the hex centre and vertices i and i+1 (vertex 0 at the top,
+# clockwise on screen, as rendering.get_triangle_vertices draws it), so its
+# outer edge faces northeast, east, southeast, southwest, west, northwest in
+# turn. These are the axial steps to the hex across that edge, spelled out
+# rather than looked up by name in hex.DIR_VECTORS_AXIAL, whose names do not
+# follow this geometry (its "north" step moves up-left).
+OUTER_EDGE_AXIAL = [
+    AxialCoord(1, -1),   # northeast
+    AxialCoord(1, 0),    # east
+    AxialCoord(0, 1),    # southeast
+    AxialCoord(-1, 1),   # southwest
+    AxialCoord(-1, 0),   # west
+    AxialCoord(0, -1),   # northwest
+]
 
 DIR_INDEX = {
     "edge0": 0,
@@ -126,10 +140,7 @@ class TriangleTiling(Tiling):
                     offset = OffsetCoord(hex_col, hex_row)
                     axial = offset_to_axial(offset)
 
-                    # Direction mapping: triangle 0 points north, etc.
-                    hex_direction = HEX_DIRECTIONS[tri_idx]
-                    delta = DIR_VECTORS_AXIAL[hex_direction]
-                    neighbor_axial = axial + delta
+                    neighbor_axial = axial + OUTER_EDGE_AXIAL[tri_idx]
 
                     # Check if neighbor hex exists
                     neighbor_offset = axial_to_offset(neighbor_axial)

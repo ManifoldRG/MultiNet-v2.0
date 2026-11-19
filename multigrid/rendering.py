@@ -612,8 +612,8 @@ def render_multigrid(
 
         # Adjust based on tiling orientation
         if tiling_name == "square":
-            # Square: 0=north, 1=east, 2=south, 3=west
-            facing_angle = -math.pi / 2 - state.agent.facing * (math.pi / 2)
+            # Square: 0=north, 1=east, 2=south, 3=west (clockwise, y grows down)
+            facing_angle = -math.pi / 2 + state.agent.facing * (math.pi / 2)
         elif tiling_name == "hex":
             # Hex: 0=north, 1=northeast, etc.
             facing_angle = -math.pi / 2 - state.agent.facing * (math.pi / 3)

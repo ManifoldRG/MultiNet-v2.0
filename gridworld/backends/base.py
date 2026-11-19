@@ -80,6 +80,7 @@ The two backends have different feature support. Choose based on your needs:
       Gates              | ✓               | ✓
       Hazards (Lava)     | ✓               | ✓
       Teleporters        | ✓               | ✓
+      Death/frozen/rotating | ✓            | ✗ (configure refuses)
       Zones (targets)    | ✗               | ✓
     Features:            |                 |
       Partial obs (cone) | ✓               | ✓
